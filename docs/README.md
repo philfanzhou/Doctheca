@@ -25,7 +25,7 @@ backend/ruoyu.docretrieval/
 
 | 文档 | 视角 | 用途 |
 |------|------|------|
-| [requirements.md](./requirements.md) | 业务 | 业务背景、目标、服务调用方、调用方故事、业务验收口径 |
+| [requirements.md](./requirements.md) | 业务 | 业务背景、能力范围、导入 + 查询两个接口、验收口径 |
 | [spec.md](./spec.md) | 技术 | 服务规格说明（架构、数据模型、接口、技术选型、验收指标） |
 | [checklist.md](./checklist.md) | 验收 | 阶段 A/B/C 验收项清单与签字栏 |
 | [tasks.md](./tasks.md) | 实施 | 阶段 A/B/C 实施任务拆解与状态总览 |
