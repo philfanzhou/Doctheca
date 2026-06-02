@@ -14,6 +14,7 @@ backend/ruoyu.docretrieval/
 └── docs/                       # 文档
     ├── README.md               # 本文件（入口）
     ├── requirements.md         # 业务需求（仅业务视角）
+    ├── process.md              # 业务流程（业务视角：参与者、流程、状态机、异常分支）
     ├── spec.md                 # 主规格说明（仅技术视角）
     ├── checklist.md            # 验收清单
     └── tasks.md                # 实施任务列表
@@ -26,11 +27,12 @@ backend/ruoyu.docretrieval/
 | 文档 | 视角 | 用途 |
 |------|------|------|
 | [requirements.md](./requirements.md) | 业务 | 业务背景、能力范围、导入 + 查询两个接口、验收口径 |
+| [process.md](./process.md) | 业务 | 业务流程：参与者、核心流程、状态机、异常分支、与上游衔接 |
 | [spec.md](./spec.md) | 技术 | 服务规格说明（架构、数据模型、接口、技术选型、验收指标） |
 | [checklist.md](./checklist.md) | 验收 | 阶段 A/B/C 验收项清单与签字栏 |
 | [tasks.md](./tasks.md) | 实施 | 阶段 A/B/C 实施任务拆解与状态总览 |
 
-> 业务变更请改 [requirements.md](./requirements.md)；技术实现变更请改 [spec.md](./spec.md)；不要在 spec 中混入业务描述。
+> 业务范围变更请改 [requirements.md](./requirements.md)，业务流程变更请改 [process.md](./process.md)；技术实现变更请改 [spec.md](./spec.md)；不要在 spec 中混入业务或流程描述。
 
 ## 关键设计决策（一句话版）
 
