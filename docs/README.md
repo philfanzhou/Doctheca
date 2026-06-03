@@ -17,7 +17,13 @@ backend/ruoyu.docretrieval/
     ├── process.md              # 业务流程（业务视角：参与者、流程、状态机、异常分支）
     ├── spec.md                 # 主规格说明（仅技术视角）
     ├── checklist.md            # 验收清单
-    └── tasks.md                # 实施任务列表
+    ├── tasks.md                # 实施任务列表
+    └── adr/                    # 架构决策记录
+        ├── README.md
+        ├── 0001-record-architecture-decisions.md
+        ├── 0002-language-stack.md
+        ├── 0003-vector-database.md
+        └── 0004-document-storage.md
 ```
 
 > 代码与配置目录（`src/Contract`、`src/Database`、`src/Domain`、`src/Host`、`src/Service`、`test/` 等）将在阶段 A 评审通过后按 [tasks.md](./tasks.md) 创建。
@@ -31,6 +37,7 @@ backend/ruoyu.docretrieval/
 | [spec.md](./spec.md) | 技术 | 服务规格说明（分层架构、数据模型、gRPC 查询接口、Web 管理接口、技术选型、验收指标） |
 | [checklist.md](./checklist.md) | 验收 | 阶段 A/B/C 验收项清单与签字栏 |
 | [tasks.md](./tasks.md) | 实施 | 阶段 A/B/C 实施任务拆解与状态总览 |
+| [adr/](./adr/) | 架构 | 架构决策记录 |
 
 > 业务范围变更请改 [requirements.md](./requirements.md)，业务流程变更请改 [process.md](./process.md)；技术实现变更请改 [spec.md](./spec.md)；不要在 spec 中混入业务或流程描述。
 
@@ -51,8 +58,8 @@ backend/ruoyu.docretrieval/
 
 ## 待敲定事项（阶段 A 启动前必须完成）
 
-- [ ] 语言栈：混合（.NET + Python） / 全 Python / 全 .NET
-- [ ] 向量库：Qdrant / pgvector
-- [ ] 文档存储：复用 SeaweedFS / 单独对象存储
+- [ ] 语言栈：混合（.NET + Python） / 全 Python / 全 .NET - 见 [adr/0002-language-stack.md](./adr/0002-language-stack.md)
+- [ ] 向量库：Qdrant / pgvector - 见 [adr/0003-vector-database.md](./adr/0003-vector-database.md)
+- [ ] 文档存储：复用 SeaweedFS / 单独对象存储 - 见 [adr/0004-document-storage.md](./adr/0004-document-storage.md)
 
 详见 [spec.md §9.3](./spec.md#93-待决策需在阶段-a-启动前敲定)。
