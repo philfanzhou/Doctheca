@@ -1,6 +1,6 @@
 # DocRetrieval 验收清单
 
-> 配套文档：[requirements.md](./requirements.md)（业务需求）｜[spec.md](./spec.md)（技术规格）｜[tasks.md](./tasks.md)（实施任务）
+> 配套文档：[requirements.md](./requirements.md)（业务需求）｜[process.md](./process.md)（业务流程）｜[spec.md](./spec.md)（技术规格）｜[tasks.md](./tasks.md)（实施任务）
 >
 > 用法：每个阶段交付前，逐项勾选；未勾选项需在交付说明中显式标注 N/A 或延期原因。
 >
@@ -77,13 +77,11 @@
 - [ ] `test/` 含单元测试与集成测试
 - [ ] `docs/` 含本套 spec / checklist / tasks 文档
 
-### 2.2 gRPC 接口
+### 2.2 gRPC 查询接口
 
-- [ ] `IngestDocument` 接口实现并通过测试
-- [ ] `GetIngestionStatus` 接口实现并通过测试
 - [ ] `ExactSearch` 接口实现并通过测试
 - [ ] `HybridSearch` 接口实现并通过测试
-- [ ] `DeleteDocument` 接口实现并通过测试
+- [ ] 业务系统只能调用查询接口（不能通过 gRPC 上传 / 删除）
 - [ ] 所有错误响应遵循 [统一错误处理规范](../../error-handling.md)
 - [ ] 错误信息使用中文
 
@@ -94,20 +92,25 @@
 - [ ] 失败任务可被重试而不污染索引
 - [ ] 索引更新有可观测日志
 
-### 2.4 删除文档
+### 2.4 Web 管理界面
 
-- [ ] `DeleteDocument` 按 `title` 软删除成功
+- [ ] 上传端点可接收 PDF / Word / PPT 文件 + 元数据
+- [ ] 导入任务在界面可见，状态（进行中 / 成功 / 失败）实时更新
+- [ ] 删除端点按 `title` 软删除成功
 - [ ] 删除后 OpenSearch 中按 `document_id` 过滤的条目被清空
 - [ ] 删除后向量库中按 `document_id` 过滤的条目被清空
-- [ ] 删除是幂等的：重复删除同一 `title` 返回 `success = true`
-- [ ] 删除接口对其它接口（导入 / 查询 / 状态）无阻塞
+- [ ] 删除是幂等的：重复删除同一 `title` 返回成功
+- [ ] 删除端点对 gRPC 查询接口无阻塞
 - [ ] 已被软删除的文档在 `ExactSearch` / `HybridSearch` 中不可见
+- [ ] 文档列表端点可正常展示已导入文档
 
 ### 2.5 接入微服务
 
 - [ ] 已在 [系统架构文档](../../architecture.md) 中登记服务端口与依赖
 - [ ] 已与 `ruoyu.student` / `ruoyu.questionBank` 等至少 1 个上游服务做联调
 - [ ] 服务能在 docker-compose 中独立拉起
+- [ ] gRPC 查询端点可被 grpcurl 调通
+- [ ] Web 管理界面可在浏览器正常访问
 
 ---
 

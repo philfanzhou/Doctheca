@@ -1,6 +1,6 @@
 # DocRetrieval 实施任务列表
 
-> 配套文档：[requirements.md](./requirements.md)（业务需求）｜[spec.md](./spec.md)（技术规格）｜[checklist.md](./checklist.md)（验收清单）
+> 配套文档：[requirements.md](./requirements.md)（业务需求）｜[process.md](./process.md)（业务流程）｜[spec.md](./spec.md)（技术规格）｜[checklist.md](./checklist.md)（验收清单）
 >
 > 用法：每条任务在开工时切换为 `[-]`，完成后切换为 `[x]`；阶段切换时整体打包评审。
 >
@@ -79,56 +79,66 @@
 - [ ] **B1.5** 创建 `src/Domain/Ruoyu.Study.DocRetrieval.Domain.csproj`
 - [ ] **B1.6** 创建 `src/Service/Ruoyu.Study.DocRetrieval.Service.csproj`
 - [ ] **B1.7** 创建 `src/Host/Ruoyu.Study.DocRetrieval.Host.csproj`（含 `Program.cs` + `appsettings.json`）
-- [ ] **B1.8** 创建 `test/Ruoyu.Study.DocRetrieval.Tests.csproj`
-- [ ] **B1.9** 将服务登记到 [系统架构文档](../../architecture.md) 的服务表
+- [ ] **B1.8** 创建 `src/WebAdmin/Ruoyu.Study.DocRetrieval.WebAdmin.csproj`（Web 管理界面项目）
+- [ ] **B1.9** 创建 `test/Ruoyu.Study.DocRetrieval.Tests.csproj`
+- [ ] **B1.10** 将服务登记到 [系统架构文档](../../architecture.md) 的服务表
 
 ### B2. 数据模型与迁移
 
-- [ ] **B2.1** 实现 `Document` 实体 + EF Core 配置
+- [ ] **B2.1** 实现 `Document` 实体 + EF Core 配置（含 `deleted_at` 软删除字段）
 - [ ] **B2.2** 实现 `DocumentPage` 实体
 - [ ] **B2.3** 实现 `DocumentSegment` 实体
 - [ ] **B2.4** 实现 `QuestionSegment` 实体
-- [ ] **B2.5** 实现 `DocumentOccurrence` 实体
-- [ ] **B2.6** 实现 `DocumentIngestionJob` 实体
-- [ ] **B2.7** 生成并提交 EF Core 初始迁移
-- [ ] **B2.8** 数据库命名遵循 [database-spec.md](../../database-spec.md)
+- [ ] **B2.5** 实现 `DocumentIngestionJob` 实体
+- [ ] **B2.6** 生成并提交 EF Core 初始迁移
+- [ ] **B2.7** 数据库命名遵循 [database-spec.md](../../database-spec.md)
 
-### B3. gRPC 接口实现
+### B3. gRPC 查询接口实现（仅对外暴露查询能力）
 
-- [ ] **B3.1** 定义 `DocumentRetrievalService` proto
-- [ ] **B3.2** 实现 `IngestDocument`
-- [ ] **B3.3** 实现 `GetIngestionStatus`
-- [ ] **B3.4** 实现 `ExactSearch`
-- [ ] **B3.5** 实现 `HybridSearch`
-- [ ] **B3.6** 实现 `DeleteDocument`（按 `title` 软删除）
-- [ ] **B3.7** 错误处理遵循 [error-handling.md](../../error-handling.md)
-- [ ] **B3.8** 加入 gRPC 拦截器（traceId、异常、限流）
+- [ ] **B3.1** 定义 `DocumentRetrievalService` proto（仅 `ExactSearch` + `HybridSearch`）
+- [ ] **B3.2** 实现 `ExactSearch`
+- [ ] **B3.3** 实现 `HybridSearch`
+- [ ] **B3.4** 错误处理遵循 [error-handling.md](../../error-handling.md)
+- [ ] **B3.5** 加入 gRPC 拦截器（traceId、异常、限流）
+- [ ] **B3.6** 确认业务系统无法通过 gRPC 调用上传 / 删除能力
 
-### B4. 解析与索引同步
+### B4. Web 管理界面实现
 
-- [ ] **B4.1** 把阶段 A 的 Python 解析器封装为独立 Worker（`ruoyu.docretrieval.workers`）
-- [ ] **B4.2** 实现导入任务队列（PostgreSQL 轮询 / Redis Stream / RabbitMQ 任选）
-- [ ] **B4.3** 解析 Worker 消费任务 → 写结构化数据
-- [ ] **B4.4** 索引同步器：结构化数据 → OpenSearch
-- [ ] **B4.5** 索引同步器：结构化数据 → 向量库
-- [ ] **B4.6** 失败重试 + 死信
-- [ ] **B4.7** 删除清理：按 `document_id` 从 OpenSearch 与向量库移除条目
+- [ ] **B4.1** 实现 `POST /admin/documents/upload` 文档上传端点（multipart）
+- [ ] **B4.2** 实现 `GET /admin/documents` 文档列表端点
+- [ ] **B4.3** 实现 `GET /admin/documents/{id}/status` 导入状态查看端点
+- [ ] **B4.4** 实现 `POST /admin/documents/{id}/delete` 文档删除端点
+- [ ] **B4.5** Web 界面 UI：上传页面（文件选择 + 元数据填写）
+- [ ] **B4.6** Web 界面 UI：文档列表 + 导入状态展示
+- [ ] **B4.7** Web 界面 UI：删除确认与结果提示
+- [ ] **B4.8** 鉴权集成（由基础设施层网关 / 反向代理负责，本服务不自行实现用户态）
 
-### B5. 测试
+### B5. 解析与索引同步
 
-- [ ] **B5.1** 单元测试：编排层聚合 / 排序逻辑
-- [ ] **B5.2** 单元测试：实体映射 / 仓储
-- [ ] **B5.3** 集成测试：gRPC 接口全量跑通
-- [ ] **B5.4** 集成测试：导入 → 检索端到端
-- [ ] **B5.5** 集成测试：导入 → 删除 → 查询不可见
+- [ ] **B5.1** 把阶段 A 的 Python 解析器封装为独立 Worker（`ruoyu.docretrieval.workers`）
+- [ ] **B5.2** 实现导入任务队列（PostgreSQL 轮询 / Redis Stream / RabbitMQ 任选）
+- [ ] **B5.3** 解析 Worker 消费任务 → 写结构化数据
+- [ ] **B5.4** 索引同步器：结构化数据 → OpenSearch
+- [ ] **B5.5** 索引同步器：结构化数据 → 向量库
+- [ ] **B5.6** 失败重试 + 死信
+- [ ] **B5.7** 删除清理：按 `document_id` 从 OpenSearch 与向量库移除条目
 
-### B6. 部署
+### B6. 测试
 
-- [ ] **B6.1** `Host` 项目 Dockerfile
-- [ ] **B6.2** Worker 镜像 Dockerfile
-- [ ] **B6.3** docker-compose 新增服务条目
-- [ ] **B6.4** 启动冒烟测试脚本
-- [ ] **B6.5** 在 [deployment.md](../../deployment.md) 登记部署说明
+- [ ] **B6.1** 单元测试：编排层聚合 / 排序逻辑
+- [ ] **B6.2** 单元测试：实体映射 / 仓储
+- [ ] **B6.3** 集成测试：gRPC 查询接口全量跑通
+- [ ] **B6.4** 集成测试：导入 → 检索端到端
+- [ ] **B6.5** 集成测试：导入 → 删除 → 查询不可见
+- [ ] **B6.6** Web 管理界面上传 / 删除 / 状态查看功能测试
+
+### B7. 部署
+
+- [ ] **B7.1** `Host` 项目 Dockerfile（含 gRPC + Web Admin）
+- [ ] **B7.2** Worker 镜像 Dockerfile
+- [ ] **B7.3** docker-compose 新增服务条目
+- [ ] **B7.4** 启动冒烟测试脚本（gRPC + Web Admin 均覆盖）
+- [ ] **B7.5** 在 [deployment.md](../../deployment.md) 登记部署说明
 
 ---
 
@@ -159,9 +169,9 @@
 | 阶段 | 总任务 | 已完成 | 进行中 | 阻塞 |
 |------|--------|--------|--------|------|
 | 阶段 A | 39 | 0 | 0 | 0 |
-| 阶段 B | 43 | 0 | 0 | 0 |
+| 阶段 B | 51 | 0 | 0 | 0 |
 | 阶段 C | 7 | 0 | 0 | 0 |
 | 跨阶段 | 5 | 0 | 0 | 0 |
-| **合计** | **94** | **0** | **0** | **0** |
+| **合计** | **102** | **0** | **0** | **0** |
 
 > 表格在阶段切换时手工更新。
