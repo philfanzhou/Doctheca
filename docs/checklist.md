@@ -102,14 +102,15 @@
 
 - [ ] 上传端点可接收 PDF / Word / PPT 文件 + 必填元数据（title / subject / grade / year）
 - [ ] 上传时必填元数据缺失 → 界面拦截
-- [ ] 上传时教材名已存在 → 立即拒绝，提示"教材名已存在"
+- [ ] 上传时文档名已存在 → 立即拒绝，提示"文档名已存在"
 - [ ] 导入任务在界面可见，状态（进行中 / 成功 / 失败）实时更新
-- [ ] 删除端点按 title 软删除成功
+- [ ] 删除端点按 title 硬删除成功（物理删除元数据、文件、任务记录）
 - [ ] 删除后 OpenSearch 中按 `document_id` 过滤的条目被清空
 - [ ] 删除后向量库中按 `document_id` 过滤的条目被清空
-- [ ] 删除是幂等的：重复删除同一 title 返回成功
+- [ ] 删除后 PostgreSQL 中对应 `Document` 记录被物理删除（title 唯一约束释放）
+- [ ] 删除是幂等的：重复删除同一 title（文档已不存在）返回成功
 - [ ] 删除端点对 gRPC 查询接口无阻塞
-- [ ] 已被软删除的文档在 `ExactSearch` / `HybridSearch` 中不可见
+- [ ] 已被硬删除的文档在 `ExactSearch` / `HybridSearch` 中不可见
 - [ ] 文档列表端点支持分页（page / pageSize）
 - [ ] 文档列表端点支持按 title 模糊搜索（keyword）
 - [ ] 文档列表端点支持按 subject / grade / year / status 筛选
