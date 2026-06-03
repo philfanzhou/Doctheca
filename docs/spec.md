@@ -301,7 +301,7 @@ message SearchResponse {
 message SearchResult {
   string document_name = 1;
   int32 page_number = 2;
-  string associated_text = 3;          // 句子（教材类）或题目文本（试卷类）
+  string associated_text = 3;          // 句子或题目文本
   double score = 4;                    // 相关度评分
 }
 ```
