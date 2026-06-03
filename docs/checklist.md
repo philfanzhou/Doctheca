@@ -29,7 +29,8 @@
 ### 1.2 文档解析层
 
 - [ ] PDF 原生文本抽取成功率 ≥ 95%
-- [ ] DOCX 抽取成功率 100%
+- [ ] Word 抽取成功率 100%
+- [ ] PPT 抽取成功率 100%
 - [ ] 扫描件 OCR 可读率 ≥ 90%
 - [ ] 抽取结果保留页码、段落、块、行级位置
 - [ ] 句子边界识别准确
@@ -82,7 +83,7 @@
 - [ ] `GetIngestionStatus` 接口实现并通过测试
 - [ ] `ExactSearch` 接口实现并通过测试
 - [ ] `HybridSearch` 接口实现并通过测试
-- [ ] `OpenOccurrence` 接口实现并通过测试
+- [ ] `DeleteDocument` 接口实现并通过测试
 - [ ] 所有错误响应遵循 [统一错误处理规范](../../error-handling.md)
 - [ ] 错误信息使用中文
 
@@ -93,7 +94,16 @@
 - [ ] 失败任务可被重试而不污染索引
 - [ ] 索引更新有可观测日志
 
-### 2.4 接入微服务
+### 2.4 删除文档
+
+- [ ] `DeleteDocument` 按 `title` 软删除成功
+- [ ] 删除后 OpenSearch 中按 `document_id` 过滤的条目被清空
+- [ ] 删除后向量库中按 `document_id` 过滤的条目被清空
+- [ ] 删除是幂等的：重复删除同一 `title` 返回 `success = true`
+- [ ] 删除接口对其它接口（导入 / 查询 / 状态）无阻塞
+- [ ] 已被软删除的文档在 `ExactSearch` / `HybridSearch` 中不可见
+
+### 2.5 接入微服务
 
 - [ ] 已在 [系统架构文档](../../architecture.md) 中登记服务端口与依赖
 - [ ] 已与 `ruoyu.student` / `ruoyu.questionBank` 等至少 1 个上游服务做联调

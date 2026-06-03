@@ -1,6 +1,6 @@
 # ruoyu.docretrieval
 
-> 文档检索域微服务：接收英文教材 / 真题 PDF/DOCX/扫描件，提供"输入单词 / 短语 → 返回真实出现位置与上下文"的能力。
+> 文档检索域微服务：接收英文教材 / 真题 PDF（含扫描件）/ Word / PPT，提供"输入单词 / 短语 → 返回真实出现位置与上下文"以及"按文档名删除"的能力。
 
 ## 状态
 
@@ -26,8 +26,8 @@ backend/ruoyu.docretrieval/
 
 | 文档 | 视角 | 用途 |
 |------|------|------|
-| [requirements.md](./requirements.md) | 业务 | 业务背景、能力范围、导入 + 查询两个接口、验收口径 |
-| [process.md](./process.md) | 业务 | 业务流程：参与者、核心流程、状态机、异常分支、与上游衔接 |
+| [requirements.md](./requirements.md) | 业务 | 业务背景、能力范围、导入 / 查询 / 删除三类接口、验收口径、业务不变式 |
+| [process.md](./process.md) | 业务 | 业务流程：参与者、核心流程、状态机、异常分支 |
 | [spec.md](./spec.md) | 技术 | 服务规格说明（架构、数据模型、接口、技术选型、验收指标） |
 | [checklist.md](./checklist.md) | 验收 | 阶段 A/B/C 验收项清单与签字栏 |
 | [tasks.md](./tasks.md) | 实施 | 阶段 A/B/C 实施任务拆解与状态总览 |

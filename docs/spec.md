@@ -19,7 +19,7 @@
 
 > 业务细节、调用方故事、验收口径见 [requirements.md](./requirements.md)。本节只给技术读者一个"这个服务要解决什么"的最短描述。
 
-- 接收英文教材与考试真题的 `PDF` / `DOCX` / 扫描件
+- 接收英文教材与考试真题的 `PDF`（含扫描件）/ `Word` / `PPT`
 - 解析出"文档展示锚点"作为一等数据
 - 提供**精确检索**与**语义扩展**两类检索能力
 - 由上层业务前端 / 微服务按需消费
@@ -29,7 +29,7 @@
 
 | 术语 | 含义 |
 |------|------|
-| 文档（Document） | 一份 PDF/DOCX/扫描件，对应一个导入任务 |
+| 文档（Document） | 一份 PDF（含扫描件）/ Word / PPT，对应一个导入任务 |
 | 锚点（Anchor） | 文档内可定位的最小单位（页/块/句/题） |
 | 精确检索 | 基于倒排索引的单词/短语匹配 |
 | 语义召回 | 基于向量相似度的近义表达召回 |
@@ -49,7 +49,7 @@
 
 | 约束 | 取值 |
 |------|------|
-| 文档来源 | 电子文本（PDF/DOCX）+ 扫描件，均占比大 |
+| 文档来源 | 电子文本（PDF / Word / PPT）+ 扫描件，均占比大 |
 | 检索目标 | 精确位置 + 语义扩展 |
 | 规模 | 中规模（一年内数千份） |
 | 主语言 | 现有后端为 .NET；方案工具链偏 Python（Docling/PaddleOCR） |
@@ -85,8 +85,8 @@
 **输入**：
 
 - `PDF`（含扫描型）
-- `DOCX`
-- 图片型试卷
+- `Word`（`.doc` / `.docx`）
+- `PPT`（`.ppt` / `.pptx`）
 
 **职责**：
 
@@ -207,7 +207,7 @@ message SearchResponse {
 
 | 实体 | 作用 | 关键字段 |
 |------|------|----------|
-| `Document` | 文档元数据 | id, title, source_type, language, grade, subject, year, status, created_at |
+| `Document` | 文档元数据 | id, title, source_type, language, grade, subject, year, status, deleted_at, created_at |
 | `DocumentPage` | 页面级锚点 | id, document_id, page_number, image_path |
 | `DocumentSegment` | 句子/段落级锚点 | id, document_id, page_id, block_id, sentence_id, text, start_offset, end_offset |
 | `QuestionSegment` | 题目锚点 | id, document_id, page_id, question_id, stem, options_json, answer_area |
@@ -235,7 +235,7 @@ message SearchResponse {
 | `GetIngestionStatus` | `GET` 风格 | 查询导入任务状态 |
 | `ExactSearch` | `POST` 风格 | 精确词/短语检索 |
 | `HybridSearch` | `POST` 风格 | 混合检索（精确 + 语义） |
-| `OpenOccurrence` | `GET` 风格 | 根据锚点返回文档上下文 |
+| `DeleteDocument` | `POST` 风格 | 按"文档名"软删除文档 |
 
 ### 5.2 关键消息（草案）
 
@@ -245,14 +245,23 @@ service DocumentRetrievalService {
   rpc GetIngestionStatus(GetIngestionStatusRequest) returns (IngestionJob);
   rpc ExactSearch(ExactSearchRequest) returns (SearchResponse);
   rpc HybridSearch(HybridSearchRequest) returns (SearchResponse);
-  rpc OpenOccurrence(OpenOccurrenceRequest) returns (OccurrenceContext);
+  rpc DeleteDocument(DeleteDocumentRequest) returns (DeleteDocumentResponse);
 }
 
 message IngestDocumentRequest {
   string title = 1;
-  DocumentSourceType source_type = 2;  // PDF / DOCX / SCAN
+  DocumentSourceType source_type = 2;  // PDF / WORD / PPT / SCAN
   bytes content = 3;                   // 文档二进制（或 OSS 引用）
   map<string, string> metadata = 4;    // 教材/年级/学科/年份
+}
+
+message DeleteDocumentRequest {
+  string title = 1;                    // 业务唯一标识（导入时使用的文档名）
+}
+
+message DeleteDocumentResponse {
+  bool   success = 1;
+  string reason  = 2;                  // 业务可读失败原因；成功时为空
 }
 
 message ExactSearchRequest {
@@ -269,6 +278,13 @@ message HybridSearchRequest {
   repeated string filters = 4;
 }
 ```
+
+### 5.3 删除语义
+
+- `DeleteDocument` 按 `title` 找到对应 `Document`，写入 `deleted_at` 时间戳。
+- 同步从 OpenSearch 与向量库中按 `document_id` 过滤删除全部条目。
+- 删除过程中其它接口（导入 / 查询 / 状态）不受影响，**已就绪且未删除**的文档仍可正常被查询。
+- 删除是**幂等**的：重复删除同一 `title` 返回 `success = true`。
 
 ---
 
@@ -341,8 +357,8 @@ message HybridSearchRequest {
 **做法**：
 
 - 新增独立 `ruoyu.docretrieval` 服务
-- 暴露接口：文档导入、导入任务状态查询、精确搜索、混合搜索、命中锚点打开上下文
-- 搜索结果作为独立能力对外提供，上层业务按需消费
+- 暴露接口：文档导入、导入任务状态查询、精确搜索、混合搜索、删除文档
+- 搜索结果与删除能力作为独立能力对外提供，上层业务按需消费
 
 ### 7.3 阶段 C：能力增强
 
@@ -359,6 +375,7 @@ message HybridSearchRequest {
 - 输入单词：返回出现的文档、页码、所在句/题
 - 输入短语：返回精确短语命中 + 上下文 + 必要时补充语义相近题目
 - 扫描件：返回可读、可定位的结果（非模糊摘要）
+- 删除文档：按 `title` 软删除成功，查询结果中该文档不再出现
 
 ### 8.2 指标建议
 
@@ -369,6 +386,7 @@ message HybridSearchRequest {
 | 扫描件题目定位成功率 | 达到可用线 |
 | 精确检索耗时 | 秒级内 |
 | 语义扩展耗时 | 略慢于精确检索 |
+| 删除接口耗时 | 秒级内（同步） |
 
 ### 8.3 阶段 A 验收口径
 
