@@ -85,31 +85,33 @@
 
 ### B2. 数据模型与迁移
 
-- [ ] **B2.1** 实现 `Document` 实体 + EF Core 配置（含 `deleted_at` 软删除字段）
+- [ ] **B2.1** 实现 `Document` 实体 + EF Core 配置（含 `deleted_at` 软删除字段、唯一约束 `title`）
 - [ ] **B2.2** 实现 `DocumentPage` 实体
 - [ ] **B2.3** 实现 `DocumentSegment` 实体
 - [ ] **B2.4** 实现 `QuestionSegment` 实体
 - [ ] **B2.5** 实现 `DocumentIngestionJob` 实体
 - [ ] **B2.6** 生成并提交 EF Core 初始迁移
 - [ ] **B2.7** 数据库命名遵循 [database-spec.md](../../database-spec.md)
+- [ ] **B2.8** 为 `Document.title` 添加唯一索引（防重名）
 
 ### B3. gRPC 查询接口实现（仅对外暴露查询能力）
 
-- [ ] **B3.1** 定义 `DocumentRetrievalService` proto（仅 `ExactSearch` + `HybridSearch`）
-- [ ] **B3.2** 实现 `ExactSearch`
-- [ ] **B3.3** 实现 `HybridSearch`
-- [ ] **B3.4** 错误处理遵循 [error-handling.md](../../error-handling.md)
-- [ ] **B3.5** 加入 gRPC 拦截器（traceId、异常、限流）
-- [ ] **B3.6** 确认业务系统无法通过 gRPC 调用上传 / 删除能力
+- [ ] **B3.1** 定义 `DocumentRetrievalService` proto（仅 `ExactSearch` + `HybridSearch`，含游标分页参数）
+- [ ] **B3.2** 实现 `ExactSearch`（含游标分页）
+- [ ] **B3.3** 实现 `HybridSearch`（含游标分页）
+- [ ] **B3.4** 游标分页：`page_size` 默认 50 / 最大 100 校验
+- [ ] **B3.5** 错误处理遵循 [error-handling.md](../../error-handling.md)
+- [ ] **B3.6** 加入 gRPC 拦截器（traceId、异常、限流）
+- [ ] **B3.7** 确认业务系统无法通过 gRPC 调用上传 / 删除能力
 
 ### B4. Web 管理界面实现
 
-- [ ] **B4.1** 实现 `POST /admin/documents/upload` 文档上传端点（multipart）
-- [ ] **B4.2** 实现 `GET /admin/documents` 文档列表端点
+- [ ] **B4.1** 实现 `POST /admin/documents/upload` 文档上传端点（multipart，必填 title / subject / grade / year，重名拒绝）
+- [ ] **B4.2** 实现 `GET /admin/documents` 文档列表端点（支持分页 + keyword 模糊搜索 + subject/grade/year/status 筛选）
 - [ ] **B4.3** 实现 `GET /admin/documents/{id}/status` 导入状态查看端点
 - [ ] **B4.4** 实现 `POST /admin/documents/{id}/delete` 文档删除端点
-- [ ] **B4.5** Web 界面 UI：上传页面（文件选择 + 元数据填写）
-- [ ] **B4.6** Web 界面 UI：文档列表 + 导入状态展示
+- [ ] **B4.5** Web 界面 UI：上传页面（文件选择 + 必填元数据填写 + 重名提示）
+- [ ] **B4.6** Web 界面 UI：文档列表（分页 + keyword 搜索框 + subject/grade/year 下拉筛选 + 状态筛选）
 - [ ] **B4.7** Web 界面 UI：删除确认与结果提示
 - [ ] **B4.8** 鉴权集成（由基础设施层网关 / 反向代理负责，本服务不自行实现用户态）
 

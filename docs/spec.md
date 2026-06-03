@@ -188,19 +188,7 @@
 - 按规则排序
 - 返回带锚点的命中记录
 
-**返回协议**：
-
-```protobuf
-message SearchResponse {
-  repeated ExactMatch       exact_matches;       // 精确命中
-  repeated SemanticMatch    semantic_matches;    // 语义命中
-  string                    document_anchor;     // 文档锚点
-  string                    preview_text;        // 命中预览
-  string                    question_context;    // 题目上下文
-  int32                     page_number;         // 页码
-  double                    score;               // 综合得分
-}
-```
+**返回协议**：见 §5.3 proto 定义（`SearchResponse`）。
 
 **结果排序优先级**：
 
@@ -262,10 +250,22 @@ message SearchResponse {
 
 | 端点 | 方法 | 用途 | 使用者 |
 |------|------|------|--------|
-| `/admin/documents/upload` | `POST` (multipart) | 上传文档 | Web 管理界面 |
-| `/admin/documents` | `GET` | 查看已导入文档列表 | Web 管理界面 |
+| `/admin/documents/upload` | `POST` (multipart) | 上传文档（必填：title / subject / grade / year） | Web 管理界面 |
+| `/admin/documents` | `GET` | 查看已导入文档列表（支持分页 / 按 title 模糊搜索 / 按 subject / grade / year / status 筛选） | Web 管理界面 |
 | `/admin/documents/{id}/status` | `GET` | 查看导入任务状态 | Web 管理界面 |
 | `/admin/documents/{id}/delete` | `POST` | 删除文档（软删除） | Web 管理界面 |
+
+**文档列表查询参数**：
+
+| 参数 | 类型 | 说明 |
+|------|------|------|
+| `keyword` | query string | 按 `title` 模糊搜索 |
+| `subject` | query string | 按学科精确筛选 |
+| `grade` | query string | 按年级精确筛选 |
+| `year` | query string | 按年份精确筛选 |
+| `status` | query string | 按导入状态筛选（pending / processing / success / failed / deleted） |
+| `page` | query string | 页码（从 1 开始） |
+| `pageSize` | query string | 每页条数（默认 20） |
 
 ### 5.3 gRPC 消息定义（草案）
 
@@ -279,7 +279,8 @@ message ExactSearchRequest {
   string query = 1;
   bool phrase = 2;                     // 是否短语查询
   repeated string filters = 3;         // 教材/年级/学科/年份过滤
-  int32 top_k = 4;
+  int32 page_size = 4;                 // 默认 50，最大 100
+  string page_token = 5;               // 游标
 }
 
 message HybridSearchRequest {
@@ -287,6 +288,21 @@ message HybridSearchRequest {
   int32 exact_top_k = 2;
   int32 semantic_top_k = 3;
   repeated string filters = 4;
+  int32 page_size = 5;                 // 默认 50，最大 100
+  string page_token = 6;               // 游标
+}
+
+message SearchResponse {
+  repeated SearchResult results = 1;
+  string next_page_token = 2;          // 游标，为空时表示已到最后一页
+  int32 total_count = 3;               // 总命中数
+}
+
+message SearchResult {
+  string document_name = 1;
+  int32 page_number = 2;
+  string associated_text = 3;          // 句子（教材类）或题目文本（试卷类）
+  double score = 4;                    // 相关度评分
 }
 ```
 
