@@ -85,7 +85,7 @@
 
 ### B2. 数据模型与迁移
 
-- [ ] **B2.1** 实现 `Document` 实体 + EF Core 配置（含 `deleted_at` 软删除字段、唯一约束 `title`）
+- [ ] **B2.1** 实现 `Document` 实体 + EF Core 配置（含唯一约束 `title`）
 - [ ] **B2.2** 实现 `DocumentPage` 实体
 - [ ] **B2.3** 实现 `DocumentSegment` 实体
 - [ ] **B2.4** 实现 `QuestionSegment` 实体

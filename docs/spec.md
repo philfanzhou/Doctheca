@@ -203,7 +203,7 @@
 
 - 上传文档（PDF / Word / PPT）+ 填写元数据
 - 查看导入任务状态（进行中 / 成功 / 失败）
-- 删除文档（软删除）
+- 删除文档（硬删除）
 - 查看已导入文档列表
 
 **技术方向**：
@@ -220,7 +220,7 @@
 
 | 实体 | 作用 | 关键字段 |
 |------|------|----------|
-| `Document` | 文档元数据 | id, title, source_type, language, grade, subject, year, status, deleted_at, created_at |
+| `Document` | 文档元数据 | id, title, source_type, language, grade, subject, year, status, created_at |
 | `DocumentPage` | 页面级锚点 | id, document_id, page_number, image_path |
 | `DocumentSegment` | 句子/段落级锚点 | id, document_id, page_id, block_id, sentence_id, text, start_offset, end_offset |
 | `QuestionSegment` | 题目锚点 | id, document_id, page_id, question_id, stem, options_json, answer_area |
@@ -253,7 +253,7 @@
 | `/admin/documents/upload` | `POST` (multipart) | 上传文档（必填：title / subject / grade / year） | Web 管理界面 |
 | `/admin/documents` | `GET` | 查看已导入文档列表（支持分页 / 按 title 模糊搜索 / 按 subject / grade / year / status 筛选） | Web 管理界面 |
 | `/admin/documents/{id}/status` | `GET` | 查看导入任务状态 | Web 管理界面 |
-| `/admin/documents/{id}/delete` | `POST` | 删除文档（软删除） | Web 管理界面 |
+| `/admin/documents/{id}/delete` | `POST` | 删除文档（硬删除） | Web 管理界面 |
 
 **文档列表查询参数**：
 
@@ -308,10 +308,11 @@ message SearchResult {
 
 ### 5.4 删除语义
 
-- Web 管理界面调用删除端点时，按 `title` 找到对应 `Document`，写入 `deleted_at` 时间戳。
+- Web 管理界面调用删除端点时，按 `title` 找到对应 `Document`，执行物理删除（DELETE）。
 - 同步从 OpenSearch 与向量库中按 `document_id` 过滤删除全部条目。
-- 删除过程中 gRPC 查询接口不受影响，**已就绪且未删除**的文档仍可正常被查询。
-- 删除是**幂等**的：重复删除同一 `title` 返回 `success = true`。
+- 删除完成后释放 `title` 唯一约束（同名可重新上传）。
+- 删除过程中 gRPC 查询接口不受影响，**已就绪**的文档仍可正常被查询。
+- 删除是**幂等**的：重复删除同一 `title`（文档已不存在）返回成功。
 
 ---
 
@@ -405,7 +406,7 @@ message SearchResult {
 - 输入单词：返回出现的文档、页码、所在句/题
 - 输入短语：返回精确短语命中 + 上下文 + 必要时补充语义相近题目
 - 扫描件：返回可读、可定位的结果（非模糊摘要）
-- 删除文档：按 `title` 软删除成功，gRPC 查询结果中该文档不再出现
+- 删除文档：按 `title` 硬删除成功，gRPC 查询结果中该文档不再出现
 - Web 管理界面：能正常上传 / 删除 / 查看导入状态
 
 ### 8.2 指标建议
@@ -435,6 +436,7 @@ message SearchResult {
 - ✅ 当前仓库无 RAG 基建，需自建
 - ✅ 中规模数据精确检索优先选搜索引擎，向量库不作主检索引擎
 - ✅ 业务系统只能调用查询接口，上传 / 删除通过 Web 管理界面操作
+- ✅ 文档名唯一（重复拒绝），删除为硬删除（释放文档名）
 
 ### 9.2 核心设计原则
 
