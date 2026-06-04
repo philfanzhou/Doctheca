@@ -11,11 +11,8 @@
 
 ### A0. 启动前置
 
-- [ ] **A0.1** 敲定语言栈：混合（.NET 编排 + Python 处理） / 全 Python / 全 .NET
-- [ ] **A0.2** 敲定向量库：Qdrant / pgvector
-- [ ] **A0.3** 敲定文档存储：复用 SeaweedFS / 单独对象存储
-- [ ] **A0.4** 在 [系统架构文档](../../architecture.md) 登记服务占位
-- [ ] **A0.5** 在 docker-compose 中占位 OpenSearch / Qdrant
+- [ ] **A0.1** 在 [系统架构文档](../../architecture.md) 登记服务占位
+- [ ] **A0.2** 在 docker-compose 中占位 OpenSearch / Qdrant
 
 ### A1. 样本准备
 
@@ -24,37 +21,36 @@
 - [ ] **A1.3** 收集至少 10 份扫描试卷 PDF
 - [ ] **A1.4** 编写样本登记脚本（记录来源、年级、学科、年份）
 
-### A2. 文档解析层（Python POC）
+### A2. 文档解析层（.NET POC）
 
-- [ ] **A2.1** 选型 `Docling` 或 `MinerU`，记录对比结论
-- [ ] **A2.2** 用 `Docling/MinerU` 抽取 PDF 原生文本
-- [ ] **A2.3** 验证抽取结果含页码、段落、块、行级位置
-- [ ] **A2.4** 集成 `PaddleOCR` 处理扫描件
-- [ ] **A2.5** 用 `OCRmyPDF` 对扫描件做预处理（如需要）
-- [ ] **A2.6** 定义结构化 JSON Schema（含 `tokens` 字段）
-- [ ] **A2.7** 实现句子边界识别
-- [ ] **A2.8** 实现试卷题目边界识别（题号、题干、选项、答案区域）
-- [ ] **A2.9** 写一个最小 CLI：`python ingest.py <file> --out <json>`
-- [ ] **A2.10** 抽取成功率自检脚本（电子版 / Word / 扫描件分别统计）
+- [ ] **A2.1** 集成 PDFPig 或 iText，抽取 PDF 原生文本
+- [ ] **A2.2** 验证抽取结果含页码、段落、块、行级位置
+- [ ] **A2.3** 集成 OpenXML SDK，解析 Word / PPT
+- [ ] **A2.4** 集成 Tesseract.NET，处理扫描件 OCR
+- [ ] **A2.5** 定义结构化 JSON Schema（含 `tokens` 字段）
+- [ ] **A2.6** 实现句子边界识别
+- [ ] **A2.7** 实现试卷题目边界识别（题号、题干、选项、答案区域）
+- [ ] **A2.8** 写一个最小 CLI：`dotnet run -- ingest <file> --out <json>`
+- [ ] **A2.9** 抽取成功率自检脚本（电子版 / Word / 扫描件分别统计）
 
 ### A3. 精确检索层（OpenSearch POC）
 
 - [ ] **A3.1** 启动本地 OpenSearch
 - [ ] **A3.2** 设计索引 Mapping（含 `document_id / page / block_id / sentence_id / question_id / text` 与高亮配置）
-- [ ] **A3.3** 编写索引写入脚本（消费 A2 的结构化 JSON）
+- [ ] **A3.3** 编写索引写入程序（消费 A2 的结构化 JSON）
 - [ ] **A3.4** 实现单词查询
 - [ ] **A3.5** 实现短语查询
 - [ ] **A3.6** 实现大小写归一 + 词形归一
 - [ ] **A3.7** 实现命中结果高亮偏移
-- [ ] **A3.8** 编写最小查询 CLI：`python search.py "encourage"`
+- [ ] **A3.8** 编写最小查询 CLI：`dotnet run -- search "encourage"`
 
-### A4. 语义召回层（Qdrant / pgvector POC）
+### A4. 语义召回层（Qdrant POC）
 
-- [ ] **A4.1** 启动本地 Qdrant（或 PostgreSQL + pgvector）
-- [ ] **A4.2** 选型 Embedding 模型（英文优先）
+- [ ] **A4.1** 启动本地 Qdrant
+- [ ] **A4.2** 部署/接入 Embedding 模型服务（如 Ollama）
 - [ ] **A4.3** 实现句子级切分
 - [ ] **A4.4** 实现题目级切分
-- [ ] **A4.5** 实现 Embedding 写入
+- [ ] **A4.5** 实现 Embedding 写入（.NET 调用模型服务 → 写入 Qdrant）
 - [ ] **A4.6** 实现语义相似查询
 - [ ] **A4.7** 验证返回结果带锚点（不是纯 chunk）
 
@@ -109,7 +105,7 @@
 - [ ] **B4.1** 实现 `POST /admin/documents/upload` 文档上传端点（multipart，必填 title / subject / grade / year，重名拒绝）
 - [ ] **B4.2** 实现 `GET /admin/documents` 文档列表端点（支持分页 + keyword 模糊搜索 + subject/grade/year/status 筛选）
 - [ ] **B4.3** 实现 `GET /admin/documents/{id}/status` 导入状态查看端点
-- [ ] **B4.4** 实现 `POST /admin/documents/{id}/delete` 文档删除端点
+- [ ] **B4.4** 实现 `DELETE /admin/documents/{title}` 文档删除端点（硬删除，按文档名）
 - [ ] **B4.5** Web 界面 UI：上传页面（文件选择 + 必填元数据填写 + 重名提示）
 - [ ] **B4.6** Web 界面 UI：文档列表（分页 + keyword 搜索框 + subject/grade/year 下拉筛选 + 状态筛选）
 - [ ] **B4.7** Web 界面 UI：删除确认与结果提示
@@ -117,13 +113,13 @@
 
 ### B5. 解析与索引同步
 
-- [ ] **B5.1** 把阶段 A 的 Python 解析器封装为独立 Worker（`ruoyu.docretrieval.workers`）
+- [ ] **B5.1** 实现文档解析器（PDFPig / OpenXML / Tesseract.NET 封装）
 - [ ] **B5.2** 实现导入任务队列（PostgreSQL 轮询 / Redis Stream / RabbitMQ 任选）
 - [ ] **B5.3** 解析 Worker 消费任务 → 写结构化数据
 - [ ] **B5.4** 索引同步器：结构化数据 → OpenSearch
-- [ ] **B5.5** 索引同步器：结构化数据 → 向量库
+- [ ] **B5.5** 索引同步器：结构化数据 → Qdrant（含 Embedding 调用）
 - [ ] **B5.6** 失败重试 + 死信
-- [ ] **B5.7** 删除清理：按 `document_id` 从 OpenSearch 与向量库移除条目
+- [ ] **B5.7** 删除清理：按 `document_id` 从 OpenSearch 与 Qdrant 移除条目，从 SeaweedFS 删除原始文件
 
 ### B6. 测试
 
@@ -137,10 +133,9 @@
 ### B7. 部署
 
 - [ ] **B7.1** `Host` 项目 Dockerfile（含 gRPC + Web Admin）
-- [ ] **B7.2** Worker 镜像 Dockerfile
-- [ ] **B7.3** docker-compose 新增服务条目
-- [ ] **B7.4** 启动冒烟测试脚本（gRPC + Web Admin 均覆盖）
-- [ ] **B7.5** 在 [deployment.md](../../deployment.md) 登记部署说明
+- [ ] **B7.2** docker-compose 新增服务条目
+- [ ] **B7.3** 启动冒烟测试脚本（gRPC + Web Admin 均覆盖）
+- [ ] **B7.4** 在 [deployment.md](../../deployment.md) 登记部署说明
 
 ---
 
@@ -170,10 +165,10 @@
 
 | 阶段 | 总任务 | 已完成 | 进行中 | 阻塞 |
 |------|--------|--------|--------|------|
-| 阶段 A | 39 | 0 | 0 | 0 |
-| 阶段 B | 51 | 0 | 0 | 0 |
+| 阶段 A | 35 | 0 | 0 | 0 |
+| 阶段 B | 49 | 0 | 0 | 0 |
 | 阶段 C | 7 | 0 | 0 | 0 |
 | 跨阶段 | 5 | 0 | 0 | 0 |
-| **合计** | **102** | **0** | **0** | **0** |
+| **合计** | **96** | **0** | **0** | **0** |
 
 > 表格在阶段切换时手工更新。

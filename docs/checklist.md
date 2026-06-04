@@ -4,13 +4,15 @@
 >
 > 用法：每个阶段交付前，逐项勾选；未勾选项需在交付说明中显式标注 N/A 或延期原因。
 >
-> **业务验收口径**见 [requirements.md §6](./requirements.md#6-业务验收口径)；**技术指标**见本文档与 [spec.md §8](./spec.md#8-验收标准)。
+> **业务验收口径**见 [requirements.md §6](./requirements.md#6-业务验收口径)；**技术指标**见本文档与 [spec.md §11](./spec.md#11-验收标准)。
 
-## 0. 阶段 A 启动前置（必须先敲定）
+## 0. 阶段 A 启动前置（已完成）
 
-- [ ] 语言栈决策已确认：混合（.NET + Python） / 全 Python / 全 .NET
-- [ ] 向量库选型已确认：Qdrant / pgvector
-- [ ] 文档存储方案已确认：复用 SeaweedFS / 单独对象存储
+> 以下决策已在 ADR 中确认，阶段 A 可直接启动。
+
+- [x] 语言栈决策已确认：全 .NET（[ADR 0002](./adr/0002-language-stack.md)）
+- [x] 向量库选型已确认：Qdrant（[ADR 0003](./adr/0003-vector-database.md)）
+- [x] 文档存储方案已确认：复用 SeaweedFS（[ADR 0004](./adr/0004-document-storage.md)）
 - [ ] 服务端口与命名空间已登记到 [系统架构文档](../../architecture.md)
 - [ ] 中间件依赖（OpenSearch / Qdrant）已在 docker-compose 中占位
 
@@ -103,7 +105,7 @@
 - [ ] 上传端点可接收 PDF / Word / PPT 文件 + 必填元数据（title / subject / grade / year）
 - [ ] 上传时必填元数据缺失 → 界面拦截
 - [ ] 上传时文档名已存在 → 立即拒绝，提示"文档名已存在"
-- [ ] 导入任务在界面可见，状态（进行中 / 成功 / 失败）实时更新
+- [ ] 导入状态在界面可见，状态（进行中 / 成功 / 失败）实时更新
 - [ ] 删除端点按 title 硬删除成功（物理删除元数据、文件、任务记录）
 - [ ] 删除后 OpenSearch 中按 `document_id` 过滤的条目被清空
 - [ ] 删除后向量库中按 `document_id` 过滤的条目被清空
@@ -148,8 +150,7 @@
 ### 4.2 代码质量
 
 - [ ] 通过 [pre-commit-check.md](../../../.testcode/docs/pre-commit-check.md) 全部 4 阶段
-- [ ] .NET 项目遵循 [DotNetCodingPolicy.md](../../DotNetCodingPolicy.md)（如适用）
-- [ ] Python 工具链有 `pyproject.toml` / `requirements.txt` 与基本 lint
+- [ ] .NET 项目遵循 [DotNetCodingPolicy.md](../../DotNetCodingPolicy.md)
 - [ ] 单元测试覆盖核心域逻辑
 
 ### 4.3 可观测性
