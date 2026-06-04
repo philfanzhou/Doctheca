@@ -2,7 +2,7 @@
 
 ## 状态
 
-待决定 (Pending)
+已决定 (Accepted)
 
 ## 上下文
 
@@ -15,15 +15,15 @@ DocRetrieval 服务需要存储原始文档文件（PDF/Word/PPT），用于：
 
 ## 决策
 
-**待决定**
+选择 **复用 SeaweedFS** 作为文档存储方案。
 
 选项：
-1. **复用 SeaweedFS**（推荐）- 与现有系统保持一致
+1. ~~**复用 SeaweedFS**（推荐）~~ - 与现有系统保持一致 ✅ 已选
 2. **独立对象存储** - 如 MinIO 或云对象存储
 
 ## 备选方案分析
 
-### 方案 A：复用 SeaweedFS
+### 方案 A：复用 SeaweedFS ✅
 - **优点**：
   - 与现有系统架构一致
   - 运维已熟悉
@@ -41,8 +41,14 @@ DocRetrieval 服务需要存储原始文档文件（PDF/Word/PPT），用于：
 
 ## 理由
 
-**待决定**
+选择 SeaweedFS 是因为：
+- 项目已有 SeaweedFS 基础设施，复用可降低运维成本
+- 团队熟悉 SeaweedFS 的部署和使用
+- 与现有系统架构保持一致，避免技术栈碎片化
+- DocRetrieval 的存储需求（原始文件保存）是标准对象存储场景，SeaweedFS 完全胜任
 
 ## 后果
 
-**待决定**
+- 需要为 DocRetrieval 规划独立的 bucket/路径命名策略
+- 删除文档时需同步清理 SeaweedFS 中的原始文件
+- 需确保 SeaweedFS 的可用性与备份策略覆盖 DocRetrieval 需求
