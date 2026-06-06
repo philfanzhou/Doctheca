@@ -8,11 +8,12 @@
 
 ## 0. 阶段 A 启动前置（必须先敲定）
 
-- [ ] 语言栈决策已确认：混合（.NET + Python） / 全 Python / 全 .NET
-- [ ] 向量库选型已确认：Qdrant / pgvector
-- [ ] 文档存储方案已确认：复用 SeaweedFS / 单独对象存储
-- [ ] 服务端口与命名空间已登记到 [系统架构文档](../../architecture.md)
-- [ ] 中间件依赖（OpenSearch / Qdrant）已在 docker-compose 中占位
+- [x] 语言栈决策已确认：全 .NET — [ADR 0002](./adr/0002-language-stack.md)
+- [x] 向量库选型已确认：Qdrant — [ADR 0003](./adr/0003-vector-database.md)
+- [x] 文档存储方案已确认：复用 SeaweedFS — [ADR 0004](./adr/0004-document-storage.md)
+- [x] 导入队列选型已确认：PostgreSQL 轮询 — [ADR 0005](./adr/0005-ingestion-queue.md)
+- [x] 服务端口与命名空间已登记到 [系统架构文档](../../architecture.md)
+- [ ] OpenSearch / Qdrant 服务已就绪
 
 ---
 
@@ -119,7 +120,7 @@
 
 - [ ] 已在 [系统架构文档](../../architecture.md) 中登记服务端口与依赖
 - [ ] 已与 `ruoyu.student` / `ruoyu.questionBank` 等至少 1 个上游服务做联调
-- [ ] 服务能在 docker-compose 中独立拉起
+- [ ] 服务能独立启动
 - [ ] gRPC 查询端点可被 grpcurl 调通
 - [ ] Web 管理界面可在浏览器正常访问
 
@@ -160,7 +161,7 @@
 
 ### 4.4 部署与运行
 
-- [ ] 镜像可在 docker-compose 中启动
+- [ ] 服务可独立启动
 - [ ] 启动后端到端冒烟测试通过
 - [ ] OpenSearch / Qdrant 等中间件有健康检查
 

@@ -1,0 +1,154 @@
+import axios, { type AxiosInstance } from 'axios'
+
+export interface DocPagedResponse<T> {
+  success: boolean
+  data: T[]
+  total: number
+  page: number
+  pageSize: number
+  totalPages: number
+}
+
+export interface Document {
+  id: string
+  title: string
+  sourceType: string
+  fileHash: string
+  filePath: string
+  fileSize: number
+  language: string
+  grade: string
+  subject: string
+  year: string
+  tags: string | null
+  status: string
+  createdAt: string
+  updatedAt: string | null
+}
+
+export interface CreateDocumentRequest {
+  title: string
+  subject: string
+  grade: string
+  year: string
+  tags?: string[]
+}
+
+export interface UpdateMetadataRequest {
+  subject?: string
+  grade?: string
+  year?: string
+  tags?: string[]
+}
+
+export interface DocumentStatus {
+  documentId: string
+  title: string
+  status: string
+  jobs: Job[]
+}
+
+export interface Job {
+  jobId: string
+  status: string
+  parserVersion: string | null
+  ocrVersion: string | null
+  errorMessage: string | null
+  startedAt: string | null
+  finishedAt: string | null
+}
+
+export interface ApiResponse<T> {
+  success: boolean
+  data: T
+}
+
+class DocApiClient {
+  private client: AxiosInstance
+
+  constructor() {
+    this.client = axios.create({
+      timeout: 30000
+    })
+  }
+
+  async uploadDocument(
+    file: File,
+    title: string,
+    subject: string,
+    grade: string,
+    year: string,
+    tags?: string[]
+  ): Promise<ApiResponse<{ documentId: string; title: string; jobId: string; status: string }>> {
+    const formData = new FormData()
+    formData.append('file', file)
+    formData.append('title', title)
+    formData.append('subject', subject)
+    formData.append('grade', grade)
+    formData.append('year', year)
+    if (tags && tags.length > 0) {
+      formData.append('tags', JSON.stringify(tags))
+    }
+
+    const response = await this.client.post('/admin/documents/upload', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
+    })
+    return response.data
+  }
+
+  async listDocuments(
+    page: number = 1,
+    pageSize: number = 20,
+    status?: string,
+    subject?: string,
+    grade?: string
+  ): Promise<DocPagedResponse<Document>> {
+    const params = { page, pageSize }
+    if (status) Object.assign(params, { status })
+    if (subject) Object.assign(params, { subject })
+    if (grade) Object.assign(params, { grade })
+
+    const response = await this.client.get('/admin/documents', { params })
+    return response.data
+  }
+
+  async getDocumentStatus(id: string): Promise<ApiResponse<DocumentStatus>> {
+    const response = await this.client.get(`/admin/documents/${id}/status`)
+    return response.data
+  }
+
+  async deleteDocument(title: string): Promise<ApiResponse<{ title: string; deleted: boolean }>> {
+    const response = await this.client.delete(`/admin/documents/${title}`)
+    return response.data
+  }
+
+  async updateMetadata(
+    title: string,
+    data: UpdateMetadataRequest
+  ): Promise<ApiResponse<{ id: string; title: string; subject: string; grade: string; year: string; tags: string[] | null }>> {
+    const response = await this.client.put(`/admin/documents/${title}/metadata`, data)
+    return response.data
+  }
+}
+
+export function createDocApiClient(): DocApiClient {
+  return new DocApiClient()
+}
+
+export function getDocErrorMessage(error: unknown): string {
+  if (axios.isAxiosError(error)) {
+    const data = error.response?.data as { message?: string } | undefined
+    if (data?.message) {
+      return data.message
+    }
+    return error.message
+  }
+
+  if (error instanceof Error) {
+    return error.message
+  }
+
+  return 'An unknown error occurred'
+}

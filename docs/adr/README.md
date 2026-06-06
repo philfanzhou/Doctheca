@@ -14,7 +14,8 @@ docs/adr/
 ├── 0001-record-architecture-decisions.md
 ├── 0002-language-stack.md
 ├── 0003-vector-database.md
-└── 0004-document-storage.md
+├── 0004-document-storage.md
+└── 0005-ingestion-queue.md
 ```
 
 ## ADR 模板

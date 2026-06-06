@@ -1,0 +1,12 @@
+syntax = "proto3";
+
+package ruoyu.study.docretrieval.v1;
+
+import "Protos/docretrieval.common.proto";
+
+option csharp_namespace = "Ruoyu.Study.DocRetrieval.Contract.Protos";
+
+service DocumentRetrievalService {
+  rpc ExactSearch(ExactSearchRequest) returns (SearchResponse);
+  rpc HybridSearch(HybridSearchRequest) returns (SearchResponse);
+}

@@ -44,7 +44,7 @@ DocRetrieval 服务需要：
   - 与现有技术栈完全一致
   - 单一技术栈，部署简单
   - 文档解析（iTextSharp/OpenXML）、OCR（Tesseract.NET）均可胜任
-  - Embedding 可调用外部模型服务（如 Ollama），不依赖 .NET 推理
+  - Embedding 可调用外部 Embedding API（如 SiliconFlow），不依赖 .NET 推理
 - **缺点**：
   - PDF/PPT 解析能力略逊于 Python 生态，但英文场景足够
   - OCR 精度不如 PaddleOCR，但 Tesseract.NET 英文识别率可接受

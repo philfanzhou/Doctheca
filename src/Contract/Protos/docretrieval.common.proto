@@ -1,0 +1,72 @@
+syntax = "proto3";
+
+package ruoyu.study.docretrieval.v1;
+
+option csharp_namespace = "Ruoyu.Study.DocRetrieval.Contract.Protos";
+
+// 文档状态
+enum DocumentStatus {
+  DOCUMENT_STATUS_UNSPECIFIED = 0;
+  DOCUMENT_STATUS_PENDING = 1;
+  DOCUMENT_STATUS_PROCESSING = 2;
+  DOCUMENT_STATUS_READY = 3;
+  DOCUMENT_STATUS_FAILED = 4;
+}
+
+// 导入任务状态
+enum IngestionJobStatus {
+  INGESTION_JOB_STATUS_UNSPECIFIED = 0;
+  INGESTION_JOB_STATUS_PENDING = 1;
+  INGESTION_JOB_STATUS_PROCESSING = 2;
+  INGESTION_JOB_STATUS_SUCCESS = 3;
+  INGESTION_JOB_STATUS_FAILED = 4;
+}
+
+// 查询过滤条件
+message SearchFilter {
+  string document_title = 1;
+  string subject = 2;
+  string grade = 3;
+  string year = 4;
+}
+
+// 精确检索请求
+message ExactSearchRequest {
+  string query = 1;
+  bool phrase = 2;
+  SearchFilter filter = 3;
+  int32 page_size = 4;
+  string page_token = 5;
+}
+
+// 混合检索请求
+message HybridSearchRequest {
+  string query = 1;
+  bool phrase = 2;
+  int32 exact_top_k = 3;
+  int32 semantic_top_k = 4;
+  SearchFilter filter = 5;
+  int32 page_size = 6;
+  string page_token = 7;
+}
+
+// 检索响应
+message SearchResponse {
+  repeated SearchResult results = 1;
+  string next_page_token = 2;
+  int32 total_count = 3;
+}
+
+// 单条检索结果
+message SearchResult {
+  string document_name = 1;
+  int32 page_number = 2;
+  string associated_text = 3;
+  double score = 4;
+  string match_type = 5;
+  string segment_id = 6;
+  int32 start_offset = 7;
+  int32 end_offset = 8;
+}
+
+message Empty {}

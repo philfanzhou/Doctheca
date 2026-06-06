@@ -23,7 +23,8 @@ backend/ruoyu.docretrieval/
         ├── 0001-record-architecture-decisions.md
         ├── 0002-language-stack.md
         ├── 0003-vector-database.md
-        └── 0004-document-storage.md
+        ├── 0004-document-storage.md
+        └── 0005-ingestion-queue.md
 ```
 
 > 代码与配置目录（`src/Contract`、`src/Database`、`src/Domain`、`src/Host`、`src/Service`、`src/WebAdmin`、`test/` 等）将在阶段 A 评审通过后按 [tasks.md](./tasks.md) 创建。
@@ -46,7 +47,8 @@ backend/ruoyu.docretrieval/
 - **语言栈**：全 .NET（.NET 8 + ASP.NET Core） — [ADR 0002](./adr/0002-language-stack.md)
 - **向量库**：Qdrant — [ADR 0003](./adr/0003-vector-database.md)
 - **文档存储**：复用现有 SeaweedFS — [ADR 0004](./adr/0004-document-storage.md)
-- **架构**：文档解析（PDFPig/OpenXML/Tesseract.NET）+ 精确检索（OpenSearch）+ 语义召回（Qdrant）+ 编排返回（.NET gRPC）
+- **导入队列**：PostgreSQL 轮询 — [ADR 0005](./adr/0005-ingestion-queue.md)
+- **架构**：文档解析（PDFPig/OpenXML/Tesseract.NET）+ 精确检索（OpenSearch）+ 语义召回（Qdrant + SiliconFlow Embedding API）+ 编排返回（.NET gRPC）
 - **核心抽象**："文档展示锚点"是一等数据，所有检索结果必须可还原到文档 / 页码 / 块 / 句 / 题号
 - **明确不做**：聊天式伪 RAG、纯向量库作主检索、把检索能力塞进现有背单词服务
 

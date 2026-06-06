@@ -12,7 +12,7 @@
 ### A0. 启动前置
 
 - [ ] **A0.1** 在 [系统架构文档](../../architecture.md) 登记服务占位
-- [ ] **A0.2** 在 docker-compose 中占位 OpenSearch / Qdrant
+- [ ] **A0.2** 确认 OpenSearch / Qdrant 服务可用
 
 ### A1. 样本准备
 
@@ -47,7 +47,7 @@
 ### A4. 语义召回层（Qdrant POC）
 
 - [ ] **A4.1** 启动本地 Qdrant
-- [ ] **A4.2** 部署/接入 Embedding 模型服务（如 Ollama）
+- [ ] **A4.2** 接入 SiliconFlow Embedding API
 - [ ] **A4.3** 实现句子级切分
 - [ ] **A4.4** 实现题目级切分
 - [ ] **A4.5** 实现 Embedding 写入（.NET 调用模型服务 → 写入 Qdrant）
@@ -133,7 +133,7 @@
 ### B7. 部署
 
 - [ ] **B7.1** `Host` 项目 Dockerfile（含 gRPC + Web Admin）
-- [ ] **B7.2** docker-compose 新增服务条目
+- [ ] **B7.2** 配置服务独立启动脚本
 - [ ] **B7.3** 启动冒烟测试脚本（gRPC + Web Admin 均覆盖）
 - [ ] **B7.4** 在 [deployment.md](../../deployment.md) 登记部署说明
 
