@@ -22,6 +22,7 @@ public class DocumentDomainService
     private readonly IDocumentIngestionJobRepository _jobRepository;
     private readonly IUnitOfWork _unitOfWork;
     private readonly ISearchIndexService? _searchIndexService;
+    private readonly IQdrantService? _qdrantService;
     private readonly ILogger<DocumentDomainService> _logger;
 
     public DocumentDomainService(
@@ -33,7 +34,8 @@ public class DocumentDomainService
         IDocumentIngestionJobRepository jobRepository,
         IUnitOfWork unitOfWork,
         ILogger<DocumentDomainService> logger,
-        ISearchIndexService? searchIndexService = null)
+        ISearchIndexService? searchIndexService = null,
+        IQdrantService? qdrantService = null)
     {
         _documentRepository = documentRepository;
         _pageRepository = pageRepository;
@@ -43,6 +45,7 @@ public class DocumentDomainService
         _jobRepository = jobRepository;
         _unitOfWork = unitOfWork;
         _searchIndexService = searchIndexService;
+        _qdrantService = qdrantService;
         _logger = logger;
     }
 
@@ -161,6 +164,19 @@ public class DocumentDomainService
             catch (Exception ex)
             {
                 _logger.LogError(ex, "删除文档搜索索引失败：{Title}", title);
+            }
+        }
+
+        // 清理 Qdrant 向量数据
+        if (_qdrantService != null)
+        {
+            try
+            {
+                await _qdrantService.DeleteDocumentVectorsAsync(document.Id);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "删除文档向量数据失败：{Title}", title);
             }
         }
 

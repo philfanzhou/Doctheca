@@ -49,6 +49,11 @@ public class OpenSearchIndexService : ISearchIndexService
         {
             settings = new
             {
+                index = new
+                {
+                    number_of_shards = 1,
+                    number_of_replicas = 0
+                },
                 analysis = new
                 {
                     analyzer = new
@@ -58,6 +63,12 @@ public class OpenSearchIndexService : ISearchIndexService
                             type = "custom",
                             tokenizer = "standard",
                             filter = new[] { "lowercase", "english_stop", "english_stemmer" }
+                        },
+                        english_phrase = new
+                        {
+                            type = "custom",
+                            tokenizer = "standard",
+                            filter = new[] { "lowercase" }
                         }
                     },
                     filter = new
@@ -72,15 +83,7 @@ public class OpenSearchIndexService : ISearchIndexService
                 properties = new
                 {
                     document_id = new { type = "keyword" },
-                    document_title = new
-                    {
-                        type = "text",
-                        analyzer = "english_custom",
-                        fields = new
-                        {
-                            keyword = new { type = "keyword" }
-                        }
-                    },
+                    document_title = new { type = "keyword" },
                     subject = new { type = "keyword" },
                     grade = new { type = "keyword" },
                     year = new { type = "keyword" },
@@ -95,7 +98,7 @@ public class OpenSearchIndexService : ISearchIndexService
                         analyzer = "english_custom",
                         fields = new
                         {
-                            exact = new { type = "text", analyzer = "standard" },
+                            exact = new { type = "text", analyzer = "english_phrase" },
                             keyword = new { type = "keyword", ignore_above = 256 }
                         }
                     },
@@ -260,8 +263,9 @@ public class OpenSearchIndexService : ISearchIndexService
         var indexName = _options.IndexName;
 
         // Build the main query
+        // 短语查询使用 text.exact 字段（english_phrase 分析器，仅小写归一不做词干提取）
         object mainQuery = phrase
-            ? new { match_phrase = new { text = new { query } } }
+            ? new { match_phrase = new { text = new { query, @operator = "and" } } }
             : new { match = new { text = new { query } } };
 
         // Build filter clauses
@@ -275,7 +279,7 @@ public class OpenSearchIndexService : ISearchIndexService
             if (!string.IsNullOrEmpty(filter.Year))
                 filterClauses.Add(new { term = new { year = new { value = filter.Year } } });
             if (!string.IsNullOrEmpty(filter.DocumentTitle))
-                filterClauses.Add(new { match = new { document_title = new { query = filter.DocumentTitle } } });
+                filterClauses.Add(new { term = new { document_title = new { value = filter.DocumentTitle } } });
         }
 
         object queryObj = filterClauses.Count > 0
@@ -401,7 +405,53 @@ public class OpenSearchIndexService : ISearchIndexService
         string query, bool phrase, int exactTopK, int semanticTopK,
         SearchFilterModel? filter, int pageSize, string? pageToken)
     {
-        // Semantic search will be added when embedding service is ready
-        return await ExactSearchAsync(query, phrase, filter, pageSize, pageToken);
+        // 获取精确搜索结果
+        var (exactResults, totalCount, nextToken) = await ExactSearchAsync(query, phrase, filter, pageSize, pageToken);
+
+        // 获取语义搜索结果
+        List<SearchResultModel> semanticResults;
+        try
+        {
+            var qdrantService = _serviceProvider.GetService<IQdrantService>();
+            if (qdrantService != null)
+            {
+                semanticResults = await qdrantService.SemanticSearchAsync(query, semanticTopK, filter);
+            }
+            else
+            {
+                semanticResults = new List<SearchResultModel>();
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Qdrant 语义搜索失败，仅返回精确搜索结果");
+            semanticResults = new List<SearchResultModel>();
+        }
+
+        // 合并去重（按 document_id + page_number + segment_id 去重键）
+        var seen = new HashSet<string>();
+        var mergedResults = new List<SearchResultModel>();
+
+        // 精确结果优先
+        foreach (var result in exactResults)
+        {
+            var key = $"{result.DocumentName}|{result.PageNumber}|{result.SegmentId}";
+            if (seen.Add(key))
+            {
+                mergedResults.Add(result);
+            }
+        }
+
+        // 语义结果补充
+        foreach (var result in semanticResults)
+        {
+            var key = $"{result.DocumentName}|{result.PageNumber}|{result.SegmentId}";
+            if (seen.Add(key))
+            {
+                mergedResults.Add(result);
+            }
+        }
+
+        return (mergedResults, totalCount, nextToken);
     }
 }

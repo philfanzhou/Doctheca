@@ -23,7 +23,7 @@ public class DocRetrievalDbContext : DbContext
         modelBuilder.Entity<DocumentEntity>(entity =>
         {
             entity.HasIndex(e => e.Title).IsUnique();
-            entity.HasIndex(e => e.FileHash).IsUnique();
+            entity.HasIndex(e => e.FileHash); // 非唯一索引：允许失败文档的 hash 重复，业务层按 file_hash+status='ready' 校验唯一性
             entity.HasIndex(e => new { e.Subject, e.Grade, e.Year });
             entity.HasIndex(e => e.Status);
         });

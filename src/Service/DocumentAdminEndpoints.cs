@@ -74,6 +74,10 @@ public static class DocumentAdminEndpoints
         string filePath;
         using (var stream = file.OpenReadStream())
         {
+            // 加密文件检测（必须在异步阶段之前拒绝）
+            if (IsEncryptedPdf(stream, file.ContentType))
+                return Results.BadRequest(new { success = false, message = "不支持加密文件", errorCode = "DOCRETRIEVAL_FILE_ENCRYPTED" });
+
             using var sha256 = SHA256.Create();
             fileHash = BitConverter.ToString(await sha256.ComputeHashAsync(stream)).Replace("-", "").ToLowerInvariant();
             stream.Position = 0;
@@ -124,10 +128,16 @@ public static class DocumentAdminEndpoints
         }
         catch (DocRetrievalValidationException ex)
         {
-            var errorCode = ex.Message.Contains("文档名已存在") ? "DOCRETRIEVAL_TITLE_ALREADY_EXISTS"
-                : ex.Message.Contains("文件已被导入") ? "DOCRETRIEVAL_FILE_HASH_ALREADY_EXISTS"
-                : "DOCRETRIEVAL_METADATA_REQUIRED";
-            return Results.Conflict(new { success = false, message = ex.Message, errorCode });
+            var (statusCode, errorCode) = ex.Message switch
+            {
+                var msg when msg.Contains("文档名已存在") => (StatusCodes.Status409Conflict, "DOCRETRIEVAL_TITLE_ALREADY_EXISTS"),
+                var msg when msg.Contains("文件已被导入") => (StatusCodes.Status409Conflict, "DOCRETRIEVAL_FILE_HASH_ALREADY_EXISTS"),
+                var msg when msg.Contains("学科仅支持") => (StatusCodes.Status400BadRequest, "DOCRETRIEVAL_SUBJECT_INVALID"),
+                var msg when msg.Contains("年级取值非法") => (StatusCodes.Status400BadRequest, "DOCRETRIEVAL_GRADE_INVALID"),
+                var msg when msg.Contains("不能为空") => (StatusCodes.Status400BadRequest, "DOCRETRIEVAL_METADATA_REQUIRED"),
+                _ => (StatusCodes.Status400BadRequest, "DOCRETRIEVAL_METADATA_REQUIRED")
+            };
+            return Results.Json(new { success = false, message = ex.Message, errorCode }, statusCode: statusCode);
         }
     }
 
@@ -274,10 +284,15 @@ public static class DocumentAdminEndpoints
         }
         catch (DocRetrievalValidationException ex)
         {
-            var statusCode = ex.Message.Contains("不存在") ? StatusCodes.Status404NotFound
-                : ex.Message.Contains("未就绪") ? StatusCodes.Status422UnprocessableEntity
-                : StatusCodes.Status400BadRequest;
-            return Results.Json(new { success = false, message = ex.Message }, statusCode: statusCode);
+            var (statusCode, errorCode) = ex.Message switch
+            {
+                var msg when msg.Contains("不存在") => (StatusCodes.Status404NotFound, "DOCRETRIEVAL_DOCUMENT_NOT_FOUND"),
+                var msg when msg.Contains("未就绪") => (StatusCodes.Status422UnprocessableEntity, "DOCRETRIEVAL_DOCUMENT_NOT_READY"),
+                var msg when msg.Contains("学科仅支持") => (StatusCodes.Status400BadRequest, "DOCRETRIEVAL_SUBJECT_INVALID"),
+                var msg when msg.Contains("年级取值非法") => (StatusCodes.Status400BadRequest, "DOCRETRIEVAL_GRADE_INVALID"),
+                _ => (StatusCodes.Status400BadRequest, "DOCRETRIEVAL_METADATA_REQUIRED")
+            };
+            return Results.Json(new { success = false, message = ex.Message, errorCode }, statusCode: statusCode);
         }
     }
 

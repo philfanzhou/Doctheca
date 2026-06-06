@@ -82,3 +82,47 @@ public class DocumentIngestionJobModel
     public DateTimeOffset? FinishedAt { get; set; }
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 }
+
+/// <summary>
+/// 文档解析结果
+/// </summary>
+public class ParsedDocument
+{
+    public List<ParsedPage> Pages { get; set; } = [];
+}
+
+/// <summary>
+/// 解析后的页面
+/// </summary>
+public class ParsedPage
+{
+    public int PageNumber { get; set; }
+    public List<ParsedSegment> Segments { get; set; } = [];
+    public List<ParsedQuestion> Questions { get; set; } = [];
+}
+
+/// <summary>
+/// 解析后的文本片段
+/// </summary>
+public class ParsedSegment
+{
+    public string BlockId { get; set; } = string.Empty;
+    public string SentenceId { get; set; } = string.Empty;
+    public string SegmentType { get; set; } = "sentence";
+    public string Text { get; set; } = string.Empty;
+    public int StartOffset { get; set; }
+    public int EndOffset { get; set; }
+}
+
+/// <summary>
+/// 解析后的题目
+/// </summary>
+public class ParsedQuestion
+{
+    public string QuestionId { get; set; } = string.Empty;
+    public string Stem { get; set; } = string.Empty;
+    public string? OptionsJson { get; set; }
+    public string? AnswerArea { get; set; }
+    public int StartOffset { get; set; }
+    public int EndOffset { get; set; }
+}

@@ -78,13 +78,13 @@ public class DocumentRetrievalServiceImpl : DocumentRetrievalService.DocumentRet
     private static void ValidateSearchRequest(string query, int pageSize)
     {
         if (string.IsNullOrWhiteSpace(query))
-            throw new RpcException(new Status(StatusCode.InvalidArgument, "查询词不能为空"));
+            throw new RpcException(new Status(StatusCode.InvalidArgument, "DOCRETRIEVAL_QUERY_REQUIRED: 查询词不能为空"));
 
         if (query.Length > 200)
-            throw new RpcException(new Status(StatusCode.InvalidArgument, "查询词超过200字符"));
+            throw new RpcException(new Status(StatusCode.InvalidArgument, "DOCRETRIEVAL_QUERY_TOO_LONG: 查询词超过200字符"));
 
         if (pageSize > 100)
-            throw new RpcException(new Status(StatusCode.InvalidArgument, "page_size超过最大值100"));
+            throw new RpcException(new Status(StatusCode.InvalidArgument, "DOCRETRIEVAL_PAGE_SIZE_INVALID: page_size超过最大值100"));
     }
 
     private static SearchFilterModel? MapFilter(SearchFilter? filter)

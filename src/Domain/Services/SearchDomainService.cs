@@ -93,8 +93,22 @@ public class SearchDomainService
             var segments = await _segmentRepository.GetByDocumentIdAsync(doc.Id);
             foreach (var seg in segments)
             {
-                var matchIndex = seg.Text.IndexOf(query, StringComparison.OrdinalIgnoreCase);
-                if (matchIndex >= 0)
+                bool matched;
+                int matchIndex;
+                if (phrase)
+                {
+                    // 短语查询：必须完整包含整个短语（不拆碎）
+                    matchIndex = seg.Text.IndexOf(query, StringComparison.OrdinalIgnoreCase);
+                    matched = matchIndex >= 0;
+                }
+                else
+                {
+                    // 单词查询：包含即可
+                    matchIndex = seg.Text.IndexOf(query, StringComparison.OrdinalIgnoreCase);
+                    matched = matchIndex >= 0;
+                }
+
+                if (matched)
                 {
                     var pageNumber = pageLookup.TryGetValue(seg.PageId, out var pn) ? pn : 0;
                     results.Add(new SearchResultModel
@@ -114,8 +128,20 @@ public class SearchDomainService
             var questions = await _questionRepository.GetByDocumentIdAsync(doc.Id);
             foreach (var q in questions)
             {
-                var matchIndex = q.Stem.IndexOf(query, StringComparison.OrdinalIgnoreCase);
-                if (matchIndex >= 0)
+                bool matched;
+                int matchIndex;
+                if (phrase)
+                {
+                    matchIndex = q.Stem.IndexOf(query, StringComparison.OrdinalIgnoreCase);
+                    matched = matchIndex >= 0;
+                }
+                else
+                {
+                    matchIndex = q.Stem.IndexOf(query, StringComparison.OrdinalIgnoreCase);
+                    matched = matchIndex >= 0;
+                }
+
+                if (matched)
                 {
                     var pageNumber = pageLookup.TryGetValue(q.PageId, out var pn) ? pn : 0;
                     results.Add(new SearchResultModel
@@ -163,14 +189,24 @@ public class SearchDomainService
 
     private async Task<List<DocumentModel>> GetFilteredDocumentsAsync(SearchFilterModel? filter)
     {
-        if (filter == null)
+        var allDocs = new List<DocumentModel>();
+        var currentPage = 1;
+        const int batchSize = 500;
+        int fetched;
+
+        do
         {
-            var (items, _) = await _documentRepository.GetListAsync(1, 1000);
-            return items;
-        }
-        var (filteredItems, _) = await _documentRepository.GetListAsync(
-            1, 1000, status: null, subject: filter.Subject,
-            grade: filter.Grade, keyword: filter.DocumentTitle, year: filter.Year);
-        return filteredItems;
+            var (items, totalCount) = filter == null
+                ? await _documentRepository.GetListAsync(currentPage, batchSize)
+                : await _documentRepository.GetListAsync(
+                    currentPage, batchSize, status: null, subject: filter.Subject,
+                    grade: filter.Grade, keyword: filter.DocumentTitle, year: filter.Year);
+
+            allDocs.AddRange(items);
+            fetched = items.Count;
+            currentPage++;
+        } while (fetched == batchSize);
+
+        return allDocs;
     }
 }

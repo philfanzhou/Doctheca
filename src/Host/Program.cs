@@ -65,6 +65,7 @@ builder.Services.Configure<OpenSearchOptions>(builder.Configuration.GetSection("
 builder.Services.Configure<QdrantOptions>(builder.Configuration.GetSection("Qdrant"));
 builder.Services.Configure<EmbeddingOptions>(builder.Configuration.GetSection("Embedding"));
 builder.Services.AddSingleton<ISearchIndexService, OpenSearchIndexService>();
+builder.Services.AddSingleton<IQdrantService, QdrantService>();
 
 // Repositories
 builder.Services.AddScoped<IDocumentRepository, DocumentRepository>();
@@ -78,6 +79,7 @@ builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
 // Domain Services
 builder.Services.AddScoped<DocumentDomainService>();
 builder.Services.AddScoped<SearchDomainService>();
+builder.Services.AddScoped<IDocumentParserService, DocumentParserService>();
 
 // Background Workers
 builder.Services.AddHostedService<IngestionWorker>();
@@ -104,6 +106,22 @@ using (var initScope = app.Services.CreateScope())
     catch (Exception ex)
     {
         initLogger.LogWarning(ex, "搜索索引初始化失败，将使用数据库回退搜索");
+    }
+}
+
+// Initialize Qdrant collection
+using (var initScope = app.Services.CreateScope())
+{
+    var qdrantService = initScope.ServiceProvider.GetRequiredService<IQdrantService>();
+    var initLogger = initScope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+    try
+    {
+        await qdrantService.EnsureCollectionAsync();
+        initLogger.LogInformation("Qdrant 集合初始化完成");
+    }
+    catch (Exception ex)
+    {
+        initLogger.LogWarning(ex, "Qdrant 集合初始化失败，语义搜索将不可用");
     }
 }
 
