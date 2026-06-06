@@ -10,9 +10,10 @@ public interface IDocumentRepository
     Task<DocumentModel?> GetByIdAsync(Guid id);
     Task<DocumentModel?> GetByTitleAsync(string title);
     Task<DocumentModel?> GetByFileHashAsync(string fileHash);
+    Task<DocumentModel?> GetByFileHashAndStatusAsync(string fileHash, string status);
     Task<bool> UpdateAsync(DocumentModel model);
     Task<bool> DeleteAsync(Guid id);
-    Task<(List<DocumentModel> Items, int TotalCount)> GetListAsync(int page, int size, string? status = null, string? subject = null, string? grade = null);
+    Task<(List<DocumentModel> Items, int TotalCount)> GetListAsync(int page, int size, string? status = null, string? subject = null, string? grade = null, string? keyword = null, string? year = null);
 }
 
 public interface IDocumentPageRepository

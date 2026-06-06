@@ -21,6 +21,7 @@ public class DocumentDomainService
     private readonly IDocumentOccurrenceRepository _occurrenceRepository;
     private readonly IDocumentIngestionJobRepository _jobRepository;
     private readonly IUnitOfWork _unitOfWork;
+    private readonly ISearchIndexService? _searchIndexService;
     private readonly ILogger<DocumentDomainService> _logger;
 
     public DocumentDomainService(
@@ -31,7 +32,8 @@ public class DocumentDomainService
         IDocumentOccurrenceRepository occurrenceRepository,
         IDocumentIngestionJobRepository jobRepository,
         IUnitOfWork unitOfWork,
-        ILogger<DocumentDomainService> logger)
+        ILogger<DocumentDomainService> logger,
+        ISearchIndexService? searchIndexService = null)
     {
         _documentRepository = documentRepository;
         _pageRepository = pageRepository;
@@ -40,6 +42,7 @@ public class DocumentDomainService
         _occurrenceRepository = occurrenceRepository;
         _jobRepository = jobRepository;
         _unitOfWork = unitOfWork;
+        _searchIndexService = searchIndexService;
         _logger = logger;
     }
 
@@ -51,7 +54,7 @@ public class DocumentDomainService
         if (existingByTitle != null)
             throw new DocRetrievalValidationException("文档名已存在");
 
-        var existingByHash = await _documentRepository.GetByFileHashAsync(document.FileHash);
+        var existingByHash = await _documentRepository.GetByFileHashAndStatusAsync(document.FileHash, "ready");
         if (existingByHash != null)
             throw new DocRetrievalValidationException("该文件已被导入");
 
@@ -86,13 +89,13 @@ public class DocumentDomainService
     }
 
     public async Task<(List<DocumentModel> Items, int TotalCount)> GetDocumentListAsync(
-        int page, int size, string? status = null, string? subject = null, string? grade = null)
+        int page, int size, string? status = null, string? subject = null, string? grade = null, string? keyword = null, string? year = null)
     {
         if (page <= 0) page = 1;
         if (size <= 0) size = 20;
         if (size > 100) size = 100;
 
-        return await _documentRepository.GetListAsync(page, size, status, subject, grade);
+        return await _documentRepository.GetListAsync(page, size, status, subject, grade, keyword, year);
     }
 
     public async Task<DocumentModel> UpdateMetadataAsync(
@@ -104,6 +107,12 @@ public class DocumentDomainService
         if (document.Status != "ready")
             throw new DocRetrievalValidationException("文档未就绪，不允许修改元数据");
 
+        if (subject != null && !DocRetrievalConstants.IsValidSubject(subject))
+            throw new DocRetrievalValidationException("学科仅支持：英语");
+
+        if (grade != null && !DocRetrievalConstants.IsValidGrade(grade))
+            throw new DocRetrievalValidationException($"年级取值非法，有效值：{string.Join("、", DocRetrievalConstants.ValidGrades)}");
+
         if (subject != null) document.Subject = subject;
         if (grade != null) document.Grade = grade;
         if (year != null) document.Year = year;
@@ -112,6 +121,19 @@ public class DocumentDomainService
 
         await _documentRepository.UpdateAsync(document);
         await _unitOfWork.SaveChangesAsync();
+
+        // 同步更新搜索索引中的元数据
+        if (_searchIndexService != null)
+        {
+            try
+            {
+                await _searchIndexService.UpdateDocumentMetadataAsync(document.Id, document.Subject, document.Grade, document.Year);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "更新文档搜索索引元数据失败：{Title}", title);
+            }
+        }
 
         _logger.LogInformation("文档元数据已更新：{Title}", title);
         return document;
@@ -128,6 +150,19 @@ public class DocumentDomainService
         await _pageRepository.DeleteByDocumentIdAsync(document.Id);
         await _documentRepository.DeleteAsync(document.Id);
         await _unitOfWork.SaveChangesAsync();
+
+        // 清理搜索索引
+        if (_searchIndexService != null)
+        {
+            try
+            {
+                await _searchIndexService.DeleteDocumentIndexAsync(document.Id);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "删除文档搜索索引失败：{Title}", title);
+            }
+        }
 
         _logger.LogInformation("文档已删除：{Title}", title);
         return true;
@@ -222,9 +257,13 @@ public class DocumentDomainService
 
         if (string.IsNullOrWhiteSpace(document.Subject))
             errors.Add("学科不能为空");
+        else if (!DocRetrievalConstants.IsValidSubject(document.Subject))
+            errors.Add("学科仅支持：英语");
 
         if (string.IsNullOrWhiteSpace(document.Grade))
             errors.Add("年级不能为空");
+        else if (!DocRetrievalConstants.IsValidGrade(document.Grade))
+            errors.Add($"年级取值非法，有效值：{string.Join("、", DocRetrievalConstants.ValidGrades)}");
 
         if (string.IsNullOrWhiteSpace(document.Year))
             errors.Add("年份不能为空");

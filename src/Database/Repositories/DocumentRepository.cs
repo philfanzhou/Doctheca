@@ -41,6 +41,12 @@ public class DocumentRepository : IDocumentRepository
         return entity != null ? MapToModel(entity) : null;
     }
 
+    public async Task<DocumentModel?> GetByFileHashAndStatusAsync(string fileHash, string status)
+    {
+        var entity = await _dbContext.Documents.FirstOrDefaultAsync(d => d.FileHash == fileHash && d.Status == status);
+        return entity != null ? MapToModel(entity) : null;
+    }
+
     public async Task<bool> UpdateAsync(DocumentModel model)
     {
         var entity = await _dbContext.Documents.FindAsync(model.Id);
@@ -73,7 +79,7 @@ public class DocumentRepository : IDocumentRepository
     }
 
     public async Task<(List<DocumentModel> Items, int TotalCount)> GetListAsync(
-        int page, int size, string? status = null, string? subject = null, string? grade = null)
+        int page, int size, string? status = null, string? subject = null, string? grade = null, string? keyword = null, string? year = null)
     {
         var query = _dbContext.Documents.AsQueryable();
 
@@ -83,6 +89,10 @@ public class DocumentRepository : IDocumentRepository
             query = query.Where(d => d.Subject == subject);
         if (!string.IsNullOrWhiteSpace(grade))
             query = query.Where(d => d.Grade == grade);
+        if (!string.IsNullOrWhiteSpace(keyword))
+            query = query.Where(d => d.Title.Contains(keyword));
+        if (!string.IsNullOrWhiteSpace(year))
+            query = query.Where(d => d.Year == year);
 
         var totalCount = await query.CountAsync();
         var items = await query

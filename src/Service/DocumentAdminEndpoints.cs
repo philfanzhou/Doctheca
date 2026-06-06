@@ -34,6 +34,7 @@ public static class DocumentAdminEndpoints
         app.MapGet("/admin/documents/{id}/status", GetDocumentStatus);
         app.MapDelete("/admin/documents/{title}", DeleteDocument);
         app.MapPut("/admin/documents/{title}/metadata", UpdateMetadata);
+        app.MapGet("/admin/documents/search-test", SearchTest);
 
         return app;
     }
@@ -51,7 +52,7 @@ public static class DocumentAdminEndpoints
 
         var file = form.Files.GetFile("file");
         if (file == null || file.Length == 0)
-            return Results.BadRequest(new { success = false, message = "文件不能为空", errorCode = "DOCRETRIEVAL_QUERY_REQUIRED" });
+            return Results.BadRequest(new { success = false, message = "文件不能为空", errorCode = "DOCRETRIEVAL_FILE_REQUIRED" });
 
         if (file.Length > MaxFileSize)
             return Results.BadRequest(new { success = false, message = "文件大小超过200MB限制" });
@@ -136,9 +137,11 @@ public static class DocumentAdminEndpoints
         [FromQuery] int pageSize = 20,
         [FromQuery] string? status = null,
         [FromQuery] string? subject = null,
-        [FromQuery] string? grade = null)
+        [FromQuery] string? grade = null,
+        [FromQuery] string? keyword = null,
+        [FromQuery] string? year = null)
     {
-        var (items, totalCount) = await documentService.GetDocumentListAsync(page, pageSize, status, subject, grade);
+        var (items, totalCount) = await documentService.GetDocumentListAsync(page, pageSize, status, subject, grade, keyword, year);
 
         return Results.Ok(new
         {
@@ -276,5 +279,59 @@ public static class DocumentAdminEndpoints
                 : StatusCodes.Status400BadRequest;
             return Results.Json(new { success = false, message = ex.Message }, statusCode: statusCode);
         }
+    }
+
+    private static bool IsEncryptedPdf(Stream stream, string contentType)
+    {
+        if (!contentType.Contains("pdf")) return false;
+
+        var originalPosition = stream.Position;
+        try
+        {
+            using var reader = new StreamReader(stream, leaveOpen: true);
+            var buffer = new char[4096];
+            reader.Read(buffer, 0, buffer.Length);
+            var header = new string(buffer);
+
+            // Check for /Encrypt in the PDF header/first chunk
+            return header.Contains("/Encrypt");
+        }
+        finally
+        {
+            stream.Position = originalPosition;
+        }
+    }
+
+    private static async Task<IResult> SearchTest(
+        SearchDomainService searchService,
+        [FromQuery] string query,
+        [FromQuery] bool phrase = false,
+        [FromQuery] int pageSize = 20,
+        [FromQuery] string? pageToken = null)
+    {
+        if (string.IsNullOrWhiteSpace(query))
+            return Results.BadRequest(new { success = false, message = "查询词不能为空" });
+
+        pageSize = Math.Min(Math.Max(pageSize, 1), 100);
+
+        var (results, totalCount, nextToken) = await searchService.ExactSearchAsync(
+            query, phrase, null, pageSize, pageToken);
+
+        return Results.Ok(new
+        {
+            results = results.Select(r => new
+            {
+                documentName = r.DocumentName,
+                pageNumber = r.PageNumber,
+                associatedText = r.AssociatedText,
+                score = r.Score,
+                matchType = r.MatchType,
+                segmentId = r.SegmentId,
+                startOffset = r.StartOffset,
+                endOffset = r.EndOffset
+            }),
+            totalCount,
+            nextPageToken = nextToken ?? string.Empty
+        });
     }
 }

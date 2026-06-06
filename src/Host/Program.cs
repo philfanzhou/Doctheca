@@ -3,6 +3,7 @@ using Microsoft.Extensions.Options;
 using Ruoyu.Study.Common.Oss;
 using Ruoyu.Study.DocRetrieval.Database;
 using Ruoyu.Study.DocRetrieval.Database.Repositories;
+using Ruoyu.Study.DocRetrieval.Domain.Models;
 using Ruoyu.Study.DocRetrieval.Domain.Repositories;
 using Ruoyu.Study.DocRetrieval.Domain.Services;
 using Ruoyu.Study.DocRetrieval.Service;
@@ -59,6 +60,12 @@ else
     });
 }
 
+// Search Index Services
+builder.Services.Configure<OpenSearchOptions>(builder.Configuration.GetSection("OpenSearch"));
+builder.Services.Configure<QdrantOptions>(builder.Configuration.GetSection("Qdrant"));
+builder.Services.Configure<EmbeddingOptions>(builder.Configuration.GetSection("Embedding"));
+builder.Services.AddSingleton<ISearchIndexService, OpenSearchIndexService>();
+
 // Repositories
 builder.Services.AddScoped<IDocumentRepository, DocumentRepository>();
 builder.Services.AddScoped<IDocumentPageRepository, DocumentPageRepository>();
@@ -72,6 +79,9 @@ builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
 builder.Services.AddScoped<DocumentDomainService>();
 builder.Services.AddScoped<SearchDomainService>();
 
+// Background Workers
+builder.Services.AddHostedService<IngestionWorker>();
+
 var app = builder.Build();
 
 using (var scope = app.Services.CreateScope())
@@ -81,11 +91,31 @@ using (var scope = app.Services.CreateScope())
     await DatabaseInitializer.InitializeAsync(dbContext, logger);
 }
 
+// Initialize search indices
+using (var initScope = app.Services.CreateScope())
+{
+    var searchIndexService = initScope.ServiceProvider.GetRequiredService<ISearchIndexService>();
+    var initLogger = initScope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+    try
+    {
+        await searchIndexService.EnsureIndexAsync();
+        initLogger.LogInformation("搜索索引初始化完成");
+    }
+    catch (Exception ex)
+    {
+        initLogger.LogWarning(ex, "搜索索引初始化失败，将使用数据库回退搜索");
+    }
+}
+
 app.MapGrpcService<DocumentRetrievalServiceImpl>();
+
+app.UseDefaultFiles();
+app.UseStaticFiles();
 
 // Web Admin API endpoints
 app.MapDocumentAdminEndpoints();
 
-app.MapGet("/", () => "DocRetrieval gRPC host is running.");
+app.MapGet("/health", () => Results.Ok(new { status = "healthy", timestamp = DateTimeOffset.UtcNow }));
+app.MapFallbackToFile("index.html");
 
 app.Run();

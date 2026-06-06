@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Grpc.Core;
 using Microsoft.Extensions.Logging;
 using Ruoyu.Study.DocRetrieval.Contract.Protos;
+using Ruoyu.Study.DocRetrieval.Domain.Models;
 using Ruoyu.Study.DocRetrieval.Domain.Services;
 
 namespace Ruoyu.Study.DocRetrieval.Service;

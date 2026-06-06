@@ -63,6 +63,17 @@ export interface ApiResponse<T> {
   data: T
 }
 
+export interface SearchResult {
+  documentName: string
+  pageNumber: number
+  associatedText: string
+  score: number
+  matchType: string
+  segmentId: string
+  startOffset: number
+  endOffset: number
+}
+
 class DocApiClient {
   private client: AxiosInstance
 
@@ -103,14 +114,30 @@ class DocApiClient {
     pageSize: number = 20,
     status?: string,
     subject?: string,
-    grade?: string
+    grade?: string,
+    keyword?: string,
+    year?: string
   ): Promise<DocPagedResponse<Document>> {
-    const params = { page, pageSize }
-    if (status) Object.assign(params, { status })
-    if (subject) Object.assign(params, { subject })
-    if (grade) Object.assign(params, { grade })
+    const params: Record<string, unknown> = { page, pageSize }
+    if (status) params.status = status
+    if (subject) params.subject = subject
+    if (grade) params.grade = grade
+    if (keyword) params.keyword = keyword
+    if (year) params.year = year
 
     const response = await this.client.get('/admin/documents', { params })
+    return response.data
+  }
+
+  async searchTest(
+    query: string,
+    phrase: boolean = false,
+    pageSize: number = 20,
+    pageToken?: string
+  ): Promise<{ results: SearchResult[]; totalCount: number; nextPageToken: string }> {
+    const response = await this.client.get('/admin/documents/search-test', {
+      params: { query, phrase, pageSize, pageToken }
+    })
     return response.data
   }
 

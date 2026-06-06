@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { ElMessage, ElMessageBox, type UploadProps, type UploadUserFile } from 'element-plus'
+import { ElMessage, type UploadUserFile } from 'element-plus'
 import { Upload } from '@element-plus/icons-vue'
 import {
   createDocApiClient,
   getDocErrorMessage,
   type Document,
-  type DocumentStatus
+  type DocumentStatus,
+  type SearchResult
 } from './services/docApi'
 
 const appTitle = ref('DocRetrieval Admin')
@@ -22,6 +23,14 @@ const pageSize = ref(20)
 const statusFilter = ref<string>('')
 const subjectFilter = ref<string>('')
 const gradeFilter = ref<string>('')
+const keywordFilter = ref<string>('')
+const yearFilter = ref<string>('')
+const searchQuery = ref('')
+const searchPhrase = ref(false)
+const searchLoading = ref(false)
+const searchResults = ref<SearchResult[]>([])
+const searchTotalCount = ref(0)
+const searchNextToken = ref('')
 const sidebarOpen = ref(false)
 const sidebarCollapsed = ref(localStorage.getItem('docSidebarCollapsed') === 'true')
 const lastRefreshTime = ref('')
@@ -140,7 +149,9 @@ async function loadDocuments() {
       pageSize.value,
       statusFilter.value || undefined,
       subjectFilter.value || undefined,
-      gradeFilter.value || undefined
+      gradeFilter.value || undefined,
+      keywordFilter.value || undefined,
+      yearFilter.value || undefined
     )
     documents.value = response.data
     total.value = response.total
@@ -282,6 +293,25 @@ function handleApiError(prefix: string, error: unknown) {
   ElMessage.error(`${prefix}: ${getDocErrorMessage(error)}`)
 }
 
+async function handleSearch() {
+  if (!searchQuery.value.trim()) return
+  searchLoading.value = true
+  try {
+    const response = await client.searchTest(
+      searchQuery.value.trim(),
+      searchPhrase.value,
+      20
+    )
+    searchResults.value = response.results
+    searchTotalCount.value = response.totalCount
+    searchNextToken.value = response.nextPageToken
+  } catch (error) {
+    handleApiError('检索失败', error)
+  } finally {
+    searchLoading.value = false
+  }
+}
+
 onMounted(() => {
   loadDocuments()
 })
@@ -402,20 +432,32 @@ onMounted(() => {
               <div class="select-wrap" style="width: 140px">
                 <select v-model="subjectFilter" @change="handleFilterChange">
                   <option value="">所有科目</option>
-                  <option value="math">数学</option>
-                  <option value="english">英语</option>
-                  <option value="physics">物理</option>
-                  <option value="chemistry">化学</option>
-                  <option value="biology">生物</option>
+                  <option value="英语">英语</option>
                 </select>
               </div>
               <div class="select-wrap" style="width: 140px">
                 <select v-model="gradeFilter" @change="handleFilterChange">
                   <option value="">所有年级</option>
-                  <option value="g10">高一</option>
-                  <option value="g11">高二</option>
-                  <option value="g12">高三</option>
+                  <option value="K">幼儿园</option>
+                  <option value="G1">一年级</option>
+                  <option value="G2">二年级</option>
+                  <option value="G3">三年级</option>
+                  <option value="G4">四年级</option>
+                  <option value="G5">五年级</option>
+                  <option value="G6">六年级</option>
+                  <option value="G7">初一</option>
+                  <option value="G8">初二</option>
+                  <option value="G9">初三</option>
+                  <option value="G10">高一</option>
+                  <option value="G11">高二</option>
+                  <option value="G12">高三</option>
                 </select>
+              </div>
+              <div class="input-wrap" style="width: 180px">
+                <input v-model="keywordFilter" type="text" placeholder="搜索文档标题..." @keyup.enter="handleFilterChange" />
+              </div>
+              <div class="input-wrap" style="width: 100px">
+                <input v-model="yearFilter" type="text" placeholder="年份" @keyup.enter="handleFilterChange" />
               </div>
             </div>
 
@@ -509,8 +551,46 @@ onMounted(() => {
         </div>
 
         <div v-if="activeTab === 'search'" class="card">
+          <div class="card-header">
+            <span>检索测试</span>
+          </div>
           <div class="card-body">
-            <p>检索测试页面功能待开发</p>
+            <div style="display: flex; gap: 12px; margin-bottom: 16px; align-items: center">
+              <div class="input-wrap" style="flex: 1">
+                <input v-model="searchQuery" type="text" placeholder="输入单词或短语进行检索..." @keyup.enter="handleSearch" />
+              </div>
+              <label style="display: flex; align-items: center; gap: 4px; font-size: 13px; white-space: nowrap">
+                <input v-model="searchPhrase" type="checkbox" />
+                短语查询
+              </label>
+              <button class="btn btn-primary btn-small" :disabled="searchLoading || !searchQuery.trim()" @click="handleSearch">
+                {{ searchLoading ? '搜索中...' : '搜索' }}
+              </button>
+            </div>
+
+            <div v-if="searchResults.length > 0" style="margin-bottom: 12px; font-size: 13px; color: var(--text-secondary)">
+              共 {{ searchTotalCount }} 条结果
+            </div>
+
+            <div v-if="searchResults.length > 0">
+              <div v-for="(result, idx) in searchResults" :key="idx" style="padding: 12px; border: 1px solid var(--border-light); border-radius: 6px; margin-bottom: 8px">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px">
+                  <span style="font-weight: 500">{{ result.documentName }}</span>
+                  <div style="display: flex; gap: 8px; align-items: center">
+                    <span class="tag tag-info" style="font-size: 11px">P{{ result.pageNumber }}</span>
+                    <span class="tag" :class="result.matchType === 'exact_phrase' ? 'tag-success' : result.matchType === 'exact_word' ? 'tag-info' : 'tag-warning'" style="font-size: 11px">
+                      {{ result.matchType === 'exact_phrase' ? '精确短语' : result.matchType === 'exact_word' ? '精确词' : result.matchType === 'stem_match' ? '词干匹配' : result.matchType }}
+                    </span>
+                    <span style="font-size: 12px; color: var(--text-muted)">{{ result.score.toFixed(2) }}</span>
+                  </div>
+                </div>
+                <div style="font-size: 13px; line-height: 1.6; color: var(--text-secondary); white-space: pre-wrap">{{ result.associatedText }}</div>
+              </div>
+            </div>
+
+            <div v-else-if="searchQuery && !searchLoading" class="empty-state">
+              <div class="empty-state-text">输入查询词后点击搜索</div>
+            </div>
           </div>
         </div>
       </main>
@@ -566,11 +646,7 @@ onMounted(() => {
             <div class="select-wrap">
               <select v-model="uploadForm.subject">
                 <option value="">请选择</option>
-                <option value="math">数学</option>
-                <option value="english">英语</option>
-                <option value="physics">物理</option>
-                <option value="chemistry">化学</option>
-                <option value="biology">生物</option>
+                <option value="英语">英语</option>
               </select>
             </div>
           </div>
@@ -579,9 +655,19 @@ onMounted(() => {
             <div class="select-wrap">
               <select v-model="uploadForm.grade">
                 <option value="">请选择</option>
-                <option value="g10">高一</option>
-                <option value="g11">高二</option>
-                <option value="g12">高三</option>
+                <option value="K">幼儿园</option>
+                <option value="G1">一年级</option>
+                <option value="G2">二年级</option>
+                <option value="G3">三年级</option>
+                <option value="G4">四年级</option>
+                <option value="G5">五年级</option>
+                <option value="G6">六年级</option>
+                <option value="G7">初一</option>
+                <option value="G8">初二</option>
+                <option value="G9">初三</option>
+                <option value="G10">高一</option>
+                <option value="G11">高二</option>
+                <option value="G12">高三</option>
               </select>
             </div>
           </div>
@@ -673,11 +759,7 @@ onMounted(() => {
             <label>科目</label>
             <div class="select-wrap">
               <select v-model="metadataForm.subject">
-                <option value="math">数学</option>
-                <option value="english">英语</option>
-                <option value="physics">物理</option>
-                <option value="chemistry">化学</option>
-                <option value="biology">生物</option>
+                <option value="英语">英语</option>
               </select>
             </div>
           </div>
@@ -685,9 +767,19 @@ onMounted(() => {
             <label>年级</label>
             <div class="select-wrap">
               <select v-model="metadataForm.grade">
-                <option value="g10">高一</option>
-                <option value="g11">高二</option>
-                <option value="g12">高三</option>
+                <option value="K">幼儿园</option>
+                <option value="G1">一年级</option>
+                <option value="G2">二年级</option>
+                <option value="G3">三年级</option>
+                <option value="G4">四年级</option>
+                <option value="G5">五年级</option>
+                <option value="G6">六年级</option>
+                <option value="G7">初一</option>
+                <option value="G8">初二</option>
+                <option value="G9">初三</option>
+                <option value="G10">高一</option>
+                <option value="G11">高二</option>
+                <option value="G12">高三</option>
               </select>
             </div>
           </div>
