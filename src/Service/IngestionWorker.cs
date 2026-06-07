@@ -43,6 +43,7 @@ public class IngestionWorker : BackgroundService
                 var pageRepository = scope.ServiceProvider.GetRequiredService<IDocumentPageRepository>();
                 var segmentRepository = scope.ServiceProvider.GetRequiredService<IDocumentSegmentRepository>();
                 var questionRepository = scope.ServiceProvider.GetRequiredService<IQuestionSegmentRepository>();
+                var occurrenceRepository = scope.ServiceProvider.GetRequiredService<IDocumentOccurrenceRepository>();
 
                 var pendingJobs = await domainService.GetPendingJobsAsync();
 
@@ -115,6 +116,67 @@ public class IngestionWorker : BackgroundService
                             .ToList();
 
                         await questionRepository.AddRangeAsync(questionModels);
+
+                        // 将 Token 写入 document_occurrences 表
+                        var occurrenceModels = new List<DocumentOccurrenceModel>();
+
+                        // 建立 SentenceId -> SegmentId 映射
+                        var segmentLookup = segmentModels.ToDictionary(s => s.SentenceId, s => s.Id);
+
+                        foreach (var page in parsedDocument.Pages)
+                        {
+                            // 从 segment 的 Token 生成 occurrence
+                            foreach (var seg in page.Segments)
+                            {
+                                var segmentId = segmentLookup.TryGetValue(seg.SentenceId, out var sid) ? sid : (Guid?)null;
+                                foreach (var token in seg.Tokens)
+                                {
+                                    occurrenceModels.Add(new DocumentOccurrenceModel
+                                    {
+                                        Id = Guid.NewGuid(),
+                                        DocumentId = document.Id,
+                                        SegmentId = segmentId,
+                                        QuestionSegmentId = null,
+                                        TokenText = token.TokenText,
+                                        TokenStem = token.TokenStem,
+                                        StartOffset = token.StartOffset,
+                                        EndOffset = token.EndOffset,
+                                        CreatedAt = DateTimeOffset.UtcNow
+                                    });
+                                }
+                            }
+
+                            // 从 question 的 Token 生成 occurrence
+                            var questionLookup = questionModels
+                                .Where(qm => page.Questions.Any(pq => pq.QuestionId == qm.QuestionId))
+                                .ToDictionary(qm => qm.QuestionId, qm => qm.Id);
+
+                            foreach (var question in page.Questions)
+                            {
+                                var questionSegmentId = questionLookup.TryGetValue(question.QuestionId, out var qid) ? qid : (Guid?)null;
+                                foreach (var token in question.Tokens)
+                                {
+                                    occurrenceModels.Add(new DocumentOccurrenceModel
+                                    {
+                                        Id = Guid.NewGuid(),
+                                        DocumentId = document.Id,
+                                        SegmentId = null,
+                                        QuestionSegmentId = questionSegmentId,
+                                        TokenText = token.TokenText,
+                                        TokenStem = token.TokenStem,
+                                        StartOffset = token.StartOffset,
+                                        EndOffset = token.EndOffset,
+                                        CreatedAt = DateTimeOffset.UtcNow
+                                    });
+                                }
+                            }
+                        }
+
+                        if (occurrenceModels.Count > 0)
+                        {
+                            await occurrenceRepository.AddRangeAsync(occurrenceModels);
+                            _logger.LogInformation("Token 写入完成：{DocumentId}，共 {TokenCount} 个 Token", job.DocumentId, occurrenceModels.Count);
+                        }
 
                         // 标记导入任务完成
                         await domainService.CompleteIngestionJobAsync(job.Id);

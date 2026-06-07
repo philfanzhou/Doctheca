@@ -112,6 +112,7 @@ public class ParsedSegment
     public string Text { get; set; } = string.Empty;
     public int StartOffset { get; set; }
     public int EndOffset { get; set; }
+    public List<ParsedToken> Tokens { get; set; } = [];
 }
 
 /// <summary>
@@ -123,6 +124,18 @@ public class ParsedQuestion
     public string Stem { get; set; } = string.Empty;
     public string? OptionsJson { get; set; }
     public string? AnswerArea { get; set; }
+    public int StartOffset { get; set; }
+    public int EndOffset { get; set; }
+    public List<ParsedToken> Tokens { get; set; } = [];
+}
+
+/// <summary>
+/// 解析后的 Token（原始文本 + 词干还原）
+/// </summary>
+public class ParsedToken
+{
+    public string TokenText { get; set; } = string.Empty;
+    public string TokenStem { get; set; } = string.Empty;
     public int StartOffset { get; set; }
     public int EndOffset { get; set; }
 }

@@ -217,9 +217,13 @@ public static class DocumentAdminEndpoints
         IOssService ossService,
         ILogger logger)
     {
+        // 先获取文档信息（用于删除 OSS 文件），再删除数据库记录，最后删除 OSS 文件
         var document = await documentService.GetDocumentByTitleAsync(title);
+
+        // 先删除数据库记录和搜索索引
         var deleted = await documentService.DeleteDocumentAsync(title);
 
+        // 再删除 OSS 文件（数据库已删除，即使 OSS 删除失败也不影响数据一致性）
         if (document != null && !string.IsNullOrEmpty(document.FilePath))
         {
             try

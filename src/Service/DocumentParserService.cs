@@ -76,6 +76,9 @@ public partial class DocumentParserService : IDocumentParserService
                 continue;
             }
 
+            // OCR 后处理：合并连字符、移除多余空白、修正常见 OCR 错误
+            pageText = OcrPostProcess(pageText);
+
             // 按换行分段，合并连续非空行为块（段落）
             var blocks = MergeTextIntoBlocks(pageText);
 
@@ -98,7 +101,8 @@ public partial class DocumentParserService : IDocumentParserService
                         SegmentType = "sentence",
                         Text = sentenceText,
                         StartOffset = globalOffset,
-                        EndOffset = globalOffset + sentenceText.Length
+                        EndOffset = globalOffset + sentenceText.Length,
+                        Tokens = Tokenize(sentenceText)
                     });
                     globalOffset += sentenceText.Length;
                 }
@@ -207,7 +211,7 @@ public partial class DocumentParserService : IDocumentParserService
         var globalOffset = 0;
         for (var blockIndex = 0; blockIndex < blocks.Count; blockIndex++)
         {
-            var blockText = blocks[blockIndex];
+            var blockText = OcrPostProcess(blocks[blockIndex]);
             var blockId = $"p1-b{blockIndex + 1}";
 
             var sentences = SplitSentences(blockText);
@@ -221,7 +225,8 @@ public partial class DocumentParserService : IDocumentParserService
                     SegmentType = "sentence",
                     Text = sentenceText,
                     StartOffset = globalOffset,
-                    EndOffset = globalOffset + sentenceText.Length
+                    EndOffset = globalOffset + sentenceText.Length,
+                    Tokens = Tokenize(sentenceText)
                 });
                 globalOffset += sentenceText.Length;
             }
@@ -288,7 +293,7 @@ public partial class DocumentParserService : IDocumentParserService
             var globalOffset = 0;
             for (var blockIndex = 0; blockIndex < texts.Count; blockIndex++)
             {
-                var blockText = texts[blockIndex];
+                var blockText = OcrPostProcess(texts[blockIndex]);
                 var blockId = $"p{pageNumber}-b{blockIndex + 1}";
 
                 var sentences = SplitSentences(blockText);
@@ -302,7 +307,8 @@ public partial class DocumentParserService : IDocumentParserService
                         SegmentType = "sentence",
                         Text = sentenceText,
                         StartOffset = globalOffset,
-                        EndOffset = globalOffset + sentenceText.Length
+                        EndOffset = globalOffset + sentenceText.Length,
+                        Tokens = Tokenize(sentenceText)
                     });
                     globalOffset += sentenceText.Length;
                 }
@@ -315,6 +321,231 @@ public partial class DocumentParserService : IDocumentParserService
         }
 
         return await Task.FromResult(result);
+    }
+
+    #endregion
+
+    #region OCR 后处理
+
+    /// <summary>
+    /// OCR 后处理：合并连字符打断的单词、移除多余空白、修正常见 OCR 错误
+    /// </summary>
+    private static string OcrPostProcess(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return text;
+
+        // 1. 合并连字符打断的单词：行尾 "word-\nword" → "wordword"
+        text = System.Text.RegularExpressions.Regex.Replace(
+            text, @"(\w)-\s*\n\s*(\w)", "$1$2");
+
+        // 2. 移除多余空白（多个空格/制表符 → 单个空格）
+        text = System.Text.RegularExpressions.Regex.Replace(
+            text, @"[ \t]+", " ");
+
+        // 3. 修正常见 OCR 错误（仅在大写字母前修正 0→O，在纯数字上下文不修正）
+        text = System.Text.RegularExpressions.Regex.Replace(
+            text, @"(?<=[A-Z])0", "O");   // A0 → AO
+        text = System.Text.RegularExpressions.Regex.Replace(
+            text, @"0(?=[A-Z])", "O");     // 0A → OA
+        text = System.Text.RegularExpressions.Regex.Replace(
+            text, @"(?<=[A-Za-z])1(?=[A-Za-z])", "l"); // l1l → lll (仅字母间)
+        text = System.Text.RegularExpressions.Regex.Replace(
+            text, @"(?<=[A-Za-z])5(?=[A-Za-z])", "S"); // a5a → aSa (仅字母间)
+
+        return text.Trim();
+    }
+
+    #endregion
+
+    #region Token 分词与词干还原
+
+    /// <summary>
+    /// 对文本进行分词，生成 Token 列表（原始文本 + Porter 词干还原）
+    /// </summary>
+    private static List<ParsedToken> Tokenize(string text)
+    {
+        var tokens = new List<ParsedToken>();
+        if (string.IsNullOrWhiteSpace(text))
+            return tokens;
+
+        // 使用正则按单词边界分词，只保留英文字母组成的单词
+        var regex = new Regex(@"[a-zA-Z]+", RegexOptions.Compiled);
+        foreach (Match match in regex.Matches(text))
+        {
+            var word = match.Value;
+            var stem = PorterStem(word.ToLowerInvariant());
+            tokens.Add(new ParsedToken
+            {
+                TokenText = word,
+                TokenStem = stem,
+                StartOffset = match.Index,
+                EndOffset = match.Index + match.Length
+            });
+        }
+
+        return tokens;
+    }
+
+    /// <summary>
+    /// Porter Stemmer 算法精简实现（英语词干还原）
+    /// </summary>
+    private static string PorterStem(string word)
+    {
+        if (word.Length < 3)
+            return word;
+
+        // Step 1a: 复数和过去式
+        if (word.EndsWith("sses")) word = word[..^2];
+        else if (word.EndsWith("ies")) word = word[..^2];
+        else if (word.EndsWith("ss")) { /* no change */ }
+        else if (word.EndsWith("s")) word = word[..^1];
+
+        // Step 1b: 进行时和过去式
+        var step1bExtra = false;
+        if (word.EndsWith("eed"))
+        {
+            if (Measure(word[..^3]) > 0) word = word[..^1];
+        }
+        else if (word.EndsWith("ed") && ContainsVowel(word[..^2]))
+        {
+            word = word[..^2];
+            step1bExtra = true;
+        }
+        else if (word.EndsWith("ing") && ContainsVowel(word[..^3]))
+        {
+            word = word[..^3];
+            step1bExtra = true;
+        }
+
+        if (step1bExtra)
+        {
+            if (word.EndsWith("at") || word.EndsWith("bl") || word.EndsWith("iz"))
+                word += "e";
+            else if (EndsWithDoubleConsonant(word) && !word.EndsWith("l") && !word.EndsWith("s") && !word.EndsWith("z"))
+                word = word[..^1];
+            else if (Measure(word) == 1 && EndsCVC(word))
+                word += "e";
+        }
+
+        // Step 1c: y → i
+        if (word.EndsWith("y") && ContainsVowel(word[..^1]))
+            word = word[..^1] + "i";
+
+        // Step 2: 常见后缀
+        word = ReplaceSuffix(word, "ational", "ate");
+        word = ReplaceSuffix(word, "tional", "tion");
+        word = ReplaceSuffix(word, "enci", "ence");
+        word = ReplaceSuffix(word, "anci", "ance");
+        word = ReplaceSuffix(word, "izer", "ize");
+        word = ReplaceSuffix(word, "abli", "able");
+        word = ReplaceSuffix(word, "alli", "al");
+        word = ReplaceSuffix(word, "entli", "ent");
+        word = ReplaceSuffix(word, "eli", "e");
+        word = ReplaceSuffix(word, "ousli", "ous");
+        word = ReplaceSuffix(word, "ization", "ize");
+        word = ReplaceSuffix(word, "ation", "ate");
+        word = ReplaceSuffix(word, "ator", "ate");
+        word = ReplaceSuffix(word, "alism", "al");
+        word = ReplaceSuffix(word, "iveness", "ive");
+        word = ReplaceSuffix(word, "fulness", "ful");
+        word = ReplaceSuffix(word, "ousness", "ous");
+        word = ReplaceSuffix(word, "aliti", "al");
+        word = ReplaceSuffix(word, "iviti", "ive");
+        word = ReplaceSuffix(word, "biliti", "ble");
+
+        // Step 3: 更多后缀
+        word = ReplaceSuffix(word, "icate", "ic");
+        word = ReplaceSuffix(word, "ative", "");
+        word = ReplaceSuffix(word, "alize", "al");
+        word = ReplaceSuffix(word, "iciti", "ic");
+        word = ReplaceSuffix(word, "ical", "ic");
+        word = ReplaceSuffix(word, "ful", "");
+        word = ReplaceSuffix(word, "ness", "");
+
+        // Step 4: 去掉剩余后缀（m > 1）
+        var step4Suffixes = new[] { "al", "ance", "ence", "er", "ic", "able", "ible", "ant", "ement", "ment", "ent", "ion", "ou", "ism", "ate", "iti", "ous", "ive", "ize" };
+        foreach (var suffix in step4Suffixes)
+        {
+            if (word.EndsWith(suffix))
+            {
+                var stem = word[..^suffix.Length];
+                if (suffix == "ion")
+                {
+                    if (Measure(stem) > 1 && stem.Length > 0 && (stem[^1] == 's' || stem[^1] == 't'))
+                        word = stem;
+                }
+                else
+                {
+                    if (Measure(stem) > 1) word = stem;
+                }
+                break;
+            }
+        }
+
+        // Step 5a: 去掉末尾 e
+        if (word.EndsWith("e"))
+        {
+            var stem = word[..^1];
+            if (Measure(stem) > 1 || (Measure(stem) == 1 && !EndsCVC(stem)))
+                word = stem;
+        }
+
+        // Step 5b: ll → l (m > 1)
+        if (word.EndsWith("ll") && Measure(word) > 1)
+            word = word[..^1];
+
+        return word;
+    }
+
+    private static bool IsVowel(char c) => c is 'a' or 'e' or 'i' or 'o' or 'u';
+
+    private static bool ContainsVowel(string word)
+    {
+        foreach (var c in word)
+            if (IsVowel(c)) return true;
+        return false;
+    }
+
+    /// <summary>计算 m 值（辅音-元音对数）</summary>
+    private static int Measure(string word)
+    {
+        if (string.IsNullOrEmpty(word)) return 0;
+        var i = 0;
+        // 跳过开头的元音
+        while (i < word.Length && IsVowel(word[i])) i++;
+        var m = 0;
+        while (i < word.Length)
+        {
+            // 辅音
+            while (i < word.Length && !IsVowel(word[i])) i++;
+            if (i >= word.Length) break;
+            // 元音
+            while (i < word.Length && IsVowel(word[i])) i++;
+            m++;
+        }
+        return m;
+    }
+
+    private static bool EndsWithDoubleConsonant(string word)
+    {
+        if (word.Length < 2) return false;
+        return word[^1] == word[^2] && !IsVowel(word[^1]);
+    }
+
+    /// <summary>是否以 辅音-元音-辅音 结尾（且最后一个辅音不是 w/x/y）</summary>
+    private static bool EndsCVC(string word)
+    {
+        if (word.Length < 3) return false;
+        return !IsVowel(word[^3]) && IsVowel(word[^2]) && !IsVowel(word[^1])
+               && word[^1] is not ('w' or 'x' or 'y');
+    }
+
+    private static string ReplaceSuffix(string word, string suffix, string replacement)
+    {
+        if (!word.EndsWith(suffix)) return word;
+        var stem = word[..^suffix.Length];
+        return Measure(stem) > 0 ? stem + replacement : word;
     }
 
     #endregion
@@ -367,6 +598,33 @@ public partial class DocumentParserService : IDocumentParserService
         // 只检查 . ! ? 后跟空格或文本结尾的情况
         if (ch != '.' && ch != '!' && ch != '?')
             return false;
+
+        // 规则 3：引号内的句号不视为句子结束（"...text." 后面跟引号）
+        if (ch == '.' && index < text.Length - 1)
+        {
+            var nextCh = text[index + 1];
+            if (nextCh == '"' || nextCh == '\u201D' || nextCh == '\u201C' || nextCh == '\'' || nextCh == '\u2019')
+            {
+                // 句号在引号内，检查引号后是否有空格（引号结束+空格=句子结束）
+                // 如果引号后没有空格或文本结尾，则不是句子边界
+                var afterQuoteIdx = index + 2;
+                if (afterQuoteIdx < text.Length && text[afterQuoteIdx] != ' ')
+                    return false;
+                // 引号后跟空格或文本结尾，这是句子边界（句号+引号结束句子）
+            }
+        }
+
+        // 规则 4：数字中的句号不视为句子结束（3.14, 2026.06.01）
+        if (ch == '.')
+        {
+            // 前面是数字
+            if (index > 0 && char.IsDigit(text[index - 1]))
+            {
+                // 后面也是数字 → 小数点，不是句子边界
+                if (index < text.Length - 1 && char.IsDigit(text[index + 1]))
+                    return false;
+            }
+        }
 
         // 文本结尾
         if (index == text.Length - 1)

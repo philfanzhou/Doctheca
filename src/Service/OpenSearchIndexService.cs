@@ -263,10 +263,21 @@ public class OpenSearchIndexService : ISearchIndexService
         var indexName = _options.IndexName;
 
         // Build the main query
-        // 短语查询使用 text.exact 字段（english_phrase 分析器，仅小写归一不做词干提取）
-        object mainQuery = phrase
-            ? new { match_phrase = new { text = new { query, @operator = "and" } } }
-            : new { match = new { text = new { query } } };
+        // 短语查询使用 text.exact 字段（english_phrase 分析器，仅小写归一不做词干提取，保证短语完整性）
+        // 普通查询使用 text 字段（english_custom 分析器，词干提取扩展召回）
+        // 注意：OpenSearch multi-field 在查询时用 "text.exact"，C# 匿名对象属性名不能含点号，用字典构建
+        object mainQuery;
+        if (phrase)
+        {
+            mainQuery = new Dictionary<string, object>
+            {
+                ["match_phrase"] = new Dictionary<string, object> { ["text.exact"] = new { query } }
+            };
+        }
+        else
+        {
+            mainQuery = new { match = new { text = new { query } } };
+        }
 
         // Build filter clauses
         var filterClauses = new List<object>();
@@ -451,6 +462,22 @@ public class OpenSearchIndexService : ISearchIndexService
                 mergedResults.Add(result);
             }
         }
+
+        // 按 match_type 优先级排序：精确短语 > 精确单词 > 词形还原 > 语义
+        var matchTypePriority = new Dictionary<string, int>
+        {
+            ["exact_phrase"] = 0,
+            ["exact_word"] = 1,
+            ["stemmed"] = 2,
+            ["semantic"] = 3
+        };
+        mergedResults.Sort((a, b) =>
+        {
+            var pa = matchTypePriority.TryGetValue(a.MatchType ?? "", out var va) ? va : 99;
+            var pb = matchTypePriority.TryGetValue(b.MatchType ?? "", out var vb) ? vb : 99;
+            if (pa != pb) return pa.CompareTo(pb);
+            return b.Score.CompareTo(a.Score); // 同优先级按分数降序
+        });
 
         return (mergedResults, totalCount, nextToken);
     }

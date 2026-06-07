@@ -63,10 +63,11 @@ public class QdrantService : IQdrantService
             _logger.LogWarning(ex, "检查 Qdrant 集合列表失败，尝试直接创建");
         }
 
-        // 创建集合，向量维度 1024，距离度量 Cosine
+        // 创建集合，向量维度 1024，距离度量 Cosine，on_disk 存储优化内存
         await _client.CreateCollectionAsync(
             collectionName,
-            vectorsConfig: new VectorParams { Size = 1024, Distance = Distance.Cosine });
+            vectorsConfig: new VectorParams { Size = 1024, Distance = Distance.Cosine, OnDisk = true },
+            optimizersConfig: new OptimizersConfigDiff { IndexingThreshold = 20000 });
 
         _logger.LogInformation("Qdrant 集合已创建：{CollectionName}", collectionName);
 
