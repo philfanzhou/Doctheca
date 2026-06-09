@@ -300,7 +300,7 @@ public static class DocumentAdminEndpoints
         }
     }
 
-    private static bool IsEncryptedPdf(Stream stream, string contentType)
+    internal static bool IsEncryptedPdf(Stream stream, string contentType)
     {
         if (!contentType.Contains("pdf")) return false;
 
