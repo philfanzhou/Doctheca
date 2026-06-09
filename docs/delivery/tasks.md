@@ -1,11 +1,11 @@
 # DocRetrieval 实施任务列表
 
-> 配套文档：[requirements.md](./requirements.md)（业务需求）｜[process.md](./process.md)（业务流程）｜[spec.md](./spec.md)（技术规格）｜[checklist.md](./checklist.md)（验收清单）
+> 配套文档：[导入模块](../modules/ingestion/README.md)｜[管理模块](../modules/management/README.md)｜[查询模块](../modules/retrieval/README.md)｜[架构文档](../architecture/README.md)｜[checklist.md](./checklist.md)（验收清单）
 >
 > 用法：每条任务在开工时切换为 `[-]`，完成后切换为 `[x]`；阶段切换时整体打包评审。
 >
-> **业务变更**：如果某条任务"业务上不再需要 / 范围调整"，应先更新 [requirements.md](./requirements.md)，再回到本文件调整任务。
-> **技术变更**：如果某条任务"实现方式调整"，应先更新 [spec.md](./spec.md)，再回到本文件调整任务。
+> **业务变更**：如果某条任务涉及业务范围调整，应先更新对应模块目录下的 `requirements.md` / `process.md`。
+> **技术变更**：如果某条任务涉及实现方式调整，应先更新对应模块技术文档或 `architecture/` 下相关文档。
 
 ## 阶段 A：核心链路验证（约 2 周）
 
@@ -59,7 +59,7 @@
 - [ ] **A5.1** 端到端脚本：单词 → 命中文档 / 页码 / 句
 - [ ] **A5.2** 端到端脚本：短语 → 完整短语命中
 - [ ] **A5.3** 端到端脚本：扫描件 → 题目定位
-- [ ] **A5.4** 撰写阶段 A 验收报告 → `docs/verification/phase-a.md`
+- [ ] **A5.4** 撰写阶段 A 验收报告 → `docs/delivery/verification/phase-a.md`
 - [ ] **A5.5** 阶段 A 评审通过后才能进入阶段 B
 
 ---
@@ -153,7 +153,7 @@
 
 ## 跨阶段持续项
 
-- [ ] **X.1** 维护 [spec.md](./spec.md) 与实现一致
+- [ ] **X.1** 维护 `modules/` 与 `architecture/` 文档和实现一致
 - [ ] **X.2** 维护 [checklist.md](./checklist.md) 验收记录
 - [ ] **X.3** 提交前走 [pre-commit-check.md](../../../.testcode/docs/pre-commit-check.md) 4 阶段
 - [ ] **X.4** 关键决策追加 ADR
