@@ -1,17 +1,17 @@
 # DocRetrieval 验收清单
 
-> 配套文档：[requirements.md](./requirements.md)（业务需求）｜[process.md](./process.md)（业务流程）｜[spec.md](./spec.md)（技术规格）｜[tasks.md](./tasks.md)（实施任务）
+> 配套文档：[导入模块](../modules/ingestion/README.md)｜[管理模块](../modules/management/README.md)｜[查询模块](../modules/retrieval/README.md)｜[架构文档](../architecture/README.md)｜[tasks.md](./tasks.md)（实施任务）
 >
 > 用法：每个阶段交付前，逐项勾选；未勾选项需在交付说明中显式标注 N/A 或延期原因。
 >
-> **业务验收口径**见 [requirements.md §6](./requirements.md#6-业务验收口径)；**技术指标**见本文档与 [spec.md §8](./spec.md#8-验收标准)。
+> **业务验收口径**按模块分别见 `modules/` 下各模块的 `requirements.md`；**技术指标**见 [architecture/README.md](../architecture/README.md) 与本文档。
 
 ## 0. 阶段 A 启动前置（必须先敲定）
 
-- [x] 语言栈决策已确认：全 .NET — [ADR 0002](./adr/0002-language-stack.md)
-- [x] 向量库选型已确认：Qdrant — [ADR 0003](./adr/0003-vector-database.md)
-- [x] 文档存储方案已确认：复用 SeaweedFS — [ADR 0004](./adr/0004-document-storage.md)
-- [x] 导入队列选型已确认：PostgreSQL 轮询 — [ADR 0005](./adr/0005-ingestion-queue.md)
+- [x] 语言栈决策已确认：全 .NET — [ADR 0002](../architecture/adr/0002-language-stack.md)
+- [x] 向量库选型已确认：Qdrant — [ADR 0003](../architecture/adr/0003-vector-database.md)
+- [x] 文档存储方案已确认：复用 SeaweedFS — [ADR 0004](../architecture/adr/0004-document-storage.md)
+- [x] 导入队列选型已确认：PostgreSQL 轮询 — [ADR 0005](../architecture/adr/0005-ingestion-queue.md)
 - [x] 服务端口与命名空间已登记到 [系统架构文档](../../architecture.md)
 - [ ] OpenSearch / Qdrant 服务已就绪
 
@@ -24,7 +24,7 @@
 - [ ] 至少 20 份电子教材 PDF 样本
 - [ ] 至少 10 份 Word 真题样本
 - [ ] 至少 10 份扫描试卷 PDF 样本
-- [ ] 样本覆盖 3 种以上学科
+- [ ] 样本覆盖 3 类以上文档场景
 - [ ] 样本含不同年份与年级
 - [ ] 每组样本填写完整的必填元数据（title / subject / grade / year）
 - [ ] 重名样本：验证同名上传被拒绝
@@ -63,7 +63,7 @@
 - [ ] 端到端：输入短语 → 返回精确短语命中 + 上下文
 - [ ] 端到端：扫描件 → 返回可定位的题目文本
 - [ ] 三类样本全部通过端到端测试
-- [ ] 阶段 A 验收报告已归档到 `docs/verification/phase-a.md`
+- [ ] 阶段 A 验收报告已归档到 `docs/delivery/verification/phase-a.md`
 
 ---
 
@@ -142,8 +142,8 @@
 ### 4.1 文档完整性
 
 - [ ] `docs/README.md` 作为入口可正确导航
-- [ ] `docs/spec.md` 与代码实现保持一致
-- [ ] 公共 API 变更时同步更新 spec
+- [ ] `modules/` 与 `architecture/` 下文档与实现保持一致
+- [ ] 公共 API 变更时同步更新对应模块文档
 - [ ] 关键决策有 ADR 记录
 
 ### 4.2 代码质量
