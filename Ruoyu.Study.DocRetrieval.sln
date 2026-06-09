@@ -1,4 +1,4 @@
-
+﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.0.31903.59
@@ -12,6 +12,10 @@ EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ruoyu.Study.DocRetrieval.Service", "src\Service\Ruoyu.Study.DocRetrieval.Service.csproj", "{A1B2C3D4-0001-0001-0001-000000000004}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ruoyu.Study.DocRetrieval.Host", "src\Host\Ruoyu.Study.DocRetrieval.Host.csproj", "{A1B2C3D4-0001-0001-0001-000000000005}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "test", "test", "{A27288A4-715C-4044-B1F4-F49533F5759E}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ruoyu.Study.DocRetrieval.Domain.Tests", "test\Ruoyu.Study.DocRetrieval.Domain.Tests\Ruoyu.Study.DocRetrieval.Domain.Tests.csproj", "{45F3352D-FA21-40C5-A003-4E9DE4356361}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -39,5 +43,12 @@ Global
 		{A1B2C3D4-0001-0001-0001-000000000005}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{A1B2C3D4-0001-0001-0001-000000000005}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{A1B2C3D4-0001-0001-0001-000000000005}.Release|Any CPU.Build.0 = Release|Any CPU
+		{45F3352D-FA21-40C5-A003-4E9DE4356361}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{45F3352D-FA21-40C5-A003-4E9DE4356361}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{45F3352D-FA21-40C5-A003-4E9DE4356361}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{45F3352D-FA21-40C5-A003-4E9DE4356361}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{45F3352D-FA21-40C5-A003-4E9DE4356361} = {A27288A4-715C-4044-B1F4-F49533F5759E}
 	EndGlobalSection
 EndGlobal
