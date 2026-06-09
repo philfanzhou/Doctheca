@@ -33,7 +33,7 @@ public static class DatabaseInitializer
                     CONSTRAINT PK_documents PRIMARY KEY (id)
                 );
                 CREATE UNIQUE INDEX IF NOT EXISTS IX_documents_title ON documents (title);
-                CREATE UNIQUE INDEX IF NOT EXISTS IX_documents_file_hash ON documents (file_hash);
+                CREATE INDEX IF NOT EXISTS IX_documents_file_hash ON documents (file_hash);
                 CREATE INDEX IF NOT EXISTS IX_documents_subject_grade_year ON documents (subject, grade, year);
                 CREATE INDEX IF NOT EXISTS IX_documents_status ON documents (status);",
 

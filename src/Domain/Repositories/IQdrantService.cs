@@ -7,5 +7,6 @@ public interface IQdrantService
     Task EnsureCollectionAsync();
     Task IndexDocumentVectorsAsync(Guid documentId, string documentTitle, string subject, string grade, string year);
     Task DeleteDocumentVectorsAsync(Guid documentId);
+    Task UpdateDocumentMetadataAsync(Guid documentId, string subject, string grade, string year);
     Task<List<SearchResultModel>> SemanticSearchAsync(string query, int topK, SearchFilterModel? filter);
 }

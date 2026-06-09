@@ -479,6 +479,6 @@ public class OpenSearchIndexService : ISearchIndexService
             return b.Score.CompareTo(a.Score); // 同优先级按分数降序
         });
 
-        return (mergedResults, totalCount, nextToken);
+        return (mergedResults, mergedResults.Count, nextToken);
     }
 }

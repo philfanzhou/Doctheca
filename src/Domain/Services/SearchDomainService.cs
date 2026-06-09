@@ -10,7 +10,7 @@ using Ruoyu.Study.DocRetrieval.Domain.Repositories;
 
 namespace Ruoyu.Study.DocRetrieval.Domain.Services;
 
-public class SearchDomainService
+public class SearchDomainService : ISearchDomainService
 {
     private readonly ISearchIndexService? _searchIndexService;
     private readonly IDocumentRepository _documentRepository;

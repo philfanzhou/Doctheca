@@ -330,7 +330,7 @@ public partial class DocumentParserService : IDocumentParserService
     /// <summary>
     /// OCR 后处理：合并连字符打断的单词、移除多余空白、修正常见 OCR 错误
     /// </summary>
-    internal static string OcrPostProcess(string text)
+    private static string OcrPostProcess(string text)
     {
         if (string.IsNullOrWhiteSpace(text))
             return text;
@@ -363,7 +363,7 @@ public partial class DocumentParserService : IDocumentParserService
     /// <summary>
     /// 对文本进行分词，生成 Token 列表（原始文本 + Porter 词干还原）
     /// </summary>
-    internal static List<ParsedToken> Tokenize(string text)
+    private static List<ParsedToken> Tokenize(string text)
     {
         var tokens = new List<ParsedToken>();
         if (string.IsNullOrWhiteSpace(text))
@@ -390,7 +390,7 @@ public partial class DocumentParserService : IDocumentParserService
     /// <summary>
     /// Porter Stemmer 算法精简实现（英语词干还原）
     /// </summary>
-    internal static string PorterStem(string word)
+    private static string PorterStem(string word)
     {
         if (word.Length < 3)
             return word;
@@ -555,7 +555,7 @@ public partial class DocumentParserService : IDocumentParserService
     /// <summary>
     /// 句子边界识别：以 ". "/"! "/"? " 结尾视为句子结束，但排除缩写
     /// </summary>
-    internal List<string> SplitSentences(string text)
+    private List<string> SplitSentences(string text)
     {
         var sentences = new List<string>();
         if (string.IsNullOrWhiteSpace(text))
@@ -671,7 +671,7 @@ public partial class DocumentParserService : IDocumentParserService
     /// <summary>
     /// 从文本中提取题目和选项
     /// </summary>
-    internal List<ParsedQuestion> ExtractQuestions(string text, string blockId, ref int globalOffset)
+    private List<ParsedQuestion> ExtractQuestions(string text, string blockId, ref int globalOffset)
     {
         var questions = new List<ParsedQuestion>();
         var lines = text.Split('\n');
@@ -732,7 +732,7 @@ public partial class DocumentParserService : IDocumentParserService
         return questions;
     }
 
-    internal ParsedQuestion BuildParsedQuestion(
+    private ParsedQuestion BuildParsedQuestion(
         string questionId, StringBuilder stemBuilder,
         Dictionary<string, string> options,
         int startOffset, int endOffset)

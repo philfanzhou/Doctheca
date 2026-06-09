@@ -138,6 +138,19 @@ public class DocumentDomainService
             }
         }
 
+        // 同步更新 Qdrant 向量索引中的元数据
+        if (_qdrantService != null)
+        {
+            try
+            {
+                await _qdrantService.UpdateDocumentMetadataAsync(document.Id, document.Subject, document.Grade, document.Year);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "更新文档向量索引元数据失败：{Title}", title);
+            }
+        }
+
         _logger.LogInformation("文档元数据已更新：{Title}", title);
         return document;
     }
@@ -146,6 +159,9 @@ public class DocumentDomainService
     {
         var document = await _documentRepository.GetByTitleAsync(title);
         if (document == null) return true; // 幂等
+
+        // 取消正在进行的导入任务（如果文档正在导入中）
+        await CancelIngestionJobAsync(document.Id);
 
         await _occurrenceRepository.DeleteByDocumentIdAsync(document.Id);
         await _questionRepository.DeleteByDocumentIdAsync(document.Id);
@@ -259,6 +275,35 @@ public class DocumentDomainService
         await _unitOfWork.SaveChangesAsync();
 
         _logger.LogError("文档导入失败：{DocumentId}，原因：{Error}", job.DocumentId, errorMessage);
+    }
+
+    /// <summary>
+    /// 取消导入任务（当删除导入中的文档时调用）
+    /// </summary>
+    public async Task CancelIngestionJobAsync(Guid documentId)
+    {
+        var job = await _jobRepository.GetByDocumentIdAsync(documentId);
+        if (job == null) return;
+
+        // 只有 pending 或 processing 状态的任务才能被取消
+        if (job.Status != "pending" && job.Status != "processing")
+            return;
+
+        job.Status = "cancelled";
+        job.FinishedAt = DateTimeOffset.UtcNow;
+        await _jobRepository.UpdateAsync(job);
+        await _unitOfWork.SaveChangesAsync();
+
+        _logger.LogInformation("导入任务已取消：{DocumentId}", documentId);
+    }
+
+    /// <summary>
+    /// 获取文档的所有导入任务
+    /// </summary>
+    public async Task<List<DocumentIngestionJobModel>> GetJobsByDocumentIdAsync(Guid documentId)
+    {
+        var job = await _jobRepository.GetByDocumentIdAsync(documentId);
+        return job != null ? [job] : [];
     }
 
     private static void ValidateDocumentMetadata(DocumentModel document)

@@ -212,6 +212,39 @@ public class QdrantService : IQdrantService
         _logger.LogInformation("文档 {DocumentId} 的 Qdrant 向量数据已删除", documentId);
     }
 
+    public async Task UpdateDocumentMetadataAsync(Guid documentId, string subject, string grade, string year)
+    {
+        var collectionName = _options.CollectionName;
+
+        // 按 document_id 过滤，更新所有匹配 points 的 payload 元数据
+        var filter = new Filter
+        {
+            Must =
+            {
+                new Condition
+                {
+                    Field = new FieldCondition
+                    {
+                        Key = "document_id",
+                        Match = new Match { Keyword = documentId.ToString() }
+                    }
+                }
+            }
+        };
+
+        await _client.SetPayloadAsync(
+            collectionName,
+            new Dictionary<string, Value>
+            {
+                ["subject"] = subject,
+                ["grade"] = grade,
+                ["year"] = year
+            },
+            filter);
+
+        _logger.LogInformation("文档 {DocumentId} 的 Qdrant 向量元数据已更新", documentId);
+    }
+
     public async Task<List<SearchResultModel>> SemanticSearchAsync(string query, int topK, SearchFilterModel? filter)
     {
         var collectionName = _options.CollectionName;

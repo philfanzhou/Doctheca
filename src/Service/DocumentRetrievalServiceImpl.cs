@@ -12,11 +12,11 @@ namespace Ruoyu.Study.DocRetrieval.Service;
 
 public class DocumentRetrievalServiceImpl : DocumentRetrievalService.DocumentRetrievalServiceBase
 {
-    private readonly SearchDomainService _searchService;
+    private readonly ISearchDomainService _searchService;
     private readonly ILogger<DocumentRetrievalServiceImpl> _logger;
 
     public DocumentRetrievalServiceImpl(
-        SearchDomainService searchService,
+        ISearchDomainService searchService,
         ILogger<DocumentRetrievalServiceImpl> logger)
     {
         _searchService = searchService;
