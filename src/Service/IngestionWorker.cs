@@ -20,6 +20,9 @@ public class IngestionWorker : BackgroundService
     private readonly IQdrantService? _qdrantService;
     private readonly TimeSpan _pollInterval = TimeSpan.FromSeconds(10);
 
+    // 暴露轮询间隔以供测试验证
+    internal TimeSpan PollInterval => _pollInterval;
+
     public IngestionWorker(IServiceProvider serviceProvider, ILogger<IngestionWorker> logger, ISearchIndexService? searchIndexService = null, IQdrantService? qdrantService = null)
     {
         _serviceProvider = serviceProvider;
