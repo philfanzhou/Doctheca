@@ -1,0 +1,45 @@
+# database — 数据库文档
+
+> **本目录是 DocRetrieval 服务数据库结构的唯一事实源。** 其他文档如需引用表结构，请链接至 `tables/` 下的对应文件。
+
+## 表清单
+
+| 表名 | 说明 | 文档 |
+|------|------|------|
+| `documents` | 文档主表 | [tables/documents.md](tables/documents.md) |
+| `document_pages` | 文档页面表 | [tables/document_pages.md](tables/document_pages.md) |
+| `document_segments` | 文本片段表 | [tables/document_segments.md](tables/document_segments.md) |
+| `question_segments` | 题目片段表 | [tables/question_segments.md](tables/question_segments.md) |
+| `document_occurrences` | 词元出现位置表 | [tables/document_occurrences.md](tables/document_occurrences.md) |
+| `document_ingestion_jobs` | 文档导入任务表 | [tables/document_ingestion_jobs.md](tables/document_ingestion_jobs.md) |
+
+## 实体关系
+
+```
+documents (1) ──┬── (*) document_pages (1) ──┬── (*) document_segments
+                │                            │
+                │                            └── (*) question_segments
+                │
+                ├── (*) document_occurrences ── (?) document_segments (SET NULL on delete)
+                │                            ── (?) question_segments (SET NULL on delete)
+                │
+                └── (*) document_ingestion_jobs
+```
+
+- `documents` 是根表，删除时级联删除所有关联数据
+- `document_pages` 关联文档，删除时级联删除 segments 和 questions
+- `document_occurrences` 是倒排索引表，同时引用 segments 和 question_segments
+
+## 迁移历史
+
+本项目不使用 EF Core Migration，而是通过 [DatabaseInitializer](../../src/Database/DatabaseInitializer.cs) 使用 SQL-based 初始化策略。表结构在应用启动时自动创建（`CREATE TABLE IF NOT EXISTS`）。
+
+## 已移除的表
+
+（无）
+
+## 数据库配置
+
+- **数据库名**：`ruoyu_study_docretrieval`
+- **引擎**：PostgreSQL（生产） / SQLite（本地开发，通过 `USE_LOCAL_OSS=1` 切换）
+- **连接字符串**：`ConnectionStrings:Default`
