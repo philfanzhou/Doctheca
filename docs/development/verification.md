@@ -1,35 +1,35 @@
-# Verification
+# 验证指南
 
-How to verify `ruoyu.docretrieval` is running correctly.
+如何验证 `ruoyu.docretrieval` 正常运行。
 
-## Health Check
+## 健康检查
 
 ```bash
 curl http://localhost:5012/health
 ```
 
-Expected response:
+预期响应：
 
 ```json
 { "status": "healthy", "timestamp": "..." }
 ```
 
-## Upload a Test Document
+## 上传测试文档
 
 ```bash
 curl -X POST http://localhost:5012/admin/documents/upload \
   -F "file=@test.pdf" \
   -F "title=Test Document" \
-  -F "subject=Mathematics" \
+  -F "subject=英语" \
   -F "grade=G10" \
   -F "year=2024"
 ```
 
-Required form fields: `file`, `title`, `subject`, `grade`, `year`. Optional: `tags`.
+必填表单字段：`file`、`title`、`subject`、`grade`、`year`。可选：`tags`。
 
-Supported file types: PDF, Word (.doc/.docx), PowerPoint (.ppt/.pptx). Max size: 200 MB.
+支持的文件类型：PDF、Word（.doc/.docx）、PowerPoint（.ppt/.pptx）。最大大小：200 MB。
 
-Expected response:
+预期响应：
 
 ```json
 {
@@ -43,29 +43,29 @@ Expected response:
 }
 ```
 
-## List Documents
+## 文档列表
 
 ```bash
 curl http://localhost:5012/admin/documents
 ```
 
-Supports query parameters: `page`, `pageSize`, `status`, `subject`, `grade`, `keyword`, `year`.
+支持的查询参数：`page`、`pageSize`、`status`、`subject`、`grade`、`keyword`、`year`。
 
-Example with filters:
+带筛选条件的示例：
 
 ```bash
-curl "http://localhost:5012/admin/documents?subject=Mathematics&grade=G10&page=1&pageSize=10"
+curl "http://localhost:5012/admin/documents?subject=英语&grade=G10&page=1&pageSize=10"
 ```
 
-## Check Document Status
+## 检查文档状态
 
-Replace `{id}` with the `document_id` returned from upload:
+将 `{id}` 替换为上传时返回的 `document_id`：
 
 ```bash
 curl http://localhost:5012/admin/documents/{id}/status
 ```
 
-Expected response:
+预期响应：
 
 ```json
 {
@@ -73,11 +73,11 @@ Expected response:
   "data": {
     "document_id": "...",
     "title": "Test Document",
-    "status": "completed",
+    "status": "ready",
     "jobs": [
       {
         "job_id": "...",
-        "status": "completed",
+        "status": "success",
         "parser_version": "...",
         "ocr_version": "...",
         "error_message": null,
@@ -89,17 +89,19 @@ Expected response:
 }
 ```
 
-Document statuses: `pending` → `processing` → `completed` (or `failed`).
+文档状态流转：`pending` → `processing` → `ready`（或 `failed`）。
 
-## Run Tests
+任务状态流转：`pending` → `processing` → `success`（或 `failed`）。
 
-From the `backend/ruoyu.docretrieval/` directory:
+## 运行测试
+
+在 `backend/ruoyu.docretrieval/` 目录下执行：
 
 ```bash
 dotnet test test/Ruoyu.Study.DocRetrieval.Tests
 ```
 
-To filter by feature module:
+按功能模块筛选：
 
 ```bash
 dotnet test --filter "FullyQualifiedName~DocumentUpload"
@@ -107,12 +109,12 @@ dotnet test --filter "FullyQualifiedName~ExactSearch"
 dotnet test --filter "FullyQualifiedName~DocumentDeletion"
 ```
 
-## Search Test Endpoint
+## 搜索测试端点
 
-Requires OpenSearch (or database fallback) to be available:
+需要 OpenSearch（或数据库回退）可用：
 
 ```bash
 curl "http://localhost:5012/admin/documents/search-test?query=algebra&pageSize=5"
 ```
 
-Query parameters: `query` (required), `phrase` (boolean, default false), `pageSize` (1–100, default 20), `pageToken` (optional cursor).
+查询参数：`query`（必填）、`phrase`（布尔值，默认 false）、`pageSize`（1–100，默认 20）、`pageToken`（可选游标）。

@@ -21,7 +21,7 @@
     │                    │                   │  GetPendingJobs │                      │
     │                    │                   │─────────────────►                      │
     │                    │                   │                 │                      │
-    │                    │  StartJob (status=parsing)          │                      │
+    │                    │  StartJob (status=processing)        │                      │
     │                    │                   │                 │                      │
     │                    │  Download(file_path)                │                      │
     │                    │──────────────────►│                 │                      │
@@ -34,7 +34,7 @@
     │                    │  写入 document_pages, segments, questions, occurrences    │
     │                    │                   │                 │                      │
     │                    │  UpdateDocumentStatus(ready)         │                      │
-    │                    │  CompleteJob(completed)              │                      │
+    │                    │  CompleteJob(success)                │                      │
     │                    │                   │                 │                      │
     │                    │                   │  IndexSegments() │                      │
     │                    │                   │─────────────────►                      │

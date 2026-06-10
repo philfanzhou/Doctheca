@@ -1,41 +1,41 @@
-# Local Setup
+# 本地搭建
 
-How to set up and run `ruoyu.docretrieval` locally.
+如何在本地搭建并运行 `ruoyu.docretrieval`。
 
-## Prerequisites
+## 前置条件
 
-| Dependency | Required | Notes |
-|------------|----------|-------|
-| .NET 8 SDK | Yes | Project targets `net8.0` |
-| PostgreSQL | Optional | Default connection string in `appsettings.json` points to `localhost:5432` |
-| SQLite | Optional | Auto-detected fallback; no install needed (EF Core SQLite provider is bundled) |
-| OpenSearch | Optional | Full-text search index; defaults to `http://localhost:9200` |
-| Qdrant | Optional | Vector search / semantic search; defaults to `http://localhost:6333` |
-| MinIO / SeaweedFS | Optional | S3-compatible object storage; defaults to `localhost:8333` |
+| 依赖 | 是否必需 | 说明 |
+|------|----------|------|
+| .NET 8 SDK | 是 | 项目目标框架为 `net8.0` |
+| PostgreSQL | 可选 | `appsettings.json` 中的默认连接字符串指向 `localhost:5432` |
+| SQLite | 可选 | 自动检测的回退方案；无需安装（EF Core SQLite 提供程序已内置） |
+| OpenSearch | 可选 | 全文搜索索引；默认地址为 `http://localhost:9200` |
+| Qdrant | 可选 | 向量搜索 / 语义搜索；默认地址为 `http://localhost:6333` |
+| MinIO / SeaweedFS | 可选 | S3 兼容的对象存储；默认地址为 `localhost:8333` |
 
-## Environment Variables
+## 环境变量
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `USE_LOCAL_OSS` | (not set) | Set to `1` to use local filesystem storage instead of S3. Files are saved under `OSS_LOCAL_PATH` |
-| `OSS_LOCAL_PATH` | `data/oss` | Directory for local file storage (only used when `USE_LOCAL_OSS=1`) |
+| 变量 | 默认值 | 说明 |
+|------|--------|------|
+| `USE_LOCAL_OSS` | （未设置） | 设为 `1` 可使用本地文件系统存储代替 S3，文件保存至 `OSS_LOCAL_PATH` |
+| `OSS_LOCAL_PATH` | `data/oss` | 本地文件存储目录（仅在 `USE_LOCAL_OSS=1` 时使用） |
 
-No other environment variables are required. All other configuration comes from `appsettings.json`.
+无需其他环境变量，其余配置均来自 `appsettings.json`。
 
-## Database: SQLite Auto-Detection
+## 数据库：SQLite 自动检测
 
-The service selects the database provider based on the connection string in `appsettings.json`:
+服务根据 `appsettings.json` 中的连接字符串选择数据库提供程序：
 
-- If the connection string contains `Host=` or `Server=` (case-insensitive) → **PostgreSQL** (`UseNpgsql`)
-- Otherwise → **SQLite** (`UseSqlite`)
+- 如果连接字符串包含 `Host=` 或 `Server=`（不区分大小写）→ **PostgreSQL**（`UseNpgsql`）
+- 否则 → **SQLite**（`UseSqlite`）
 
-The default `appsettings.json` ships with a PostgreSQL connection string:
+默认的 `appsettings.json` 包含 PostgreSQL 连接字符串：
 
 ```
 Host=localhost;Port=5432;Database=ruoyu_study_docretrieval;Username=phil
 ```
 
-To use SQLite instead, change `ConnectionStrings:Default` to a SQLite-style string, e.g.:
+若要改用 SQLite，请将 `ConnectionStrings:Default` 改为 SQLite 风格的字符串，例如：
 
 ```json
 "ConnectionStrings": {
@@ -43,45 +43,45 @@ To use SQLite instead, change `ConnectionStrings:Default` to a SQLite-style stri
 }
 ```
 
-If the connection string is empty or null, SQLite defaults to `Data Source=data/sqlite/ruoyu_study_docretrieval.db`.
+如果连接字符串为空或 null，SQLite 默认使用 `Data Source=data/sqlite/ruoyu_study_docretrieval.db`。
 
-The database and tables are created automatically on startup via `DatabaseInitializer.InitializeAsync`.
+数据库和表会在启动时通过 `DatabaseInitializer.InitializeAsync` 自动创建。
 
-## Running the Service
+## 运行服务
 
-From the `backend/ruoyu.docretrieval/` directory:
+在 `backend/ruoyu.docretrieval/` 目录下执行：
 
 ```bash
 dotnet run --project src/Host
 ```
 
-### Port Configuration
+### 端口配置
 
-| Protocol | Default Port | Config Key | Notes |
-|----------|-------------|------------|-------|
-| gRPC | 5011 | `Endpoints:Grpc` | HTTP/2 only |
-| HTTP | 5012 | `Endpoints:Http` | HTTP/1 only (Admin API + health) |
+| 协议 | 默认端口 | 配置键 | 说明 |
+|------|----------|--------|------|
+| gRPC | 5011 | `Endpoints:Grpc` | 仅 HTTP/2 |
+| HTTP | 5012 | `Endpoints:Http` | 仅 HTTP/1（管理 API + 健康检查） |
 
-Ports can be overridden in `appsettings.json` under the `Endpoints` section.
+端口可在 `appsettings.json` 的 `Endpoints` 节中覆盖。
 
-## Minimal Local Setup (No External Services)
+## 最小本地搭建（无需外部服务）
 
-For basic upload/list/delete functionality without any external services:
+在没有任何外部服务的情况下实现基本的上传/列表/删除功能：
 
-1. Set the connection string to a SQLite value (remove `Host=` / `Server=`).
-2. Set environment variable `USE_LOCAL_OSS=1`.
-3. Run `dotnet run --project src/Host`.
+1. 将连接字符串设为 SQLite 值（移除 `Host=` / `Server=`）。
+2. 设置环境变量 `USE_LOCAL_OSS=1`。
+3. 运行 `dotnet run --project src/Host`。
 
-This gives you:
-- SQLite database (auto-created)
-- Local filesystem object storage (files saved to `data/oss/`)
-- Document upload, list, delete, and metadata update via HTTP Admin API
-- Background ingestion worker (parsing only; search indexing will fail gracefully)
+你将获得：
+- SQLite 数据库（自动创建）
+- 本地文件系统对象存储（文件保存至 `data/oss/`）
+- 通过 HTTP 管理 API 进行文档上传、列表、删除和元数据更新
+- 后台摄取工作器（仅解析；搜索索引将优雅降级）
 
-## Features Requiring External Services
+## 需要外部服务的功能
 
-| Feature | Service | Config Section | What happens without it |
-|---------|---------|----------------|------------------------|
-| Full-text search | OpenSearch | `OpenSearch` | Falls back to database LIKE search; index initialization logs a warning |
-| Semantic / hybrid search | Qdrant | `Qdrant` | Semantic search unavailable; collection initialization logs a warning |
-| Embedding generation | SiliconFlow API | `Embedding` | Semantic search cannot produce vectors; `Embedding:ApiKey` must be set for this to work |
+| 功能 | 服务 | 配置节 | 缺少时的行为 |
+|------|------|--------|-------------|
+| 全文搜索 | OpenSearch | `OpenSearch` | 回退到数据库 LIKE 搜索；索引初始化时记录警告 |
+| 语义 / 混合搜索 | Qdrant | `Qdrant` | 语义搜索不可用；集合初始化时记录警告 |
+| 嵌入向量生成 | SiliconFlow API | `Embedding` | 语义搜索无法生成向量；需设置 `Embedding:ApiKey` 才能使用 |

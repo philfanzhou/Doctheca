@@ -2,31 +2,40 @@
 
 ## 1. 本轮任务范围
 
-对 `ruoyu.docretrieval` 服务的 `docs/` 目录进行结构优化：将根目录散落的 7 份总览文档收拢到 `docs/overview/`，根目录仅保留薄入口 `README.md` 和过程性文档 `AgentReviewNotes.md`。
+对 `ruoyu.docretrieval` 服务的 `docs/` 目录进行全面审查和优化：以代码为唯一事实源，修正文档中的错误、补齐缺失文档、统一格式和语言。
 
 ## 2. 已完成的文档调整
 
-### 2.1 结构调整
-
-| 操作 | 说明 |
-|------|------|
-| 新增 `docs/overview/` 目录 | 收拢服务级总览文档 |
-| 迁移 7 份总览文档 | `SystemContext.md`、`Integration.md`、`KeyFlows.md`、`DataOwnership.md`、`Requirements.md`、`Design.md`、`DotNetCodingPolicy.md` → `docs/overview/` |
-| 新增 `docs/overview/README.md` | 总览文档索引 |
-| 重写 `docs/README.md` | 从详细导航改为薄根入口，引导至 `overview/` |
-
-### 2.2 链接修复
+### 2.1 本轮修正
 
 | # | 文件 | 修正内容 |
 |---|------|---------|
-| 1 | `docs/README.md` | 所有总览文档链接从 `./X.md` → `./overview/X.md` |
-| 2 | `docs/Integration/README.md` | `../Integration.md` → `../overview/Integration.md` |
-| 3 | `docs/overview/Requirements.md` | 9 个 `modules/` 链接 → `../modules/` |
-| 4 | `docs/overview/Integration.md` | 2 个 `../src/` 链接 → `../../src/` |
-| 5 | `docs/overview/Design.md` | 8 个 `../src/` 链接 → `../../src/` |
-| 6 | `docs/overview/DotNetCodingPolicy.md` | `../../ruoyu.mistake/` → `../../../ruoyu.mistake/` |
+| 1 | `overview/KeyFlows.md` | 状态值 `parsing` → `processing`（2 处），`completed` → `success`（1 处） |
+| 2 | `development/verification.md` | 状态值 `completed` → `ready`/`success`；全文翻译为中文；`subject=Mathematics` → `subject=英语`（2 处） |
+| 3 | `development/README.md` | 全文翻译为中文 |
+| 4 | `development/local-setup.md` | 全文翻译为中文 |
 
-### 2.3 历史修正记录（前几轮已完成，保留备查）
+### 2.2 本轮补齐
+
+| # | 文件 | 说明 |
+|---|------|------|
+| 1 | `modules/DocumentList/02-SPEC.md` | 新建：9 条 FR + 9 组 AC（Given-When-Then） |
+| 2 | `modules/DocumentDeletion/01-FEATURE.md` | 新建：核心用户故事 + 8 条 AC + 补充约束 |
+
+### 2.3 核对结果
+
+| 项目 | 结果 |
+|------|------|
+| database/ 6 张表文档 vs DatabaseInitializer.cs DDL | 完全一致，无需修改 |
+| database/relations.md | 与 DDL 外键关系一致 |
+| database/migrations.md | 与实际迁移策略一致（SQL-based 初始化，无 EF Migration） |
+| overview/SystemContext.md | 与 Program.cs 注册代码一致 |
+| overview/Integration.md | 与实际接口和降级策略一致 |
+| overview/Design.md | 与项目分层和技术栈一致 |
+| overview/DataOwnership.md | 与 DbContext DbSet 属性一致 |
+| overview/Requirements.md | 与 modules/ 功能点对应一致 |
+
+### 2.4 历史修正记录（前几轮已完成，保留备查）
 
 - Integration.md HTTP 路径 `/api/` → `/admin/`，参数 `{id}` → `{title}`
 - Requirements.md 模块链接修正（双层 → 单层）
@@ -38,6 +47,7 @@
 - modules/README.md 断链修复
 - database/README.md 去重 ER 图
 - development/ 目录创建（local-setup + verification）
+- 根目录总览文档收拢到 `overview/`
 
 ## 3. 待人工审核事项
 
@@ -64,12 +74,20 @@
 - **已查阅的证据**：`OpenSearchIndexService.cs` 的 `matchTypePriority` 字典和 `ExactSearchAsync` 方法
 - **建议复核方式**：确认 `stemmed` 是否为未来功能预留
 
+### 3.4 DocumentList 缺少 02-SPEC.md 的历史原因
+
+- **编号**：REV-04
+- **问题描述**：DocumentList 模块之前缺少 02-SPEC.md，本轮已补齐，但需确认是否有其他模块也存在类似缺失
+- **已查阅的证据**：Glob 扫描 `docs/modules/` 下所有文件
+- **当前状态**：已补齐，7 个模块均有完整的 6 件套（部分模块的 01-FEATURE.md 是本轮新建）
+
 ## 4. 证据不足但已落盘的内容
 
 | 内容 | 文件 | 标注 |
 |------|------|------|
 | DotNetCodingPolicy 中"注释必须英文"与实际代码中文日志的矛盾 | `docs/overview/DotNetCodingPolicy.md` | `[推断]` |
 | `source_type` 字段的 `word`/`ppt` 值来自代码常量推断 | `docs/database/tables/documents.md` | `[推断]` |
+| DocumentList 02-SPEC 中"无效筛选值返回空列表" | `docs/modules/DocumentList/02-SPEC.md` | `[推断]` |
 
 ## 5. 风险与后续建议
 
@@ -77,3 +95,4 @@
 2. **文档与代码同步机制**：建议在 CI 中加入文档链接检查步骤
 3. **状态枚举硬编码**：建议统一为枚举常量
 4. **DocumentMetadata 测试骨架**：缺少 `Mock<IQdrantService>` 注入
+5. **PPT 解析测试**：DocumentParserServiceTests 中未见 PPT 解析的测试用例
