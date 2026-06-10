@@ -65,7 +65,7 @@
 ## 5. xUnit + Moq 推荐骨架
 
 ```csharp
-// tests/DocumentDeletion/DocumentDeletionTests.cs
+// [当前无测试覆盖] tests/DocumentDeletion/DocumentDeletionTests.cs
 public class DocumentDeletionTests
 {
     private readonly Mock<IDocumentRepository> _documentRepository;

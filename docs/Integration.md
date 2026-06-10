@@ -18,8 +18,8 @@
 
 | RPC | 请求 | 响应 | 说明 |
 |-----|------|------|------|
-| `ExactSearch` | `ExactSearchRequest` | `ExactSearchResponse` | 精确关键词搜索 |
-| `HybridSearch` | `HybridSearchRequest` | `HybridSearchResponse` | 混合搜索（关键词+语义） |
+| `ExactSearch` | `ExactSearchRequest` | `SearchResponse` | 精确关键词搜索 |
+| `HybridSearch` | `HybridSearchRequest` | `SearchResponse` | 混合搜索（关键词+语义） |
 
 ## HTTP API（入方向）
 
@@ -27,12 +27,12 @@
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| POST | `/api/documents/upload` | 上传文档文件 |
-| GET | `/api/documents` | 分页列出文档 |
-| GET | `/api/documents/{id}` | 获取单个文档详情 |
-| DELETE | `/api/documents/{id}` | 删除文档 |
-| PUT | `/api/documents/{id}/metadata` | 更新文档元数据 |
-| GET | `/api/documents/{id}/status` | 查询文档解析状态 |
+| POST | `/admin/documents/upload` | 上传文档文件（PDF/DOC/DOCX/PPT/PPTX，最大 200MB） |
+| GET | `/admin/documents` | 分页列出文档 |
+| GET | `/admin/documents/{id}/status` | 查询文档解析状态 |
+| DELETE | `/admin/documents/{title}` | 删除文档 |
+| PUT | `/admin/documents/{title}/metadata` | 更新文档元数据 |
+| GET | `/admin/documents/search-test` | 搜索测试 |
 | GET | `/health` | 健康检查 |
 
 ## 失败语义

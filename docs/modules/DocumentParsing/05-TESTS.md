@@ -6,7 +6,7 @@
 
 | # | 测试用例 | 覆盖需求 | 前置条件 | 预期结果 |
 |---|---------|---------|---------|---------|
-| UT-W-01 | 轮询间隔为 10 秒 | REQ-PARSE-01 | 创建 IngestionWorker 实例 | `_pollInterval == TimeSpan.FromSeconds(10)` |
+| UT-W-01 | 轮询间隔为 5 秒 | REQ-PARSE-01 | 创建 IngestionWorker 实例 | `_pollInterval == TimeSpan.FromSeconds(5)` |
 | UT-W-02 | 获取到 pending 任务后调用 StartIngestionJobAsync | REQ-PARSE-02 | GetPendingJobsAsync 返回 1 个任务 | StartIngestionJobAsync 被调用 1 次，参数 `(jobId, "v1.0", null)` |
 | UT-W-03 | 解析成功后调用 CompleteIngestionJobAsync | REQ-PARSE-02 | ParseAsync 正常返回 | CompleteIngestionJobAsync 被调用 1 次 |
 | UT-W-04 | 解析失败后调用 FailIngestionJobAsync | REQ-PARSE-09 | ParseAsync 抛出异常 | FailIngestionJobAsync 被调用，errorMessage = ex.Message |
@@ -72,7 +72,7 @@
 
 ## 骨架代码
 
-### IngestionWorkerTests.cs
+### IngestionWorkerTests.cs [当前无测试覆盖]
 
 ```csharp
 using System;
@@ -89,7 +89,7 @@ using Ruoyu.Study.DocRetrieval.Domain.Services;
 using Ruoyu.Study.DocRetrieval.Service;
 using Xunit;
 
-namespace Ruoyu.Study.DocRetrieval.Tests.Service;
+namespace Ruoyu.Study.DocRetrieval.Tests;
 
 public class IngestionWorkerTests
 {
@@ -118,12 +118,12 @@ public class IngestionWorkerTests
     }
 
     [Fact]
-    public void PollInterval_ShouldBe10Seconds()
+    public void PollInterval_ShouldBe5Seconds()
     {
-        // UT-W-01: 验证轮询间隔为 10 秒
+        // UT-W-01: 验证轮询间隔为 5 秒
         var worker = CreateWorker();
         // 通过反射或公开属性验证 _pollInterval
-        // Assert.Equal(TimeSpan.FromSeconds(10), worker.PollInterval);
+        // Assert.Equal(TimeSpan.FromSeconds(5), worker.PollInterval);
     }
 
     [Fact]
@@ -187,6 +187,8 @@ public class IngestionWorkerTests
 ```
 
 ### DocumentDomainServiceTests.cs
+
+> 文件路径：`test/Ruoyu.Study.DocRetrieval.Tests/DocumentDomainServiceTests.cs`
 
 ```csharp
 using System;
@@ -290,6 +292,8 @@ public class DocumentDomainServiceTests
 
 ### DocumentParserServiceTests.cs
 
+> 文件路径：`test/Ruoyu.Study.DocRetrieval.Tests/DocumentParserServiceTests.cs`
+
 ```csharp
 using System.IO;
 using System.Threading;
@@ -299,7 +303,7 @@ using Moq;
 using Ruoyu.Study.DocRetrieval.Service;
 using Xunit;
 
-namespace Ruoyu.Study.DocRetrieval.Tests.Service;
+namespace Ruoyu.Study.DocRetrieval.Tests;
 
 public class DocumentParserServiceTests
 {

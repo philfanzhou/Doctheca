@@ -6,9 +6,9 @@
 
 **优先级**: P0 | **状态**: 已实现
 
-IngestionWorker 作为 BackgroundService，以 10 秒为间隔持续轮询 `status = "pending"` 的导入任务。
+IngestionWorker 作为 BackgroundService，以 5 秒为间隔持续轮询 `status = "pending"` 的导入任务。
 
-- 轮询间隔：`_pollInterval = TimeSpan.FromSeconds(10)`
+- 轮询间隔：`_pollInterval = TimeSpan.FromSeconds(5)`
 - 查询方式：`DocumentDomainService.GetPendingJobsAsync()` → `IJobRepository.GetByStatusAsync("pending")`
 - 取消支持：每轮循环检查 `stoppingToken.IsCancellationRequested`，每个任务处理前检查 `stoppingToken.ThrowIfCancellationRequested()`
 - 作用域管理：每轮循环使用 `IServiceProvider.CreateScope()` 获取 Scoped 服务实例
@@ -18,7 +18,7 @@ IngestionWorker 作为 BackgroundService，以 10 秒为间隔持续轮询 `stat
 Scenario: Worker 启动后持续轮询
   Given IngestionWorker 已启动
   When 数据库中有 pending 状态的任务
-  Then Worker 在 10 秒内获取到该任务并开始处理
+  Then Worker 在 5 秒内获取到该任务并开始处理
 
 Scenario: 取消令牌触发时 Worker 优雅退出
   Given IngestionWorker 正在运行

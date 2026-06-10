@@ -212,15 +212,15 @@ DocumentAdminEndpoints.UploadDocument
   ├─ 1. 校验 HasFormContentType → 否则 400
   │
   ├─ 2. 提取 file 字段
-  │     ├─ file == null || file.Length == 0 → 400 (DOCRETREIVAL_FILE_REQUIRED)
+  │     ├─ file == null || file.Length == 0 → 400 (DOCRETRIEVAL_FILE_REQUIRED)
   │     ├─ file.Length > 200MB → 400
-  │     └─ file.ContentType ∉ AllowedMimeTypes → 400 (DOCRETREIVAL_FILE_FORMAT_UNSUPPORTED)
+  │     └─ file.ContentType ∉ AllowedMimeTypes → 400 (DOCRETRIEVAL_FILE_FORMAT_UNSUPPORTED)
   │
   ├─ 3. 提取 title/subject/grade/year/tags
-  │     └─ 任一必填项为空 → 400 (DOCRETREIVAL_METADATA_REQUIRED)
+  │     └─ 任一必填项为空 → 400 (DOCRETRIEVAL_METADATA_REQUIRED)
   │
   ├─ 4. 打开文件流
-  │     ├─ IsEncryptedPdf(stream, contentType) → 400 (DOCRETREIVAL_FILE_ENCRYPTED)
+  │     ├─ IsEncryptedPdf(stream, contentType) → 400 (DOCRETRIEVAL_FILE_ENCRYPTED)
   │     ├─ SHA256.ComputeHashAsync(stream) → fileHash
   │     ├─ stream.Position = 0
   │     └─ ossService.UploadAsync(stream, "docretrieval/{Guid}{ext}", contentType, Uploads) → filePath
@@ -270,16 +270,16 @@ pending ──IngestionWorker消费──▶ processing ──成功──▶ re
 | 错误场景 | 处理层 | 异常/返回 | HTTP 状态码 | 错误码 |
 | --- | --- | --- | --- | --- |
 | 非 multipart/form-data | 端点 | `Results.BadRequest` | 400 | — |
-| 文件为空 | 端点 | `Results.BadRequest` | 400 | `DOCRETREIVAL_FILE_REQUIRED` |
+| 文件为空 | 端点 | `Results.BadRequest` | 400 | `DOCRETRIEVAL_FILE_REQUIRED` |
 | 文件大小超限 | 端点 | `Results.BadRequest` | 400 | — |
-| 文件格式不支持 | 端点 | `Results.BadRequest` | 400 | `DOCRETREIVAL_FILE_FORMAT_UNSUPPORTED` |
-| 元数据缺失 | 端点 | `Results.BadRequest` | 400 | `DOCRETREIVAL_METADATA_REQUIRED` |
-| 加密 PDF | 端点 | `Results.BadRequest` | 400 | `DOCRETREIVAL_FILE_ENCRYPTED` |
-| 标题已存在 | 领域服务 | `DocRetrievalValidationException` | 409 | `DOCRETREIVAL_TITLE_ALREADY_EXISTS` |
-| 文件哈希重复(ready) | 领域服务 | `DocRetrievalValidationException` | 409 | `DOCRETREIVAL_FILE_HASH_ALREADY_EXISTS` |
-| 学科非法 | 领域服务 | `DocRetrievalValidationException` | 400 | `DOCRETREIVAL_SUBJECT_INVALID` |
-| 年级非法 | 领域服务 | `DocRetrievalValidationException` | 400 | `DOCRETREIVAL_GRADE_INVALID` |
-| 元数据校验失败(领域层) | 领域服务 | `DocRetrievalValidationException` | 400 | `DOCRETREIVAL_METADATA_REQUIRED` |
+| 文件格式不支持 | 端点 | `Results.BadRequest` | 400 | `DOCRETRIEVAL_FILE_FORMAT_UNSUPPORTED` |
+| 元数据缺失 | 端点 | `Results.BadRequest` | 400 | `DOCRETRIEVAL_METADATA_REQUIRED` |
+| 加密 PDF | 端点 | `Results.BadRequest` | 400 | `DOCRETRIEVAL_FILE_ENCRYPTED` |
+| 标题已存在 | 领域服务 | `DocRetrievalValidationException` | 409 | `DOCRETRIEVAL_TITLE_ALREADY_EXISTS` |
+| 文件哈希重复(ready) | 领域服务 | `DocRetrievalValidationException` | 409 | `DOCRETRIEVAL_FILE_HASH_ALREADY_EXISTS` |
+| 学科非法 | 领域服务 | `DocRetrievalValidationException` | 400 | `DOCRETRIEVAL_SUBJECT_INVALID` |
+| 年级非法 | 领域服务 | `DocRetrievalValidationException` | 400 | `DOCRETRIEVAL_GRADE_INVALID` |
+| 元数据校验失败(领域层) | 领域服务 | `DocRetrievalValidationException` | 400 | `DOCRETRIEVAL_METADATA_REQUIRED` |
 | OSS 上传失败 | 端点 | 异常向上抛出 | 500 | — |
 | 数据库写入失败 | 领域服务 | 异常向上抛出 | 500 | — |
 

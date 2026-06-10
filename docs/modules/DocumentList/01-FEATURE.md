@@ -38,8 +38,8 @@
 
 | 文档 | 链接 |
 |------|------|
-| 功能规格与验收标准 | [SPEC.md](./SPEC.md) |
-| 技术设计与数据流 | [DESIGN.md](./DESIGN.md) |
-| 任务与代码审查清单 | [TASKS.md](./TASKS.md) |
-| 测试场景与代码骨架 | [TESTS.md](./TESTS.md) |
-| 命名与代码规范 | [CONVENTIONS.md](./CONVENTIONS.md) |
+| 功能规格与验收标准 | [SPEC.md](./02-SPEC.md) |
+| 技术设计与数据流 | [DESIGN.md](./03-DESIGN.md) |
+| 任务与代码审查清单 | [TASKS.md](./04-TASKS.md) |
+| 测试场景与代码骨架 | [TESTS.md](./05-TESTS.md) |
+| 命名与代码规范 | [CONVENTIONS.md](./06-CONVENTIONS.md) |

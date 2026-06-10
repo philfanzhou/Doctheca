@@ -15,20 +15,7 @@
 
 ## 实体关系
 
-```
-documents (1) ──┬── (*) document_pages (1) ──┬── (*) document_segments
-                │                            │
-                │                            └── (*) question_segments
-                │
-                ├── (*) document_occurrences ── (?) document_segments (SET NULL on delete)
-                │                            ── (?) question_segments (SET NULL on delete)
-                │
-                └── (*) document_ingestion_jobs
-```
-
-- `documents` 是根表，删除时级联删除所有关联数据
-- `document_pages` 关联文档，删除时级联删除 segments 和 questions
-- `document_occurrences` 是倒排索引表，同时引用 segments 和 question_segments
+详见 [relations.md](relations.md)。
 
 ## 迁移历史
 
@@ -41,5 +28,5 @@ documents (1) ──┬── (*) document_pages (1) ──┬── (*) documen
 ## 数据库配置
 
 - **数据库名**：`ruoyu_study_docretrieval`
-- **引擎**：PostgreSQL（生产） / SQLite（本地开发，通过 `USE_LOCAL_OSS=1` 切换）
+- **引擎**：PostgreSQL（生产） / SQLite（本地开发，通过连接字符串自动切换）
 - **连接字符串**：`ConnectionStrings:Default`

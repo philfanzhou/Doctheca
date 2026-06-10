@@ -8,19 +8,19 @@
 
 DocumentParsing 是文档检索服务的核心后台处理模块，负责将用户上传的原始文档（PDF/DOCX/PPTX）自动解析为结构化数据，并写入数据库和搜索索引，使文档可被精确检索和语义搜索。
 
-整个流程由 `IngestionWorker`（后台 BackgroundService）驱动：每 10 秒轮询待处理的导入任务，对每个任务执行 **下载 → 解析 → 结构化写入 → 索引同步** 的完整管线。
+整个流程由 `IngestionWorker`（后台 BackgroundService）驱动：每 5 秒轮询待处理的导入任务，对每个任务执行 **下载 → 解析 → 结构化写入 → 索引同步** 的完整管线。
 
 ## 单一用户故事
 
 > **作为** 后台工作器（IngestionWorker），
-> **我希望** 每 10 秒轮询待处理的导入任务，对每个任务从 OSS 下载文件、调用解析器、将页面/片段/题目/Token 写入数据库，完成后同步写入搜索索引和向量索引，
+> **我希望** 每 5 秒轮询待处理的导入任务，对每个任务从 OSS 下载文件、调用解析器、将页面/片段/题目/Token 写入数据库，完成后同步写入搜索索引和向量索引，
 > **以便** 用户上传的文档能够被自动结构化处理并支持后续的精确检索和语义搜索。
 
 ## 验收条件
 
 | # | 验收条件 | 验证方式 |
 |---|---------|---------|
-| AC-1 | Worker 每 10 秒轮询一次 pending 状态的导入任务 | 单元测试验证 `_pollInterval = TimeSpan.FromSeconds(10)`；集成测试观察轮询间隔 |
+| AC-1 | Worker 每 5 秒轮询一次 pending 状态的导入任务 | 单元测试验证 `_pollInterval = TimeSpan.FromSeconds(5)`；集成测试观察轮询间隔 |
 | AC-2 | 每个任务在独立的 try/catch 中处理，单个任务失败不影响其他任务 | 单元测试模拟第二个任务抛异常，验证第一个任务正常完成 |
 | AC-3 | 解析流程按序执行：下载 OSS → ParseAsync → 写入 pages → 写入 segments → 写入 questions → 写入 occurrences → CompleteIngestionJobAsync | 集成测试验证数据库写入顺序和完整性 |
 | AC-4 | PageNumber → PageId 映射正确，segment 和 question 的 PageId 字段指向正确的 page 记录 | 单元测试验证映射字典构建逻辑 |

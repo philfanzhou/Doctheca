@@ -7,7 +7,7 @@
   {
     "id": "TASK-001",
     "title": "IngestionWorker 后台轮询机制",
-    "description": "实现 BackgroundService，每 10 秒轮询 pending 任务，使用 CreateScope 获取 Scoped 服务",
+    "description": "实现 BackgroundService，每 5 秒轮询 pending 任务，使用 CreateScope 获取 Scoped 服务",
     "status": "done",
     "priority": "P0",
     "requirement": "REQ-PARSE-01",
@@ -131,7 +131,7 @@
     "status": "pending",
     "priority": "P0",
     "requirement": "REQ-PARSE-01~09",
-    "files": ["tests/Service/IngestionWorkerTests.cs"],
+    "files": ["test/Ruoyu.Study.DocRetrieval.Tests/IngestionWorkerTests.cs [当前无测试覆盖]"],
     "depends_on": ["TASK-012"]
   },
   {
@@ -141,7 +141,7 @@
     "status": "pending",
     "priority": "P0",
     "requirement": "REQ-PARSE-02",
-    "files": ["tests/Domain/DocumentDomainServiceTests.cs"],
+    "files": ["test/Ruoyu.Study.DocRetrieval.Tests/DocumentDomainServiceTests.cs"],
     "depends_on": ["TASK-002"]
   },
   {
@@ -151,7 +151,7 @@
     "status": "pending",
     "priority": "P0",
     "requirement": "REQ-PARSE-03",
-    "files": ["tests/Service/DocumentParserServiceTests.cs"],
+    "files": ["test/Ruoyu.Study.DocRetrieval.Tests/DocumentParserServiceTests.cs"],
     "depends_on": ["TASK-005"]
   },
   {
@@ -161,7 +161,7 @@
     "status": "pending",
     "priority": "P1",
     "requirement": "REQ-PARSE-01~09",
-    "files": ["tests/Integration/IngestionIntegrationTests.cs"],
+    "files": ["test/Ruoyu.Study.DocRetrieval.Tests/IngestionIntegrationTests.cs [当前无测试覆盖]"],
     "depends_on": ["TASK-013", "TASK-014", "TASK-015"]
   }
 ]

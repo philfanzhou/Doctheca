@@ -24,7 +24,7 @@
 4. **AC-4：学科与年级校验** — 学科仅支持"英语"，年级必须 K/G1~G12。
 5. **AC-5：null 参数不修改** — null 参数表示不修改，仅更新非 null 字段。
 6. **AC-6：更新时间戳** — 更新后设置 `UpdatedAt = DateTimeOffset.UtcNow`。
-7. **AC-7：搜索索引同步** — 同步调用 `ISearchIndexService.UpdateDocumentMetadataAsync`，失败仅记 Error 日志。
+7. **AC-7：搜索索引同步** — 同步调用 `ISearchIndexService.UpdateDocumentMetadataAsync`，失败仅记 Error 日志；同步调用 `IQdrantService.UpdateDocumentMetadataAsync`，失败仅记 Error 日志。
 8. **AC-8：Admin 端点至少一项** — 至少提供一项元数据，否则返回 400。
 9. **AC-9：tags 存储格式** — tags 字段存储为 JSON 数组字符串，使用 `GetRawText()` 获取。
 10. **AC-10：错误码映射** — 不存在→404 NOT_FOUND，未就绪→422 NOT_READY，学科无效→400，年级无效→400。
@@ -45,8 +45,8 @@
 
 | 文档 | 链接 |
 |------|------|
-| 功能规格与验收标准 | [SPEC.md](./SPEC.md) |
-| 技术设计与数据流 | [DESIGN.md](./DESIGN.md) |
-| 任务与代码审查清单 | [TASKS.md](./TASKS.md) |
-| 测试场景与代码骨架 | [TESTS.md](./TESTS.md) |
-| 命名与代码规范 | [CONVENTIONS.md](./CONVENTIONS.md) |
+| 功能规格与验收标准 | [SPEC.md](./02-SPEC.md) |
+| 技术设计与数据流 | [DESIGN.md](./03-DESIGN.md) |
+| 任务与代码审查清单 | [TASKS.md](./04-TASKS.md) |
+| 测试场景与代码骨架 | [TESTS.md](./05-TESTS.md) |
+| 命名与代码规范 | [CONVENTIONS.md](./06-CONVENTIONS.md) |

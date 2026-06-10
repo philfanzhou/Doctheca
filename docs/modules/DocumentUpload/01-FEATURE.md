@@ -10,12 +10,12 @@
 
 ## 关键验收条件摘要
 
-- AC-1：必须提供 `title`/`subject`/`grade`/`year` 四项元数据，缺少任何一项返回 400（`DOCRETREIVAL_METADATA_REQUIRED`）。
-- AC-2：文件大小 ≤ 200MB，仅支持 PDF/Word/PPT 格式，超限或格式不符返回 400（`DOCRETREIVAL_FILE_FORMAT_UNSUPPORTED` / `DOCRETREIVAL_FILE_REQUIRED`）。
-- AC-3：加密 PDF 被拒绝，返回 400（`DOCRETREIVAL_FILE_ENCRYPTED`）。
-- AC-4：相同标题已存在时返回 409（`DOCRETREIVAL_TITLE_ALREADY_EXISTS`）。
-- AC-5：相同文件哈希且状态为 `ready` 的文档已存在时返回 409（`DOCRETREIVAL_FILE_HASH_ALREADY_EXISTS`）。
-- AC-6：学科仅支持"英语"，年级必须为 K/G1~G12，不合法值返回 400（`DOCRETREIVAL_SUBJECT_INVALID` / `DOCRETREIVAL_GRADE_INVALID`）。
+- AC-1：必须提供 `title`/`subject`/`grade`/`year` 四项元数据，缺少任何一项返回 400（`DOCRETRIEVAL_METADATA_REQUIRED`）。
+- AC-2：文件大小 ≤ 200MB，仅支持 PDF/Word/PPT 格式，超限或格式不符返回 400（`DOCRETRIEVAL_FILE_FORMAT_UNSUPPORTED` / `DOCRETRIEVAL_FILE_REQUIRED`）。
+- AC-3：加密 PDF 被拒绝，返回 400（`DOCRETRIEVAL_FILE_ENCRYPTED`）。
+- AC-4：相同标题已存在时返回 409（`DOCRETRIEVAL_TITLE_ALREADY_EXISTS`）。
+- AC-5：相同文件哈希且状态为 `ready` 的文档已存在时返回 409（`DOCRETRIEVAL_FILE_HASH_ALREADY_EXISTS`）。
+- AC-6：学科仅支持"英语"，年级必须为 K/G1~G12，不合法值返回 400（`DOCRETRIEVAL_SUBJECT_INVALID` / `DOCRETRIEVAL_GRADE_INVALID`）。
 - AC-7：文档记录和导入任务在同一 `SaveChangesAsync` 中原子写入，保证数据一致性。
 - AC-8：OSS 路径格式为 `docretrieval/{Guid}{ext}`，SHA-256 哈希计算后 `stream.Position=0` 再上传 OSS。
 

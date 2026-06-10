@@ -53,7 +53,7 @@ public class IngestionWorker : BackgroundService
     private readonly ILogger<IngestionWorker> _logger;
     private readonly ISearchIndexService? _searchIndexService;
     private readonly IQdrantService? _qdrantService;
-    private readonly TimeSpan _pollInterval = TimeSpan.FromSeconds(10);
+    private readonly TimeSpan _pollInterval = TimeSpan.FromSeconds(5);
 
     public IngestionWorker(
         IServiceProvider serviceProvider,

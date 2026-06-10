@@ -10,7 +10,7 @@
 - **字段**：私有依赖注入字段采用 `_camelCase` 下划线前缀（如 `_documentRepository`、`_jobRepository`、`_unitOfWork`、`_logger`）。
 - **数据库**：表名 `documents`、`document_ingestion_jobs` 小写蛇形；列名 `file_hash`、`file_path`、`source_type`、`created_at`、`updated_at` 蛇形命名；并发字段 `updated_at` 使用 `[ConcurrencyCheck]`。
 - **OSS 路径**：`docretrieval/{Guid}{ext}`，Guid 保证唯一性，ext 保留原始扩展名。
-- **错误码**：采用 `DOCRETREIVAL_` 前缀 + 大写蛇形，如 `DOCRETREIVAL_FILE_REQUIRED`、`DOCRETREIVAL_TITLE_ALREADY_EXISTS`。
+- **错误码**：采用 `DOCRETRIEVAL_` 前缀 + 大写蛇形，如 `DOCRETRIEVAL_FILE_REQUIRED`、`DOCRETRIEVAL_TITLE_ALREADY_EXISTS`。
 
 ## 日志级别
 
@@ -31,27 +31,27 @@
 
 | 场景 | 消息文本 | 对应错误码 |
 | --- | --- | --- |
-| 文档名为空 | `"文档名不能为空"` | `DOCRETREIVAL_METADATA_REQUIRED` |
-| 文档名超长 | `"文档名超过200字符"` | `DOCRETREIVAL_METADATA_REQUIRED` |
-| 学科为空 | `"学科不能为空"` | `DOCRETREIVAL_METADATA_REQUIRED` |
-| 学科非法 | `"学科仅支持：英语"` | `DOCRETREIVAL_SUBJECT_INVALID` |
-| 年级为空 | `"年级不能为空"` | `DOCRETREIVAL_METADATA_REQUIRED` |
-| 年级非法 | `"年级取值非法，有效值：K、G1、G2、..."` | `DOCRETREIVAL_GRADE_INVALID` |
-| 年份为空 | `"年份不能为空"` | `DOCRETREIVAL_METADATA_REQUIRED` |
-| 文件哈希为空 | `"文件哈希不能为空"` | `DOCRETREIVAL_METADATA_REQUIRED` |
-| 标题重复 | `"文档名已存在"` | `DOCRETREIVAL_TITLE_ALREADY_EXISTS` |
-| 文件哈希重复 | `"该文件已被导入"` | `DOCRETREIVAL_FILE_HASH_ALREADY_EXISTS` |
+| 文档名为空 | `"文档名不能为空"` | `DOCRETRIEVAL_METADATA_REQUIRED` |
+| 文档名超长 | `"文档名超过200字符"` | `DOCRETRIEVAL_METADATA_REQUIRED` |
+| 学科为空 | `"学科不能为空"` | `DOCRETRIEVAL_METADATA_REQUIRED` |
+| 学科非法 | `"学科仅支持：英语"` | `DOCRETRIEVAL_SUBJECT_INVALID` |
+| 年级为空 | `"年级不能为空"` | `DOCRETRIEVAL_METADATA_REQUIRED` |
+| 年级非法 | `"年级取值非法，有效值：K、G1、G2、..."` | `DOCRETRIEVAL_GRADE_INVALID` |
+| 年份为空 | `"年份不能为空"` | `DOCRETRIEVAL_METADATA_REQUIRED` |
+| 文件哈希为空 | `"文件哈希不能为空"` | `DOCRETRIEVAL_METADATA_REQUIRED` |
+| 标题重复 | `"文档名已存在"` | `DOCRETRIEVAL_TITLE_ALREADY_EXISTS` |
+| 文件哈希重复 | `"该文件已被导入"` | `DOCRETRIEVAL_FILE_HASH_ALREADY_EXISTS` |
 
 ### 端点层错误消息（中文）
 
 | 场景 | 消息文本 | 错误码 |
 | --- | --- | --- |
 | 非 multipart/form-data | `"请求必须是 multipart/form-data"` | — |
-| 文件为空 | `"文件不能为空"` | `DOCRETREIVAL_FILE_REQUIRED` |
+| 文件为空 | `"文件不能为空"` | `DOCRETRIEVAL_FILE_REQUIRED` |
 | 文件大小超限 | `"文件大小超过200MB限制"` | — |
-| 文件格式不支持 | `"不支持的文件格式"` | `DOCRETREIVAL_FILE_FORMAT_UNSUPPORTED` |
-| 元数据缺失 | `"必填元数据缺失（title/subject/grade/year）"` | `DOCRETREIVAL_METADATA_REQUIRED` |
-| 加密文件 | `"不支持加密文件"` | `DOCRETREIVAL_FILE_ENCRYPTED` |
+| 文件格式不支持 | `"不支持的文件格式"` | `DOCRETRIEVAL_FILE_FORMAT_UNSUPPORTED` |
+| 元数据缺失 | `"必填元数据缺失（title/subject/grade/year）"` | `DOCRETRIEVAL_METADATA_REQUIRED` |
+| 加密文件 | `"不支持加密文件"` | `DOCRETRIEVAL_FILE_ENCRYPTED` |
 
 ### 错误响应格式
 
@@ -59,7 +59,7 @@
 {
   "success": false,
   "message": "错误描述文本",
-  "errorCode": "DOCRETREIVAL_XXX"
+  "errorCode": "DOCRETRIEVAL_XXX"
 }
 ```
 

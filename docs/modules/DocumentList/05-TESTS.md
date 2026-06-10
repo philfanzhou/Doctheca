@@ -1,6 +1,6 @@
 # 文档列表查询与筛选 — 测试方案与代码骨架（TESTS）
 
-> 对应测试文件：`test/DocumentDomainServiceTests.cs`（列表相关测试方法）
+> 对应测试文件：`test/Ruoyu.Study.DocRetrieval.Tests/DocumentDomainServiceTests.cs`（列表相关测试方法）
 > 运行命令：`dotnet test --filter "FullyQualifiedName~DocumentListTests"`
 
 ---
@@ -151,7 +151,7 @@ using Ruoyu.Study.DocRetrieval.Domain.Repositories;
 using Ruoyu.Study.DocRetrieval.Domain.Services;
 using Xunit;
 
-namespace Ruoyu.Study.DocRetrieval.Domain.Tests;
+namespace Ruoyu.Study.DocRetrieval.Tests;
 
 public class DocumentListTests
 {

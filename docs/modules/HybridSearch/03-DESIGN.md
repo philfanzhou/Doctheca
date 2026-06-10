@@ -13,10 +13,7 @@ backend/ruoyu.docretrieval/
 │   │   └── Repositories/
 │   │       ├── ISearchIndexService.cs             # 搜索索引接口 (HybridSearchAsync)
 │   │       ├── IQdrantService.cs                  # 向量搜索接口 (SemanticSearchAsync)
-│   │       ├── IDocumentRepository.cs             # 文档仓储接口
-│   │       ├── IDocumentSegmentRepository.cs      # 文档片段仓储接口
-│   │       ├── IQuestionSegmentRepository.cs      # 题目片段仓储接口
-│   │       └── IDocumentPageRepository.cs         # 文档页面仓储接口
+│   │       └── IRepositories.cs                   # 各仓储接口定义 (IDocumentRepository, IDocumentSegmentRepository, IQuestionSegmentRepository, IDocumentPageRepository 等)
 │   ├── Service/
 │   │   ├── DocumentRetrievalServiceImpl.cs        # gRPC 实现 (HybridSearch)
 │   │   ├── OpenSearchIndexService.cs              # OpenSearch 索引服务实现 (HybridSearchAsync)
@@ -27,7 +24,7 @@ backend/ruoyu.docretrieval/
 │       ├── docretrieval.proto                     # gRPC 服务定义
 │       └── docretrieval.common.proto              # 公共消息定义
 ├── test/
-│   └── Services/
+│   └── Ruoyu.Study.DocRetrieval.Tests/
 │       └── SearchDomainServiceTests.cs            # 单元测试
 └── docs/modules/HybridSearch/                     # 本文档所在目录
     ├── 01-FEATURE.md
@@ -115,7 +112,7 @@ Task<List<SearchResultModel>> SemanticSearchAsync(string query, int topK, Search
 ```csharp
 // src/Service/DocumentRetrievalServiceImpl.cs
 public DocumentRetrievalServiceImpl(
-    SearchDomainService searchService,
+    ISearchDomainService searchService,
     ILogger<DocumentRetrievalServiceImpl> logger)
 ```
 

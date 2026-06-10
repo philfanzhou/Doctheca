@@ -79,6 +79,20 @@ public class DocumentDomainService
             }
         }
 
+        // 同步更新 Qdrant 中的元数据
+        if (_qdrantService != null)
+        {
+            try
+            {
+                await _qdrantService.UpdateDocumentMetadataAsync(
+                    document.Id, document.Subject, document.Grade, document.Year);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "更新文档 Qdrant 元数据失败：{Title}", title);
+            }
+        }
+
         _logger.LogInformation("文档元数据已更新：{Title}", title);
         return document;
     }
@@ -228,6 +242,7 @@ DocumentAdminEndpoints.UpdateMetadata
 | Domain 层 | `IDocumentRepository.UpdateAsync` | 更新文档 |
 | Domain 层 | `IUnitOfWork.SaveChangesAsync` | 提交数据库变更 |
 | Domain 层 | `ISearchIndexService.UpdateDocumentMetadataAsync` | 同步搜索索引元数据 |
+| Domain 层 | `IQdrantService.UpdateDocumentMetadataAsync` | 同步 Qdrant 向量索引元数据 |
 | Domain 层 | `DocRetrievalConstants` | 学科/年级校验 |
 | ASP.NET Core | `Results.Json()` | 构造错误响应（带状态码） |
 | System.Text.Json | `JsonElement.GetRawText()` | 获取 tags 原始 JSON 文本 |

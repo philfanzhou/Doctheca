@@ -92,7 +92,7 @@
 
 - **Given**：`DocumentDomainService.CreateDocumentAsync` 抛出不同消息的 `DocRetrievalValidationException`。
 - **When**：在 `UploadDocument` 中捕获异常并映射。
-- **Then**：消息包含"文档名已存在"→ 409/`DOCRETREIVAL_TITLE_ALREADY_EXISTS`；消息包含"文件已被导入"→ 409/`DOCRETREIVAL_FILE_HASH_ALREADY_EXISTS`；消息包含"学科仅支持"→ 400/`DOCRETREIVAL_SUBJECT_INVALID`；消息包含"年级取值非法"→ 400/`DOCRETREIVAL_GRADE_INVALID`。
+- **Then**：消息包含"文档名已存在"→ 409/`DOCRETRIEVAL_TITLE_ALREADY_EXISTS`；消息包含"文件已被导入"→ 409/`DOCRETRIEVAL_FILE_HASH_ALREADY_EXISTS`；消息包含"学科仅支持"→ 400/`DOCRETRIEVAL_SUBJECT_INVALID`；消息包含"年级取值非法"→ 400/`DOCRETRIEVAL_GRADE_INVALID`。
 
 ## 集成测试
 
@@ -107,12 +107,12 @@
 ### IT-02 上传重复标题 → 409
 
 1. 上传文档 A（title="重复测试"），成功。
-2. 上传文档 B（title="重复测试"，不同文件），返回 409，`errorCode == "DOCRETREIVAL_TITLE_ALREADY_EXISTS"`。
+2. 上传文档 B（title="重复测试"，不同文件），返回 409，`errorCode == "DOCRETRIEVAL_TITLE_ALREADY_EXISTS"`。
 
 ### IT-03 上传重复哈希(ready) → 409
 
 1. 上传文档 A，手动将其状态设为 `ready`。
-2. 上传文档 B（相同文件，不同标题），返回 409，`errorCode == "DOCRETREIVAL_FILE_HASH_ALREADY_EXISTS"`。
+2. 上传文档 B（相同文件，不同标题），返回 409，`errorCode == "DOCRETRIEVAL_FILE_HASH_ALREADY_EXISTS"`。
 
 ## 边界和异常测试
 

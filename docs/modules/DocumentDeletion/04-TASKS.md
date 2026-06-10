@@ -62,7 +62,7 @@
     "depends_on": ["T01", "T02", "T03", "T04", "T05"],
     "action": "运行一次完整的回归测试：对 DocumentDeletion 相关测试执行 dotnet test 并确保全部通过。",
     "files": [
-      "tests/**/*DocumentDeletion*Tests.cs"
+      "[当前无测试覆盖] tests/**/*DocumentDeletion*Tests.cs"
     ],
     "acceptance": "dotnet test --filter 'FullyQualifiedName~DocumentDeletion|FullyQualifiedName~DeleteDocument'",
     "notes": "若测试项目尚未创建，本任务同时包含'补齐 DocumentDeletionTests'子任务。"

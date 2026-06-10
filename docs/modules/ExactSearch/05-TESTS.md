@@ -1,6 +1,6 @@
 # ExactSearch — 测试计划 (TESTS)
 
-测试工具：`xUnit + Moq`。现有测试文件：`test/Services/SearchDomainServiceTests.cs`、`test/Services/DocumentRetrievalServiceImplTests.cs`。
+测试工具：`xUnit + Moq`。现有测试文件：`test/Ruoyu.Study.DocRetrieval.Tests/SearchDomainServiceTests.cs`、`test/Ruoyu.Study.DocRetrieval.Tests/DocumentRetrievalServiceImplTests.cs`。
 
 ## 单元测试 — Given-When-Then 格式
 

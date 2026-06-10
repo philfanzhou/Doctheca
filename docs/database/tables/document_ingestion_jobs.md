@@ -31,6 +31,6 @@
 
 ## 特殊说明
 
-- 状态流转：`pending` → `parsing` → `completed` / `failed`
+- 状态流转：`pending` → `processing` → `success` / `failed` / `cancelled`
 - `IngestionWorker` 后台服务轮询 `pending` 状态的任务
 - 删除文档级联删除关联的导入任务

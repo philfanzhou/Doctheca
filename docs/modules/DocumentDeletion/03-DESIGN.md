@@ -83,7 +83,7 @@ public class DocumentDomainService
 public interface IDocumentRepository
 {
     Task<DocumentModel?> GetByTitleAsync(string title);
-    Task DeleteAsync(Guid id);
+    Task<bool> DeleteAsync(Guid id);
 }
 
 public interface IDocumentOccurrenceRepository

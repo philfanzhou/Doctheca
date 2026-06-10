@@ -12,10 +12,7 @@ backend/ruoyu.docretrieval/
 │   │   │   └── SearchDomainService.cs             # 领域服务 (ExactSearchAsync, DatabaseSearchAsync)
 │   │   └── Repositories/
 │   │       ├── ISearchIndexService.cs             # 搜索索引接口 (ExactSearchAsync)
-│   │       ├── IDocumentRepository.cs             # 文档仓储接口
-│   │       ├── IDocumentSegmentRepository.cs      # 文档片段仓储接口
-│   │       ├── IQuestionSegmentRepository.cs      # 题目片段仓储接口
-│   │       └── IDocumentPageRepository.cs         # 文档页面仓储接口
+│   │       └── IRepositories.cs                   # 各仓储接口定义 (IDocumentRepository, IDocumentSegmentRepository, IQuestionSegmentRepository, IDocumentPageRepository 等)
 │   ├── Service/
 │   │   ├── DocumentRetrievalServiceImpl.cs        # gRPC 实现 (ExactSearch)
 │   │   └── OpenSearchIndexService.cs              # OpenSearch 索引服务实现
@@ -25,7 +22,7 @@ backend/ruoyu.docretrieval/
 │       ├── docretrieval.proto                     # gRPC 服务定义
 │       └── docretrieval.common.proto              # 公共消息定义
 ├── test/
-│   └── Services/
+│   └── Ruoyu.Study.DocRetrieval.Tests/
 │       └── SearchDomainServiceTests.cs            # 单元测试
 └── docs/modules/ExactSearch/                      # 本文档所在目录
     ├── 01-FEATURE.md
@@ -127,7 +124,7 @@ public class SearchFilterModel
 ```csharp
 // src/Service/DocumentRetrievalServiceImpl.cs
 public DocumentRetrievalServiceImpl(
-    SearchDomainService searchService,
+    ISearchDomainService searchService,
     ILogger<DocumentRetrievalServiceImpl> logger)
 ```
 

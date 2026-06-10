@@ -40,7 +40,7 @@
     "id": "TEST-01",
     "depends_on": ["REVIEW-01", "REVIEW-02", "REVIEW-03"],
     "action": "执行参数校验测试：验证查询词为空、查询词超过 200 字符、page_size 超过 100 时均抛出 RpcException(StatusCode.InvalidArgument)。",
-    "files": ["test/Services/DocumentRetrievalServiceImplTests.cs"],
+    "files": ["test/Ruoyu.Study.DocRetrieval.Tests/DocumentRetrievalServiceImplTests.cs"],
     "acceptance": "dotnet test --filter FullyQualifiedName~ExactSearch_InvalidArgument",
     "notes": "三个错误码：DOCRETRIEVAL_QUERY_REQUIRED、DOCRETRIEVAL_QUERY_TOO_LONG、DOCRETRIEVAL_PAGE_SIZE_INVALID。"
   },
@@ -48,7 +48,7 @@
     "id": "TEST-02",
     "depends_on": ["REVIEW-02"],
     "action": "执行 OpenSearch 回退测试：Mock ISearchIndexService.ExactSearchAsync 抛异常，验证 SearchDomainService 回退 DatabaseSearchAsync 并记录 LogWarning。",
-    "files": ["test/Services/SearchDomainServiceTests.cs"],
+    "files": ["test/Ruoyu.Study.DocRetrieval.Tests/SearchDomainServiceTests.cs"],
     "acceptance": "dotnet test --filter FullyQualifiedName~ExactSearchAsync_FallbackToDatabase",
     "notes": "同时测试 _searchIndexService 为 null 时的直接回退路径。"
   },
@@ -56,7 +56,7 @@
     "id": "TEST-03",
     "depends_on": ["REVIEW-03"],
     "action": "执行数据库搜索匹配测试：验证 segments 和 questions 两表的 IndexOf 匹配、phrase=true 时 Score=1.0/MatchType=exact_phrase、phrase=false 时 Score=0.8/MatchType=exact_word。",
-    "files": ["test/Services/SearchDomainServiceTests.cs"],
+    "files": ["test/Ruoyu.Study.DocRetrieval.Tests/SearchDomainServiceTests.cs"],
     "acceptance": "dotnet test --filter FullyQualifiedName~DatabaseSearchAsync",
     "notes": ""
   },
@@ -64,7 +64,7 @@
     "id": "TEST-04",
     "depends_on": ["REVIEW-03"],
     "action": "执行去重和分页测试：验证 DocumentName+PageNumber+SegmentId 去重保留首条、游标分页的 skip/take 逻辑、next_token 编码/解码。",
-    "files": ["test/Services/SearchDomainServiceTests.cs"],
+    "files": ["test/Ruoyu.Study.DocRetrieval.Tests/SearchDomainServiceTests.cs"],
     "acceptance": "dotnet test --filter FullyQualifiedName~ExactSearch_DeduplicationAndPagination",
     "notes": "page_token 解码失败时 skip 应默认为 0。"
   },
@@ -72,7 +72,7 @@
     "id": "TEST-05",
     "depends_on": ["REVIEW-01"],
     "action": "执行 MapFilter 测试：验证 SearchFilter 空字符串字段转为 null、非空字段保留原值。",
-    "files": ["test/Services/DocumentRetrievalServiceImplTests.cs"],
+    "files": ["test/Ruoyu.Study.DocRetrieval.Tests/DocumentRetrievalServiceImplTests.cs"],
     "acceptance": "dotnet test --filter FullyQualifiedName~MapFilter",
     "notes": ""
   },
