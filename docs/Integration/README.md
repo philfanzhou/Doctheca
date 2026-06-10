@@ -2,7 +2,7 @@
 
 > DocRetrieval 服务目前**不通过 gRPC 调用其他 Ruoyu 微服务**，所有外部依赖均为基础设施（数据库、搜索服务、向量服务、OSS）。
 >
-> 详见顶层 [Integration.md](../Integration.md)。
+> 详见顶层 [Integration.md](../overview/Integration.md)。
 
 ## 外部系统列表
 

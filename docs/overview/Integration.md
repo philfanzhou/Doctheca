@@ -14,7 +14,7 @@
 
 ## gRPC 接口（入方向）
 
-定义在 [docretrieval.proto](../src/Contract/Protos/docretrieval.proto)：
+定义在 [docretrieval.proto](../../src/Contract/Protos/docretrieval.proto)：
 
 | RPC | 请求 | 响应 | 说明 |
 |-----|------|------|------|
@@ -23,7 +23,7 @@
 
 ## HTTP API（入方向）
 
-定义在 [DocumentAdminEndpoints.cs](../src/Service/DocumentAdminEndpoints.cs)：
+定义在 [DocumentAdminEndpoints.cs](../../src/Service/DocumentAdminEndpoints.cs)：
 
 | 方法 | 路径 | 说明 |
 |------|------|------|

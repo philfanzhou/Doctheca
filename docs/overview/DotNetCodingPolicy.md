@@ -2,7 +2,7 @@
 
 > 本文档为解决方案级共享规范，与 `ruoyu.mistake`、`ruoyu.student` 等服务共用同一份。
 
-详见 [ruoyu.mistake/docs/DotNetCodingPolicy.md](../../ruoyu.mistake/docs/DotNetCodingPolicy.md)（唯一事实源）。
+详见 [ruoyu.mistake/docs/DotNetCodingPolicy.md](../../../ruoyu.mistake/docs/overview/DotNetCodingPolicy.md)（唯一事实源）。
 
 ## 本服务特定补充
 

@@ -72,11 +72,11 @@
 
 | 文件 | 用途 |
 |------|------|
-| [Program.cs](../src/Host/Program.cs) | 服务启动配置 |
-| [docretrieval.proto](../src/Contract/Protos/docretrieval.proto) | gRPC 契约 |
-| [DocumentDomainService.cs](../src/Domain/Services/DocumentDomainService.cs) | 文档领域逻辑 |
-| [SearchDomainService.cs](../src/Domain/Services/SearchDomainService.cs) | 搜索领域逻辑 |
-| [DocumentRetrievalServiceImpl.cs](../src/Service/DocumentRetrievalServiceImpl.cs) | gRPC 实现 |
-| [IngestionWorker.cs](../src/Service/IngestionWorker.cs) | 后台导入 |
-| [DocumentAdminEndpoints.cs](../src/Service/DocumentAdminEndpoints.cs) | HTTP API |
-| [DatabaseInitializer.cs](../src/Database/DatabaseInitializer.cs) | 表初始化 |
+| [Program.cs](../../src/Host/Program.cs) | 服务启动配置 |
+| [docretrieval.proto](../../src/Contract/Protos/docretrieval.proto) | gRPC 契约 |
+| [DocumentDomainService.cs](../../src/Domain/Services/DocumentDomainService.cs) | 文档领域逻辑 |
+| [SearchDomainService.cs](../../src/Domain/Services/SearchDomainService.cs) | 搜索领域逻辑 |
+| [DocumentRetrievalServiceImpl.cs](../../src/Service/DocumentRetrievalServiceImpl.cs) | gRPC 实现 |
+| [IngestionWorker.cs](../../src/Service/IngestionWorker.cs) | 后台导入 |
+| [DocumentAdminEndpoints.cs](../../src/Service/DocumentAdminEndpoints.cs) | HTTP API |
+| [DatabaseInitializer.cs](../../src/Database/DatabaseInitializer.cs) | 表初始化 |
