@@ -59,9 +59,9 @@ public class ConstantsTests
     public void GradeLabels_HasLabelsForAllGrades()
     {
         Assert.Equal(13, DocRetrievalConstants.GradeLabels.Count);
-        Assert.Equal("幼儿园", DocRetrievalConstants.GradeLabels["K"]);
-        Assert.Equal("高一", DocRetrievalConstants.GradeLabels["G10"]);
-        Assert.Equal("高三", DocRetrievalConstants.GradeLabels["G12"]);
+        Assert.Equal("Kindergarten", DocRetrievalConstants.GradeLabels["K"]);
+        Assert.Equal("Grade 10", DocRetrievalConstants.GradeLabels["G10"]);
+        Assert.Equal("Grade 12", DocRetrievalConstants.GradeLabels["G12"]);
     }
 
     #endregion

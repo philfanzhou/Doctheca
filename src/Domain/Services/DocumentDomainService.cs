@@ -55,11 +55,11 @@ public class DocumentDomainService
 
         var existingByTitle = await _documentRepository.GetByTitleAsync(document.Title);
         if (existingByTitle != null)
-            throw new DocRetrievalValidationException("文档名已存在");
+            throw new DocRetrievalValidationException("Document title already exists");
 
         var existingByHash = await _documentRepository.GetByFileHashAndStatusAsync(document.FileHash, "ready");
         if (existingByHash != null)
-            throw new DocRetrievalValidationException("该文件已被导入");
+            throw new DocRetrievalValidationException("File already imported");
 
         document.Id = Guid.NewGuid();
         document.Status = "pending";
@@ -77,7 +77,7 @@ public class DocumentDomainService
         await _jobRepository.AddAsync(job);
         await _unitOfWork.SaveChangesAsync();
 
-        _logger.LogInformation("文档已创建：{Title}，导入任务已排队", document.Title);
+        _logger.LogInformation("Document created: {Title}, ingestion job queued", document.Title);
         return document;
     }
 
@@ -105,16 +105,16 @@ public class DocumentDomainService
         string title, string? subject, string? grade, string? year, string? tags)
     {
         var document = await _documentRepository.GetByTitleAsync(title)
-            ?? throw new DocRetrievalValidationException("文档不存在");
+            ?? throw new DocRetrievalValidationException("Document not found");
 
         if (document.Status != "ready")
-            throw new DocRetrievalValidationException("文档未就绪，不允许修改元数据");
+            throw new DocRetrievalValidationException("Document not ready, metadata update not allowed");
 
         if (subject != null && !DocRetrievalConstants.IsValidSubject(subject))
-            throw new DocRetrievalValidationException("学科仅支持：英语");
+            throw new DocRetrievalValidationException("Subject only supports: English");
 
         if (grade != null && !DocRetrievalConstants.IsValidGrade(grade))
-            throw new DocRetrievalValidationException($"年级取值非法，有效值：{string.Join("、", DocRetrievalConstants.ValidGrades)}");
+            throw new DocRetrievalValidationException($"Invalid grade value, valid values: {string.Join(", ", DocRetrievalConstants.ValidGrades)}");
 
         if (subject != null) document.Subject = subject;
         if (grade != null) document.Grade = grade;
@@ -125,7 +125,7 @@ public class DocumentDomainService
         await _documentRepository.UpdateAsync(document);
         await _unitOfWork.SaveChangesAsync();
 
-        // 同步更新搜索索引中的元数据
+        // Sync update search index metadata
         if (_searchIndexService != null)
         {
             try
@@ -134,11 +134,11 @@ public class DocumentDomainService
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "更新文档搜索索引元数据失败：{Title}", title);
+                _logger.LogError(ex, "Failed to update document search index metadata: {Title}", title);
             }
         }
 
-        // 同步更新 Qdrant 向量索引中的元数据
+        // Sync update Qdrant vector index metadata
         if (_qdrantService != null)
         {
             try
@@ -147,20 +147,20 @@ public class DocumentDomainService
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "更新文档向量索引元数据失败：{Title}", title);
+                _logger.LogError(ex, "Failed to update document vector index metadata: {Title}", title);
             }
         }
 
-        _logger.LogInformation("文档元数据已更新：{Title}", title);
+        _logger.LogInformation("Document metadata updated: {Title}", title);
         return document;
     }
 
     public async Task<bool> DeleteDocumentAsync(string title)
     {
         var document = await _documentRepository.GetByTitleAsync(title);
-        if (document == null) return true; // 幂等
+        if (document == null) return true; // Idempotent
 
-        // 取消正在进行的导入任务（如果文档正在导入中）
+        // Cancel ongoing ingestion job if document is being ingested
         await CancelIngestionJobAsync(document.Id);
 
         await _occurrenceRepository.DeleteByDocumentIdAsync(document.Id);
@@ -170,7 +170,7 @@ public class DocumentDomainService
         await _documentRepository.DeleteAsync(document.Id);
         await _unitOfWork.SaveChangesAsync();
 
-        // 清理搜索索引
+        // Clean up search index
         if (_searchIndexService != null)
         {
             try
@@ -179,11 +179,11 @@ public class DocumentDomainService
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "删除文档搜索索引失败：{Title}", title);
+                _logger.LogError(ex, "Failed to delete document search index: {Title}", title);
             }
         }
 
-        // 清理 Qdrant 向量数据
+        // Clean up Qdrant vector data
         if (_qdrantService != null)
         {
             try
@@ -192,11 +192,11 @@ public class DocumentDomainService
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "删除文档向量数据失败：{Title}", title);
+                _logger.LogError(ex, "Failed to delete document vector data: {Title}", title);
             }
         }
 
-        _logger.LogInformation("文档已删除：{Title}", title);
+        _logger.LogInformation("Document deleted: {Title}", title);
         return true;
     }
 
@@ -251,7 +251,7 @@ public class DocumentDomainService
         await _jobRepository.UpdateAsync(job);
         await _unitOfWork.SaveChangesAsync();
 
-        _logger.LogInformation("文档导入完成：{DocumentId}", job.DocumentId);
+        _logger.LogInformation("Document ingestion completed: {DocumentId}", job.DocumentId);
     }
 
     public async Task FailIngestionJobAsync(Guid jobId, string errorMessage)
@@ -274,18 +274,18 @@ public class DocumentDomainService
         await _jobRepository.UpdateAsync(job);
         await _unitOfWork.SaveChangesAsync();
 
-        _logger.LogError("文档导入失败：{DocumentId}，原因：{Error}", job.DocumentId, errorMessage);
+        _logger.LogError("Document ingestion failed: {DocumentId}, reason: {Error}", job.DocumentId, errorMessage);
     }
 
     /// <summary>
-    /// 取消导入任务（当删除导入中的文档时调用）
+    /// Cancel ingestion job (called when deleting a document being ingested)
     /// </summary>
     public async Task CancelIngestionJobAsync(Guid documentId)
     {
         var job = await _jobRepository.GetByDocumentIdAsync(documentId);
         if (job == null) return;
 
-        // 只有 pending 或 processing 状态的任务才能被取消
+        // Only pending or processing jobs can be cancelled
         if (job.Status != "pending" && job.Status != "processing")
             return;
 
@@ -294,11 +294,11 @@ public class DocumentDomainService
         await _jobRepository.UpdateAsync(job);
         await _unitOfWork.SaveChangesAsync();
 
-        _logger.LogInformation("导入任务已取消：{DocumentId}", documentId);
+        _logger.LogInformation("Ingestion job cancelled: {DocumentId}", documentId);
     }
 
     /// <summary>
-    /// 获取文档的所有导入任务
+    /// Get all ingestion jobs for a document
     /// </summary>
     public async Task<List<DocumentIngestionJobModel>> GetJobsByDocumentIdAsync(Guid documentId)
     {
@@ -311,26 +311,26 @@ public class DocumentDomainService
         var errors = new List<string>();
 
         if (string.IsNullOrWhiteSpace(document.Title))
-            errors.Add("文档名不能为空");
+            errors.Add("Document title cannot be empty");
 
         if (document.Title?.Length > 200)
-            errors.Add("文档名超过200字符");
+            errors.Add("Document title exceeds 200 characters");
 
         if (string.IsNullOrWhiteSpace(document.Subject))
-            errors.Add("学科不能为空");
+            errors.Add("Subject cannot be empty");
         else if (!DocRetrievalConstants.IsValidSubject(document.Subject))
-            errors.Add("学科仅支持：英语");
+            errors.Add("Subject only supports: English");
 
         if (string.IsNullOrWhiteSpace(document.Grade))
-            errors.Add("年级不能为空");
+            errors.Add("Grade cannot be empty");
         else if (!DocRetrievalConstants.IsValidGrade(document.Grade))
-            errors.Add($"年级取值非法，有效值：{string.Join("、", DocRetrievalConstants.ValidGrades)}");
+            errors.Add($"Invalid grade value, valid values: {string.Join(", ", DocRetrievalConstants.ValidGrades)}");
 
         if (string.IsNullOrWhiteSpace(document.Year))
-            errors.Add("年份不能为空");
+            errors.Add("Year cannot be empty");
 
         if (string.IsNullOrWhiteSpace(document.FileHash))
-            errors.Add("文件哈希不能为空");
+            errors.Add("File hash cannot be empty");
 
         if (errors.Count > 0)
             throw new DocRetrievalValidationException(string.Join("; ", errors));

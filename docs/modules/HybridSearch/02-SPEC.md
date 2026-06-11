@@ -14,7 +14,7 @@
 - [ ] FR-04 `page_size` 默认 50，最小 1，最大 100；与 ExactSearch 一致。
 - [ ] FR-05 优先使用 OpenSearch 混合搜索（`ISearchIndexService.HybridSearchAsync`）。
 - [ ] FR-06 OpenSearch 不可用（`_searchIndexService == null`）或查询异常时，回退数据库搜索并记录 LogWarning。
-- [ ] FR-07 回退时 `exact_word` 匹配类型的 `MatchType` 降级为 `stem_match`。
+- [ ] FR-07 回退时 `exact_word` 匹配类型的 `MatchType` 降级为 `stemmed`。
 - [ ] FR-08 回退搜索结果与 ExactSearch 的数据库回退逻辑相同（segments + questions 两表 `IndexOf(query, OrdinalIgnoreCase)` 匹配，仅搜索 `status == "ready"` 的文档）。
 - [ ] FR-09 OpenSearch 混合搜索内部：精确结果调用 `ExactSearchAsync`，语义结果调用 `IQdrantService.SemanticSearchAsync`。
 - [ ] FR-10 OpenSearch 混合搜索合并去重：按 `DocumentName + PageNumber + SegmentId` 三元组去重，精确结果优先。
@@ -31,7 +31,7 @@
 - AC-FR-04：`pageSize` 修正逻辑与 ExactSearch 一致：`pageSize = request.PageSize > 0 ? Math.Min(request.PageSize, 100) : 50`。
 - AC-FR-05：`_searchIndexService` 不为 null 且不抛异常时，调用 `ISearchIndexService.HybridSearchAsync`。
 - AC-FR-06：`_searchIndexService` 为 null 时，直接回退 `DatabaseSearchAsync`；`_searchIndexService.HybridSearchAsync` 抛异常时，捕获异常并 LogWarning 后回退。
-- AC-FR-07：回退路径中，`DatabaseSearchAsync` 返回的结果里 `MatchType == "exact_word"` 的记录被改为 `"stem_match"`。
+- AC-FR-07：回退路径中，`DatabaseSearchAsync` 返回的结果里 `MatchType == "exact_word"` 的记录被改为 `"stemmed"`。
 - AC-FR-08：回退路径的 `DatabaseSearchAsync` 逻辑与 ExactSearch 相同（segments + questions 两表匹配，status == "ready" 过滤）。
 - AC-FR-09：OpenSearch 混合搜索内部调用 `ExactSearchAsync` 获取精确结果，调用 `IQdrantService.SemanticSearchAsync` 获取语义结果。
 - AC-FR-10：合并去重键为 `$"{DocumentName}|{PageNumber}|{SegmentId}"`，精确结果优先保留。

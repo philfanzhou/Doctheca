@@ -11,8 +11,7 @@
 | 测试框架 | xUnit + Moq + FluentAssertions |
 | 对象映射 | Mapster |
 | 数据库初始化 | 原生 SQL（DatabaseInitializer），不使用 EF Core Migration |
-| 日志语言 | 中文（`_logger.LogInformation("文档已删除：{Title}", title)`） |
+| 日志语言 | 英文（遵循 DotNetCodingPolicy 4.4 节） |
 | 错误码前缀 | `DOCRETRIEVAL_` |
-| 注释语言 | 中文（与 DotNetCodingPolicy 第 4.4 节的"英文注释"规范不一致，以实际代码为准） |
-
-> [推断] 本服务的日志和注释使用中文，与 DotNetCodingPolicy 4.4 节"注释和字符串必须使用英文"的要求不一致。建议后续统一。
+| 注释语言 | 英文（遵循 DotNetCodingPolicy 4.4 节） |
+| 域值例外 | 数据库域值常量（如 `SubjectEnglish = "英语"`、`GradeLabels`）保留中文，因为它们是业务数据的实际存储值，不是日志/注释/输出字符串 |

@@ -101,11 +101,11 @@ using (var initScope = app.Services.CreateScope())
     try
     {
         await searchIndexService.EnsureIndexAsync();
-        initLogger.LogInformation("搜索索引初始化完成");
+        initLogger.LogInformation("Search index initialization completed");
     }
     catch (Exception ex)
     {
-        initLogger.LogWarning(ex, "搜索索引初始化失败，将使用数据库回退搜索");
+        initLogger.LogWarning(ex, "Search index initialization failed, will use database fallback search");
     }
 }
 
@@ -117,11 +117,11 @@ using (var initScope = app.Services.CreateScope())
     try
     {
         await qdrantService.EnsureCollectionAsync();
-        initLogger.LogInformation("Qdrant 集合初始化完成");
+        initLogger.LogInformation("Qdrant collection initialization completed");
     }
     catch (Exception ex)
     {
-        initLogger.LogWarning(ex, "Qdrant 集合初始化失败，语义搜索将不可用");
+        initLogger.LogWarning(ex, "Qdrant collection initialization failed, semantic search will be unavailable");
     }
 }
 

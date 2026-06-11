@@ -46,19 +46,19 @@ public static class DocumentAdminEndpoints
         ILogger logger)
     {
         if (!request.HasFormContentType)
-            return Results.BadRequest(new { success = false, message = "请求必须是 multipart/form-data" });
+            return Results.BadRequest(new { success = false, message = "Request must be multipart/form-data" });
 
         var form = await request.ReadFormAsync();
 
         var file = form.Files.GetFile("file");
         if (file == null || file.Length == 0)
-            return Results.BadRequest(new { success = false, message = "文件不能为空", errorCode = "DOCRETRIEVAL_FILE_REQUIRED" });
+            return Results.BadRequest(new { success = false, message = "File cannot be empty", errorCode = "DOCRETRIEVAL_FILE_REQUIRED" });
 
         if (file.Length > MaxFileSize)
-            return Results.BadRequest(new { success = false, message = "文件大小超过200MB限制" });
+            return Results.BadRequest(new { success = false, message = "File size exceeds 200MB limit" });
 
         if (!AllowedMimeTypes.Contains(file.ContentType))
-            return Results.BadRequest(new { success = false, message = "不支持的文件格式", errorCode = "DOCRETRIEVAL_FILE_FORMAT_UNSUPPORTED" });
+            return Results.BadRequest(new { success = false, message = "Unsupported file format", errorCode = "DOCRETRIEVAL_FILE_FORMAT_UNSUPPORTED" });
 
         var title = form["title"].ToString();
         var subject = form["subject"].ToString();
@@ -68,15 +68,15 @@ public static class DocumentAdminEndpoints
 
         if (string.IsNullOrWhiteSpace(title) || string.IsNullOrWhiteSpace(subject)
             || string.IsNullOrWhiteSpace(grade) || string.IsNullOrWhiteSpace(year))
-            return Results.BadRequest(new { success = false, message = "必填元数据缺失（title/subject/grade/year）", errorCode = "DOCRETRIEVAL_METADATA_REQUIRED" });
+            return Results.BadRequest(new { success = false, message = "Required metadata missing (title/subject/grade/year)", errorCode = "DOCRETRIEVAL_METADATA_REQUIRED" });
 
         string fileHash;
         string filePath;
         using (var stream = file.OpenReadStream())
         {
-            // 加密文件检测（必须在异步阶段之前拒绝）
+            // Encrypted file detection (must reject before async phase)
             if (IsEncryptedPdf(stream, file.ContentType))
-                return Results.BadRequest(new { success = false, message = "不支持加密文件", errorCode = "DOCRETRIEVAL_FILE_ENCRYPTED" });
+                return Results.BadRequest(new { success = false, message = "Encrypted files not supported", errorCode = "DOCRETRIEVAL_FILE_ENCRYPTED" });
 
             using var sha256 = SHA256.Create();
             fileHash = BitConverter.ToString(await sha256.ComputeHashAsync(stream)).Replace("-", "").ToLowerInvariant();
@@ -130,11 +130,11 @@ public static class DocumentAdminEndpoints
         {
             var (statusCode, errorCode) = ex.Message switch
             {
-                var msg when msg.Contains("文档名已存在") => (StatusCodes.Status409Conflict, "DOCRETRIEVAL_TITLE_ALREADY_EXISTS"),
-                var msg when msg.Contains("文件已被导入") => (StatusCodes.Status409Conflict, "DOCRETRIEVAL_FILE_HASH_ALREADY_EXISTS"),
-                var msg when msg.Contains("学科仅支持") => (StatusCodes.Status400BadRequest, "DOCRETRIEVAL_SUBJECT_INVALID"),
-                var msg when msg.Contains("年级取值非法") => (StatusCodes.Status400BadRequest, "DOCRETRIEVAL_GRADE_INVALID"),
-                var msg when msg.Contains("不能为空") => (StatusCodes.Status400BadRequest, "DOCRETRIEVAL_METADATA_REQUIRED"),
+                var msg when msg.Contains("Document title already exists") => (StatusCodes.Status409Conflict, "DOCRETRIEVAL_TITLE_ALREADY_EXISTS"),
+                var msg when msg.Contains("File already imported") => (StatusCodes.Status409Conflict, "DOCRETRIEVAL_FILE_HASH_ALREADY_EXISTS"),
+                var msg when msg.Contains("Subject only supports") => (StatusCodes.Status400BadRequest, "DOCRETRIEVAL_SUBJECT_INVALID"),
+                var msg when msg.Contains("Invalid grade value") => (StatusCodes.Status400BadRequest, "DOCRETRIEVAL_GRADE_INVALID"),
+                var msg when msg.Contains("cannot be empty") => (StatusCodes.Status400BadRequest, "DOCRETRIEVAL_METADATA_REQUIRED"),
                 _ => (StatusCodes.Status400BadRequest, "DOCRETRIEVAL_METADATA_REQUIRED")
             };
             return Results.Json(new { success = false, message = ex.Message, errorCode }, statusCode: statusCode);
@@ -182,7 +182,7 @@ public static class DocumentAdminEndpoints
     {
         var document = await documentService.GetDocumentAsync(id);
         if (document == null)
-            return Results.NotFound(new { success = false, message = "文档不存在", errorCode = "DOCRETRIEVAL_DOCUMENT_NOT_FOUND" });
+            return Results.NotFound(new { success = false, message = "Document not found", errorCode = "DOCRETRIEVAL_DOCUMENT_NOT_FOUND" });
 
         var job = await documentService.GetIngestionJobAsync(id);
 
@@ -217,13 +217,13 @@ public static class DocumentAdminEndpoints
         IOssService ossService,
         ILogger logger)
     {
-        // 先获取文档信息（用于删除 OSS 文件），再删除数据库记录，最后删除 OSS 文件
+        // Get document info first (for OSS file deletion), then delete database records, finally delete OSS file
         var document = await documentService.GetDocumentByTitleAsync(title);
 
-        // 先删除数据库记录和搜索索引
+        // Delete database records and search index first
         var deleted = await documentService.DeleteDocumentAsync(title);
 
-        // 再删除 OSS 文件（数据库已删除，即使 OSS 删除失败也不影响数据一致性）
+        // Then delete OSS file (database already deleted, OSS failure does not affect data consistency)
         if (document != null && !string.IsNullOrEmpty(document.FilePath))
         {
             try
@@ -232,7 +232,7 @@ public static class DocumentAdminEndpoints
             }
             catch (Exception ex)
             {
-                logger.LogWarning(ex, "删除文档文件失败：{FilePath}", document.FilePath);
+                logger.LogWarning(ex, "Failed to delete document file: {FilePath}", document.FilePath);
             }
         }
 
@@ -258,7 +258,7 @@ public static class DocumentAdminEndpoints
         }
         catch
         {
-            return Results.BadRequest(new { success = false, message = "无效的JSON" });
+            return Results.BadRequest(new { success = false, message = "Invalid JSON" });
         }
 
         string? subject = json.TryGetProperty("subject", out var s) ? s.GetString() : null;
@@ -267,7 +267,7 @@ public static class DocumentAdminEndpoints
         string? tags = json.TryGetProperty("tags", out var t) ? t.GetRawText() : null;
 
         if (subject == null && grade == null && year == null && tags == null)
-            return Results.BadRequest(new { success = false, message = "至少提供一项元数据" });
+            return Results.BadRequest(new { success = false, message = "At least one metadata field required" });
 
         try
         {
@@ -290,10 +290,10 @@ public static class DocumentAdminEndpoints
         {
             var (statusCode, errorCode) = ex.Message switch
             {
-                var msg when msg.Contains("不存在") => (StatusCodes.Status404NotFound, "DOCRETRIEVAL_DOCUMENT_NOT_FOUND"),
-                var msg when msg.Contains("未就绪") => (StatusCodes.Status422UnprocessableEntity, "DOCRETRIEVAL_DOCUMENT_NOT_READY"),
-                var msg when msg.Contains("学科仅支持") => (StatusCodes.Status400BadRequest, "DOCRETRIEVAL_SUBJECT_INVALID"),
-                var msg when msg.Contains("年级取值非法") => (StatusCodes.Status400BadRequest, "DOCRETRIEVAL_GRADE_INVALID"),
+                var msg when msg.Contains("not found") => (StatusCodes.Status404NotFound, "DOCRETRIEVAL_DOCUMENT_NOT_FOUND"),
+                var msg when msg.Contains("not ready") => (StatusCodes.Status422UnprocessableEntity, "DOCRETRIEVAL_DOCUMENT_NOT_READY"),
+                var msg when msg.Contains("Subject only supports") => (StatusCodes.Status400BadRequest, "DOCRETRIEVAL_SUBJECT_INVALID"),
+                var msg when msg.Contains("Invalid grade value") => (StatusCodes.Status400BadRequest, "DOCRETRIEVAL_GRADE_INVALID"),
                 _ => (StatusCodes.Status400BadRequest, "DOCRETRIEVAL_METADATA_REQUIRED")
             };
             return Results.Json(new { success = false, message = ex.Message, errorCode }, statusCode: statusCode);
@@ -329,7 +329,7 @@ public static class DocumentAdminEndpoints
         [FromQuery] string? pageToken = null)
     {
         if (string.IsNullOrWhiteSpace(query))
-            return Results.BadRequest(new { success = false, message = "查询词不能为空" });
+            return Results.BadRequest(new { success = false, message = "Query cannot be empty" });
 
         pageSize = Math.Min(Math.Max(pageSize, 1), 100);
 

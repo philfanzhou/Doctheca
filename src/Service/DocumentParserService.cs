@@ -13,23 +13,23 @@ using DocumentFormat.OpenXml.Presentation;
 namespace Ruoyu.Study.DocRetrieval.Service;
 
 /// <summary>
-/// 文档解析服务实现，支持 PDF、Word、PPT
+/// Document parsing service implementation, supports PDF, Word, PPT
 /// </summary>
 public partial class DocumentParserService : IDocumentParserService
 {
     private readonly ILogger<DocumentParserService> _logger;
 
-    // 缩写列表，用于句子边界识别时排除误判
+    // Abbreviation list, used to exclude false positives in sentence boundary detection
     private static readonly HashSet<string> Abbreviations =
     [
         "Mr", "Mrs", "Ms", "Dr", "Prof", "Sr", "Jr", "vs", "etc", "e.g", "i.e", "U.S", "U.K"
     ];
 
-    // 题号正则：行首数字 + 分隔符
+    // Question number regex: leading digit + separator
     [GeneratedRegex(@"^\s*(\d+)\s*[.、．)\]】]", RegexOptions.Compiled)]
     private static partial Regex QuestionNumberRegex();
 
-    // 选项正则：行首字母 + 分隔符
+    // Option regex: leading letter + separator
     [GeneratedRegex(@"^\s*([A-Da-d])\s*[.、．)\]】]", RegexOptions.Compiled)]
     private static partial Regex OptionRegex();
 
@@ -47,11 +47,11 @@ public partial class DocumentParserService : IDocumentParserService
             "pdf" => await ParsePdfAsync(fileStream, cancellationToken),
             "docx" or "doc" => await ParseWordAsync(fileStream, cancellationToken),
             "pptx" or "ppt" => await ParsePptAsync(fileStream, cancellationToken),
-            _ => throw new NotSupportedException($"不支持的文件类型：{sourceType}")
+            _ => throw new NotSupportedException($"Unsupported file type: {sourceType}")
         };
     }
 
-    #region PDF 解析
+    #region PDF Parsing
 
     private Task<ParsedDocument> ParsePdfAsync(Stream fileStream, CancellationToken cancellationToken)
     {
@@ -71,25 +71,25 @@ public partial class DocumentParserService : IDocumentParserService
 
             if (string.IsNullOrWhiteSpace(pageText))
             {
-                _logger.LogWarning("PDF 第 {PageNumber} 页文本为空，可能需要 OCR 支持", pageNumber);
+                _logger.LogWarning("PDF page {PageNumber} has no text, OCR support may be needed", pageNumber);
                 result.Pages.Add(parsedPage);
                 continue;
             }
 
-            // OCR 后处理：合并连字符、移除多余空白、修正常见 OCR 错误
+            // OCR post-processing: merge hyphens, remove extra whitespace, fix common OCR errors
             pageText = OcrPostProcess(pageText);
 
-            // 按换行分段，合并连续非空行为块（段落）
+            // Split by newlines, merge consecutive non-empty lines into blocks (paragraphs)
             var blocks = MergeTextIntoBlocks(pageText);
 
-            // 对每个块做句子边界识别和题目边界识别
+            // Perform sentence boundary detection and question boundary detection for each block
             var globalOffset = 0;
             for (var blockIndex = 0; blockIndex < blocks.Count; blockIndex++)
             {
                 var blockText = blocks[blockIndex];
                 var blockId = $"p{pageNumber}-b{blockIndex + 1}";
 
-                // 句子切分
+                // Sentence splitting
                 var sentences = SplitSentences(blockText);
                 for (var sentIndex = 0; sentIndex < sentences.Count; sentIndex++)
                 {
@@ -107,7 +107,7 @@ public partial class DocumentParserService : IDocumentParserService
                     globalOffset += sentenceText.Length;
                 }
 
-                // 题目边界识别
+                // Question boundary detection
                 var questions = ExtractQuestions(blockText, blockId, ref globalOffset);
                 parsedPage.Questions.AddRange(questions);
             }
@@ -119,7 +119,7 @@ public partial class DocumentParserService : IDocumentParserService
     }
 
     /// <summary>
-    /// 将文本按换行分段，合并连续非空行为块（段落）
+    /// Split text by newlines, merge consecutive non-empty lines into blocks (paragraphs)
     /// </summary>
     private List<string> MergeTextIntoBlocks(string text)
     {
@@ -133,7 +133,7 @@ public partial class DocumentParserService : IDocumentParserService
 
             if (string.IsNullOrWhiteSpace(lineText))
             {
-                // 空行视为段落分隔
+                // Empty lines treated as paragraph separators
                 if (currentBlock.Length > 0)
                 {
                     blocks.Add(currentBlock.ToString());
@@ -159,7 +159,7 @@ public partial class DocumentParserService : IDocumentParserService
 
     #endregion
 
-    #region Word 解析
+    #region Word Parsing
 
     private async Task<ParsedDocument> ParseWordAsync(Stream fileStream, CancellationToken cancellationToken)
     {
@@ -167,14 +167,14 @@ public partial class DocumentParserService : IDocumentParserService
 
         using var doc = WordprocessingDocument.Open(fileStream, false);
         var mainPart = doc.MainDocumentPart
-            ?? throw new InvalidOperationException("Word 文档缺少 MainDocumentPart");
+            ?? throw new InvalidOperationException("Word document missing MainDocumentPart");
 
         var body = mainPart.Document.Body
-            ?? throw new InvalidOperationException("Word 文档缺少 Body");
+            ?? throw new InvalidOperationException("Word document missing Body");
 
         var paragraphs = body.Elements<Paragraph>().ToList();
 
-        // Word 文档视为单页
+        // Word document treated as single page
         var parsedPage = new ParsedPage { PageNumber = 1 };
         var blocks = new List<string>();
         var currentBlock = new StringBuilder();
@@ -207,7 +207,7 @@ public partial class DocumentParserService : IDocumentParserService
             blocks.Add(currentBlock.ToString());
         }
 
-        // 对每个块做句子边界识别和题目边界识别
+        // Perform sentence boundary detection and question boundary detection for each block
         var globalOffset = 0;
         for (var blockIndex = 0; blockIndex < blocks.Count; blockIndex++)
         {
@@ -241,7 +241,7 @@ public partial class DocumentParserService : IDocumentParserService
 
     #endregion
 
-    #region PPT 解析
+    #region PPT Parsing
 
     private async Task<ParsedDocument> ParsePptAsync(Stream fileStream, CancellationToken cancellationToken)
     {
@@ -249,7 +249,7 @@ public partial class DocumentParserService : IDocumentParserService
 
         using var doc = PresentationDocument.Open(fileStream, false);
         var presentationPart = doc.PresentationPart
-            ?? throw new InvalidOperationException("PPT 文档缺少 PresentationPart");
+            ?? throw new InvalidOperationException("PPT document missing PresentationPart");
 
         var slideParts = presentationPart.SlideParts.ToList();
 
@@ -284,12 +284,12 @@ public partial class DocumentParserService : IDocumentParserService
 
             if (texts.Count == 0)
             {
-                _logger.LogWarning("PPT 第 {PageNumber} 页文本为空", pageNumber);
+                _logger.LogWarning("PPT page {PageNumber} has no text", pageNumber);
                 result.Pages.Add(parsedPage);
                 continue;
             }
 
-            // 每个文本框视为一个块
+            // Each text box treated as a block
             var globalOffset = 0;
             for (var blockIndex = 0; blockIndex < texts.Count; blockIndex++)
             {
@@ -325,43 +325,43 @@ public partial class DocumentParserService : IDocumentParserService
 
     #endregion
 
-    #region OCR 后处理
+    #region OCR Post-processing
 
     /// <summary>
-    /// OCR 后处理：合并连字符打断的单词、移除多余空白、修正常见 OCR 错误
+    /// OCR post-processing: merge hyphen-broken words, remove extra whitespace, fix common OCR errors
     /// </summary>
     private static string OcrPostProcess(string text)
     {
         if (string.IsNullOrWhiteSpace(text))
             return text;
 
-        // 1. 合并连字符打断的单词：行尾 "word-\nword" → "wordword"
+        // 1. Merge hyphen-broken words: line-end "word-\nword" → "wordword"
         text = System.Text.RegularExpressions.Regex.Replace(
             text, @"(\w)-\s*\n\s*(\w)", "$1$2");
 
-        // 2. 移除多余空白（多个空格/制表符 → 单个空格）
+        // 2. Remove extra whitespace (multiple spaces/tabs → single space)
         text = System.Text.RegularExpressions.Regex.Replace(
             text, @"[ \t]+", " ");
 
-        // 3. 修正常见 OCR 错误（仅在大写字母前修正 0→O，在纯数字上下文不修正）
+        // 3. Fix common OCR errors (only correct 0→O before uppercase letters, not in pure digit context)
         text = System.Text.RegularExpressions.Regex.Replace(
             text, @"(?<=[A-Z])0", "O");   // A0 → AO
         text = System.Text.RegularExpressions.Regex.Replace(
             text, @"0(?=[A-Z])", "O");     // 0A → OA
         text = System.Text.RegularExpressions.Regex.Replace(
-            text, @"(?<=[A-Za-z])1(?=[A-Za-z])", "l"); // l1l → lll (仅字母间)
+            text, @"(?<=[A-Za-z])1(?=[A-Za-z])", "l"); // l1l → lll (between letters only)
         text = System.Text.RegularExpressions.Regex.Replace(
-            text, @"(?<=[A-Za-z])5(?=[A-Za-z])", "S"); // a5a → aSa (仅字母间)
+            text, @"(?<=[A-Za-z])5(?=[A-Za-z])", "S"); // a5a → aSa (between letters only)
 
         return text.Trim();
     }
 
     #endregion
 
-    #region Token 分词与词干还原
+    #region Token Tokenization and Stemming
 
     /// <summary>
-    /// 对文本进行分词，生成 Token 列表（原始文本 + Porter 词干还原）
+    /// Tokenize text, generate token list (original text + Porter stemming)
     /// </summary>
     private static List<ParsedToken> Tokenize(string text)
     {
@@ -369,7 +369,7 @@ public partial class DocumentParserService : IDocumentParserService
         if (string.IsNullOrWhiteSpace(text))
             return tokens;
 
-        // 使用正则按单词边界分词，只保留英文字母组成的单词
+        // Tokenize by word boundary using regex, keep only English letter words
         var regex = new Regex(@"[a-zA-Z]+", RegexOptions.Compiled);
         foreach (Match match in regex.Matches(text))
         {
@@ -388,20 +388,20 @@ public partial class DocumentParserService : IDocumentParserService
     }
 
     /// <summary>
-    /// Porter Stemmer 算法精简实现（英语词干还原）
+    /// Porter Stemmer algorithm simplified implementation (English stemming)
     /// </summary>
     private static string PorterStem(string word)
     {
         if (word.Length < 3)
             return word;
 
-        // Step 1a: 复数和过去式
+        // Step 1a: Plurals and past tense
         if (word.EndsWith("sses")) word = word[..^2];
         else if (word.EndsWith("ies")) word = word[..^2];
         else if (word.EndsWith("ss")) { /* no change */ }
         else if (word.EndsWith("s")) word = word[..^1];
 
-        // Step 1b: 进行时和过去式
+        // Step 1b: Progressive and past tense
         var step1bExtra = false;
         if (word.EndsWith("eed"))
         {
@@ -432,7 +432,7 @@ public partial class DocumentParserService : IDocumentParserService
         if (word.EndsWith("y") && ContainsVowel(word[..^1]))
             word = word[..^1] + "i";
 
-        // Step 2: 常见后缀
+        // Step 2: Common suffixes
         word = ReplaceSuffix(word, "ational", "ate");
         word = ReplaceSuffix(word, "tional", "tion");
         word = ReplaceSuffix(word, "enci", "ence");
@@ -454,7 +454,7 @@ public partial class DocumentParserService : IDocumentParserService
         word = ReplaceSuffix(word, "iviti", "ive");
         word = ReplaceSuffix(word, "biliti", "ble");
 
-        // Step 3: 更多后缀
+        // Step 3: More suffixes
         word = ReplaceSuffix(word, "icate", "ic");
         word = ReplaceSuffix(word, "ative", "");
         word = ReplaceSuffix(word, "alize", "al");
@@ -463,7 +463,7 @@ public partial class DocumentParserService : IDocumentParserService
         word = ReplaceSuffix(word, "ful", "");
         word = ReplaceSuffix(word, "ness", "");
 
-        // Step 4: 去掉剩余后缀（m > 1）
+        // Step 4: Remove remaining suffixes (m > 1)
         var step4Suffixes = new[] { "al", "ance", "ence", "er", "ic", "able", "ible", "ant", "ement", "ment", "ent", "ion", "ou", "ism", "ate", "iti", "ous", "ive", "ize" };
         foreach (var suffix in step4Suffixes)
         {
@@ -483,7 +483,7 @@ public partial class DocumentParserService : IDocumentParserService
             }
         }
 
-        // Step 5a: 去掉末尾 e
+        // Step 5a: Remove trailing e
         if (word.EndsWith("e"))
         {
             var stem = word[..^1];
@@ -507,20 +507,20 @@ public partial class DocumentParserService : IDocumentParserService
         return false;
     }
 
-    /// <summary>计算 m 值（辅音-元音对数）</summary>
+    /// <summary>Calculate m value (consonant-vowel pair count)</summary>
     private static int Measure(string word)
     {
         if (string.IsNullOrEmpty(word)) return 0;
         var i = 0;
-        // 跳过开头的元音
+        // Skip leading vowels
         while (i < word.Length && IsVowel(word[i])) i++;
         var m = 0;
         while (i < word.Length)
         {
-            // 辅音
+            // Consonant
             while (i < word.Length && !IsVowel(word[i])) i++;
             if (i >= word.Length) break;
-            // 元音
+            // Vowel
             while (i < word.Length && IsVowel(word[i])) i++;
             m++;
         }
@@ -533,7 +533,7 @@ public partial class DocumentParserService : IDocumentParserService
         return word[^1] == word[^2] && !IsVowel(word[^1]);
     }
 
-    /// <summary>是否以 辅音-元音-辅音 结尾（且最后一个辅音不是 w/x/y）</summary>
+    /// <summary>Whether ending with consonant-vowel-consonant (and last consonant is not w/x/y)</summary>
     private static bool EndsCVC(string word)
     {
         if (word.Length < 3) return false;
@@ -550,10 +550,10 @@ public partial class DocumentParserService : IDocumentParserService
 
     #endregion
 
-    #region 句子边界识别
+    #region Sentence Boundary Detection
 
     /// <summary>
-    /// 句子边界识别：以 ". "/"! "/"? " 结尾视为句子结束，但排除缩写
+    /// Sentence boundary detection: treat ". "/"! "/"? " endings as sentence boundaries, excluding abbreviations
     /// </summary>
     private List<string> SplitSentences(string text)
     {
@@ -566,7 +566,7 @@ public partial class DocumentParserService : IDocumentParserService
         {
             current.Append(text[i]);
 
-            // 检查是否为句子结束位置
+            // Check if this is a sentence boundary
             if (IsSentenceBoundary(text, i))
             {
                 var sentence = current.ToString().Trim();
@@ -578,7 +578,7 @@ public partial class DocumentParserService : IDocumentParserService
             }
         }
 
-        // 处理剩余文本
+        // Process remaining text
         var remaining = current.ToString().Trim();
         if (!string.IsNullOrWhiteSpace(remaining))
         {
@@ -589,57 +589,57 @@ public partial class DocumentParserService : IDocumentParserService
     }
 
     /// <summary>
-    /// 判断当前位置是否为句子边界
+    /// Determine if current position is a sentence boundary
     /// </summary>
     private bool IsSentenceBoundary(string text, int index)
     {
         var ch = text[index];
 
-        // 只检查 . ! ? 后跟空格或文本结尾的情况
+        // Only check . ! ? followed by space or end of text
         if (ch != '.' && ch != '!' && ch != '?')
             return false;
 
-        // 规则 3：引号内的句号不视为句子结束（"...text." 后面跟引号）
+        // Rule 3: Period inside quotes not treated as sentence end ("...text." followed by quote)
         if (ch == '.' && index < text.Length - 1)
         {
             var nextCh = text[index + 1];
             if (nextCh == '"' || nextCh == '\u201D' || nextCh == '\u201C' || nextCh == '\'' || nextCh == '\u2019')
             {
-                // 句号在引号内，检查引号后是否有空格（引号结束+空格=句子结束）
-                // 如果引号后没有空格或文本结尾，则不是句子边界
+                // Period inside quotes, check if space follows quote (quote end + space = sentence boundary)
+                // If no space or text end after quote, not a sentence boundary
                 var afterQuoteIdx = index + 2;
                 if (afterQuoteIdx < text.Length && text[afterQuoteIdx] != ' ')
                     return false;
-                // 引号后跟空格或文本结尾，这是句子边界（句号+引号结束句子）
+                // Space or text end after quote, this is a sentence boundary (period + quote ends sentence)
             }
         }
 
-        // 规则 4：数字中的句号不视为句子结束（3.14, 2026.06.01）
+        // Rule 4: Period in numbers not treated as sentence end (3.14, 2026.06.01)
         if (ch == '.')
         {
-            // 前面是数字
+            // Preceded by digit
             if (index > 0 && char.IsDigit(text[index - 1]))
             {
-                // 后面也是数字 → 小数点，不是句子边界
+                // Followed by digit → decimal point, not a sentence boundary
                 if (index < text.Length - 1 && char.IsDigit(text[index + 1]))
                     return false;
             }
         }
 
-        // 文本结尾
+        // End of text
         if (index == text.Length - 1)
         {
-            // 对于 '.' 需要排除缩写
+            // For '.' need to exclude abbreviations
             if (ch == '.' && IsAbbreviation(text, index))
                 return false;
             return true;
         }
 
-        // 后面必须跟空格才算句子结束
+        // Must be followed by space to be sentence end
         if (text[index + 1] != ' ')
             return false;
 
-        // 对于 '.' 需要排除缩写
+        // For '.' need to exclude abbreviations
         if (ch == '.' && IsAbbreviation(text, index))
             return false;
 
@@ -647,11 +647,11 @@ public partial class DocumentParserService : IDocumentParserService
     }
 
     /// <summary>
-    /// 检查当前位置的 '.' 是否属于缩写
+    /// Check if the '.' at current position belongs to an abbreviation
     /// </summary>
     private bool IsAbbreviation(string text, int dotIndex)
     {
-        // 向前查找缩写词，最多取 dotIndex 前 5 个字符
+        // Look back for abbreviation, take at most 5 characters before dotIndex
         var start = Math.Max(0, dotIndex - 5);
         var beforeDot = text.Substring(start, dotIndex - start);
 
@@ -666,10 +666,10 @@ public partial class DocumentParserService : IDocumentParserService
 
     #endregion
 
-    #region 题目边界识别
+    #region Question Boundary Detection
 
     /// <summary>
-    /// 从文本中提取题目和选项
+    /// Extract questions and options from text
     /// </summary>
     private List<ParsedQuestion> ExtractQuestions(string text, string blockId, ref int globalOffset)
     {
@@ -690,7 +690,7 @@ public partial class DocumentParserService : IDocumentParserService
 
             if (questionMatch.Success)
             {
-                // 保存上一道题
+                // Save previous question
                 if (currentQuestionId != null)
                 {
                     questions.Add(BuildParsedQuestion(
@@ -698,7 +698,7 @@ public partial class DocumentParserService : IDocumentParserService
                         questionStartOffset, lineOffset));
                 }
 
-                // 开始新题
+                // Start new question
                 currentQuestionId = $"q{questionMatch.Groups[1].Value}";
                 stemBuilder.Clear();
                 stemBuilder.Append(trimmedLine);
@@ -707,21 +707,21 @@ public partial class DocumentParserService : IDocumentParserService
             }
             else if (optionMatch.Success && currentQuestionId != null)
             {
-                // 选项
+                // Option
                 var optionLetter = optionMatch.Groups[1].Value.ToUpperInvariant();
                 options[optionLetter] = trimmedLine;
                 stemBuilder.Append(' ').Append(trimmedLine);
             }
             else if (currentQuestionId != null)
             {
-                // 题目续行
+                // Question continuation line
                 stemBuilder.Append(' ').Append(trimmedLine);
             }
 
             lineOffset += line.Length + 1; // +1 for \n
         }
 
-        // 保存最后一道题
+        // Save last question
         if (currentQuestionId != null)
         {
             questions.Add(BuildParsedQuestion(

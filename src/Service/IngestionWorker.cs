@@ -30,7 +30,7 @@ public class IngestionWorker : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        _logger.LogInformation("文档导入后台工作器已启动");
+        _logger.LogInformation("Document ingestion background worker started");
 
         while (!stoppingToken.IsCancellationRequested)
         {
@@ -54,20 +54,20 @@ public class IngestionWorker : BackgroundService
                     try
                     {
                         await domainService.StartIngestionJobAsync(job.Id, "v1.0", null);
-                        _logger.LogInformation("开始处理导入任务：{JobId}，文档：{DocumentId}", job.Id, job.DocumentId);
+                        _logger.LogInformation("Starting ingestion job: {JobId}, document: {DocumentId}", job.Id, job.DocumentId);
 
-                        // 获取文档信息
+                        // Get document info
                         var document = await domainService.GetDocumentAsync(job.DocumentId)
-                            ?? throw new InvalidOperationException($"文档不存在：{job.DocumentId}");
+                            ?? throw new InvalidOperationException($"Document not found: {job.DocumentId}");
 
-                        // 从 OSS 下载文件流
+                        // Download file stream from OSS
                         using var fileStream = await ossService.DownloadAsync(document.FilePath);
 
-                        // 调用文档解析服务
+                        // Call document parsing service
                         var parsedDocument = await parserService.ParseAsync(fileStream, document.SourceType, stoppingToken);
-                        _logger.LogInformation("文档解析完成：{DocumentId}，共 {PageCount} 页", job.DocumentId, parsedDocument.Pages.Count);
+                        _logger.LogInformation("Document parsing completed: {DocumentId}, {PageCount} pages", job.DocumentId, parsedDocument.Pages.Count);
 
-                        // 将解析结果写入数据库
+                        // Write parsing results to database
                         var pageModels = parsedDocument.Pages.Select(p => new DocumentPageModel
                         {
                             Id = Guid.NewGuid(),
@@ -78,7 +78,7 @@ public class IngestionWorker : BackgroundService
 
                         await pageRepository.AddRangeAsync(pageModels);
 
-                        // 建立 PageNumber -> PageId 映射
+                        // Build PageNumber -> PageId mapping
                         var pageLookup = pageModels.ToDictionary(p => p.PageNumber, p => p.Id);
 
                         var segmentModels = parsedDocument.Pages
@@ -117,15 +117,15 @@ public class IngestionWorker : BackgroundService
 
                         await questionRepository.AddRangeAsync(questionModels);
 
-                        // 将 Token 写入 document_occurrences 表
+                        // Write tokens to document_occurrences table
                         var occurrenceModels = new List<DocumentOccurrenceModel>();
 
-                        // 建立 SentenceId -> SegmentId 映射
+                        // Build SentenceId -> SegmentId mapping
                         var segmentLookup = segmentModels.ToDictionary(s => s.SentenceId, s => s.Id);
 
                         foreach (var page in parsedDocument.Pages)
                         {
-                            // 从 segment 的 Token 生成 occurrence
+                            // Generate occurrences from segment tokens
                             foreach (var seg in page.Segments)
                             {
                                 var segmentId = segmentLookup.TryGetValue(seg.SentenceId, out var sid) ? sid : (Guid?)null;
@@ -146,7 +146,7 @@ public class IngestionWorker : BackgroundService
                                 }
                             }
 
-                            // 从 question 的 Token 生成 occurrence
+                            // Generate occurrences from question tokens
                             var questionLookup = questionModels
                                 .Where(qm => page.Questions.Any(pq => pq.QuestionId == qm.QuestionId))
                                 .ToDictionary(qm => qm.QuestionId, qm => qm.Id);
@@ -175,61 +175,61 @@ public class IngestionWorker : BackgroundService
                         if (occurrenceModels.Count > 0)
                         {
                             await occurrenceRepository.AddRangeAsync(occurrenceModels);
-                            _logger.LogInformation("Token 写入完成：{DocumentId}，共 {TokenCount} 个 Token", job.DocumentId, occurrenceModels.Count);
+                            _logger.LogInformation("Token write completed: {DocumentId}, {TokenCount} tokens", job.DocumentId, occurrenceModels.Count);
                         }
 
-                        // 标记导入任务完成
+                        // Mark ingestion job as completed
                         await domainService.CompleteIngestionJobAsync(job.Id);
-                        _logger.LogInformation("导入任务完成：{JobId}，共 {SegmentCount} 个片段，{QuestionCount} 道题目",
+                        _logger.LogInformation("Ingestion job completed: {JobId}, {SegmentCount} segments, {QuestionCount} questions",
                             job.Id, segmentModels.Count, questionModels.Count);
 
-                        // 导入完成后，将文档segments写入搜索索引
+                        // After ingestion, write document segments to search index
                         if (_searchIndexService != null)
                         {
                             try
                             {
                                 await _searchIndexService.IndexDocumentSegmentsAsync(
                                     document.Id, document.Title, document.Subject, document.Grade, document.Year);
-                                _logger.LogInformation("文档搜索索引已创建：{DocumentId}", job.DocumentId);
+                                _logger.LogInformation("Document search index created: {DocumentId}", job.DocumentId);
                             }
                             catch (Exception indexEx)
                             {
-                                _logger.LogError(indexEx, "创建文档搜索索引失败：{DocumentId}", job.DocumentId);
+                                _logger.LogError(indexEx, "Failed to create document search index: {DocumentId}", job.DocumentId);
                             }
                         }
 
-                        // 导入完成后，将文档向量写入 Qdrant
+                        // After ingestion, write document vectors to Qdrant
                         if (_qdrantService != null)
                         {
                             try
                             {
                                 await _qdrantService.IndexDocumentVectorsAsync(
                                     document.Id, document.Title, document.Subject, document.Grade, document.Year);
-                                _logger.LogInformation("文档向量索引已创建：{DocumentId}", job.DocumentId);
+                                _logger.LogInformation("Document vector index created: {DocumentId}", job.DocumentId);
                             }
                             catch (Exception vectorEx)
                             {
-                                _logger.LogError(vectorEx, "创建文档向量索引失败：{DocumentId}", job.DocumentId);
+                                _logger.LogError(vectorEx, "Failed to create document vector index: {DocumentId}", job.DocumentId);
                             }
                         }
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogError(ex, "导入任务失败：{JobId}", job.Id);
+                        _logger.LogError(ex, "Ingestion job failed: {JobId}", job.Id);
                         try
                         {
                             await domainService.FailIngestionJobAsync(job.Id, ex.Message);
                         }
                         catch (Exception failEx)
                         {
-                            _logger.LogError(failEx, "标记导入任务失败时出错：{JobId}", job.Id);
+                            _logger.LogError(failEx, "Error marking ingestion job as failed: {JobId}", job.Id);
                         }
                     }
                 }
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "导入工作器轮询出错");
+                _logger.LogError(ex, "Ingestion worker polling error");
             }
 
             await Task.Delay(_pollInterval, stoppingToken);

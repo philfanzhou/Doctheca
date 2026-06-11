@@ -51,28 +51,26 @@
 
 ## 3. 待人工审核事项
 
-### 3.1 日志和注释语言不一致
+### 3.1 日志和注释语言不一致 ✅ 已整改
 
 - **编号**：REV-01
 - **问题描述**：DotNetCodingPolicy 4.4 节要求"注释和字符串必须使用英文"，但 DocRetrieval 服务代码中大量使用中文日志和中文异常消息
-- **已查阅的证据**：`DocumentDomainService.cs`、`DocumentAdminEndpoints.cs`、`IngestionWorker.cs` 中的 ILogger 调用
-- **为什么仍无法完全确认**：不确定这是有意为之（面向中文开发团队）还是遗漏
-- **建议复核方式**：确认团队是否统一接受中文日志，如是则更新 DotNetCodingPolicy 的例外说明
+- **人工批注**：不是，需要修改代码或者日志。
+- **整改结果**：已将全部 C# 源代码中的中文日志、异常消息、注释改为英文（9 个文件，约 100 处修改）。仅保留数据库域值常量（如 `SubjectEnglish = "英语"`）为中文。已更新 `docs/overview/DotNetCodingPolicy.md` 补充表。`dotnet build` 通过，104 个测试全部通过。
 
-### 3.2 DocumentDeletion 权限控制缺失
+### 3.2 DocumentDeletion 权限控制缺失 ✅ 已整改
 
 - **编号**：REV-02
 - **问题描述**：`DocumentDeletion/02-SPEC.md` 中 REQ-DEL-08 写"仅管理员可调用此接口"，但代码中 `DeleteDocument` 端点无任何授权检查
-- **已查阅的证据**：`DocumentAdminEndpoints.cs` 的 `DeleteDocument` 方法无 `[Authorize]` 特性
-- **为什么仍无法完全确认**：可能由上层 API 网关统一处理鉴权
-- **建议复核方式**：确认 API 网关是否对所有 `/admin/` 路径做了鉴权
+- **人工批注**：是，这是设计意图。部署阶段会控制只有内网才能访问管理界面
+- **整改结果**：已更新 `docs/modules/DocumentDeletion/02-SPEC.md` REQ-DEL-08 和 §4.2 安全章节，明确说明权限控制由部署层网络隔离实现。已更新 `docs/modules/DocumentDeletion/01-FEATURE.md` "范围外"章节。
 
-### 3.3 HybridSearch 中 `stemmed` MatchType
+### 3.3 HybridSearch 中 `stemmed` MatchType ✅ 已整改
 
 - **编号**：REV-03
 - **问题描述**：`stemmed` 作为 MatchType 值仅存在于优先级映射字典中，从未被代码路径实际产生
-- **已查阅的证据**：`OpenSearchIndexService.cs` 的 `matchTypePriority` 字典和 `ExactSearchAsync` 方法
-- **建议复核方式**：确认 `stemmed` 是否为未来功能预留
+- **人工批注**：不是未来预留，这是要求实现的功能
+- **整改结果**：已将 `OpenSearchIndexService.ExactSearchAsync` 中非短语搜索的 MatchType 从 `"exact_word"` 改为 `"stemmed"`（因为 `english_custom` 分析器含词干提取）。已将 `SearchDomainService.HybridSearchAsync` 数据库回退中的 `"stem_match"` 统一为 `"stemmed"`。已同步更新 `docs/modules/ExactSearch/02-SPEC.md`、`docs/modules/HybridSearch/02-SPEC.md`。`dotnet build` 通过，104 个测试全部通过。
 
 ### 3.4 DocumentList 缺少 02-SPEC.md 的历史原因
 
@@ -85,7 +83,7 @@
 
 | 内容 | 文件 | 标注 |
 |------|------|------|
-| DotNetCodingPolicy 中"注释必须英文"与实际代码中文日志的矛盾 | `docs/overview/DotNetCodingPolicy.md` | `[推断]` |
+| DotNetCodingPolicy 中"注释必须英文"与实际代码中文日志的矛盾 | `docs/overview/DotNetCodingPolicy.md` | `[推断]` → **已解决**：代码已改为英文，补充表已更新 |
 | `source_type` 字段的 `word`/`ppt` 值来自代码常量推断 | `docs/database/tables/documents.md` | `[推断]` |
 | DocumentList 02-SPEC 中"无效筛选值返回空列表" | `docs/modules/DocumentList/02-SPEC.md` | `[推断]` |
 

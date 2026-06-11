@@ -84,7 +84,7 @@ public class DocumentIngestionJobModel
 }
 
 /// <summary>
-/// 文档解析结果
+/// Document parsing result
 /// </summary>
 public class ParsedDocument
 {
@@ -92,7 +92,7 @@ public class ParsedDocument
 }
 
 /// <summary>
-/// 解析后的页面
+/// Parsed page
 /// </summary>
 public class ParsedPage
 {
@@ -102,7 +102,7 @@ public class ParsedPage
 }
 
 /// <summary>
-/// 解析后的文本片段
+/// Parsed text segment
 /// </summary>
 public class ParsedSegment
 {
@@ -116,7 +116,7 @@ public class ParsedSegment
 }
 
 /// <summary>
-/// 解析后的题目
+/// Parsed question
 /// </summary>
 public class ParsedQuestion
 {
@@ -130,7 +130,7 @@ public class ParsedQuestion
 }
 
 /// <summary>
-/// 解析后的 Token（原始文本 + 词干还原）
+/// Parsed token (original text + stemmed)
 /// </summary>
 public class ParsedToken
 {

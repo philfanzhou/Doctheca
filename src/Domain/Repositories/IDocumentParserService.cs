@@ -5,15 +5,15 @@ using Ruoyu.Study.DocRetrieval.Domain.Models;
 namespace Ruoyu.Study.DocRetrieval.Domain.Repositories;
 
 /// <summary>
-/// 文档解析服务接口
+/// Document parsing service interface
 /// </summary>
 public interface IDocumentParserService
 {
     /// <summary>
-    /// 解析文档，返回结构化的解析结果
+    /// Parse document and return structured parsing result
     /// </summary>
-    /// <param name="fileStream">文件流</param>
-    /// <param name="sourceType">文件类型（pdf/docx/pptx）</param>
-    /// <param name="cancellationToken">取消令牌</param>
+    /// <param name="fileStream">File stream</param>
+    /// <param name="sourceType">File type (pdf/docx/pptx)</param>
+    /// <param name="cancellationToken">Cancellation token</param>
     Task<ParsedDocument> ParseAsync(Stream fileStream, string sourceType, CancellationToken cancellationToken = default);
 }

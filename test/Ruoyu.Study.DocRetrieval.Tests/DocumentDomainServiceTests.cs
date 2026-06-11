@@ -81,7 +81,7 @@ public class DocumentDomainServiceTests
 
         // Act & Assert
         var ex = await Assert.ThrowsAsync<DocRetrievalValidationException>(() => _service.CreateDocumentAsync(document));
-        Assert.Contains("文档名已存在", ex.Message);
+        Assert.Contains("Document title already exists", ex.Message);
     }
 
     [Fact]
@@ -94,17 +94,17 @@ public class DocumentDomainServiceTests
 
         // Act & Assert
         var ex = await Assert.ThrowsAsync<DocRetrievalValidationException>(() => _service.CreateDocumentAsync(document));
-        Assert.Contains("该文件已被导入", ex.Message);
+        Assert.Contains("File already imported", ex.Message);
     }
 
     [Theory]
-    [InlineData("", "英语", "G1", "2023", "文档名不能为空")]
-    [InlineData("test", "", "G1", "2023", "学科不能为空")]
-    [InlineData("test", "英语", "", "2023", "年级不能为空")]
-    [InlineData("test", "英语", "G1", "", "年份不能为空")]
-    [InlineData("test", "Invalid", "G1", "2023", "学科仅支持")]
-    [InlineData("test", "英语", "Invalid", "2023", "年级取值非法")]
-    [InlineData("empty-hash", "英语", "G1", "2023", "文件哈希不能为空")]
+    [InlineData("", "英语", "G1", "2023", "Document title cannot be empty")]
+    [InlineData("test", "", "G1", "2023", "Subject cannot be empty")]
+    [InlineData("test", "英语", "", "2023", "Grade cannot be empty")]
+    [InlineData("test", "英语", "G1", "", "Year cannot be empty")]
+    [InlineData("test", "Invalid", "G1", "2023", "Subject only supports")]
+    [InlineData("test", "英语", "Invalid", "2023", "Invalid grade value")]
+    [InlineData("empty-hash", "英语", "G1", "2023", "File hash cannot be empty")]
     public async Task CreateDocumentAsync_InvalidMetadata_ThrowsValidationException(
         string title, string subject, string grade, string year, string expectedErrorPart)
     {
@@ -168,7 +168,7 @@ public class DocumentDomainServiceTests
         // Act & Assert
         var ex = await Assert.ThrowsAsync<DocRetrievalValidationException>(() =>
             _service.UpdateMetadataAsync("nonexistent", "英语", "G1", "2023", null));
-        Assert.Contains("文档不存在", ex.Message);
+        Assert.Contains("Document not found", ex.Message);
     }
 
     [Fact]
@@ -181,7 +181,7 @@ public class DocumentDomainServiceTests
         // Act & Assert
         var ex = await Assert.ThrowsAsync<DocRetrievalValidationException>(() =>
             _service.UpdateMetadataAsync("pending-doc", "英语", "G1", "2023", null));
-        Assert.Contains("文档未就绪", ex.Message);
+        Assert.Contains("Document not ready", ex.Message);
     }
 
     [Fact]
@@ -194,7 +194,7 @@ public class DocumentDomainServiceTests
         // Act & Assert
         var ex = await Assert.ThrowsAsync<DocRetrievalValidationException>(() =>
             _service.UpdateMetadataAsync("ready-doc", "数学", null, null, null));
-        Assert.Contains("学科仅支持", ex.Message);
+        Assert.Contains("Subject only supports", ex.Message);
     }
 
     [Fact]
@@ -207,7 +207,7 @@ public class DocumentDomainServiceTests
         // Act & Assert
         var ex = await Assert.ThrowsAsync<DocRetrievalValidationException>(() =>
             _service.UpdateMetadataAsync("ready-doc", null, "Invalid", null, null));
-        Assert.Contains("年级取值非法", ex.Message);
+        Assert.Contains("Invalid grade value", ex.Message);
     }
 
     [Fact]

@@ -200,12 +200,12 @@ public class SearchDomainServiceTests
         });
         _questionRepoMock.Setup(r => r.GetByDocumentIdAsync(documents[0].Id)).ReturnsAsync(new List<QuestionSegmentModel>());
 
-        // Act - use phrase: false so fallback marks results as stem_match
+        // Act - use phrase: false so fallback marks results as stemmed
         var (results, _, _) = await _service.HybridSearchAsync("hello", false, 50, 20, null, 50, null);
 
-        // Assert - fallback marks non-phrase results as stem_match
+        // Assert - fallback marks non-phrase results as stemmed
         Assert.NotEmpty(results);
-        Assert.All(results, r => Assert.Equal("stem_match", r.MatchType));
+        Assert.All(results, r => Assert.Equal("stemmed", r.MatchType));
     }
 
     #endregion

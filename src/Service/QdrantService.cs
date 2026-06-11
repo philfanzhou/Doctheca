@@ -36,7 +36,7 @@ public class QdrantService : IQdrantService
         _serviceProvider = serviceProvider;
         _logger = logger;
 
-        // 从 URL 解析 host 和 port
+        // Parse host and port from URL
         var uri = new Uri(_options.Url);
         var host = uri.Host;
         var port = uri.Port;
@@ -54,24 +54,24 @@ public class QdrantService : IQdrantService
             var collections = await _client.ListCollectionsAsync();
             if (collections.Any(c => c == collectionName))
             {
-                _logger.LogInformation("Qdrant 集合已存在：{CollectionName}", collectionName);
+                _logger.LogInformation("Qdrant collection already exists: {CollectionName}", collectionName);
                 return;
             }
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "检查 Qdrant 集合列表失败，尝试直接创建");
+            _logger.LogWarning(ex, "Failed to list Qdrant collections, attempting to create directly");
         }
 
-        // 创建集合，向量维度 1024，距离度量 Cosine，on_disk 存储优化内存
+        // Create collection, vector dimension 1024, distance metric Cosine, on_disk storage for memory optimization
         await _client.CreateCollectionAsync(
             collectionName,
             vectorsConfig: new VectorParams { Size = 1024, Distance = Distance.Cosine, OnDisk = true },
             optimizersConfig: new OptimizersConfigDiff { IndexingThreshold = 20000 });
 
-        _logger.LogInformation("Qdrant 集合已创建：{CollectionName}", collectionName);
+        _logger.LogInformation("Qdrant collection created: {CollectionName}", collectionName);
 
-        // 创建 payload 索引
+        // Create payload indexes
         try
         {
             await _client.CreatePayloadIndexAsync(collectionName, "document_id", PayloadSchemaType.Keyword);
@@ -79,11 +79,11 @@ public class QdrantService : IQdrantService
             await _client.CreatePayloadIndexAsync(collectionName, "grade", PayloadSchemaType.Keyword);
             await _client.CreatePayloadIndexAsync(collectionName, "year", PayloadSchemaType.Keyword);
             await _client.CreatePayloadIndexAsync(collectionName, "segment_type", PayloadSchemaType.Keyword);
-            _logger.LogInformation("Qdrant payload 索引已创建");
+            _logger.LogInformation("Qdrant payload indexes created");
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "创建 Qdrant payload 索引失败（可能已存在）");
+            _logger.LogWarning(ex, "Failed to create Qdrant payload indexes (may already exist)");
         }
     }
 
@@ -99,11 +99,11 @@ public class QdrantService : IQdrantService
         var pages = await pageRepository.GetByDocumentIdAsync(documentId);
         var pageLookup = pages.ToDictionary(p => p.Id, p => p.PageNumber);
 
-        // 收集所有需要向量化的文本
+        // Collect all texts to be vectorized
         var texts = new List<string>();
         var points = new List<PointStruct>();
 
-        // 处理 sentence segments
+        // Process sentence segments
         var segments = await segmentRepository.GetByDocumentIdAsync(documentId);
         foreach (var seg in segments)
         {
@@ -112,7 +112,7 @@ public class QdrantService : IQdrantService
             points.Add(new PointStruct
             {
                 Id = new PointId { Uuid = Guid.NewGuid().ToString() },
-                Vectors = Array.Empty<float>(), // 占位，后续填入实际向量
+                Vectors = Array.Empty<float>(), // Placeholder, actual vectors filled in later
                 Payload =
                 {
                     ["document_id"] = documentId.ToString(),
@@ -131,7 +131,7 @@ public class QdrantService : IQdrantService
             });
         }
 
-        // 处理 question segments
+        // Process question segments
         var questions = await questionRepository.GetByDocumentIdAsync(documentId);
         foreach (var q in questions)
         {
@@ -140,7 +140,7 @@ public class QdrantService : IQdrantService
             points.Add(new PointStruct
             {
                 Id = new PointId { Uuid = Guid.NewGuid().ToString() },
-                Vectors = Array.Empty<float>(), // 占位，后续填入实际向量
+                Vectors = Array.Empty<float>(), // Placeholder, actual vectors filled in later
                 Payload =
                 {
                     ["document_id"] = documentId.ToString(),
@@ -160,11 +160,11 @@ public class QdrantService : IQdrantService
 
         if (texts.Count == 0)
         {
-            _logger.LogInformation("文档 {DocumentId} 没有可向量化的 segments", documentId);
+            _logger.LogInformation("Document {DocumentId} has no vectorizable segments", documentId);
             return;
         }
 
-        // 批量获取 Embedding 向量，每批 16 条
+        // Batch get embedding vectors, 16 per batch
         const int batchSize = 16;
         for (var i = 0; i < texts.Count; i += batchSize)
         {
@@ -173,26 +173,26 @@ public class QdrantService : IQdrantService
 
             var embeddings = await GetEmbeddingsWithRetryAsync(batchTexts);
 
-            // 将向量填入 points
+            // Fill vectors into points
             for (var j = 0; j < embeddings.Count; j++)
             {
                 batchPoints[j].Vectors = embeddings[j];
             }
 
-            // 写入 Qdrant
+            // Write to Qdrant
             await _client.UpsertAsync(collectionName, batchPoints);
-            _logger.LogInformation("文档 {DocumentId} 已写入 Qdrant 批次 {Batch}（{Count} 条）",
+            _logger.LogInformation("Document {DocumentId} written to Qdrant batch {Batch} ({Count} records)",
                 documentId, i / batchSize + 1, batchPoints.Count);
         }
 
-        _logger.LogInformation("文档 {DocumentId} 向量索引完成，共 {Count} 条", documentId, texts.Count);
+        _logger.LogInformation("Document {DocumentId} vector indexing completed, {Count} records total", documentId, texts.Count);
     }
 
     public async Task DeleteDocumentVectorsAsync(Guid documentId)
     {
         var collectionName = _options.CollectionName;
 
-        // 按 document_id payload 过滤删除
+        // Delete by document_id payload filter
         var filter = new Filter
         {
             Must =
@@ -209,14 +209,14 @@ public class QdrantService : IQdrantService
         };
 
         await _client.DeleteAsync(collectionName, filter);
-        _logger.LogInformation("文档 {DocumentId} 的 Qdrant 向量数据已删除", documentId);
+        _logger.LogInformation("Document {DocumentId} Qdrant vector data deleted", documentId);
     }
 
     public async Task UpdateDocumentMetadataAsync(Guid documentId, string subject, string grade, string year)
     {
         var collectionName = _options.CollectionName;
 
-        // 按 document_id 过滤，更新所有匹配 points 的 payload 元数据
+        // Filter by document_id, update payload metadata for all matching points
         var filter = new Filter
         {
             Must =
@@ -242,21 +242,21 @@ public class QdrantService : IQdrantService
             },
             filter);
 
-        _logger.LogInformation("文档 {DocumentId} 的 Qdrant 向量元数据已更新", documentId);
+        _logger.LogInformation("Document {DocumentId} Qdrant vector metadata updated", documentId);
     }
 
     public async Task<List<SearchResultModel>> SemanticSearchAsync(string query, int topK, SearchFilterModel? filter)
     {
         var collectionName = _options.CollectionName;
 
-        // 获取 query 的 Embedding 向量
+        // Get embedding vector for query
         var queryEmbeddings = await GetEmbeddingsWithRetryAsync(new List<string> { query });
         var queryVector = queryEmbeddings[0];
 
-        // 构建 Qdrant 过滤条件
+        // Build Qdrant filter conditions
         var qdrantFilter = BuildQdrantFilter(filter);
 
-        // 执行向量搜索
+        // Execute vector search
         var searchResults = await _client.SearchAsync(
             collectionName,
             queryVector,
@@ -290,7 +290,7 @@ public class QdrantService : IQdrantService
     }
 
     /// <summary>
-    /// 构建 Qdrant 过滤条件
+    /// Build Qdrant filter conditions
     /// </summary>
     private Filter? BuildQdrantFilter(SearchFilterModel? filter)
     {
@@ -350,7 +350,7 @@ public class QdrantService : IQdrantService
     }
 
     /// <summary>
-    /// 调用 SiliconFlow Embedding API 获取向量，失败重试 3 次，指数退避
+    /// Call SiliconFlow Embedding API to get vectors, retry 3 times on failure with exponential backoff
     /// </summary>
     private async Task<List<float[]>> GetEmbeddingsWithRetryAsync(List<string> texts)
     {
@@ -365,18 +365,18 @@ public class QdrantService : IQdrantService
             catch (Exception ex) when (attempt < maxRetries)
             {
                 var delay = TimeSpan.FromSeconds(Math.Pow(2, attempt));
-                _logger.LogWarning(ex, "Embedding API 调用失败，第 {Attempt} 次重试，等待 {Delay}ms",
+                _logger.LogWarning(ex, "Embedding API call failed, retry attempt {Attempt}, waiting {Delay}ms",
                     attempt + 1, delay.TotalMilliseconds);
                 await Task.Delay(delay);
             }
         }
 
-        // 最后一次尝试不捕获异常
+        // Last attempt does not catch exceptions
         return await GetEmbeddingsAsync(texts);
     }
 
     /// <summary>
-    /// 调用 SiliconFlow Embedding API 获取向量
+    /// Call SiliconFlow Embedding API to get vectors
     /// </summary>
     private async Task<List<float[]>> GetEmbeddingsAsync(List<string> texts)
     {

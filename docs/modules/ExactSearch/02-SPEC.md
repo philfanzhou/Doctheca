@@ -17,7 +17,7 @@
 - [ ] FR-07 数据库回退搜索在 segments 和 questions 两表中使用 `IndexOf(query, StringComparison.OrdinalIgnoreCase)` 匹配。
 - [ ] FR-08 仅搜索 `status == "ready"` 的文档。
 - [ ] FR-09 短语匹配（`phrase = true`）时 `Score = 1.0`，`MatchType = "exact_phrase"`。
-- [ ] FR-10 单词匹配（`phrase = false`）时 `Score = 0.8`，`MatchType = "exact_word"`。
+- [ ] FR-10 单词匹配（`phrase = false`）时：OpenSearch 路径 `MatchType = "stemmed"`（因为 `english_custom` 分析器含词干提取）；数据库回退路径 `MatchType = "exact_word"`（因为 `IndexOf` 是精确子串匹配）。
 - [ ] FR-11 结果按 `DocumentName + PageNumber + SegmentId` 三元组去重，保留首次出现的记录。
 - [ ] FR-12 游标分页：`page_token` 为 `Base64(JSON({ "skip": N }))` 编码。
 - [ ] FR-13 `SearchFilter` 中空字符串字段视为不筛选（`MapFilter` 将空字符串转为 `null`）。
@@ -34,7 +34,7 @@
 - AC-FR-07：数据库回退搜索对 segments 表和 questions 表均执行 `IndexOf(query, StringComparison.OrdinalIgnoreCase)` 匹配。
 - AC-FR-08：`DatabaseSearchAsync` 中 `documents.Where(d => d.Status == "ready")` 过滤非 ready 文档。
 - AC-FR-09：`phrase = true` 时，匹配结果的 `Score == 1.0`，`MatchType == "exact_phrase"`。
-- AC-FR-10：`phrase = false` 时，匹配结果的 `Score == 0.8`，`MatchType == "exact_word"`。
+- AC-FR-10：`phrase = false` 时，OpenSearch 路径匹配结果的 `MatchType == "stemmed"`；数据库回退路径匹配结果的 `Score == 0.8`，`MatchType == "exact_word"`。
 - AC-FR-11：去重键为 `$"{DocumentName}|{PageNumber}|{SegmentId}"`，使用 `GroupBy(...).Select(g => g.First())` 保留首条。
 - AC-FR-12：`page_token` 解码为 JSON 后取 `skip` 值，分页使用 `Skip(skip).Take(pageSize)`；下一页 token 为 `Base64(JSON({ skip = skip + pagedResults.Count }))`。
 - AC-FR-13：`MapFilter` 将 `SearchFilter` 中空字符串字段转为 `null`，`GetFilteredDocumentsAsync` 传入 `null` 时不作为筛选条件。

@@ -41,7 +41,7 @@ public class OpenSearchIndexService : ISearchIndexService
         var existsResponse = await _client.Indices.ExistsAsync<BytesResponse>(indexName);
         if (existsResponse.Success && existsResponse.HttpStatusCode == 200)
         {
-            _logger.LogInformation("OpenSearch 索引已存在：{IndexName}", indexName);
+            _logger.LogInformation("OpenSearch index already exists: {IndexName}", indexName);
             return;
         }
 
@@ -114,11 +114,11 @@ public class OpenSearchIndexService : ISearchIndexService
 
         if (response.Success && (response.HttpStatusCode == 200 || response.HttpStatusCode == 201))
         {
-            _logger.LogInformation("OpenSearch 索引已创建：{IndexName}", indexName);
+            _logger.LogInformation("OpenSearch index created: {IndexName}", indexName);
         }
         else
         {
-            _logger.LogWarning("OpenSearch 索引创建失败：{IndexName}，状态码：{StatusCode}", indexName, response.HttpStatusCode);
+            _logger.LogWarning("OpenSearch index creation failed: {IndexName}, status code: {StatusCode}", indexName, response.HttpStatusCode);
         }
     }
 
@@ -187,7 +187,7 @@ public class OpenSearchIndexService : ISearchIndexService
 
         if (bulkOps.Count == 0)
         {
-            _logger.LogInformation("文档 {DocumentId} 没有可索引的segments", documentId);
+            _logger.LogInformation("Document {DocumentId} has no indexable segments", documentId);
             return;
         }
 
@@ -196,11 +196,11 @@ public class OpenSearchIndexService : ISearchIndexService
 
         if (response.Success && (response.HttpStatusCode == 200 || response.HttpStatusCode == 201))
         {
-            _logger.LogInformation("文档 {DocumentId} 已索引 {Count} 个segments", documentId, bulkOps.Count / 2);
+            _logger.LogInformation("Document {DocumentId} indexed {Count} segments", documentId, bulkOps.Count / 2);
         }
         else
         {
-            _logger.LogWarning("文档 {DocumentId} 索引失败，状态码：{StatusCode}", documentId, response.HttpStatusCode);
+            _logger.LogWarning("Document {DocumentId} indexing failed, status code: {StatusCode}", documentId, response.HttpStatusCode);
         }
     }
 
@@ -220,11 +220,11 @@ public class OpenSearchIndexService : ISearchIndexService
 
         if (response.Success && response.HttpStatusCode == 200)
         {
-            _logger.LogInformation("文档 {DocumentId} 的搜索索引已删除", documentId);
+            _logger.LogInformation("Document {DocumentId} search index deleted", documentId);
         }
         else
         {
-            _logger.LogWarning("删除文档 {DocumentId} 搜索索引失败，状态码：{StatusCode}", documentId, response.HttpStatusCode);
+            _logger.LogWarning("Failed to delete document {DocumentId} search index, status code: {StatusCode}", documentId, response.HttpStatusCode);
         }
     }
 
@@ -249,11 +249,11 @@ public class OpenSearchIndexService : ISearchIndexService
 
         if (response.Success && response.HttpStatusCode == 200)
         {
-            _logger.LogInformation("文档 {DocumentId} 的搜索索引元数据已更新", documentId);
+            _logger.LogInformation("Document {DocumentId} search index metadata updated", documentId);
         }
         else
         {
-            _logger.LogWarning("更新文档 {DocumentId} 搜索索引元数据失败，状态码：{StatusCode}", documentId, response.HttpStatusCode);
+            _logger.LogWarning("Failed to update document {DocumentId} search index metadata, status code: {StatusCode}", documentId, response.HttpStatusCode);
         }
     }
 
@@ -263,9 +263,9 @@ public class OpenSearchIndexService : ISearchIndexService
         var indexName = _options.IndexName;
 
         // Build the main query
-        // 短语查询使用 text.exact 字段（english_phrase 分析器，仅小写归一不做词干提取，保证短语完整性）
-        // 普通查询使用 text 字段（english_custom 分析器，词干提取扩展召回）
-        // 注意：OpenSearch multi-field 在查询时用 "text.exact"，C# 匿名对象属性名不能含点号，用字典构建
+        // Phrase query uses text.exact field (english_phrase analyzer, lowercase only without stemming, ensures phrase integrity)
+        // Non-phrase query uses text field (english_custom analyzer, stemming for expanded recall)
+        // Note: OpenSearch multi-field uses "text.exact" at query time, C# anonymous objects cannot contain dots in property names, use dictionary instead
         object mainQuery;
         if (phrase)
         {
@@ -343,7 +343,7 @@ public class OpenSearchIndexService : ISearchIndexService
 
         if (!response.Success || response.HttpStatusCode != 200)
         {
-            throw new InvalidOperationException($"OpenSearch 查询失败，状态码：{response.HttpStatusCode}");
+            throw new InvalidOperationException($"OpenSearch query failed, status code: {response.HttpStatusCode}");
         }
 
         var responseJson = Encoding.UTF8.GetString(response.Body);
@@ -389,7 +389,7 @@ public class OpenSearchIndexService : ISearchIndexService
                     PageNumber = source.TryGetProperty("page_number", out var pnEl) ? pnEl.GetInt32() : 0,
                     AssociatedText = associatedText,
                     Score = score,
-                    MatchType = phrase ? "exact_phrase" : "exact_word",
+                    MatchType = phrase ? "exact_phrase" : "stemmed",
                     SegmentId = segmentId,
                     StartOffset = source.TryGetProperty("start_offset", out var soEl) ? soEl.GetInt32() : 0,
                     EndOffset = source.TryGetProperty("end_offset", out var eoEl) ? eoEl.GetInt32() : 0
@@ -416,10 +416,10 @@ public class OpenSearchIndexService : ISearchIndexService
         string query, bool phrase, int exactTopK, int semanticTopK,
         SearchFilterModel? filter, int pageSize, string? pageToken)
     {
-        // 获取精确搜索结果
+        // Get exact search results
         var (exactResults, totalCount, nextToken) = await ExactSearchAsync(query, phrase, filter, pageSize, pageToken);
 
-        // 获取语义搜索结果
+        // Get semantic search results
         List<SearchResultModel> semanticResults;
         try
         {
@@ -435,15 +435,15 @@ public class OpenSearchIndexService : ISearchIndexService
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Qdrant 语义搜索失败，仅返回精确搜索结果");
+            _logger.LogWarning(ex, "Qdrant semantic search failed, returning exact search results only");
             semanticResults = new List<SearchResultModel>();
         }
 
-        // 合并去重（按 document_id + page_number + segment_id 去重键）
+        // Merge and deduplicate (by document_id + page_number + segment_id dedup key)
         var seen = new HashSet<string>();
         var mergedResults = new List<SearchResultModel>();
 
-        // 精确结果优先
+        // Exact results first
         foreach (var result in exactResults)
         {
             var key = $"{result.DocumentName}|{result.PageNumber}|{result.SegmentId}";
@@ -453,7 +453,7 @@ public class OpenSearchIndexService : ISearchIndexService
             }
         }
 
-        // 语义结果补充
+        // Semantic results appended
         foreach (var result in semanticResults)
         {
             var key = $"{result.DocumentName}|{result.PageNumber}|{result.SegmentId}";
@@ -463,7 +463,7 @@ public class OpenSearchIndexService : ISearchIndexService
             }
         }
 
-        // 按 match_type 优先级排序：精确短语 > 精确单词 > 词形还原 > 语义
+        // Sort by match_type priority: exact_phrase > exact_word > stemmed > semantic
         var matchTypePriority = new Dictionary<string, int>
         {
             ["exact_phrase"] = 0,
@@ -476,7 +476,7 @@ public class OpenSearchIndexService : ISearchIndexService
             var pa = matchTypePriority.TryGetValue(a.MatchType ?? "", out var va) ? va : 99;
             var pb = matchTypePriority.TryGetValue(b.MatchType ?? "", out var vb) ? vb : 99;
             if (pa != pb) return pa.CompareTo(pb);
-            return b.Score.CompareTo(a.Score); // 同优先级按分数降序
+            return b.Score.CompareTo(a.Score); // Same priority: sort by score descending
         });
 
         return (mergedResults, mergedResults.Count, nextToken);

@@ -5,33 +5,33 @@ namespace Ruoyu.Study.DocRetrieval.Domain.Repositories;
 public interface ISearchIndexService
 {
     /// <summary>
-    /// 确保索引/集合已创建
+    /// Ensure index/collection is created
     /// </summary>
     Task EnsureIndexAsync();
 
     /// <summary>
-    /// 索引一个文档的所有segments
+    /// Index all segments of a document
     /// </summary>
     Task IndexDocumentSegmentsAsync(Guid documentId, string documentTitle, string subject, string grade, string year);
 
     /// <summary>
-    /// 删除一个文档的所有索引数据
+    /// Delete all index data for a document
     /// </summary>
     Task DeleteDocumentIndexAsync(Guid documentId);
 
     /// <summary>
-    /// 更新一个文档的元数据（subject/grade/year）
+    /// Update document metadata (subject/grade/year)
     /// </summary>
     Task UpdateDocumentMetadataAsync(Guid documentId, string subject, string grade, string year);
 
     /// <summary>
-    /// 精确搜索（OpenSearch BM25）
+    /// Exact search (OpenSearch BM25)
     /// </summary>
     Task<(List<SearchResultModel> Results, int TotalCount, string? NextToken)> ExactSearchAsync(
         string query, bool phrase, SearchFilterModel? filter, int pageSize, string? pageToken);
 
     /// <summary>
-    /// 混合搜索（精确 + 语义）
+    /// Hybrid search (exact + semantic)
     /// </summary>
     Task<(List<SearchResultModel> Results, int TotalCount, string? NextToken)> HybridSearchAsync(
         string query, bool phrase, int exactTopK, int semanticTopK,

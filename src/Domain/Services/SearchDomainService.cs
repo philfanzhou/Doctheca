@@ -47,7 +47,7 @@ public class SearchDomainService : ISearchDomainService
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "OpenSearch 查询失败，回退到数据库搜索");
+                _logger.LogWarning(ex, "OpenSearch query failed, falling back to database search");
             }
         }
 
@@ -67,14 +67,14 @@ public class SearchDomainService : ISearchDomainService
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "OpenSearch 混合查询失败，回退到数据库搜索");
+                _logger.LogWarning(ex, "OpenSearch hybrid query failed, falling back to database search");
             }
         }
 
         var (results, totalCount, nextToken) = await DatabaseSearchAsync(query, phrase, filter, pageSize, pageToken);
         foreach (var r in results)
         {
-            if (r.MatchType == "exact_word") r.MatchType = "stem_match";
+            if (r.MatchType == "exact_word") r.MatchType = "stemmed";
         }
         return (results, totalCount, nextToken);
     }
@@ -97,13 +97,13 @@ public class SearchDomainService : ISearchDomainService
                 int matchIndex;
                 if (phrase)
                 {
-                    // 短语查询：必须完整包含整个短语（不拆碎）
+                    // Phrase query: must contain the complete phrase (no splitting)
                     matchIndex = seg.Text.IndexOf(query, StringComparison.OrdinalIgnoreCase);
                     matched = matchIndex >= 0;
                 }
                 else
                 {
-                    // 单词查询：包含即可
+                    // Word query: contains match
                     matchIndex = seg.Text.IndexOf(query, StringComparison.OrdinalIgnoreCase);
                     matched = matchIndex >= 0;
                 }

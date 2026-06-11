@@ -8,19 +8,19 @@ public static class DocRetrievalConstants
 
     public static readonly string[] ValidGrades =
     [
-        "K",     // 幼儿园
-        "G1", "G2", "G3", "G4", "G5", "G6",     // 小学
-        "G7", "G8", "G9",                         // 初中
-        "G10", "G11", "G12"                       // 高中
+        "K",     // Kindergarten
+        "G1", "G2", "G3", "G4", "G5", "G6",     // Primary school
+        "G7", "G8", "G9",                         // Junior high school
+        "G10", "G11", "G12"                       // Senior high school
     ];
 
     public static readonly Dictionary<string, string> GradeLabels = new()
     {
-        ["K"] = "幼儿园",
-        ["G1"] = "一年级", ["G2"] = "二年级", ["G3"] = "三年级",
-        ["G4"] = "四年级", ["G5"] = "五年级", ["G6"] = "六年级",
-        ["G7"] = "初一", ["G8"] = "初二", ["G9"] = "初三",
-        ["G10"] = "高一", ["G11"] = "高二", ["G12"] = "高三"
+        ["K"] = "Kindergarten",
+        ["G1"] = "Grade 1", ["G2"] = "Grade 2", ["G3"] = "Grade 3",
+        ["G4"] = "Grade 4", ["G5"] = "Grade 5", ["G6"] = "Grade 6",
+        ["G7"] = "Grade 7", ["G8"] = "Grade 8", ["G9"] = "Grade 9",
+        ["G10"] = "Grade 10", ["G11"] = "Grade 11", ["G12"] = "Grade 12"
     };
 
     public static bool IsValidSubject(string subject) => ValidSubjects.Contains(subject);
