@@ -54,8 +54,8 @@
 | 对象映射 | Mapster 10.0 | Entity ↔ Model 映射 |
 | PDF 解析 | PdfPig 0.1 | PDF 文本提取 |
 | DOCX 解析 | DocumentFormat.OpenXml 3.2 | Word 文档文本提取 |
-| 搜索引擎 | OpenSearch 1.8 | 外部全文检索 |
-| 向量数据库 | Qdrant.Client 1.12 | 语义搜索 |
+| 搜索引擎 | OpenSearch 2.19 (Docker) / OpenSearch.Net 1.8 (NuGet) | 外部全文检索 |
+| 向量数据库 | Qdrant 1.18 (Docker) / Qdrant.Client 1.18 (NuGet) | 语义搜索 |
 | 测试 | xUnit + Moq + FluentAssertions | 三层测试 |
 
 ## 关键设计决策
