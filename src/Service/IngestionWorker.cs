@@ -17,15 +17,13 @@ public class IngestionWorker : BackgroundService
     private readonly IServiceProvider _serviceProvider;
     private readonly ILogger<IngestionWorker> _logger;
     private readonly ISearchIndexService? _searchIndexService;
-    private readonly IQdrantService? _qdrantService;
     private readonly TimeSpan _pollInterval = TimeSpan.FromSeconds(5);
 
-    public IngestionWorker(IServiceProvider serviceProvider, ILogger<IngestionWorker> logger, ISearchIndexService? searchIndexService = null, IQdrantService? qdrantService = null)
+    public IngestionWorker(IServiceProvider serviceProvider, ILogger<IngestionWorker> logger, ISearchIndexService? searchIndexService = null)
     {
         _serviceProvider = serviceProvider;
         _logger = logger;
         _searchIndexService = searchIndexService;
-        _qdrantService = qdrantService;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -195,21 +193,6 @@ public class IngestionWorker : BackgroundService
                             catch (Exception indexEx)
                             {
                                 _logger.LogError(indexEx, "Failed to create document search index: {DocumentId}", job.DocumentId);
-                            }
-                        }
-
-                        // After ingestion, write document vectors to Qdrant
-                        if (_qdrantService != null)
-                        {
-                            try
-                            {
-                                await _qdrantService.IndexDocumentVectorsAsync(
-                                    document.Id, document.Title, document.Subject, document.Grade, document.Year);
-                                _logger.LogInformation("Document vector index created: {DocumentId}", job.DocumentId);
-                            }
-                            catch (Exception vectorEx)
-                            {
-                                _logger.LogError(vectorEx, "Failed to create document vector index: {DocumentId}", job.DocumentId);
                             }
                         }
                     }

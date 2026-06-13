@@ -9,7 +9,7 @@ public class ConstantsTests
     #region Subject Validation
 
     [Theory]
-    [InlineData("英语", true)]
+    [InlineData("English", true)]
     [InlineData("数学", false)]
     [InlineData("语文", false)]
     [InlineData("", false)]
@@ -22,7 +22,7 @@ public class ConstantsTests
     public void ValidSubjects_ContainsOnlyEnglish()
     {
         Assert.Single(DocRetrievalConstants.ValidSubjects);
-        Assert.Equal("英语", DocRetrievalConstants.ValidSubjects[0]);
+        Assert.Equal("English", DocRetrievalConstants.ValidSubjects[0]);
     }
 
     #endregion
@@ -69,9 +69,9 @@ public class ConstantsTests
     #region Subject Constant
 
     [Fact]
-    public void SubjectEnglish_IsChineseEnglish()
+    public void SubjectEnglish_IsEnglish()
     {
-        Assert.Equal("英语", DocRetrievalConstants.SubjectEnglish);
+        Assert.Equal("English", DocRetrievalConstants.SubjectEnglish);
     }
 
     #endregion
@@ -84,22 +84,6 @@ public class ConstantsTests
         var options = new OpenSearchOptions();
         Assert.Equal("http://localhost:9200", options.Url);
         Assert.Equal("docretrieval-segments", options.IndexName);
-    }
-
-    [Fact]
-    public void QdrantOptions_HasCorrectDefaults()
-    {
-        var options = new QdrantOptions();
-        Assert.Equal("http://localhost:6333", options.Url);
-        Assert.Equal("docretrieval_segments", options.CollectionName);
-    }
-
-    [Fact]
-    public void EmbeddingOptions_HasCorrectDefaults()
-    {
-        var options = new EmbeddingOptions();
-        Assert.Equal("https://api.siliconflow.cn/v1/embeddings", options.ApiUrl);
-        Assert.Equal("BAAI/bge-large-en-v1.5", options.Model);
     }
 
     #endregion
@@ -144,8 +128,59 @@ public class ConstantsTests
         var model = new DocumentModel();
         Assert.NotEqual(Guid.Empty, model.Id);
         Assert.Equal("en", model.Language);
-        Assert.Equal("pending", model.Status);
+        Assert.Equal(DocumentStatus.Pending, model.Status);
         Assert.Equal(string.Empty, model.Title);
+    }
+
+    #endregion
+
+    #region DocumentStatus Constants
+
+    [Fact]
+    public void DocumentStatus_HasAllStatusValues()
+    {
+        Assert.Equal("pending", DocumentStatus.Pending);
+        Assert.Equal("processing", DocumentStatus.Processing);
+        Assert.Equal("ready", DocumentStatus.Ready);
+        Assert.Equal("success", DocumentStatus.Success);
+        Assert.Equal("failed", DocumentStatus.Failed);
+        Assert.Equal("cancelled", DocumentStatus.Cancelled);
+    }
+
+    #endregion
+
+    #region SegmentTypes Constants
+
+    [Fact]
+    public void SegmentTypes_HasSentenceAndQuestion()
+    {
+        Assert.Equal("sentence", SegmentTypes.Sentence);
+        Assert.Equal("question", SegmentTypes.Question);
+    }
+
+    #endregion
+
+    #region SourceTypes Constants
+
+    [Fact]
+    public void SourceTypes_HasAllSourceTypes()
+    {
+        Assert.Equal("pdf", SourceTypes.Pdf);
+        Assert.Equal("word", SourceTypes.Word);
+        Assert.Equal("ppt", SourceTypes.Ppt);
+        Assert.Equal("unknown", SourceTypes.Unknown);
+    }
+
+    #endregion
+
+    #region SearchMatchType Constants
+
+    [Fact]
+    public void SearchMatchType_HasAllMatchTypes()
+    {
+        Assert.Equal("exact_phrase", SearchMatchType.ExactPhrase);
+        Assert.Equal("stemmed", SearchMatchType.Stemmed);
+        Assert.Equal("exact_word", SearchMatchType.ExactWord);
     }
 
     #endregion

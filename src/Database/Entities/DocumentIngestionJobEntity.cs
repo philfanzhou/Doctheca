@@ -1,6 +1,7 @@
 using System;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using Ruoyu.Study.DocRetrieval.Domain.Models;
 
 namespace Ruoyu.Study.DocRetrieval.Database.Entities;
 
@@ -18,7 +19,7 @@ public class DocumentIngestionJobEntity
     [Column("status")]
     [Required]
     [MaxLength(20)]
-    public string Status { get; set; } = "pending";
+    public string Status { get; set; } = DocumentStatus.Pending;
 
     [Column("parser_version")]
     [MaxLength(20)]

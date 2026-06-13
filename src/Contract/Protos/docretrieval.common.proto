@@ -39,17 +39,6 @@ message ExactSearchRequest {
   string page_token = 5;
 }
 
-// 混合检索请求
-message HybridSearchRequest {
-  string query = 1;
-  bool phrase = 2;
-  int32 exact_top_k = 3;
-  int32 semantic_top_k = 4;
-  SearchFilter filter = 5;
-  int32 page_size = 6;
-  string page_token = 7;
-}
-
 // 检索响应
 message SearchResponse {
   repeated SearchResult results = 1;

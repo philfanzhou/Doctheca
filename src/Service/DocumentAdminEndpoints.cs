@@ -89,10 +89,10 @@ public static class DocumentAdminEndpoints
 
         var sourceType = file.ContentType switch
         {
-            "application/pdf" => "pdf",
-            "application/msword" or "application/vnd.openxmlformats-officedocument.wordprocessingml.document" => "word",
-            "application/vnd.ms-powerpoint" or "application/vnd.openxmlformats-officedocument.presentationml.presentation" => "ppt",
-            _ => "unknown"
+            "application/pdf" => SourceTypes.Pdf,
+            "application/msword" or "application/vnd.openxmlformats-officedocument.wordprocessingml.document" => SourceTypes.Word,
+            "application/vnd.ms-powerpoint" or "application/vnd.openxmlformats-officedocument.presentationml.presentation" => SourceTypes.Ppt,
+            _ => SourceTypes.Unknown
         };
 
         var document = new DocumentModel

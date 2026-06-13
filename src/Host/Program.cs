@@ -62,10 +62,7 @@ else
 
 // Search Index Services
 builder.Services.Configure<OpenSearchOptions>(builder.Configuration.GetSection("OpenSearch"));
-builder.Services.Configure<QdrantOptions>(builder.Configuration.GetSection("Qdrant"));
-builder.Services.Configure<EmbeddingOptions>(builder.Configuration.GetSection("Embedding"));
 builder.Services.AddSingleton<ISearchIndexService, OpenSearchIndexService>();
-builder.Services.AddSingleton<IQdrantService, QdrantService>();
 
 // Repositories
 builder.Services.AddScoped<IDocumentRepository, DocumentRepository>();
@@ -106,22 +103,6 @@ using (var initScope = app.Services.CreateScope())
     catch (Exception ex)
     {
         initLogger.LogWarning(ex, "Search index initialization failed, will use database fallback search");
-    }
-}
-
-// Initialize Qdrant collection
-using (var initScope = app.Services.CreateScope())
-{
-    var qdrantService = initScope.ServiceProvider.GetRequiredService<IQdrantService>();
-    var initLogger = initScope.ServiceProvider.GetRequiredService<ILogger<Program>>();
-    try
-    {
-        await qdrantService.EnsureCollectionAsync();
-        initLogger.LogInformation("Qdrant collection initialization completed");
-    }
-    catch (Exception ex)
-    {
-        initLogger.LogWarning(ex, "Qdrant collection initialization failed, semantic search will be unavailable");
     }
 }
 

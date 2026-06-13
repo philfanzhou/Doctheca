@@ -79,7 +79,7 @@ public class SearchDomainServiceTests
 
         var documents = new List<DocumentModel>
         {
-            new() { Id = Guid.NewGuid(), Title = "test.pdf", Status = "ready", Subject = "英语", Grade = "G10", Year = "2023" }
+            new() { Id = Guid.NewGuid(), Title = "test.pdf", Status = "ready", Subject = "English", Grade = "G10", Year = "2023" }
         };
         _documentRepoMock
             .Setup(r => r.GetListAsync(It.IsAny<int>(), It.IsAny<int>(), null, null, null, null, null))
@@ -119,9 +119,9 @@ public class SearchDomainServiceTests
 
         var documents = new List<DocumentModel>
         {
-            new() { Id = Guid.NewGuid(), Title = "ready-doc", Status = "ready", Subject = "英语", Grade = "G10", Year = "2023" },
-            new() { Id = Guid.NewGuid(), Title = "pending-doc", Status = "pending", Subject = "英语", Grade = "G10", Year = "2023" },
-            new() { Id = Guid.NewGuid(), Title = "failed-doc", Status = "failed", Subject = "英语", Grade = "G10", Year = "2023" }
+            new() { Id = Guid.NewGuid(), Title = "ready-doc", Status = "ready", Subject = "English", Grade = "G10", Year = "2023" },
+            new() { Id = Guid.NewGuid(), Title = "pending-doc", Status = "pending", Subject = "English", Grade = "G10", Year = "2023" },
+            new() { Id = Guid.NewGuid(), Title = "failed-doc", Status = "failed", Subject = "English", Grade = "G10", Year = "2023" }
         };
         _documentRepoMock
             .Setup(r => r.GetListAsync(It.IsAny<int>(), It.IsAny<int>(), null, null, null, null, null))
@@ -151,65 +151,6 @@ public class SearchDomainServiceTests
 
     #endregion
 
-    #region HybridSearchAsync Tests
-
-    [Fact]
-    public async Task HybridSearchAsync_UsesOpenSearch_WhenAvailable()
-    {
-        // Arrange
-        var expectedResults = new List<SearchResultModel>
-        {
-            new() { DocumentName = "test.pdf", PageNumber = 1, AssociatedText = "Hello world", Score = 1.0, MatchType = "exact_phrase", SegmentId = "p1-b1-s1" }
-        };
-        _searchIndexServiceMock
-            .Setup(s => s.HybridSearchAsync("hello", true, 50, 20, null, 50, null))
-            .ReturnsAsync((expectedResults, 1, null));
-
-        // Act
-        var (results, totalCount, nextToken) = await _service.HybridSearchAsync("hello", true, 50, 20, null, 50, null);
-
-        // Assert
-        Assert.Single(results);
-        Assert.Equal(1, totalCount);
-    }
-
-    [Fact]
-    public async Task HybridSearchAsync_FallsBackToDatabase_WhenOpenSearchFails()
-    {
-        // Arrange
-        _searchIndexServiceMock
-            .Setup(s => s.HybridSearchAsync(It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<SearchFilterModel?>(), It.IsAny<int>(), It.IsAny<string?>()))
-            .ThrowsAsync(new Exception("OpenSearch unavailable"));
-
-        var documents = new List<DocumentModel>
-        {
-            new() { Id = Guid.NewGuid(), Title = "test.pdf", Status = "ready", Subject = "英语", Grade = "G10", Year = "2023" }
-        };
-        _documentRepoMock
-            .Setup(r => r.GetListAsync(It.IsAny<int>(), It.IsAny<int>(), null, null, null, null, null))
-            .ReturnsAsync((documents, 1));
-
-        var pageId = Guid.NewGuid();
-        _pageRepoMock.Setup(r => r.GetByDocumentIdAsync(documents[0].Id)).ReturnsAsync(new List<DocumentPageModel>
-        {
-            new() { Id = pageId, PageNumber = 1 }
-        });
-        _segmentRepoMock.Setup(r => r.GetByDocumentIdAsync(documents[0].Id)).ReturnsAsync(new List<DocumentSegmentModel>
-        {
-            new() { Id = Guid.NewGuid(), DocumentId = documents[0].Id, PageId = pageId, SentenceId = "s1", Text = "Hello world", BlockId = "b1", SegmentType = "sentence" }
-        });
-        _questionRepoMock.Setup(r => r.GetByDocumentIdAsync(documents[0].Id)).ReturnsAsync(new List<QuestionSegmentModel>());
-
-        // Act - use phrase: false so fallback marks results as stemmed
-        var (results, _, _) = await _service.HybridSearchAsync("hello", false, 50, 20, null, 50, null);
-
-        // Assert - fallback marks non-phrase results as stemmed
-        Assert.NotEmpty(results);
-        Assert.All(results, r => Assert.Equal("stemmed", r.MatchType));
-    }
-
-    #endregion
-
     #region Filter Tests
 
     [Fact]
@@ -218,7 +159,7 @@ public class SearchDomainServiceTests
         // Arrange
         var filter = new SearchFilterModel
         {
-            Subject = "英语",
+            Subject = "English",
             Grade = "G10",
             Year = "2023",
             DocumentTitle = "test.pdf"
@@ -270,7 +211,7 @@ public class SearchDomainServiceTests
                 Id = Guid.NewGuid(),
                 Title = $"doc{i}.pdf",
                 Status = "ready",
-                Subject = "英语",
+                Subject = "English",
                 Grade = "G10",
                 Year = "2023"
             });
@@ -320,7 +261,7 @@ public class SearchDomainServiceTests
             .Setup(s => s.ExactSearchAsync(It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<SearchFilterModel?>(), It.IsAny<int>(), It.IsAny<string?>()))
             .ThrowsAsync(new Exception("OpenSearch unavailable"));
 
-        var doc = new DocumentModel { Id = Guid.NewGuid(), Title = "exam.pdf", Status = "ready", Subject = "英语", Grade = "G10", Year = "2023" };
+        var doc = new DocumentModel { Id = Guid.NewGuid(), Title = "exam.pdf", Status = "ready", Subject = "English", Grade = "G10", Year = "2023" };
         _documentRepoMock
             .Setup(r => r.GetListAsync(It.IsAny<int>(), It.IsAny<int>(), null, null, null, null, null))
             .ReturnsAsync((new List<DocumentModel> { doc }, 1));

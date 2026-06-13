@@ -55,37 +55,13 @@ public class SearchDomainService : ISearchDomainService
         return await DatabaseSearchAsync(query, phrase, filter, pageSize, pageToken);
     }
 
-    public async Task<(List<SearchResultModel> Results, int TotalCount, string? NextToken)> HybridSearchAsync(
-        string query, bool phrase, int exactTopK, int semanticTopK,
-        SearchFilterModel? filter, int pageSize, string? pageToken)
-    {
-        if (_searchIndexService != null)
-        {
-            try
-            {
-                return await _searchIndexService.HybridSearchAsync(query, phrase, exactTopK, semanticTopK, filter, pageSize, pageToken);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "OpenSearch hybrid query failed, falling back to database search");
-            }
-        }
-
-        var (results, totalCount, nextToken) = await DatabaseSearchAsync(query, phrase, filter, pageSize, pageToken);
-        foreach (var r in results)
-        {
-            if (r.MatchType == "exact_word") r.MatchType = "stemmed";
-        }
-        return (results, totalCount, nextToken);
-    }
-
     private async Task<(List<SearchResultModel>, int, string?)> DatabaseSearchAsync(
         string query, bool phrase, SearchFilterModel? filter, int pageSize, string? pageToken)
     {
         var results = new List<SearchResultModel>();
         var documents = await GetFilteredDocumentsAsync(filter);
 
-        foreach (var doc in documents.Where(d => d.Status == "ready"))
+        foreach (var doc in documents.Where(d => d.Status == DocumentStatus.Ready))
         {
             var pages = await _pageRepository.GetByDocumentIdAsync(doc.Id);
             var pageLookup = pages.ToDictionary(p => p.Id, p => p.PageNumber);
@@ -117,7 +93,7 @@ public class SearchDomainService : ISearchDomainService
                         PageNumber = pageNumber,
                         AssociatedText = seg.Text,
                         Score = phrase ? 1.0 : 0.8,
-                        MatchType = phrase ? "exact_phrase" : "exact_word",
+                        MatchType = phrase ? SearchMatchType.ExactPhrase : SearchMatchType.ExactWord,
                         SegmentId = seg.SentenceId,
                         StartOffset = matchIndex,
                         EndOffset = matchIndex + query.Length
@@ -150,7 +126,7 @@ public class SearchDomainService : ISearchDomainService
                         PageNumber = pageNumber,
                         AssociatedText = q.Stem,
                         Score = phrase ? 1.0 : 0.8,
-                        MatchType = phrase ? "exact_phrase" : "exact_word",
+                        MatchType = phrase ? SearchMatchType.ExactPhrase : SearchMatchType.ExactWord,
                         SegmentId = q.QuestionId,
                         StartOffset = matchIndex,
                         EndOffset = matchIndex + query.Length

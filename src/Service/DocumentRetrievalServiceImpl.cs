@@ -47,34 +47,6 @@ public class DocumentRetrievalServiceImpl : DocumentRetrievalService.DocumentRet
         return response;
     }
 
-    public override async Task<SearchResponse> HybridSearch(HybridSearchRequest request, ServerCallContext context)
-    {
-        ValidateSearchRequest(request.Query, request.PageSize);
-
-        var filter = MapFilter(request.Filter);
-        var pageSize = request.PageSize > 0 ? Math.Min(request.PageSize, 100) : 50;
-        var exactTopK = request.ExactTopK > 0 ? Math.Min(request.ExactTopK, 200) : 50;
-        var semanticTopK = request.SemanticTopK > 0 ? Math.Min(request.SemanticTopK, 100) : 20;
-
-        var (results, totalCount, nextToken) = await _searchService.HybridSearchAsync(
-            request.Query,
-            request.Phrase,
-            exactTopK,
-            semanticTopK,
-            filter,
-            pageSize,
-            string.IsNullOrEmpty(request.PageToken) ? null : request.PageToken);
-
-        var response = new SearchResponse
-        {
-            TotalCount = totalCount,
-            NextPageToken = nextToken ?? string.Empty
-        };
-        response.Results.AddRange(results.Select(MapSearchResult));
-
-        return response;
-    }
-
     private static void ValidateSearchRequest(string query, int pageSize)
     {
         if (string.IsNullOrWhiteSpace(query))

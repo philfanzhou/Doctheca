@@ -30,10 +30,4 @@ public interface ISearchIndexService
     Task<(List<SearchResultModel> Results, int TotalCount, string? NextToken)> ExactSearchAsync(
         string query, bool phrase, SearchFilterModel? filter, int pageSize, string? pageToken);
 
-    /// <summary>
-    /// Hybrid search (exact + semantic)
-    /// </summary>
-    Task<(List<SearchResultModel> Results, int TotalCount, string? NextToken)> HybridSearchAsync(
-        string query, bool phrase, int exactTopK, int semanticTopK,
-        SearchFilterModel? filter, int pageSize, string? pageToken);
 }

@@ -98,7 +98,7 @@ public partial class DocumentParserService : IDocumentParserService
                     {
                         BlockId = blockId,
                         SentenceId = $"{blockId}-s{sentIndex + 1}",
-                        SegmentType = "sentence",
+                        SegmentType = SegmentTypes.Sentence,
                         Text = sentenceText,
                         StartOffset = globalOffset,
                         EndOffset = globalOffset + sentenceText.Length,
@@ -222,7 +222,7 @@ public partial class DocumentParserService : IDocumentParserService
                 {
                     BlockId = blockId,
                     SentenceId = $"{blockId}-s{sentIndex + 1}",
-                    SegmentType = "sentence",
+                    SegmentType = SegmentTypes.Sentence,
                     Text = sentenceText,
                     StartOffset = globalOffset,
                     EndOffset = globalOffset + sentenceText.Length,
@@ -304,7 +304,7 @@ public partial class DocumentParserService : IDocumentParserService
                     {
                         BlockId = blockId,
                         SentenceId = $"{blockId}-s{sentIndex + 1}",
-                        SegmentType = "sentence",
+                        SegmentType = SegmentTypes.Sentence,
                         Text = sentenceText,
                         StartOffset = globalOffset,
                         EndOffset = globalOffset + sentenceText.Length,

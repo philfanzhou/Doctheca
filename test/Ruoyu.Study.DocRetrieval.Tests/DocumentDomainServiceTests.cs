@@ -20,7 +20,6 @@ public class DocumentDomainServiceTests
     private readonly Mock<IDocumentIngestionJobRepository> _jobRepoMock;
     private readonly Mock<IUnitOfWork> _unitOfWorkMock;
     private readonly Mock<ISearchIndexService> _searchIndexServiceMock;
-    private readonly Mock<IQdrantService> _qdrantServiceMock;
     private readonly Mock<ILogger<DocumentDomainService>> _loggerMock;
     private readonly DocumentDomainService _service;
 
@@ -34,7 +33,6 @@ public class DocumentDomainServiceTests
         _jobRepoMock = new Mock<IDocumentIngestionJobRepository>();
         _unitOfWorkMock = new Mock<IUnitOfWork>();
         _searchIndexServiceMock = new Mock<ISearchIndexService>();
-        _qdrantServiceMock = new Mock<IQdrantService>();
         _loggerMock = new Mock<ILogger<DocumentDomainService>>();
 
         _service = new DocumentDomainService(
@@ -46,8 +44,7 @@ public class DocumentDomainServiceTests
             _jobRepoMock.Object,
             _unitOfWorkMock.Object,
             _loggerMock.Object,
-            _searchIndexServiceMock.Object,
-            _qdrantServiceMock.Object);
+            _searchIndexServiceMock.Object);
     }
 
     #region CreateDocumentAsync Tests
@@ -98,13 +95,13 @@ public class DocumentDomainServiceTests
     }
 
     [Theory]
-    [InlineData("", "英语", "G1", "2023", "Document title cannot be empty")]
+    [InlineData("", "English", "G1", "2023", "Document title cannot be empty")]
     [InlineData("test", "", "G1", "2023", "Subject cannot be empty")]
-    [InlineData("test", "英语", "", "2023", "Grade cannot be empty")]
-    [InlineData("test", "英语", "G1", "", "Year cannot be empty")]
+    [InlineData("test", "English", "", "2023", "Grade cannot be empty")]
+    [InlineData("test", "English", "G1", "", "Year cannot be empty")]
     [InlineData("test", "Invalid", "G1", "2023", "Subject only supports")]
-    [InlineData("test", "英语", "Invalid", "2023", "Invalid grade value")]
-    [InlineData("empty-hash", "英语", "G1", "2023", "File hash cannot be empty")]
+    [InlineData("test", "English", "Invalid", "2023", "Invalid grade value")]
+    [InlineData("empty-hash", "English", "G1", "2023", "File hash cannot be empty")]
     public async Task CreateDocumentAsync_InvalidMetadata_ThrowsValidationException(
         string title, string subject, string grade, string year, string expectedErrorPart)
     {
@@ -138,7 +135,7 @@ public class DocumentDomainServiceTests
         {
             Id = Guid.NewGuid(),
             Title = "test-doc",
-            Subject = "英语",
+            Subject = "English",
             Grade = "G1",
             Year = "2023",
             Status = "ready"
@@ -146,17 +143,15 @@ public class DocumentDomainServiceTests
         _documentRepoMock.Setup(r => r.GetByTitleAsync(document.Title)).ReturnsAsync(document);
         _documentRepoMock.Setup(r => r.UpdateAsync(It.IsAny<DocumentModel>())).ReturnsAsync(true);
         _searchIndexServiceMock.Setup(s => s.UpdateDocumentMetadataAsync(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>())).Returns(Task.CompletedTask);
-        _qdrantServiceMock.Setup(q => q.UpdateDocumentMetadataAsync(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>())).Returns(Task.CompletedTask);
 
         // Act
-        var result = await _service.UpdateMetadataAsync("test-doc", "英语", "G2", "2024", "[\"tag1\"]");
+        var result = await _service.UpdateMetadataAsync("test-doc", "English", "G2", "2024", "[\"tag1\"]");
 
         // Assert
         Assert.Equal("G2", result.Grade);
         Assert.Equal("2024", result.Year);
         Assert.Equal("[\"tag1\"]", result.Tags);
         _searchIndexServiceMock.Verify(s => s.UpdateDocumentMetadataAsync(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()), Times.Once);
-        _qdrantServiceMock.Verify(q => q.UpdateDocumentMetadataAsync(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()), Times.Once);
     }
 
     [Fact]
@@ -167,7 +162,7 @@ public class DocumentDomainServiceTests
 
         // Act & Assert
         var ex = await Assert.ThrowsAsync<DocRetrievalValidationException>(() =>
-            _service.UpdateMetadataAsync("nonexistent", "英语", "G1", "2023", null));
+            _service.UpdateMetadataAsync("nonexistent", "English", "G1", "2023", null));
         Assert.Contains("Document not found", ex.Message);
     }
 
@@ -180,7 +175,7 @@ public class DocumentDomainServiceTests
 
         // Act & Assert
         var ex = await Assert.ThrowsAsync<DocRetrievalValidationException>(() =>
-            _service.UpdateMetadataAsync("pending-doc", "英语", "G1", "2023", null));
+            _service.UpdateMetadataAsync("pending-doc", "English", "G1", "2023", null));
         Assert.Contains("Document not ready", ex.Message);
     }
 
@@ -188,7 +183,7 @@ public class DocumentDomainServiceTests
     public async Task UpdateMetadataAsync_InvalidSubject_ThrowsValidationException()
     {
         // Arrange
-        var document = new DocumentModel { Title = "ready-doc", Status = "ready", Subject = "英语", Grade = "G1", Year = "2023" };
+        var document = new DocumentModel { Title = "ready-doc", Status = "ready", Subject = "English", Grade = "G1", Year = "2023" };
         _documentRepoMock.Setup(r => r.GetByTitleAsync("ready-doc")).ReturnsAsync(document);
 
         // Act & Assert
@@ -201,7 +196,7 @@ public class DocumentDomainServiceTests
     public async Task UpdateMetadataAsync_InvalidGrade_ThrowsValidationException()
     {
         // Arrange
-        var document = new DocumentModel { Title = "ready-doc", Status = "ready", Subject = "英语", Grade = "G1", Year = "2023" };
+        var document = new DocumentModel { Title = "ready-doc", Status = "ready", Subject = "English", Grade = "G1", Year = "2023" };
         _documentRepoMock.Setup(r => r.GetByTitleAsync("ready-doc")).ReturnsAsync(document);
 
         // Act & Assert
@@ -218,7 +213,7 @@ public class DocumentDomainServiceTests
         {
             Title = "ready-doc",
             Status = "ready",
-            Subject = "英语",
+            Subject = "English",
             Grade = "G1",
             Year = "2023"
         };
@@ -229,7 +224,7 @@ public class DocumentDomainServiceTests
         var result = await _service.UpdateMetadataAsync("ready-doc", null, "G3", null, null);
 
         // Assert
-        Assert.Equal("英语", result.Subject); // unchanged
+        Assert.Equal("English", result.Subject); // unchanged
         Assert.Equal("G3", result.Grade);     // changed
         Assert.Equal("2023", result.Year);    // unchanged
     }
@@ -258,7 +253,6 @@ public class DocumentDomainServiceTests
         _pageRepoMock.Verify(r => r.DeleteByDocumentIdAsync(document.Id), Times.Once);
         _documentRepoMock.Verify(r => r.DeleteAsync(document.Id), Times.Once);
         _searchIndexServiceMock.Verify(s => s.DeleteDocumentIndexAsync(document.Id), Times.Once);
-        _qdrantServiceMock.Verify(q => q.DeleteDocumentVectorsAsync(document.Id), Times.Once);
     }
 
     [Fact]
@@ -442,11 +436,11 @@ public class DocumentDomainServiceTests
     {
         // Arrange
         var items = new List<DocumentModel> { CreateValidDocument() };
-        _documentRepoMock.Setup(r => r.GetListAsync(1, 20, "ready", "英语", "G1", "keyword", "2023"))
+        _documentRepoMock.Setup(r => r.GetListAsync(1, 20, "ready", "English", "G1", "keyword", "2023"))
             .ReturnsAsync((items, 1));
 
         // Act
-        var (result, totalCount) = await _service.GetDocumentListAsync(1, 20, "ready", "英语", "G1", "keyword", "2023");
+        var (result, totalCount) = await _service.GetDocumentListAsync(1, 20, "ready", "English", "G1", "keyword", "2023");
 
         // Assert
         Assert.Single(result);
@@ -466,7 +460,7 @@ public class DocumentDomainServiceTests
         FileSize = 102400,
         Language = "en",
         Grade = "G10",
-        Subject = "英语",
+        Subject = "English",
         Year = "2023",
         Tags = "[\"高考\"]"
     };

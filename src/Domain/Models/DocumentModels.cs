@@ -15,7 +15,7 @@ public class DocumentModel
     public string Subject { get; set; } = string.Empty;
     public string Year { get; set; } = string.Empty;
     public string? Tags { get; set; }
-    public string Status { get; set; } = "pending";
+    public string Status { get; set; } = DocumentStatus.Pending;
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset? UpdatedAt { get; set; }
 }
@@ -36,7 +36,8 @@ public class DocumentSegmentModel
     public Guid PageId { get; set; }
     public string BlockId { get; set; } = string.Empty;
     public string SentenceId { get; set; } = string.Empty;
-    public string SegmentType { get; set; } = "sentence";
+    public string SegmentType { get; set; } = SegmentTypes.Sentence;
+
     public string Text { get; set; } = string.Empty;
     public int StartOffset { get; set; }
     public int EndOffset { get; set; }
@@ -74,7 +75,7 @@ public class DocumentIngestionJobModel
 {
     public Guid Id { get; set; } = Guid.NewGuid();
     public Guid DocumentId { get; set; }
-    public string Status { get; set; } = "pending";
+    public string Status { get; set; } = DocumentStatus.Pending;
     public string? ParserVersion { get; set; }
     public string? OcrVersion { get; set; }
     public string? ErrorMessage { get; set; }
@@ -108,7 +109,7 @@ public class ParsedSegment
 {
     public string BlockId { get; set; } = string.Empty;
     public string SentenceId { get; set; } = string.Empty;
-    public string SegmentType { get; set; } = "sentence";
+    public string SegmentType { get; set; } = SegmentTypes.Sentence;
     public string Text { get; set; } = string.Empty;
     public int StartOffset { get; set; }
     public int EndOffset { get; set; }

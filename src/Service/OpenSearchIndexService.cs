@@ -153,7 +153,7 @@ public class OpenSearchIndexService : ISearchIndexService
                 page_number = pageNumber,
                 block_id = seg.BlockId,
                 sentence_id = seg.SentenceId,
-                segment_type = "sentence",
+                segment_type = SegmentTypes.Sentence,
                 text = seg.Text,
                 start_offset = seg.StartOffset,
                 end_offset = seg.EndOffset,
@@ -177,7 +177,7 @@ public class OpenSearchIndexService : ISearchIndexService
                 year,
                 page_number = pageNumber,
                 question_id = q.QuestionId,
-                segment_type = "question",
+                segment_type = SegmentTypes.Question,
                 text = q.Stem,
                 start_offset = q.StartOffset,
                 end_offset = q.EndOffset,
@@ -365,8 +365,8 @@ public class OpenSearchIndexService : ISearchIndexService
             foreach (var hit in hitArray.EnumerateArray())
             {
                 var source = hit.GetProperty("_source");
-                var segmentType = source.TryGetProperty("segment_type", out var stEl) ? stEl.GetString() ?? "sentence" : "sentence";
-                var segmentId = segmentType == "question"
+                var segmentType = source.TryGetProperty("segment_type", out var stEl) ? stEl.GetString() ?? SegmentTypes.Sentence : SegmentTypes.Sentence;
+                var segmentId = segmentType == SegmentTypes.Question
                     ? (source.TryGetProperty("question_id", out var qiEl) ? qiEl.GetString() ?? "" : "")
                     : (source.TryGetProperty("sentence_id", out var siEl) ? siEl.GetString() ?? "" : "");
 
@@ -389,7 +389,7 @@ public class OpenSearchIndexService : ISearchIndexService
                     PageNumber = source.TryGetProperty("page_number", out var pnEl) ? pnEl.GetInt32() : 0,
                     AssociatedText = associatedText,
                     Score = score,
-                    MatchType = phrase ? "exact_phrase" : "stemmed",
+                    MatchType = phrase ? SearchMatchType.ExactPhrase : SearchMatchType.Stemmed,
                     SegmentId = segmentId,
                     StartOffset = source.TryGetProperty("start_offset", out var soEl) ? soEl.GetInt32() : 0,
                     EndOffset = source.TryGetProperty("end_offset", out var eoEl) ? eoEl.GetInt32() : 0
@@ -412,73 +412,4 @@ public class OpenSearchIndexService : ISearchIndexService
         return (results, totalCount, nextToken);
     }
 
-    public async Task<(List<SearchResultModel> Results, int TotalCount, string? NextToken)> HybridSearchAsync(
-        string query, bool phrase, int exactTopK, int semanticTopK,
-        SearchFilterModel? filter, int pageSize, string? pageToken)
-    {
-        // Get exact search results
-        var (exactResults, totalCount, nextToken) = await ExactSearchAsync(query, phrase, filter, pageSize, pageToken);
-
-        // Get semantic search results
-        List<SearchResultModel> semanticResults;
-        try
-        {
-            var qdrantService = _serviceProvider.GetService<IQdrantService>();
-            if (qdrantService != null)
-            {
-                semanticResults = await qdrantService.SemanticSearchAsync(query, semanticTopK, filter);
-            }
-            else
-            {
-                semanticResults = new List<SearchResultModel>();
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Qdrant semantic search failed, returning exact search results only");
-            semanticResults = new List<SearchResultModel>();
-        }
-
-        // Merge and deduplicate (by document_id + page_number + segment_id dedup key)
-        var seen = new HashSet<string>();
-        var mergedResults = new List<SearchResultModel>();
-
-        // Exact results first
-        foreach (var result in exactResults)
-        {
-            var key = $"{result.DocumentName}|{result.PageNumber}|{result.SegmentId}";
-            if (seen.Add(key))
-            {
-                mergedResults.Add(result);
-            }
-        }
-
-        // Semantic results appended
-        foreach (var result in semanticResults)
-        {
-            var key = $"{result.DocumentName}|{result.PageNumber}|{result.SegmentId}";
-            if (seen.Add(key))
-            {
-                mergedResults.Add(result);
-            }
-        }
-
-        // Sort by match_type priority: exact_phrase > exact_word > stemmed > semantic
-        var matchTypePriority = new Dictionary<string, int>
-        {
-            ["exact_phrase"] = 0,
-            ["exact_word"] = 1,
-            ["stemmed"] = 2,
-            ["semantic"] = 3
-        };
-        mergedResults.Sort((a, b) =>
-        {
-            var pa = matchTypePriority.TryGetValue(a.MatchType ?? "", out var va) ? va : 99;
-            var pb = matchTypePriority.TryGetValue(b.MatchType ?? "", out var vb) ? vb : 99;
-            if (pa != pb) return pa.CompareTo(pb);
-            return b.Score.CompareTo(a.Score); // Same priority: sort by score descending
-        });
-
-        return (mergedResults, mergedResults.Count, nextToken);
-    }
 }

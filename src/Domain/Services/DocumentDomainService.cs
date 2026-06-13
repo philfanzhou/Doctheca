@@ -22,7 +22,6 @@ public class DocumentDomainService
     private readonly IDocumentIngestionJobRepository _jobRepository;
     private readonly IUnitOfWork _unitOfWork;
     private readonly ISearchIndexService? _searchIndexService;
-    private readonly IQdrantService? _qdrantService;
     private readonly ILogger<DocumentDomainService> _logger;
 
     public DocumentDomainService(
@@ -34,8 +33,7 @@ public class DocumentDomainService
         IDocumentIngestionJobRepository jobRepository,
         IUnitOfWork unitOfWork,
         ILogger<DocumentDomainService> logger,
-        ISearchIndexService? searchIndexService = null,
-        IQdrantService? qdrantService = null)
+        ISearchIndexService? searchIndexService = null)
     {
         _documentRepository = documentRepository;
         _pageRepository = pageRepository;
@@ -45,7 +43,6 @@ public class DocumentDomainService
         _jobRepository = jobRepository;
         _unitOfWork = unitOfWork;
         _searchIndexService = searchIndexService;
-        _qdrantService = qdrantService;
         _logger = logger;
     }
 
@@ -57,12 +54,12 @@ public class DocumentDomainService
         if (existingByTitle != null)
             throw new DocRetrievalValidationException("Document title already exists");
 
-        var existingByHash = await _documentRepository.GetByFileHashAndStatusAsync(document.FileHash, "ready");
+        var existingByHash = await _documentRepository.GetByFileHashAndStatusAsync(document.FileHash, DocumentStatus.Ready);
         if (existingByHash != null)
             throw new DocRetrievalValidationException("File already imported");
 
         document.Id = Guid.NewGuid();
-        document.Status = "pending";
+        document.Status = DocumentStatus.Pending;
         document.CreatedAt = DateTimeOffset.UtcNow;
 
         await _documentRepository.AddAsync(document);
@@ -71,7 +68,7 @@ public class DocumentDomainService
         {
             Id = Guid.NewGuid(),
             DocumentId = document.Id,
-            Status = "pending",
+            Status = DocumentStatus.Pending,
             CreatedAt = DateTimeOffset.UtcNow
         };
         await _jobRepository.AddAsync(job);
@@ -107,7 +104,7 @@ public class DocumentDomainService
         var document = await _documentRepository.GetByTitleAsync(title)
             ?? throw new DocRetrievalValidationException("Document not found");
 
-        if (document.Status != "ready")
+        if (document.Status != DocumentStatus.Ready)
             throw new DocRetrievalValidationException("Document not ready, metadata update not allowed");
 
         if (subject != null && !DocRetrievalConstants.IsValidSubject(subject))
@@ -135,19 +132,6 @@ public class DocumentDomainService
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to update document search index metadata: {Title}", title);
-            }
-        }
-
-        // Sync update Qdrant vector index metadata
-        if (_qdrantService != null)
-        {
-            try
-            {
-                await _qdrantService.UpdateDocumentMetadataAsync(document.Id, document.Subject, document.Grade, document.Year);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to update document vector index metadata: {Title}", title);
             }
         }
 
@@ -183,19 +167,6 @@ public class DocumentDomainService
             }
         }
 
-        // Clean up Qdrant vector data
-        if (_qdrantService != null)
-        {
-            try
-            {
-                await _qdrantService.DeleteDocumentVectorsAsync(document.Id);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to delete document vector data: {Title}", title);
-            }
-        }
-
         _logger.LogInformation("Document deleted: {Title}", title);
         return true;
     }
@@ -207,7 +178,7 @@ public class DocumentDomainService
 
     public async Task<List<DocumentIngestionJobModel>> GetPendingJobsAsync()
     {
-        return await _jobRepository.GetByStatusAsync("pending");
+        return await _jobRepository.GetByStatusAsync(DocumentStatus.Pending);
     }
 
     public async Task StartIngestionJobAsync(Guid jobId, string parserVersion, string? ocrVersion)
@@ -215,7 +186,7 @@ public class DocumentDomainService
         var job = await _jobRepository.GetByIdAsync(jobId);
         if (job == null) return;
 
-        job.Status = "processing";
+        job.Status = DocumentStatus.Processing;
         job.StartedAt = DateTimeOffset.UtcNow;
         job.ParserVersion = parserVersion;
         job.OcrVersion = ocrVersion;
@@ -223,7 +194,7 @@ public class DocumentDomainService
         var document = await _documentRepository.GetByIdAsync(job.DocumentId);
         if (document != null)
         {
-            document.Status = "processing";
+            document.Status = DocumentStatus.Processing;
             document.UpdatedAt = DateTimeOffset.UtcNow;
             await _documentRepository.UpdateAsync(document);
         }
@@ -237,13 +208,13 @@ public class DocumentDomainService
         var job = await _jobRepository.GetByIdAsync(jobId);
         if (job == null) return;
 
-        job.Status = "success";
+        job.Status = DocumentStatus.Success;
         job.FinishedAt = DateTimeOffset.UtcNow;
 
         var document = await _documentRepository.GetByIdAsync(job.DocumentId);
         if (document != null)
         {
-            document.Status = "ready";
+            document.Status = DocumentStatus.Ready;
             document.UpdatedAt = DateTimeOffset.UtcNow;
             await _documentRepository.UpdateAsync(document);
         }
@@ -259,14 +230,14 @@ public class DocumentDomainService
         var job = await _jobRepository.GetByIdAsync(jobId);
         if (job == null) return;
 
-        job.Status = "failed";
+        job.Status = DocumentStatus.Failed;
         job.ErrorMessage = errorMessage;
         job.FinishedAt = DateTimeOffset.UtcNow;
 
         var document = await _documentRepository.GetByIdAsync(job.DocumentId);
         if (document != null)
         {
-            document.Status = "failed";
+            document.Status = DocumentStatus.Failed;
             document.UpdatedAt = DateTimeOffset.UtcNow;
             await _documentRepository.UpdateAsync(document);
         }
@@ -286,10 +257,10 @@ public class DocumentDomainService
         if (job == null) return;
 
         // Only pending or processing jobs can be cancelled
-        if (job.Status != "pending" && job.Status != "processing")
+        if (job.Status != DocumentStatus.Pending && job.Status != DocumentStatus.Processing)
             return;
 
-        job.Status = "cancelled";
+        job.Status = DocumentStatus.Cancelled;
         job.FinishedAt = DateTimeOffset.UtcNow;
         await _jobRepository.UpdateAsync(job);
         await _unitOfWork.SaveChangesAsync();

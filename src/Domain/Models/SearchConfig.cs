@@ -6,19 +6,6 @@ public class OpenSearchOptions
     public string IndexName { get; set; } = "docretrieval-segments";
 }
 
-public class QdrantOptions
-{
-    public string Url { get; set; } = "http://localhost:6333";
-    public string CollectionName { get; set; } = "docretrieval_segments";
-}
-
-public class EmbeddingOptions
-{
-    public string ApiUrl { get; set; } = "https://api.siliconflow.cn/v1/embeddings";
-    public string ApiKey { get; set; } = "";
-    public string Model { get; set; } = "BAAI/bge-large-en-v1.5";
-}
-
 public class SearchFilterModel
 {
     public string? DocumentTitle { get; set; }

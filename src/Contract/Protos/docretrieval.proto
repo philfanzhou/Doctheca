@@ -8,5 +8,4 @@ option csharp_namespace = "Ruoyu.Study.DocRetrieval.Contract.Protos";
 
 service DocumentRetrievalService {
   rpc ExactSearch(ExactSearchRequest) returns (SearchResponse);
-  rpc HybridSearch(HybridSearchRequest) returns (SearchResponse);
 }

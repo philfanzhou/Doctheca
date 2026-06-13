@@ -1,6 +1,7 @@
 using System;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using Ruoyu.Study.DocRetrieval.Domain.Models;
 
 namespace Ruoyu.Study.DocRetrieval.Database.Entities;
 
@@ -60,7 +61,7 @@ public class DocumentEntity
     [Column("status")]
     [Required]
     [MaxLength(20)]
-    public string Status { get; set; } = "pending";
+    public string Status { get; set; } = DocumentStatus.Pending;
 
     [Column("created_at")]
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;

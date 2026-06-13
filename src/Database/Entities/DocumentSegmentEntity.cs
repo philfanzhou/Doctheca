@@ -1,6 +1,7 @@
 using System;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using Ruoyu.Study.DocRetrieval.Domain.Models;
 
 namespace Ruoyu.Study.DocRetrieval.Database.Entities;
 
@@ -32,7 +33,7 @@ public class DocumentSegmentEntity
     [Column("segment_type")]
     [Required]
     [MaxLength(20)]
-    public string SegmentType { get; set; } = "sentence";
+    public string SegmentType { get; set; } = SegmentTypes.Sentence;
 
     [Column("text")]
     [Required]
