@@ -8,9 +8,9 @@ CONTAINER_NAME="ruoyu-docretrieval"
 NETWORK_NAME="ruoyu-net"
 
 # Prerequisites: start these services first
-#   .script/env-script/01-start-postgres.sh
-#   .script/env-script/03-start-seaweedfs.sh
-#   .script/env-script/04-start-opensearch.sh
+#   script/env-script/01-start-postgres.sh
+#   script/env-script/03-start-seaweedfs.sh
+#   script/env-script/04-start-opensearch.sh
 
 DB_HOST="ruoyu-postgres"
 DB_PORT="5432"
