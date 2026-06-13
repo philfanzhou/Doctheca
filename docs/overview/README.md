@@ -12,7 +12,7 @@
 | [DataOwnership.md](DataOwnership.md) | 数据主责、引用边界、双写禁区 |
 | [Requirements.md](Requirements.md) | 服务级需求摘要 → 模块详细需求入口 |
 | [Design.md](Design.md) | 服务级架构：分层、技术栈、关键决策 |
-| [DotNetCodingPolicy.md](DotNetCodingPolicy.md) | 编码规范（解决方案级共享 + 本服务补充） |
+| [共享 .NET 编码规范](../../../../.agent/rules/dotnet-coding-policy.md) | 仓库级共享 .NET 编码规范（含项目补充） |
 
 ## 阅读建议
 
