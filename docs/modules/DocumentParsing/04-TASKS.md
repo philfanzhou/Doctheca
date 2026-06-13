@@ -106,12 +106,12 @@
   },
   {
     "id": "TASK-011",
-    "title": "向量索引同步（Qdrant）",
-    "description": "解析完成后调用 IQdrantService.IndexDocumentVectorsAsync，失败仅记日志",
-    "status": "done",
+    "title": "~~向量索引同步（Qdrant）~~ — 已移除",
+    "description": "~~解析完成后调用 IQdrantService.IndexDocumentVectorsAsync，失败仅记日志~~ — **已移除**（2026-06-12，Qdrant 已移除）",
+    "status": "removed",
     "priority": "P1",
     "requirement": "REQ-PARSE-08",
-    "files": ["src/Service/IngestionWorker.cs", "src/Service/QdrantService.cs"],
+    "files": ["src/Service/IngestionWorker.cs", ~~"src/Service/QdrantService.cs"~~],
     "depends_on": ["TASK-009"]
   },
   {
@@ -128,17 +128,17 @@
     "id": "TASK-013",
     "title": "单元测试 — IngestionWorker 编排逻辑",
     "description": "测试轮询间隔、任务级异常隔离、映射正确性、索引失败不影响任务状态",
-    "status": "pending",
+    "status": "done",
     "priority": "P0",
     "requirement": "REQ-PARSE-01~09",
-    "files": ["test/Ruoyu.Study.DocRetrieval.Tests/IngestionWorkerTests.cs [当前无测试覆盖]"],
+    "files": ["test/Ruoyu.Study.DocRetrieval.Tests/IngestionWorkerTests.cs"],
     "depends_on": ["TASK-012"]
   },
   {
     "id": "TASK-014",
     "title": "单元测试 — DocumentDomainService 任务状态管理",
     "description": "测试 Start/Complete/Fail 状态转换、ErrorMessage 记录",
-    "status": "pending",
+    "status": "done",
     "priority": "P0",
     "requirement": "REQ-PARSE-02",
     "files": ["test/Ruoyu.Study.DocRetrieval.Tests/DocumentDomainServiceTests.cs"],
@@ -148,7 +148,7 @@
     "id": "TASK-015",
     "title": "单元测试 — DocumentParserService 解析逻辑",
     "description": "测试 PDF/Word/PPT 解析、OCR 后处理、句子边界、题目边界、Token 分词",
-    "status": "pending",
+    "status": "done",
     "priority": "P0",
     "requirement": "REQ-PARSE-03",
     "files": ["test/Ruoyu.Study.DocRetrieval.Tests/DocumentParserServiceTests.cs"],
@@ -203,10 +203,7 @@ dotnet ef database update --project src/Database --startup-project src/Host
 docker run -d -p 9200:9200 -p 9600:9600 \
   -e "discovery.type=single-node" \
   -e "DISABLE_SECURITY_PLUGIN=true" \
-  opensearchproject/opensearch:2.11.0
-
-# 启动 Qdrant
-docker run -d -p 6333:6333 qdrant/qdrant:latest
+  opensearchproject/opensearch:2.19.5
 ```
 
 ## 依赖图
@@ -248,5 +245,5 @@ TASK-003 → TASK-004 → TASK-005 → TASK-006 → TASK-007 → TASK-008 → TA
 | 组 1 | TASK-001, TASK-002, TASK-003, TASK-004 |
 | 组 2 | TASK-005, TASK-006（TASK-006 仅依赖 TASK-001 + TASK-004） |
 | 组 3 | TASK-007, TASK-008（均依赖 TASK-006，可并行） |
-| 组 4 | TASK-010, TASK-011（均依赖 TASK-009，可并行） |
+| 组 4 | TASK-010, ~~TASK-011~~（均依赖 TASK-009，可并行；TASK-011 已移除） |
 | 组 5 | TASK-013, TASK-014, TASK-015（测试任务可并行） |
