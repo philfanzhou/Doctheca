@@ -23,6 +23,8 @@ DocumentDeletion 模块负责删除指定文档及其全部关联数据。其核
 - [ ] **REQ-DEL-05**：Admin 端点先删数据库再删 OSS 文件，OSS 删除失败仅记 Warning 日志。
 - [ ] **REQ-DEL-06**：Admin 端点返回 `{ success: true, data: { title, deleted: document != null } }`。
 - [ ] **REQ-DEL-07**：仅管理员可调用此接口（通过部署层网络隔离实现，仅内网可访问 `/admin/` 路径；应用层不做鉴权中间件）。
+- [ ] **REQ-DEL-08**：Admin 端点支持按文档 ID 删除：`DELETE /admin/documents/{id}` 返回 `{ success: true, data: { id, title, deleted: true } }`。
+- [ ] **REQ-DEL-09**：原有 `DELETE /admin/documents/{title}` 端点调整为 `DELETE /admin/documents/by-title/{title}`（保留作为备选入口）。
 
 ---
 
@@ -31,7 +33,7 @@ DocumentDeletion 模块负责删除指定文档及其全部关联数据。其核
 ### 3.1 正常删除
 
 **场景 A：删除存在的文档**
-- 给定 `title = "英语试卷2024"`，文档存在且有关联数据
+- 给定 `title = "English Test 2024"`，文档存在且有关联数据
 - 当调用 `DeleteDocumentAsync`
 - 则 `_occurrenceRepository.DeleteByDocumentIdAsync` 被调用
 - 且 `_questionRepository.DeleteByDocumentIdAsync` 被调用
@@ -43,7 +45,7 @@ DocumentDeletion 模块负责删除指定文档及其全部关联数据。其核
 - 且返回 `true`
 
 **场景 B：删除不存在的文档（幂等）**
-- 给定 `title = "不存在的文档"`，文档不存在
+- 给定 `title = "Nonexistent Document"`，文档不存在
 - 当调用 `DeleteDocumentAsync`
 - 则无级联删除操作被调用
 - 且返回 `true`
@@ -51,16 +53,17 @@ DocumentDeletion 模块负责删除指定文档及其全部关联数据。其核
 ### 3.2 Admin 端点
 
 **场景 C：删除存在的文档（含 OSS 文件）**
-- 给定 `title = "英语试卷2024"`，文档存在且 `FilePath` 非空
-- 当调用 `DELETE /admin/documents/{title}`
-- 则先调用 `GetDocumentByTitleAsync` 获取文档信息
+- 给定 `title = "English Test 2024"`，文档存在且 `FilePath` 非空
+- 当调用 `DELETE /admin/documents/by-title/{title}` 或 `DELETE /admin/documents/{id}`
+- 则先获取文档信息（按标题端点调用 `GetDocumentByTitleAsync`，按 ID 端点调用 `GetByIdAsync`）
 - 且调用 `DeleteDocumentAsync` 删除数据库记录
 - 且调用 `ossService.DeleteAsync(document.FilePath)` 删除 OSS 文件
-- 且返回 `{ success: true, data: { title: "英语试卷2024", deleted: true } }`
+- 且按标题端点返回 `{ success: true, data: { title: "English Test 2024", deleted: true } }`
+- 且按 ID 端点返回 `{ success: true, data: { id, title: "English Test 2024", deleted: true } }`
 
 **场景 D：删除文档但无 OSS 文件**
 - 给定文档存在但 `FilePath` 为空
-- 当调用 `DELETE /admin/documents/{title}`
+- 当调用 `DELETE /admin/documents/by-title/{title}`
 - 则不调用 `ossService.DeleteAsync`
 - 且返回 `{ success: true, data: { title: "...", deleted: true } }`
 
@@ -76,7 +79,7 @@ DocumentDeletion 模块负责删除指定文档及其全部关联数据。其核
 
 **场景 G：OSS 删除失败**
 - 给定 `ossService.DeleteAsync` 抛出异常
-- 当调用 `DELETE /admin/documents/{title}`
+- 当调用 `DELETE /admin/documents/by-title/{title}`
 - 则异常被捕获，仅记 Warning 日志
 - 且返回 `{ success: true, data: { title: "...", deleted: true } }`
 

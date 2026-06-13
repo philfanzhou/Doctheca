@@ -20,7 +20,8 @@
                 │
 ┌───────────────▼─────────────────────────────────┐
 │  Domain (Ruoyu.Study.DocRetrieval.Domain)       │
-│  DocumentDomainService.cs: 文档 CRUD 逻辑       │
+│  IDocumentDomainService.cs: 文档 CRUD 接口      │
+│  DocumentDomainService.cs: 文档 CRUD 实现       │
 │  SearchDomainService.cs: 搜索逻辑（含降级）      │
 │  IDocumentParserService: 解析器接口              │
 │  IRepositories: 仓储接口                         │
@@ -72,7 +73,8 @@
 |------|------|
 | [Program.cs](../../src/Host/Program.cs) | 服务启动配置 |
 | [docretrieval.proto](../../src/Contract/Protos/docretrieval.proto) | gRPC 契约 |
-| [DocumentDomainService.cs](../../src/Domain/Services/DocumentDomainService.cs) | 文档领域逻辑 |
+| [IDocumentDomainService.cs](../../src/Domain/Services/IDocumentDomainService.cs) | 文档领域接口 |
+| [DocumentDomainService.cs](../../src/Domain/Services/DocumentDomainService.cs) | 文档领域实现 |
 | [SearchDomainService.cs](../../src/Domain/Services/SearchDomainService.cs) | 搜索领域逻辑 |
 | [DocumentRetrievalServiceImpl.cs](../../src/Service/DocumentRetrievalServiceImpl.cs) | gRPC 实现 |
 | [IngestionWorker.cs](../../src/Service/IngestionWorker.cs) | 后台导入 |

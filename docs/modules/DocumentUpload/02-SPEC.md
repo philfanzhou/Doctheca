@@ -42,8 +42,8 @@
 ### 场景 C：元数据校验失败
 
 - AC-C1：缺少 `title` → 400，`errorCode=="DOCRETRIEVAL_METADATA_REQUIRED"`。
-- AC-C2：`subject="数学"` → 400，`errorCode=="DOCRETRIEVAL_SUBJECT_INVALID"`。
-- AC-C3：`grade="大学"` → 400，`errorCode=="DOCRETRIEVAL_GRADE_INVALID"`。
+- AC-C2：`subject="math"` → 400，`errorCode=="DOCRETRIEVAL_SUBJECT_INVALID"`。
+- AC-C3：`grade="college"` → 400，`errorCode=="DOCRETRIEVAL_GRADE_INVALID"`。
 - AC-C4：`title` 超过 200 字符 → 400，`errorCode=="DOCRETRIEVAL_METADATA_REQUIRED"`。
 
 ### 场景 D：去重校验失败

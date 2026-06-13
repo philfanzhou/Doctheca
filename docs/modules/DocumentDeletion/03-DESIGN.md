@@ -17,7 +17,8 @@ backend/ruoyu.docretrieval/
 │   │   ├── Repositories/
 │   │   │   └── IRepositories.cs            # 各仓储接口定义
 │   │   └── Services/
-│   │       └── DocumentDomainService.cs     # DeleteDocumentAsync 核心逻辑
+│   │       ├── IDocumentDomainService.cs    # DeleteDocumentAsync 核心接口
+│   │       └── DocumentDomainService.cs     # DeleteDocumentAsync 核心实现
 │   ├── Database/
 │   │   └── Repositories/
 │   │       ├── DocumentOccurrenceRepository.cs  # DeleteByDocumentIdAsync 实现
@@ -27,15 +28,16 @@ backend/ruoyu.docretrieval/
 │   │       ├── DocumentRepository.cs            # DeleteAsync, GetByTitleAsync 实现
 │   │       └── UnitOfWork.cs                    # SaveChangesAsync 实现
 │   └── Service/
-│       └── DocumentAdminEndpoints.cs       # DELETE /admin/documents/{title} 端点
+│       └── DocumentAdminEndpoints.cs       # DELETE /admin/documents/{id} & DELETE /admin/documents/by-title/{title} 端点
 ```
 
 ### 1.1 文件职责精确到每个文件
 
 | 文件 | 职责 | 不得变更的公共 API |
 |------|------|--------------------|
-| `DocumentDomainService.cs` | 领域服务，编排级联删除 → SaveChanges → 索引清理流程 | `DeleteDocumentAsync(string title)` 签名 |
-| `DocumentAdminEndpoints.cs` | Admin HTTP 端点，编排获取文档 → 删数据库 → 删 OSS 流程 | `DELETE /admin/documents/{title}` 路由 |
+| `IDocumentDomainService.cs` | 领域服务接口，定义级联删除 → SaveChanges → 索引清理流程 | `DeleteDocumentAsync(string title)` 签名 |
+| `DocumentDomainService.cs` | 领域服务实现，编排级联删除 → SaveChanges → 索引清理流程 | `DeleteDocumentAsync(string title)` 签名 |
+| `DocumentAdminEndpoints.cs` | Admin HTTP 端点，编排获取文档 → 删数据库 → 删 OSS 流程 | `DELETE /admin/documents/{id}` 和 `DELETE /admin/documents/by-title/{title}` 路由 |
 | `DocumentOccurrenceRepository.cs` | 实现 `DeleteByDocumentIdAsync`，删除指定文档的 occurrence 记录 | `DeleteByDocumentIdAsync` 签名 |
 | `QuestionSegmentRepository.cs` | 实现 `DeleteByDocumentIdAsync`，删除指定文档的 question 记录 | `DeleteByDocumentIdAsync` 签名 |
 | `DocumentSegmentRepository.cs` | 实现 `DeleteByDocumentIdAsync`，删除指定文档的 segment 记录 | `DeleteByDocumentIdAsync` 签名 |
@@ -50,7 +52,7 @@ backend/ruoyu.docretrieval/
 ### 2.1 Admin HTTP 端点
 
 ```
-DELETE /admin/documents/{title}
+DELETE /admin/documents/{id}
 ```
 
 **响应**：
@@ -59,7 +61,24 @@ DELETE /admin/documents/{title}
 {
   "success": true,
   "data": {
-    "title": "英语试卷2024",
+    "id": "...",
+    "title": "English Test 2024",
+    "deleted": true
+  }
+}
+```
+
+```
+DELETE /admin/documents/by-title/{title}
+```
+
+**响应**：
+
+```json
+{
+  "success": true,
+  "data": {
+    "title": "English Test 2024",
     "deleted": true
   }
 }
@@ -68,11 +87,11 @@ DELETE /admin/documents/{title}
 ### 2.2 领域服务接口
 
 ```csharp
-// src/Domain/Services/DocumentDomainService.cs
-public class DocumentDomainService
+// src/Domain/Services/IDocumentDomainService.cs
+public interface IDocumentDomainService
 {
-    public async Task<bool> DeleteDocumentAsync(string title);
-    public async Task<DocumentModel?> GetDocumentByTitleAsync(string title);
+    Task<bool> DeleteDocumentAsync(string title);
+    Task<DocumentModel?> GetDocumentByTitleAsync(string title);
 }
 ```
 
@@ -127,8 +146,8 @@ public interface IOssService
 
 | 类型 | 来源 |
 |------|------|
-| `DocumentDomainService` | 构造函数注入 `IDocumentRepository`、`IDocumentPageRepository`、`IDocumentSegmentRepository`、`IQuestionSegmentRepository`、`IDocumentOccurrenceRepository`、`IDocumentIngestionJobRepository`、`IUnitOfWork`、`ILogger`、`ISearchIndexService?` |
-| `DocumentAdminEndpoints` | 静态方法参数注入 `DocumentDomainService`、`IOssService`、`ILogger` |
+| `IDocumentDomainService` | 构造函数注入 `IDocumentRepository`、`IDocumentPageRepository`、`IDocumentSegmentRepository`、`IQuestionSegmentRepository`、`IDocumentOccurrenceRepository`、`IDocumentIngestionJobRepository`、`IUnitOfWork`、`ILogger`、`ISearchIndexService?` |
+| `DocumentAdminEndpoints` | 静态方法参数注入 `IDocumentDomainService`、`IOssService`、`ILogger` |
 | 各仓储接口 | 由 DI 提供 → 对应 Repository 实现 (Scoped) |
 | `ISearchIndexService` | 由 DI 提供 → `OpenSearchIndexService` (可选) |
 | `IOssService` | 由 DI 提供 → `S3OssService` 或 `LocalFileOssService` |
@@ -164,17 +183,17 @@ DocumentDomainService.DeleteDocumentAsync(title)
     │     └─ 异常被捕获 → _logger.LogError
     │
     └─ 5. 记录日志并返回
-          ├─ _logger.LogInformation("文档已删除：{Title}", title)
+          ├─ _logger.LogInformation("Document deleted: {Title}", title)
           └─ return true
 ```
 
-### 3.2 DeleteDocument（Admin 端点层）
+### 3.2 DeleteDocument（Admin 端点层 — 按标题）
 
 ```
 [Caller: HTTP Client]
     │
     ▼
-DocumentAdminEndpoints.DeleteDocument(title, documentService, ossService, logger)
+DocumentAdminEndpoints.DeleteDocumentByTitle(title, documentService, ossService, logger)
     │
     ├─ 1. 获取文档信息（用于后续删 OSS）
     │     └─ documentService.GetDocumentByTitleAsync(title)
@@ -191,6 +210,29 @@ DocumentAdminEndpoints.DeleteDocument(title, documentService, ossService, logger
           └─ { success: true, data: { title, deleted: document != null } }
 ```
 
+### 3.3 DeleteDocumentById（Admin 端点层 — 按 ID）
+
+```
+[Caller: HTTP Client]
+    │
+    ▼
+DocumentAdminEndpoints.DeleteDocumentById(id, documentService, ossService, logger)
+    │
+    ├─ 1. 获取文档信息（用于后续删 OSS）
+    │     └─ documentService.GetDocumentByIdAsync(id)
+    │
+    ├─ 2. 删除数据库记录 + 索引
+    │     └─ documentService.DeleteDocumentByIdAsync(id)
+    │
+    ├─ 3. 删除 OSS 文件（try/catch 容错）
+    │     ├─ document != null && !string.IsNullOrEmpty(document.FilePath)
+    │     │   └─ ossService.DeleteAsync(document.FilePath)
+    │     └─ 异常被捕获 → logger.LogWarning
+    │
+    └─ 4. 返回结果
+          └─ { success: true, data: { id, title: document?.Title, deleted: document != null } }
+```
+
 ---
 
 ## 4. 错误处理策略
@@ -198,8 +240,8 @@ DocumentAdminEndpoints.DeleteDocument(title, documentService, ossService, logger
 | 错误场景 | 处理方式 | 返回值 / 日志 |
 |----------|----------|----------------|
 | 文档不存在 | 直接返回 true | 无错误日志（幂等） |
-| 搜索索引清理异常 | `try/catch` 捕获 | `LogError(ex, "删除文档搜索索引失败：{Title}", title)` |
-| OSS 文件删除异常 | `try/catch` 捕获 | `LogWarning(ex, "删除文档文件失败：{FilePath}", document.FilePath)` |
+| 搜索索引清理异常 | `try/catch` 捕获 | `LogError(ex, "Failed to delete document search index: {Title}", title)` |
+| OSS 文件删除异常 | `try/catch` 捕获 | `LogWarning(ex, "Failed to delete document file: {FilePath}", document.FilePath)` |
 | 数据库级联删除异常 | 冒泡给调用方 | 由上层处理 |
 | `ISearchIndexService` 为 null | 跳过搜索索引清理 | 无日志 |
 
@@ -225,7 +267,7 @@ DocumentAdminEndpoints.DeleteDocument(title, documentService, ossService, logger
 ### 6.1 外部依赖通过接口注入
 
 - 所有仓储、`ISearchIndexService`、`IOssService` 全部为接口，可被 Moq 完全替代。
-- `DocumentDomainService` 构造函数公开，`ISearchIndexService` 为可选参数（nullable），测试中可传 null。
+- `IDocumentDomainService` 构造函数公开，`ISearchIndexService` 为可选参数（nullable），测试中可传 null。
 
 ### 6.2 索引清理容错可验证
 
@@ -237,6 +279,6 @@ DocumentAdminEndpoints.DeleteDocument(title, documentService, ossService, logger
 
 ### 6.4 禁止的反模式
 
-- 禁止在 Admin 端点中直接访问 `DocRetrievalDbContext`；必须通过 `DocumentDomainService`。
+- 禁止在 Admin 端点中直接访问 `DocRetrievalDbContext`；必须通过 `IDocumentDomainService`。
 - 禁止吞掉数据库级联删除异常；应冒泡给调用方。
 - 禁止在 `DeleteDocumentAsync` 中直接调用 `IOssService`；OSS 清理由 Admin 端点负责。

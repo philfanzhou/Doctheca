@@ -77,7 +77,7 @@ public interface IDocumentRepository
 ```csharp
 // src/Service/DocumentAdminEndpoints.cs
 private static async Task<IResult> ListDocuments(
-    DocumentDomainService documentService,
+    IDocumentDomainService documentService,
     [FromQuery] int page = 1,
     [FromQuery] int pageSize = 20,
     [FromQuery] string? status = null,
@@ -105,12 +105,50 @@ public class DocumentModel
 }
 ```
 
+### 2.5 GetDocument 端点
+
+```
+GET /admin/documents/{id:guid}
+```
+
+```csharp
+// src/Service/DocumentAdminEndpoints.cs
+private static async Task<IResult> GetDocument(
+    Guid id,
+    IDocumentDomainService documentService)
+```
+
+返回完整文档详情，包含 `file_hash`、`file_size`、`language` 等字段：
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": "...",
+    "title": "...",
+    "source_type": "...",
+    "file_hash": "...",
+    "file_size": 12345,
+    "language": "en",
+    "subject": "...",
+    "grade": "...",
+    "year": "...",
+    "tags": ["..."],
+    "status": "...",
+    "created_at": "...",
+    "updated_at": "..."
+  }
+}
+```
+
+文档不存在时返回 404：`{ success: false, message: "Document not found", errorCode: "DOCRETRIEVAL_DOCUMENT_NOT_FOUND" }`。
+
 ---
 
 ## 3. 数据流描述（步骤序列）
 
 ```
-客户端 GET /admin/documents?page=1&pageSize=20&status=ready&subject=英语
+客户端 GET /admin/documents?page=1&pageSize=20&status=ready&subject=English
   │
   ▼
 DocumentAdminEndpoints.ListDocuments
@@ -139,6 +177,29 @@ DocumentAdminEndpoints.ListDocuments
           page,
           pageSize,
           totalPages: (totalCount + pageSize - 1) / pageSize
+        }
+```
+
+### 3.2 GetDocument 数据流
+
+```
+客户端 GET /admin/documents/{id:guid}
+  │
+  ▼
+DocumentAdminEndpoints.GetDocument
+  │
+  ├── 调用 documentService.GetDocumentAsync(id)
+  │     └─ _documentRepository.GetByIdAsync(id)
+  │           └─ 返回 DocumentModel?（null 表示不存在）
+  │
+  ├── document == null → 404 NotFound
+  │
+  └── 构造 JSON 响应
+        {
+          success: true,
+          data: { id, title, source_type, file_hash, file_size, language,
+                  subject, grade, year, tags (反序列化), status,
+                  created_at, updated_at }
         }
 ```
 

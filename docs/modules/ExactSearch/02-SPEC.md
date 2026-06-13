@@ -22,6 +22,7 @@
 - [ ] FR-12 游标分页：`page_token` 为 `Base64(JSON({ "skip": N }))` 编码。
 - [ ] FR-13 `SearchFilter` 中空字符串字段视为不筛选（`MapFilter` 将空字符串转为 `null`）。
 - [ ] FR-14 返回 `SearchResponse`，包含 `results`、`total_count`、`next_page_token`。
+- [ ] FR-15 HTTP 搜索测试端点 `GET /admin/documents/search-test` 支持筛选参数：`subject`、`grade`、`year`、`documentTitle`。当提供任一筛选参数时，构造 `SearchFilterModel` 并传入 `ExactSearchAsync`。
 
 ## 详细的验收标准（可自动验证）
 

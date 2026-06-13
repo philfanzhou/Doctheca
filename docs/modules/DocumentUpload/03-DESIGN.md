@@ -237,13 +237,13 @@ DocumentAdminEndpoints.UploadDocument
   │     │     ├─ Year 为空 → 抛异常
   │     │     └─ FileHash 为空 → 抛异常
   │     │
-  │     ├─ GetByTitleAsync(title) → 非空 → 抛异常 ("文档名已存在")
-  │     │
-  │     ├─ GetByFileHashAndStatusAsync(hash, "ready") → 非空 → 抛异常 ("该文件已被导入")
+  │     ├─ GetByTitleAsync(title) → 非空 → 抛异常 ("Document title already exists")
+    │     │
+    │     ├─ GetByFileHashAndStatusAsync(hash, "ready") → 非空 → 抛异常 ("File already imported")
   │     │
   │     ├─ 设置 Id/Status/CreatedAt
   │     ├─ documentRepository.AddAsync(document)
-  │     ├─ 构建 DocumentIngestionJobModel (Status="pending")
+  │     ├─ 构建 DocumentIngestionJobModel (Status=DocumentStatus.Pending)
   │     ├─ jobRepository.AddAsync(job)
   │     └─ unitOfWork.SaveChangesAsync() ← 原子提交
   │

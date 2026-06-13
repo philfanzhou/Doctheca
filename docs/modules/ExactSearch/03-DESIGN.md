@@ -149,6 +149,30 @@ public SearchDomainService(
 
 ## 数据流描述（步骤序列）
 
+### HTTP Admin 搜索测试端点
+
+```
+GET /admin/documents/search-test?query=...&phrase=false&pageSize=20&subject=English&grade=G10&year=2024&documentTitle=...
+```
+
+```csharp
+// src/Service/DocumentAdminEndpoints.cs
+private static async Task<IResult> SearchTest(
+    ISearchDomainService searchService,
+    [FromQuery] string query,
+    [FromQuery] bool phrase = false,
+    [FromQuery] int pageSize = 20,
+    [FromQuery] string? pageToken = null,
+    [FromQuery] string? subject = null,
+    [FromQuery] string? grade = null,
+    [FromQuery] string? year = null,
+    [FromQuery] string? documentTitle = null)
+```
+
+- 当 `subject`、`grade`、`year`、`documentTitle` 任一非空时，构造 `SearchFilterModel` 并传入 `searchService.ExactSearchAsync`；否则 `filter` 为 `null`。
+- `pageSize` 修正为 `Math.Min(Math.Max(pageSize, 1), 100)`。
+- `query` 为空时返回 400 Bad Request。
+
 ### ExactSearch 完整流程
 
 1. gRPC 层接收 `ExactSearchRequest`，调用 `ValidateSearchRequest` 校验参数。
