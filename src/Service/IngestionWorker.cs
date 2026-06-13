@@ -35,7 +35,7 @@ public class IngestionWorker : BackgroundService
             try
             {
                 using var scope = _serviceProvider.CreateScope();
-                var domainService = scope.ServiceProvider.GetRequiredService<DocumentDomainService>();
+                var domainService = scope.ServiceProvider.GetRequiredService<IDocumentDomainService>();
                 var parserService = scope.ServiceProvider.GetRequiredService<IDocumentParserService>();
                 var ossService = scope.ServiceProvider.GetRequiredService<IOssService>();
                 var pageRepository = scope.ServiceProvider.GetRequiredService<IDocumentPageRepository>();

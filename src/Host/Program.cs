@@ -74,7 +74,7 @@ builder.Services.AddScoped<IDocumentIngestionJobRepository, DocumentIngestionJob
 builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
 
 // Domain Services
-builder.Services.AddScoped<DocumentDomainService>();
+builder.Services.AddScoped<IDocumentDomainService, DocumentDomainService>();
 builder.Services.AddScoped<ISearchDomainService, SearchDomainService>();
 builder.Services.AddScoped<IDocumentParserService, DocumentParserService>();
 

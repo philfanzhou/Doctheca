@@ -12,7 +12,7 @@ public class DocRetrievalValidationException : Exception
     public DocRetrievalValidationException(string message) : base(message) { }
 }
 
-public class DocumentDomainService
+public class DocumentDomainService : IDocumentDomainService
 {
     private readonly IDocumentRepository _documentRepository;
     private readonly IDocumentPageRepository _pageRepository;

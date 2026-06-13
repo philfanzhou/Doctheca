@@ -41,7 +41,7 @@ public static class DocumentAdminEndpoints
 
     private static async Task<IResult> UploadDocument(
         HttpRequest request,
-        DocumentDomainService documentService,
+        IDocumentDomainService documentService,
         IOssService ossService,
         ILogger logger)
     {
@@ -142,7 +142,7 @@ public static class DocumentAdminEndpoints
     }
 
     private static async Task<IResult> ListDocuments(
-        DocumentDomainService documentService,
+        IDocumentDomainService documentService,
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 20,
         [FromQuery] string? status = null,
@@ -178,7 +178,7 @@ public static class DocumentAdminEndpoints
 
     private static async Task<IResult> GetDocumentStatus(
         Guid id,
-        DocumentDomainService documentService)
+        IDocumentDomainService documentService)
     {
         var document = await documentService.GetDocumentAsync(id);
         if (document == null)
@@ -213,7 +213,7 @@ public static class DocumentAdminEndpoints
 
     private static async Task<IResult> DeleteDocument(
         string title,
-        DocumentDomainService documentService,
+        IDocumentDomainService documentService,
         IOssService ossService,
         ILogger logger)
     {
@@ -246,7 +246,7 @@ public static class DocumentAdminEndpoints
     private static async Task<IResult> UpdateMetadata(
         string title,
         HttpRequest request,
-        DocumentDomainService documentService)
+        IDocumentDomainService documentService)
     {
         using var reader = new StreamReader(request.Body);
         var body = await reader.ReadToEndAsync();
