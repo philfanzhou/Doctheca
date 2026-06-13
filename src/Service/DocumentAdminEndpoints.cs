@@ -322,7 +322,7 @@ public static class DocumentAdminEndpoints
     }
 
     private static async Task<IResult> SearchTest(
-        SearchDomainService searchService,
+        ISearchDomainService searchService,
         [FromQuery] string query,
         [FromQuery] bool phrase = false,
         [FromQuery] int pageSize = 20,

@@ -11,5 +11,3 @@ ruoyu.docretrieval 是文档检索服务，负责文档上传、解析、管理�
 | [Integration/](./Integration/README.md) | 外部系统交互 |
 | [database/](./database/README.md) | 数据结构与数据主责 |
 | [development/](./development/README.md) | 开发执行支持 |
-| [AgentExecutionAudit.md](./AgentExecutionAudit.md) | 执行审计 |
-| [AgentGeneralChangeAudit.md](./AgentGeneralChangeAudit.md) | 通用变更审计 |
