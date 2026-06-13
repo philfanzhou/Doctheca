@@ -281,7 +281,7 @@ ExecuteAsync
 │           ├── 下载/解析/写入
 │           ├── CompleteIngestionJobAsync
 │           ├── 搜索索引 try/catch  → 失败仅记日志
-│           └── 向量索引 try/catch  → 失败仅记日志
+│           └── ~~向量索引 try/catch~~  → ~~失败仅记日志~~ — **已移除**（2026-06-12）
 │       └── catch → FailIngestionJobAsync (嵌套 try/catch)
 └── Task.Delay
 ```
@@ -312,7 +312,7 @@ ExecuteAsync
 | IQuestionSegmentRepository | Question 写入 | Scoped（通过 CreateScope） | 否 |
 | IDocumentOccurrenceRepository | Occurrence 写入 | Scoped（通过 CreateScope） | 否 |
 | ISearchIndexService | 搜索索引同步 | 构造函数注入（Singleton） | 是 |
-| IQdrantService | 向量索引同步 | 构造函数注入（Singleton） | 是 |
+| ~~IQdrantService~~ | ~~向量索引同步~~ — **已移除**（2026-06-12） | ~~构造函数注入（Singleton）~~ | ~~是~~ |
 
 ### 解析器内部依赖
 
@@ -326,5 +326,5 @@ ExecuteAsync
 | 依赖 | 用途 | 配置 |
 |------|------|------|
 | OpenSearch | BM25 全文搜索 | `OpenSearchOptions.Url`、`OpenSearchOptions.IndexName` |
-| Qdrant | 向量搜索 | `QdrantOptions.Url`、`QdrantOptions.CollectionName` |
-| SiliconFlow Embedding API | 文本向量化 | `EmbeddingOptions.ApiUrl`、`EmbeddingOptions.Model`（BAAI/bge-large-en-v1.5，1024 维） |
+| ~~Qdrant~~ | ~~向量搜索~~ — **已移除**（2026-06-12） | ~~`QdrantOptions.Url`、`QdrantOptions.CollectionName`~~ |
+| ~~SiliconFlow Embedding API~~ | ~~文本向量化~~ — **已移除**（2026-06-12） | ~~`EmbeddingOptions.ApiUrl`、`EmbeddingOptions.Model`（BAAI/bge-large-en-v1.5，1024 维）~~ |

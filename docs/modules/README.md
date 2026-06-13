@@ -17,7 +17,7 @@
 ### gRPC 搜索（对外服务）
 
 - [ExactSearch](ExactSearch/01-FEATURE.md) — `DocumentRetrievalServiceImpl.ExactSearch`
-- [HybridSearch](HybridSearch/01-FEATURE.md) — `DocumentRetrievalServiceImpl.HybridSearch`
+- ~~[HybridSearch](HybridSearch/01-FEATURE.md)~~ — ~~`DocumentRetrievalServiceImpl.HybridSearch`~~ — **已移除**（2026-06-12）
 
 ### HTTP Admin API（内部管理）
 

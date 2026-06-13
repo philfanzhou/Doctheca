@@ -81,7 +81,7 @@
 | PDF 页文本为空 | Warning | `"PDF 第 {PageNumber} 页文本为空，可能需要 OCR 支持"` |
 | PPT 页文本为空 | Warning | `"PPT 第 {PageNumber} 页文本为空"` |
 | 搜索索引创建失败 | Error | `"创建文档搜索索引失败：{DocumentId}"` |
-| 向量索引创建失败 | Error | `"创建文档向量索引失败：{DocumentId}"` |
+| 向量索引创建失败 | Error | ~~`"创建文档向量索引失败：{DocumentId}"`~~ — **已移除**（2026-06-12） |
 | 任务处理失败 | Error | `"导入任务失败：{JobId}"` |
 | FailIngestionJob 失败 | Error | `"标记导入任务失败时出错：{JobId}"` |
 | 轮询出错 | Error | `"导入工作器轮询出错"` |

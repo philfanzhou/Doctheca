@@ -10,7 +10,6 @@
 | PostgreSQL | 可选 | `appsettings.json` 中的默认连接字符串指向 `localhost:5432` |
 | SQLite | 可选 | 自动检测的回退方案；无需安装（EF Core SQLite 提供程序已内置） |
 | OpenSearch | 可选 | 全文搜索索引；默认地址为 `http://localhost:9200`；推荐 Docker 镜像版本 `2.19.5`（与 `OpenSearch.Net 1.8.0` 客户端兼容） |
-| Qdrant | 可选 | 向量搜索 / 语义搜索；默认地址为 `http://localhost:6333`；推荐 Docker 镜像版本 `v1.18.2`（与 `Qdrant.Client 1.18.1` 客户端 gRPC 兼容） |
 | MinIO / SeaweedFS | 可选 | S3 兼容的对象存储；默认地址为 `localhost:8333` |
 
 ## 环境变量
@@ -83,5 +82,3 @@ dotnet run --project src/Host
 | 功能 | 服务 | 配置节 | 缺少时的行为 |
 |------|------|--------|-------------|
 | 全文搜索 | OpenSearch | `OpenSearch` | 回退到数据库 LIKE 搜索；索引初始化时记录警告 |
-| 语义 / 混合搜索 | Qdrant | `Qdrant` | 语义搜索不可用；集合初始化时记录警告 |
-| 嵌入向量生成 | SiliconFlow API | `Embedding` | 语义搜索无法生成向量；需设置 `Embedding:ApiKey` 才能使用 |

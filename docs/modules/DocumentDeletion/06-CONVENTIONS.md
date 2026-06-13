@@ -33,7 +33,7 @@
 |------|----------|
 | `Information` | 正常删除操作完成 |
 | `Warning` | OSS 文件删除失败（非致命） |
-| `Error` | 搜索索引清理失败、向量索引清理失败，必须附带 `ex` 参数 |
+| `Error` | 搜索索引清理失败~~、向量索引清理失败~~，必须附带 `ex` 参数 |
 
 ### 2.2 日志模板
 
@@ -76,7 +76,7 @@ _logger.LogError($"Failed: {title}");
 |------|----------|------|
 | 文档不存在 | 返回 true | 无错误日志（幂等） |
 | 搜索索引清理失败 | try/catch 捕获 | `LogError(ex, "删除文档搜索索引失败：{Title}", title)` |
-| 向量索引清理失败 | try/catch 捕获 | `LogError(ex, "删除文档向量数据失败：{Title}", title)` |
+| 向量索引清理失败 | ~~try/catch 捕获~~ — **已移除**（2026-06-12） | ~~`LogError(ex, "删除文档向量数据失败：{Title}", title)`~~ |
 | 数据库操作失败 | 异常冒泡 | 由上层处理 |
 
 ### 3.2 Admin 端点
@@ -138,7 +138,7 @@ _logger.LogError($"Failed: {title}");
 ### 5.2 可空性
 
 - 启用 `<Nullable>enable</Nullable>`
-- `ISearchIndexService` 和 `IQdrantService` 为可选依赖（nullable），通过 `?.` 安全调用
+- `ISearchIndexService` 和 ~~`IQdrantService`~~ 为可选依赖（nullable），通过 `?.` 安全调用。 — 注：`IQdrantService` 已于 2026-06-12 移除安全调用
 
 ### 5.3 异步与并发
 

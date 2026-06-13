@@ -32,8 +32,8 @@
 
 | 编号 | 需求 |
 |------|------|
-| NFR-01 | 搜索响应时间 < 2s（精确搜索）/ < 5s（混合搜索） |
+| NFR-01 | 搜索响应时间 < 2s（精确搜索）~~/ < 5s（混合搜索）~~ |
 | NFR-02 | 文档解析异步执行，不阻塞上传响应 |
-| NFR-03 | OpenSearch/Qdrant/SiliconFlow 不可用时降级，不中断主流程 |
+| NFR-03 | OpenSearch~~/Qdrant/SiliconFlow~~ 不可用时降级，不中断主流程 |
 | NFR-04 | 支持 PostgreSQL 和 SQLite 双数据库 |
 | NFR-05 | 服务双端口：gRPC(5011) + HTTP(5012) |

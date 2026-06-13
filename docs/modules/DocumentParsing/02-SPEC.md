@@ -273,7 +273,7 @@ Scenario: FailIngestionJobAsync 失败时记录日志
 | 可观测性 | 关键步骤均有日志输出 | Information/Error 级别 |
 | 可观测性 | 失败任务记录 ErrorMessage | 可追溯 |
 | 可扩展性 | 解析器通过接口注入，可替换 | IDocumentParserService |
-| 可扩展性 | 搜索索引和向量索引为可选依赖 | nullable 注入 |
+| 可扩展性 | 搜索索引~~和向量索引~~为可选依赖 | nullable 注入 |
 | 性能 | 批量写入数据库（AddRangeAsync） | 减少 DB 往返 |
 | 安全性 | Worker 使用 Scoped 服务 | 避免生命周期问题 |
 

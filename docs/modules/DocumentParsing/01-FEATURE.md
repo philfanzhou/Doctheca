@@ -61,9 +61,9 @@ DocumentParsing 是文档检索服务的核心后台处理模块，负责将用�
 | DocumentParserService | `src/Service/DocumentParserService.cs` |
 | ParsedDocument 模型 | `src/Domain/Models/DocumentModels.cs` |
 | ISearchIndexService | `src/Domain/Repositories/ISearchIndexService.cs` |
-| IQdrantService | `src/Domain/Repositories/IQdrantService.cs` |
+| IQdrantService | `src/Domain/Repositories/IQdrantService.cs` — **已移除**（2026-06-12） |
 | OpenSearchIndexService | `src/Service/OpenSearchIndexService.cs` |
-| QdrantService | `src/Service/QdrantService.cs` |
+| QdrantService | `src/Service/QdrantService.cs` — **已移除**（2026-06-12） |
 | 数据库实体 | `src/Database/Entities/` |
 | 仓储接口 | `src/Domain/Repositories/IRepositories.cs` |
 

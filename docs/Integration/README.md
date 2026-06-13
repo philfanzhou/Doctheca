@@ -11,7 +11,7 @@
 | PostgreSQL | 数据库 | [database/](../database/README.md) |
 | MinIO / SeaweedFS / LocalFile | OSS | 配置在 [appsettings.json](../../src/Host/appsettings.json) |
 | OpenSearch | 搜索引擎 | 配置在 [appsettings.json](../../src/Host/appsettings.json) |
-| Qdrant | 向量数据库 | 配置在 [appsettings.json](../../src/Host/appsettings.json) |
-| SiliconFlow | Embedding API | 配置在 [appsettings.json](../../src/Host/appsettings.json) |
+| ~~Qdrant~~ | ~~向量数据库~~ — **已移除**（2026-06-12） | ~~配置在 [appsettings.json](../../src/Host/appsettings.json)~~ |
+| ~~SiliconFlow~~ | ~~Embedding API~~ — **已移除**（2026-06-12） | ~~配置在 [appsettings.json](../../src/Host/appsettings.json)~~ |
 
 > 以上外部系统均为基础设施组件，无需 `ExternalSystem/Feature/` 六件套文档。

@@ -242,7 +242,7 @@ DocumentAdminEndpoints.UpdateMetadata
 | Domain 层 | `IDocumentRepository.UpdateAsync` | 更新文档 |
 | Domain 层 | `IUnitOfWork.SaveChangesAsync` | 提交数据库变更 |
 | Domain 层 | `ISearchIndexService.UpdateDocumentMetadataAsync` | 同步搜索索引元数据 |
-| Domain 层 | `IQdrantService.UpdateDocumentMetadataAsync` | 同步 Qdrant 向量索引元数据 |
+| Domain 层 | ~~`IQdrantService.UpdateDocumentMetadataAsync`~~ — **已移除**（2026-06-12） | ~~同步 Qdrant 向量索引元数据~~ |
 | Domain 层 | `DocRetrievalConstants` | 学科/年级校验 |
 | ASP.NET Core | `Results.Json()` | 构造错误响应（带状态码） |
 | System.Text.Json | `JsonElement.GetRawText()` | 获取 tags 原始 JSON 文本 |

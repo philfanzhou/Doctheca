@@ -170,9 +170,9 @@ DocumentDomainService.DeleteDocumentAsync(title)
     │     ├─ _searchIndexService?.DeleteDocumentIndexAsync(document.Id)
     │     └─ 异常被捕获 → _logger.LogError
     │
-    ├─ 5. 清理向量索引（try/catch 容错）
-    │     ├─ _qdrantService?.DeleteDocumentVectorsAsync(document.Id)
-    │     └─ 异常被捕获 → _logger.LogError
+    ├─ 5. ~~清理向量索引（try/catch 容错）~~ — **已移除**（2026-06-12，Qdrant 已移除）
+    │     ~~├─ _qdrantService?.DeleteDocumentVectorsAsync(document.Id)~~
+    │     ~~└─ 异常被捕获 → _logger.LogError~~
     │
     └─ 6. 记录日志并返回
           ├─ _logger.LogInformation("文档已删除：{Title}", title)
@@ -214,7 +214,7 @@ DocumentAdminEndpoints.DeleteDocument(title, documentService, ossService, logger
 | OSS 文件删除异常 | `try/catch` 捕获 | `LogWarning(ex, "删除文档文件失败：{FilePath}", document.FilePath)` |
 | 数据库级联删除异常 | 冒泡给调用方 | 由上层处理 |
 | `ISearchIndexService` 为 null | 跳过搜索索引清理 | 无日志 |
-| `IQdrantService` 为 null | 跳过向量索引清理 | 无日志 |
+| `IQdrantService` 为 null | ~~跳过向量索引清理~~ — **已移除**（2026-06-12） | ~~无日志~~ |
 
 ---
 
@@ -244,7 +244,7 @@ DocumentAdminEndpoints.DeleteDocument(title, documentService, ossService, logger
 ### 6.2 索引清理容错可验证
 
 - 测试中可让 `DeleteDocumentIndexAsync` 抛出异常，验证方法仍返回 true。
-- 测试中可让 `DeleteDocumentVectorsAsync` 抛出异常，验证方法仍返回 true。
+- 测试中可让 ~~`DeleteDocumentVectorsAsync` 抛出异常，验证方法仍返回 true。~~ — **已移除**（2026-06-12，Qdrant 已移除）
 
 ### 6.3 OSS 清理容错可验证
 

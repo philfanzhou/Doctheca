@@ -92,5 +92,24 @@
 1. **测试覆盖缺口**：IngestionWorker、DocumentDeletion、OpenSearchIndexService 均无单元测试
 2. **文档与代码同步机制**：建议在 CI 中加入文档链接检查步骤
 3. **状态枚举硬编码**：建议统一为枚举常量
-4. **DocumentMetadata 测试骨架**：缺少 `Mock<IQdrantService>` 注入
+4. **DocumentMetadata 测试骨架**：缺少 `Mock<IQdrantService>` 注入 — **已移除**（2026-06-12，Qdrant 已移除）
 5. **PPT 解析测试**：DocumentParserServiceTests 中未见 PPT 解析的测试用例
+
+---
+
+## 6. 语义搜索功能移除记录（2026-06-12）
+
+HybridSearch（语义搜索）功能已于 2026-06-12 移除。本项目当前仅支持精确搜索（ExactSearch），不再依赖 Qdrant 和 Embedding API（SiliconFlow）。
+
+受影响的文档已全部标注"已移除"，具体包括：
+- `docs/modules/HybridSearch/` 全部 6 个文件：添加移除标注
+- `docs/modules/README.md`：HybridSearch 条目标注已移除
+- `docs/overview/KeyFlows.md`：混合搜索流程标注已移除，上传流程移除 Qdrant 列
+- `docs/overview/Requirements.md`：FR-09 标注已移除，NFR-01/03 标注删除线
+- `docs/overview/DataOwnership.md`：Qdrant/SiliconFlow 行标注已移除
+- `docs/Integration/README.md`：Qdrant/SiliconFlow 行标注已移除
+- `docs/modules/DocumentDeletion/`：5 个文件中 Qdrant 向量数据删除相关描述标注已移除
+- `docs/modules/DocumentMetadata/`：4 个文件中 Qdrant 向量索引元数据更新相关描述标注已移除
+- `docs/modules/DocumentParsing/`：6 个文件中 Qdrant 向量索引写入相关描述标注已移除
+- `docs/modules/DocumentUpload/03-DESIGN.md`：IQdrantService 相关描述标注已移除
+- `docs/modules/ExactSearch/`：01-FEATURE.md 和 04-TASKS.md 中 HybridSearch 关联描述标注已移除

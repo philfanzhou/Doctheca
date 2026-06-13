@@ -141,6 +141,6 @@
 - [ ] null 参数不修改对应字段
 - [ ] 搜索索引同步失败仅记 LogError，不抛出
 - [ ] `ISearchIndexService` 为可选依赖（`?`）
-- [ ] `IQdrantService` 为可选依赖（`?`）
+- [ ] ~~`IQdrantService` 为可选依赖（`?`）~~ — **已移除**（2026-06-12，Qdrant 已移除）
 - [ ] `dotnet build -c Release` 无错误
 - [ ] 相关单元测试全部通过

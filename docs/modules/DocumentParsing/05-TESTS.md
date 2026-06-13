@@ -103,7 +103,7 @@ public class IngestionWorkerTests
         _serviceProviderMock = new Mock<IServiceProvider>();
         _loggerMock = new Mock<ILogger<IngestionWorker>>();
         _searchIndexServiceMock = new Mock<ISearchIndexService>();
-        _qdrantServiceMock = new Mock<IQdrantService>();
+        ~~_qdrantServiceMock = new Mock<IQdrantService>();~~ // **已移除**（2026-06-12）
     }
 
     private IngestionWorker CreateWorker(
@@ -172,17 +172,17 @@ public class IngestionWorkerTests
         // 验证 CompleteIngestionJobAsync 仍被调用
     }
 
-    [Fact]
-    public async Task ExecuteAsync_VectorIndexFailure_ShouldNotAffectJobStatus()
-    {
-        // UT-W-10: 向量索引失败不影响任务状态
-        _qdrantServiceMock.Setup(q => q.IndexDocumentVectorsAsync(
-                It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<string>(),
-                It.IsAny<string>(), It.IsAny<string>()))
-            .ThrowsAsync(new Exception("Qdrant 不可用"));
+    ~~[Fact]~~
+    ~~public async Task ExecuteAsync_VectorIndexFailure_ShouldNotAffectJobStatus()~~
+    ~~{~~
+    ~~    // UT-W-10: 向量索引失败不影响任务状态 — **已移除**（2026-06-12，Qdrant 已移除）~~
+    ~~    _qdrantServiceMock.Setup(q => q.IndexDocumentVectorsAsync(~~
+    ~~            It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<string>(),~~
+    ~~            It.IsAny<string>(), It.IsAny<string>()))~~
+    ~~        .ThrowsAsync(new Exception("Qdrant 不可用"));~~
 
-        // 验证 CompleteIngestionJobAsync 仍被调用
-    }
+    ~~    // 验证 CompleteIngestionJobAsync 仍被调用~~
+    ~~}~~
 }
 ```
 

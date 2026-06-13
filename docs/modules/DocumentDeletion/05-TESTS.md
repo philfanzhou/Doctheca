@@ -103,7 +103,7 @@ public class DocumentDeletionTests
             _unitOfWork.Object,
             _logger.Object,
             _searchIndexService.Object,
-            _qdrantService.Object);
+            ~~_qdrantService.Object~~); // **已移除**（2026-06-12，Qdrant 已移除）
     }
 
     [Fact]

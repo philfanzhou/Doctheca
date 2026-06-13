@@ -1,3 +1,5 @@
+> **已移除**：HybridSearch（语义搜索）功能已于 2026-06-12 移除。本项目当前仅支持精确搜索（ExactSearch），不再依赖 Qdrant 和 Embedding API。
+
 # HybridSearch — 设计说明 (DESIGN)
 
 ## 本功能在项目中的目录与文件结构

@@ -75,9 +75,11 @@
 
 ---
 
-## 3. 混合搜索 (HybridSearch)
+## 3. ~~混合搜索 (HybridSearch)~~ — **已移除**（2026-06-12）
 
-```
+> HybridSearch（语义搜索）功能已于 2026-06-12 移除。本项目当前仅支持精确搜索（ExactSearch），不再依赖 Qdrant 和 Embedding API。以下流程图保留供历史参考。
+
+~~```
   Client             DocRetrieval           PostgreSQL         Qdrant          SiliconFlow
     │                    │                       │                 │                │
     │ HybridSearch(q)    │                       │                 │                │
@@ -98,7 +100,7 @@
     │                    │ 4. 合并结果 (按 Score 排序去重)          │                │
     │    merged results  │                       │                 │                │
     │◄───────────────────│                       │                 │                │
-```
+```~~
 
-**触发条件**：gRPC 调用 `HybridSearch`
-**合并策略**：两路结果按 `Score` 排序后合并去重，返回分页结果
+~~**触发条件**：gRPC 调用 `HybridSearch`~~
+~~**合并策略**：两路结果按 `Score` 排序后合并去重，返回分页结果~~
