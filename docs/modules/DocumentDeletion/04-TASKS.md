@@ -7,7 +7,7 @@
   {
     "id": "T01",
     "depends_on": [],
-    "action": "审查 DocumentDomainService.cs 中 DeleteDocumentAsync 方法：确认幂等逻辑（document == null 返回 true）、级联删除顺序（occurrences → questions → segments → pages → document → SaveChanges）、搜索索引清理（try/catch 容错）、向量索引清理（try/catch 容错）。",
+    "action": "审查 DocumentDomainService.cs 中 DeleteDocumentAsync 方法：确认幂等逻辑（document == null 返回 true）、级联删除顺序（occurrences → questions → segments → pages → document → SaveChanges）、搜索索引清理（try/catch 容错）。",
     "files": [
       "src/Domain/Services/DocumentDomainService.cs"
     ],

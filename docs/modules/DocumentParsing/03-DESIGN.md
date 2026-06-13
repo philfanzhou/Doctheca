@@ -8,7 +8,6 @@ src/
 │   ├── IngestionWorker.cs              # 后台工作器，轮询 + 编排
 │   ├── DocumentParserService.cs        # 解析器实现（PDF/Word/PPT）
 │   ├── OpenSearchIndexService.cs       # OpenSearch 搜索索引服务
-│   └── QdrantService.cs               # Qdrant 向量索引服务
 ├── Domain/
 │   ├── Models/
 │   │   ├── DocumentModels.cs           # 所有领域模型（含 ParsedDocument）
@@ -17,7 +16,6 @@ src/
 │   ├── Repositories/
 │   │   ├── IDocumentParserService.cs   # 解析器接口
 │   │   ├── ISearchIndexService.cs      # 搜索索引接口
-│   │   ├── IQdrantService.cs           # 向量索引接口
 │   │   └── IRepositories.cs           # 仓储接口集合
 │   └── Services/
 │       └── DocumentDomainService.cs    # 领域服务（任务状态管理）
@@ -52,14 +50,12 @@ public class IngestionWorker : BackgroundService
     private readonly IServiceProvider _serviceProvider;
     private readonly ILogger<IngestionWorker> _logger;
     private readonly ISearchIndexService? _searchIndexService;
-    private readonly IQdrantService? _qdrantService;
     private readonly TimeSpan _pollInterval = TimeSpan.FromSeconds(5);
 
     public IngestionWorker(
         IServiceProvider serviceProvider,
         ILogger<IngestionWorker> logger,
-        ISearchIndexService? searchIndexService = null,
-        IQdrantService? qdrantService = null);
+        ISearchIndexService? searchIndexService = null);
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken);
 }
@@ -109,19 +105,6 @@ public interface ISearchIndexService
     Task DeleteDocumentIndexAsync(Guid documentId);
     Task UpdateDocumentMetadataAsync(Guid documentId, string subject, string grade, string year);
     Task<(List<SearchResultModel> Results, int TotalCount, string? NextToken)> ExactSearchAsync(...);
-    Task<(List<SearchResultModel> Results, int TotalCount, string? NextToken)> HybridSearchAsync(...);
-}
-```
-
-### IQdrantService
-
-```csharp
-public interface IQdrantService
-{
-    Task EnsureCollectionAsync();
-    Task IndexDocumentVectorsAsync(Guid documentId, string documentTitle, string subject, string grade, string year);
-    Task DeleteDocumentVectorsAsync(Guid documentId);
-    Task<List<SearchResultModel>> SemanticSearchAsync(string query, int topK, SearchFilterModel? filter);
 }
 ```
 
@@ -249,9 +232,6 @@ ParsedToken (q)    → DocumentOccurrenceModel
 │  │  │  ⑩ 同步搜索索引（可选，失败仅记日志）                       │     │
 │  │  │     _searchIndexService?.IndexDocumentSegmentsAsync(...)     │     │
 │  │  │                                                              │     │
-│  │  │  ⑪ 同步向量索引（可选，失败仅记日志）                       │     │
-│  │  │     _qdrantService?.IndexDocumentVectorsAsync(...)           │     │
-│  │  │                                                              │     │
 │  │  ├── catch (Exception ex) ─────────────────────────────────────┐    │
 │  │  │  domainService.FailIngestionJobAsync(job.Id, ex.Message)     │    │
 │  │  │  → job.Status = "failed", document.Status = "failed"        │    │
@@ -281,7 +261,6 @@ ExecuteAsync
 │           ├── 下载/解析/写入
 │           ├── CompleteIngestionJobAsync
 │           ├── 搜索索引 try/catch  → 失败仅记日志
-│           └── ~~向量索引 try/catch~~  → ~~失败仅记日志~~ — **已移除**（2026-06-12）
 │       └── catch → FailIngestionJobAsync (嵌套 try/catch)
 └── Task.Delay
 ```
@@ -296,7 +275,6 @@ ExecuteAsync
 | 解析器内部错误 | 抛出异常 | 任务标记 failed |
 | 数据库写入失败 | 抛出异常 | 任务标记 failed |
 | 搜索索引写入失败 | try/catch + LogError | 不影响任务状态 |
-| 向量索引写入失败 | try/catch + LogError | 不影响任务状态 |
 | FailIngestionJobAsync 失败 | 嵌套 try/catch + LogError | 仅记日志 |
 | 轮询级异常 | 外层 try/catch + LogError | Worker 继续运行 |
 
@@ -312,7 +290,6 @@ ExecuteAsync
 | IQuestionSegmentRepository | Question 写入 | Scoped（通过 CreateScope） | 否 |
 | IDocumentOccurrenceRepository | Occurrence 写入 | Scoped（通过 CreateScope） | 否 |
 | ISearchIndexService | 搜索索引同步 | 构造函数注入（Singleton） | 是 |
-| ~~IQdrantService~~ | ~~向量索引同步~~ — **已移除**（2026-06-12） | ~~构造函数注入（Singleton）~~ | ~~是~~ |
 
 ### 解析器内部依赖
 
@@ -326,5 +303,3 @@ ExecuteAsync
 | 依赖 | 用途 | 配置 |
 |------|------|------|
 | OpenSearch | BM25 全文搜索 | `OpenSearchOptions.Url`、`OpenSearchOptions.IndexName` |
-| ~~Qdrant~~ | ~~向量搜索~~ — **已移除**（2026-06-12） | ~~`QdrantOptions.Url`、`QdrantOptions.CollectionName`~~ |
-| ~~SiliconFlow Embedding API~~ | ~~文本向量化~~ — **已移除**（2026-06-12） | ~~`EmbeddingOptions.ApiUrl`、`EmbeddingOptions.Model`（BAAI/bge-large-en-v1.5，1024 维）~~ |

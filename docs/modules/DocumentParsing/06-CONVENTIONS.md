@@ -10,12 +10,12 @@
 | 领域服务 | `{Feature}DomainService` | `DocumentDomainService` |
 | 解析器接口 | `I{Feature}ParserService` | `IDocumentParserService` |
 | 解析器实现 | `{Feature}ParserService` | `DocumentParserService` |
-| 索引服务接口 | `I{Technology}Service` | `ISearchIndexService`、`IQdrantService` |
+| 索引服务接口 | `I{Technology}Service` | `ISearchIndexService` |
 | 领域模型 | `{Entity}Model` | `DocumentModel`、`DocumentPageModel` |
 | 解析结果模型 | `Parsed{Entity}` | `ParsedDocument`、`ParsedPage`、`ParsedSegment` |
 | 数据库实体 | `{Entity}Entity` | `DocumentEntity`、`DocumentIngestionJobEntity` |
 | 仓储接口 | `I{Entity}Repository` | `IDocumentPageRepository` |
-| 配置选项 | `{Technology}Options` | `OpenSearchOptions`、`QdrantOptions`、`EmbeddingOptions` |
+| 配置选项 | `{Technology}Options` | `OpenSearchOptions` |
 | 自定义异常 | `{Feature}ValidationException` | `DocRetrievalValidationException` |
 
 ### 方法命名
@@ -54,7 +54,7 @@
 | 级别 | 使用场景 | 示例 |
 |------|---------|------|
 | LogInformation | 正常流程关键节点 | Worker 启动、任务开始、解析完成、索引创建成功 |
-| LogWarning | 非致命异常、可恢复问题 | PDF 页文本为空、索引创建失败、Qdrant 集合检查失败 |
+| LogWarning | 非致命异常、可恢复问题 | PDF 页文本为空、索引创建失败 |
 | LogError | 致命异常、需要关注 | 任务处理失败、FailIngestionJobAsync 失败、轮询出错 |
 
 ### 日志消息格式
@@ -77,11 +77,9 @@
 | Token 写入完成 | Information | `"Token 写入完成：{DocumentId}，共 {TokenCount} 个 Token"` |
 | 导入任务完成 | Information | `"导入任务完成：{JobId}，共 {SegmentCount} 个片段，{QuestionCount} 道题目"` |
 | 搜索索引创建成功 | Information | `"文档搜索索引已创建：{DocumentId}"` |
-| 向量索引创建成功 | Information | `"文档向量索引已创建：{DocumentId}"` |
 | PDF 页文本为空 | Warning | `"PDF 第 {PageNumber} 页文本为空，可能需要 OCR 支持"` |
 | PPT 页文本为空 | Warning | `"PPT 第 {PageNumber} 页文本为空"` |
 | 搜索索引创建失败 | Error | `"创建文档搜索索引失败：{DocumentId}"` |
-| 向量索引创建失败 | Error | ~~`"创建文档向量索引失败：{DocumentId}"`~~ — **已移除**（2026-06-12） |
 | 任务处理失败 | Error | `"导入任务失败：{JobId}"` |
 | FailIngestionJob 失败 | Error | `"标记导入任务失败时出错：{JobId}"` |
 | 轮询出错 | Error | `"导入工作器轮询出错"` |
@@ -129,8 +127,7 @@
 public IngestionWorker(
     IServiceProvider serviceProvider,          // 必需
     ILogger<IngestionWorker> logger,           // 必需
-    ISearchIndexService? searchIndexService = null,  // 可选
-    IQdrantService? qdrantService = null)            // 可选
+    ISearchIndexService? searchIndexService = null)  // 可选
 ```
 
 ### Scoped 服务获取

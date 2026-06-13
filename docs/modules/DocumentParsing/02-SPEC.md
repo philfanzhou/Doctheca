@@ -208,35 +208,6 @@ Scenario: 搜索索引写入失败不影响任务状态
 
 ---
 
-### REQ-PARSE-08：向量索引同步
-
-**优先级**: P1 | **状态**: 已实现
-
-解析完成后，同步调用 `IQdrantService.IndexDocumentVectorsAsync` 将文档向量写入 Qdrant。
-
-- 调用条件：`_qdrantService != null`
-- 调用参数：`document.Id, document.Title, document.Subject, document.Grade, document.Year`
-- 失败策略：try/catch 包裹，失败仅记日志，不影响任务 success 状态
-- Qdrant 实现内部：从数据库读取 segments 和 questions，调用 Embedding API 获取向量，批量 upsert
-
-**验收场景**:
-```gherkin
-Scenario: 向量索引写入成功
-  Given _qdrantService 不为 null
-  And 解析流程正常完成
-  When 调用 IndexDocumentVectorsAsync
-  Then 日志输出 "文档向量索引已创建：{DocumentId}"
-
-Scenario: 向量索引写入失败不影响任务状态
-  Given _qdrantService 不为 null
-  And IndexDocumentVectorsAsync 抛出异常
-  When 解析流程完成
-  Then job.Status 仍为 "success"，document.Status 仍为 "ready"
-  And 日志输出 "创建文档向量索引失败：{DocumentId}"
-```
-
----
-
 ### REQ-PARSE-09：错误处理与故障恢复
 
 **优先级**: P0 | **状态**: 已实现
@@ -246,7 +217,7 @@ Scenario: 向量索引写入失败不影响任务状态
 - **任务级异常**：每个任务在独立 try/catch 中处理，捕获 Exception 后调用 `FailIngestionJobAsync(job.Id, ex.Message)`
 - **FailIngestionJobAsync 自身异常**：嵌套 try/catch，记录日志 `"标记导入任务失败时出错：{JobId}"`
 - **轮询级异常**：外层 try/catch 捕获轮询过程中的异常，记录日志 `"导入工作器轮询出错"`，Worker 继续运行
-- **索引写入异常**：搜索索引和向量索引写入失败仅记日志，不标记任务失败
+- **索引写入异常**：搜索索引写入失败仅记日志，不标记任务失败
 
 **验收场景**:
 ```gherkin
@@ -273,7 +244,7 @@ Scenario: FailIngestionJobAsync 失败时记录日志
 | 可观测性 | 关键步骤均有日志输出 | Information/Error 级别 |
 | 可观测性 | 失败任务记录 ErrorMessage | 可追溯 |
 | 可扩展性 | 解析器通过接口注入，可替换 | IDocumentParserService |
-| 可扩展性 | 搜索索引~~和向量索引~~为可选依赖 | nullable 注入 |
+| 可扩展性 | 搜索索引为可选依赖 | nullable 注入 |
 | 性能 | 批量写入数据库（AddRangeAsync） | 减少 DB 往返 |
 | 安全性 | Worker 使用 Scoped 服务 | 避免生命周期问题 |
 

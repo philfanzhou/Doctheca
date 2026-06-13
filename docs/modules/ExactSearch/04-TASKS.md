@@ -10,7 +10,7 @@
     "action": "评审 DocumentRetrievalServiceImpl.cs 中 ExactSearch 方法：确认参数校验逻辑（query 为空/过长、page_size 超限）、pageSize 默认值和上限修正、MapFilter 空字符串转 null 逻辑与 SPEC 一致。",
     "files": ["src/Service/DocumentRetrievalServiceImpl.cs"],
     "acceptance": "代码阅读签名与注释一致；编译通过 dotnet build。",
-    "notes": "ValidateSearchRequest 方法同时被 ExactSearch ~~和 HybridSearch~~ 共用。 — 注：HybridSearch 已于 2026-06-12 移除"
+    "notes": "ValidateSearchRequest 方法被 ExactSearch 共用。"
   },
   {
     "id": "REVIEW-02",

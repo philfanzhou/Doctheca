@@ -26,7 +26,7 @@
 
 - **私有字段**：`_` 前缀 + `camelCase`。示例：`_documentRepository`、`_searchIndexService`、`_logger`。
 - **局部变量**：`camelCase`。示例：`document`、`title`、`subject`。
-- **可选依赖字段**：使用 `?` 标注可空。示例：`ISearchIndexService? _searchIndexService`、`IQdrantService? _qdrantService`。
+- **可选依赖字段**：使用 `?` 标注可空。示例：`ISearchIndexService? _searchIndexService`。
 
 ### 1.4 HTTP 端点命名
 
@@ -122,7 +122,7 @@
   var document = await _documentRepository.GetByTitleAsync(title)
       ?? throw new DocRetrievalValidationException("文档不存在");
   ```
-- **可选依赖**：`ISearchIndexService?`、`IQdrantService?` 使用 `?.` 安全调用，内部 `try/catch` 包裹。
+- **可选依赖**：`ISearchIndexService?` 使用 `?.` 安全调用，内部 `try/catch` 包裹。
 - **tags 获取**：端点层使用 `JsonElement.GetRawText()` 获取原始 JSON 文本，不使用 `GetString()`。
 - **字段更新**：使用 `if (param != null) document.Field = param` 模式，逐字段判断。
 - **时间戳**：使用 `DateTimeOffset.UtcNow`，不使用 `DateTime.Now`。
@@ -141,6 +141,5 @@
 - [ ] null 参数不修改对应字段
 - [ ] 搜索索引同步失败仅记 LogError，不抛出
 - [ ] `ISearchIndexService` 为可选依赖（`?`）
-- [ ] ~~`IQdrantService` 为可选依赖（`?`）~~ — **已移除**（2026-06-12，Qdrant 已移除）
 - [ ] `dotnet build -c Release` 无错误
 - [ ] 相关单元测试全部通过

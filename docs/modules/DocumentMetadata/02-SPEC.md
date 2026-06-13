@@ -29,7 +29,7 @@
 - [ ] **FR-5 年级校验** — grade 非空时，必须为 K/G1~G12（`DocRetrievalConstants.IsValidGrade`），否则抛 `DocRetrievalValidationException` 含有效值列表。
 - [ ] **FR-6 null 参数不修改** — subject/grade/year/tags 为 null 时表示不修改，仅更新非 null 字段。
 - [ ] **FR-7 更新时间戳** — 更新后设置 `UpdatedAt = DateTimeOffset.UtcNow`。
-- [ ] **FR-8 搜索索引同步** — 更新成功后调用 `ISearchIndexService.UpdateDocumentMetadataAsync(documentId, subject, grade, year)`~~及 `IQdrantService.UpdateDocumentMetadataAsync(documentId, subject, grade, year)`~~，失败仅记 Error 日志，不影响主流程。 — 注：Qdrant 同步已于 2026-06-12 移除
+- [ ] **FR-8 搜索索引同步** — 更新成功后调用 `ISearchIndexService.UpdateDocumentMetadataAsync(documentId, subject, grade, year)`，失败仅记 Error 日志，不影响主流程。
 - [ ] **FR-9 Admin 端点至少一项** — 请求体中 subject/grade/year/tags 全部为 null 时返回 400 "至少提供一项元数据"。
 - [ ] **FR-10 tags 存储格式** — tags 字段从请求 JSON 中使用 `GetRawText()` 获取，存储为 JSON 数组字符串。
 

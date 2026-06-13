@@ -22,12 +22,6 @@ POSTGRES_USER="postgres"
 POSTGRES_PASSWORD="postgres"
 
 OPENSEARCH_URL="http://ruoyu-opensearch:9200"
-QDRANT_URL="http://ruoyu-qdrant:6333"
-
-# SiliconFlow Embedding API（语义搜索用，留空则仅使用精确搜索）
-EMBEDDING_API_URL="https://api.siliconflow.cn/v1/embeddings"
-EMBEDDING_API_KEY=""
-EMBEDDING_MODEL="BAAI/bge-large-en-v1.5"
 
 docker network inspect "$NETWORK_NAME" >/dev/null 2>&1 || docker network create "$NETWORK_NAME"
 
@@ -54,11 +48,6 @@ docker run -d \
   -e Oss__BucketName="${OSS_BUCKET}" \
   -e OpenSearch__Url="${OPENSEARCH_URL}" \
   -e OpenSearch__IndexName="docretrieval-segments" \
-  -e Qdrant__Url="${QDRANT_URL}" \
-  -e Qdrant__CollectionName="docretrieval_segments" \
-  -e Embedding__ApiUrl="${EMBEDDING_API_URL}" \
-  -e Embedding__ApiKey="${EMBEDDING_API_KEY}" \
-  -e Embedding__Model="${EMBEDDING_MODEL}" \
   "$IMAGE_NAME"
 
 echo "${CONTAINER_NAME} started"
@@ -66,7 +55,6 @@ echo "-> gRPC Port: ${DOCRETRIEVAL_GRPC_PORT}"
 echo "-> HTTP Port: ${DOCRETRIEVAL_HTTP_PORT}"
 echo "-> PostgreSQL: ${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}"
 echo "-> OpenSearch: ${OPENSEARCH_URL}"
-echo "-> Qdrant: ${QDRANT_URL}"
 echo "-> OSS: ${OSS_ENDPOINT}"
 echo "-> Network: ${NETWORK_NAME}"
 echo "-> Image: $IMAGE_NAME"

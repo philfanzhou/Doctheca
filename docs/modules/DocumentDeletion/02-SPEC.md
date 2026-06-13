@@ -2,7 +2,7 @@
 
 ## 1. 功能概述
 
-DocumentDeletion 模块负责删除指定文档及其全部关联数据。其核心职责是：**按标题删除文档，级联清理数据库记录、搜索索引、向量索引和 OSS 文件，保证数据一致性，且操作幂等**。
+DocumentDeletion 模块负责删除指定文档及其全部关联数据。其核心职责是：**按标题删除文档，级联清理数据库记录、搜索索引和 OSS 文件，保证数据一致性，且操作幂等**。
 
 模块提供 1 类能力：
 
@@ -20,10 +20,9 @@ DocumentDeletion 模块负责删除指定文档及其全部关联数据。其核
 - [ ] **REQ-DEL-02**：级联删除顺序为：occurrences → questions → segments → pages → document → SaveChanges。
 - [ ] **REQ-DEL-03**：文档不存在时返回 true（幂等）。
 - [ ] **REQ-DEL-04**：搜索索引清理在 SaveChanges 之后执行，失败仅记 Error 日志，不影响返回结果。
-- [ ] **REQ-DEL-05**：向量索引清理在 SaveChanges 之后执行，失败仅记 Error 日志，不影响返回结果。
-- [ ] **REQ-DEL-06**：Admin 端点先删数据库再删 OSS 文件，OSS 删除失败仅记 Warning 日志。
-- [ ] **REQ-DEL-07**：Admin 端点返回 `{ success: true, data: { title, deleted: document != null } }`。
-- [ ] **REQ-DEL-08**：仅管理员可调用此接口（通过部署层网络隔离实现，仅内网可访问 `/admin/` 路径；应用层不做鉴权中间件）。
+- [ ] **REQ-DEL-05**：Admin 端点先删数据库再删 OSS 文件，OSS 删除失败仅记 Warning 日志。
+- [ ] **REQ-DEL-06**：Admin 端点返回 `{ success: true, data: { title, deleted: document != null } }`。
+- [ ] **REQ-DEL-07**：仅管理员可调用此接口（通过部署层网络隔离实现，仅内网可访问 `/admin/` 路径；应用层不做鉴权中间件）。
 
 ---
 
@@ -41,7 +40,6 @@ DocumentDeletion 模块负责删除指定文档及其全部关联数据。其核
 - 且 `_documentRepository.DeleteAsync` 被调用
 - 且 `_unitOfWork.SaveChangesAsync()` 被调用
 - 且 `_searchIndexService.DeleteDocumentIndexAsync` 被调用
-- 且 `_qdrantService.DeleteDocumentVectorsAsync` 被调用
 - 且返回 `true`
 
 **场景 B：删除不存在的文档（幂等）**
@@ -74,12 +72,6 @@ DocumentDeletion 模块负责删除指定文档及其全部关联数据。其核
 - 则异常被捕获，仅记 Error 日志
 - 且返回 `true`
 
-**场景 F：向量索引清理失败**
-- 给定 `_qdrantService.DeleteDocumentVectorsAsync` 抛出异常
-- 当调用 `DeleteDocumentAsync`
-- 则异常被捕获，仅记 Error 日志
-- 且返回 `true`
-
 ### 3.4 OSS 清理容错
 
 **场景 G：OSS 删除失败**
@@ -96,7 +88,7 @@ DocumentDeletion 模块负责删除指定文档及其全部关联数据。其核
 
 | 指标 | 目标 | 备注 |
 |------|------|------|
-| 删除操作响应时间 | P95 < 2s | 依赖数据库、搜索索引~~、向量索引~~、OSS 操作 |
+| 删除操作响应时间 | P95 < 2s | 依赖数据库、搜索索引、OSS 操作 |
 | 级联删除关联数据 | P95 < 500ms | 依赖数据库批量删除 |
 
 ### 4.2 安全
@@ -107,14 +99,13 @@ DocumentDeletion 模块负责删除指定文档及其全部关联数据。其核
 ### 4.3 可靠性 / 一致性
 
 - **先落库、再清索引**：数据库级联删除在同一 `SaveChangesAsync` 事务内，索引清理在事务外。
-- **索引清理容错**：搜索索引和向量索引清理失败仅记日志，不影响返回结果。
+- **索引清理容错**：搜索索引清理失败仅记日志，不影响返回结果。
 - **OSS 清理容错**：OSS 文件删除失败仅记 Warning 日志，不影响接口返回。
 - **幂等性**：文档不存在时返回 true，不报错。
 
 ### 4.4 可观测性
 
 - 监控搜索索引清理失败率。
-- 监控向量索引清理失败率。
 - 监控 OSS 删除失败率。
 - 索引清理失败率 > 1% 时告警。
 
@@ -130,9 +121,8 @@ DocumentDeletion 模块负责删除指定文档及其全部关联数据。其核
 
 1. 文档不存在时返回 true（幂等）。
 2. 搜索索引清理抛出异常时，返回仍为 true。
-3. 向量索引清理抛出异常时，返回仍为 true。
-4. OSS 删除抛出异常时，端点仍返回成功。
-5. 文档存在但 `FilePath` 为空时，不调用 OSS 删除。
+3. OSS 删除抛出异常时，端点仍返回成功。
+4. 文档存在但 `FilePath` 为空时，不调用 OSS 删除。
 
 ### 5.3 测试环境要求
 
@@ -142,5 +132,4 @@ DocumentDeletion 模块负责删除指定文档及其全部关联数据。其核
 
 - 禁止使用真实 OSS 账号跑单元测试。
 - 禁止使用真实搜索索引跑单元测试。
-- 禁止使用真实 Qdrant 服务跑单元测试。~~ — 注：Qdrant 已于 2026-06-12 移除，此条不再适用~~
 - 禁止测试依赖特定执行时间。

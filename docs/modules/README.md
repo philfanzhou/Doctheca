@@ -8,4 +8,3 @@
 | DocumentParsing | [DocumentParsing](./DocumentParsing/01-FEATURE.md) |
 | DocumentUpload | [DocumentUpload](./DocumentUpload/01-FEATURE.md) |
 | ExactSearch | [ExactSearch](./ExactSearch/01-FEATURE.md) |
-| HybridSearch | [HybridSearch](./HybridSearch/01-FEATURE.md) |

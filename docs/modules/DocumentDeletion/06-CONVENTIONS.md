@@ -16,7 +16,7 @@
 
 - C# 属性：**PascalCase** — `Title`, `FilePath`, `Deleted`
 - JSON 响应字段：**snake_case** — `title`, `deleted`, `file_path`
-- 私有字段：**camelCase 前加下划线** — `_documentRepository`, `_searchIndexService`, `_qdrantService`
+- 私有字段：**camelCase 前加下划线** — `_documentRepository`, `_searchIndexService`
 
 ### 1.3 路由约定
 
@@ -33,7 +33,7 @@
 |------|----------|
 | `Information` | 正常删除操作完成 |
 | `Warning` | OSS 文件删除失败（非致命） |
-| `Error` | 搜索索引清理失败~~、向量索引清理失败~~，必须附带 `ex` 参数 |
+| `Error` | 搜索索引清理失败，必须附带 `ex` 参数 |
 
 ### 2.2 日志模板
 
@@ -76,7 +76,6 @@ _logger.LogError($"Failed: {title}");
 |------|----------|------|
 | 文档不存在 | 返回 true | 无错误日志（幂等） |
 | 搜索索引清理失败 | try/catch 捕获 | `LogError(ex, "删除文档搜索索引失败：{Title}", title)` |
-| 向量索引清理失败 | ~~try/catch 捕获~~ — **已移除**（2026-06-12） | ~~`LogError(ex, "删除文档向量数据失败：{Title}", title)`~~ |
 | 数据库操作失败 | 异常冒泡 | 由上层处理 |
 
 ### 3.2 Admin 端点
@@ -119,7 +118,6 @@ _logger.LogError($"Failed: {title}");
 
 - 禁止使用真实 OSS 账号跑单元测试；必须 mock `IOssService`。
 - 禁止使用真实搜索索引跑单元测试；必须 mock `ISearchIndexService`。
-- 禁止使用真实 Qdrant 服务跑单元测试；必须 mock `IQdrantService`。
 - 禁止测试依赖特定执行时间或时区。
 
 ---
@@ -138,7 +136,7 @@ _logger.LogError($"Failed: {title}");
 ### 5.2 可空性
 
 - 启用 `<Nullable>enable</Nullable>`
-- `ISearchIndexService` 和 ~~`IQdrantService`~~ 为可选依赖（nullable），通过 `?.` 安全调用。 — 注：`IQdrantService` 已于 2026-06-12 移除安全调用
+- `ISearchIndexService` 为可选依赖（nullable），通过 `?.` 安全调用。
 
 ### 5.3 异步与并发
 
@@ -148,7 +146,7 @@ _logger.LogError($"Failed: {title}");
 ### 5.4 事务与一致性
 
 - 级联删除 + `SaveChangesAsync` 在同一事务内
-- 搜索索引和向量索引清理在事务外，失败不回滚数据库
+- 搜索索引清理在事务外，失败不回滚数据库
 - OSS 文件删除在数据库删除之后，失败不回滚数据库
 - 索引清理异常被捕获，不阻塞后续流程
 

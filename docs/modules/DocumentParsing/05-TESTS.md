@@ -15,11 +15,9 @@
 | UT-W-07 | SentenceId → SegmentId 映射正确 | REQ-PARSE-06 | ParsedDocument 含 segments | occurrence 的 SegmentId 与 segmentLookup 对应 |
 | UT-W-08 | QuestionId → QuestionSegmentId 映射正确 | REQ-PARSE-06 | ParsedDocument 含 questions | occurrence 的 QuestionSegmentId 与 questionLookup 对应 |
 | UT-W-09 | 搜索索引失败不影响任务状态 | REQ-PARSE-07 | IndexDocumentSegmentsAsync 抛异常 | 任务仍为 success，日志记录错误 |
-| UT-W-10 | 向量索引失败不影响任务状态 | REQ-PARSE-08 | IndexDocumentVectorsAsync 抛异常 | 任务仍为 success，日志记录错误 |
-| UT-W-11 | 搜索索引为 null 时跳过索引写入 | REQ-PARSE-07 | _searchIndexService = null | IndexDocumentSegmentsAsync 不被调用 |
-| UT-W-12 | 向量索引为 null 时跳过索引写入 | REQ-PARSE-08 | _qdrantService = null | IndexDocumentVectorsAsync 不被调用 |
-| UT-W-13 | FailIngestionJobAsync 自身失败时记录日志 | REQ-PARSE-09 | FailIngestionJobAsync 抛异常 | 记录 "标记导入任务失败时出错" 日志 |
-| UT-W-14 | 文档不存在时任务标记 failed | REQ-PARSE-09 | GetDocumentAsync 返回 null | 抛出 InvalidOperationException，任务标记 failed |
+| UT-W-10 | 搜索索引为 null 时跳过索引写入 | REQ-PARSE-07 | _searchIndexService = null | IndexDocumentSegmentsAsync 不被调用 |
+| UT-W-11 | FailIngestionJobAsync 自身失败时记录日志 | REQ-PARSE-09 | FailIngestionJobAsync 抛异常 | 记录 "标记导入任务失败时出错" 日志 |
+| UT-W-12 | 文档不存在时任务标记 failed | REQ-PARSE-09 | GetDocumentAsync 返回 null | 抛出 InvalidOperationException，任务标记 failed |
 
 ### DocumentDomainService 任务状态管理测试
 
@@ -57,7 +55,6 @@
 | IT-02 | 完整 Word 解析流程 | REQ-PARSE-01~09 | 上传 DOCX 文档 | 同上 |
 | IT-03 | 完整 PPT 解析流程 | REQ-PARSE-01~09 | 上传 PPTX 文档 | 同上 |
 | IT-04 | 搜索索引写入验证 | REQ-PARSE-07 | 解析完成 | OpenSearch 中可查到文档 segments |
-| IT-05 | 向量索引写入验证 | REQ-PARSE-08 | 解析完成 | Qdrant 中可查到文档向量 |
 
 ## 边界测试
 
@@ -96,25 +93,21 @@ public class IngestionWorkerTests
     private readonly Mock<IServiceProvider> _serviceProviderMock;
     private readonly Mock<ILogger<IngestionWorker>> _loggerMock;
     private readonly Mock<ISearchIndexService> _searchIndexServiceMock;
-    private readonly Mock<IQdrantService> _qdrantServiceMock;
 
     public IngestionWorkerTests()
     {
         _serviceProviderMock = new Mock<IServiceProvider>();
         _loggerMock = new Mock<ILogger<IngestionWorker>>();
         _searchIndexServiceMock = new Mock<ISearchIndexService>();
-        ~~_qdrantServiceMock = new Mock<IQdrantService>();~~ // **已移除**（2026-06-12）
     }
 
     private IngestionWorker CreateWorker(
-        ISearchIndexService? searchIndexService = null,
-        IQdrantService? qdrantService = null)
+        ISearchIndexService? searchIndexService = null)
     {
         return new IngestionWorker(
             _serviceProviderMock.Object,
             _loggerMock.Object,
-            searchIndexService,
-            qdrantService);
+            searchIndexService);
     }
 
     [Fact]
@@ -171,18 +164,6 @@ public class IngestionWorkerTests
 
         // 验证 CompleteIngestionJobAsync 仍被调用
     }
-
-    ~~[Fact]~~
-    ~~public async Task ExecuteAsync_VectorIndexFailure_ShouldNotAffectJobStatus()~~
-    ~~{~~
-    ~~    // UT-W-10: 向量索引失败不影响任务状态 — **已移除**（2026-06-12，Qdrant 已移除）~~
-    ~~    _qdrantServiceMock.Setup(q => q.IndexDocumentVectorsAsync(~~
-    ~~            It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<string>(),~~
-    ~~            It.IsAny<string>(), It.IsAny<string>()))~~
-    ~~        .ThrowsAsync(new Exception("Qdrant 不可用"));~~
-
-    ~~    // 验证 CompleteIngestionJobAsync 仍被调用~~
-    ~~}~~
 }
 ```
 

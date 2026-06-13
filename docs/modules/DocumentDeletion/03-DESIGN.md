@@ -116,12 +116,6 @@ public interface ISearchIndexService
     Task DeleteDocumentIndexAsync(Guid documentId);
 }
 
-// src/Domain/Repositories/IQdrantService.cs
-public interface IQdrantService
-{
-    Task DeleteDocumentVectorsAsync(Guid documentId);
-}
-
 // Ruoyu.Study.Common/Oss/IOssService
 public interface IOssService
 {
@@ -133,11 +127,10 @@ public interface IOssService
 
 | 类型 | 来源 |
 |------|------|
-| `DocumentDomainService` | 构造函数注入 `IDocumentRepository`、`IDocumentPageRepository`、`IDocumentSegmentRepository`、`IQuestionSegmentRepository`、`IDocumentOccurrenceRepository`、`IDocumentIngestionJobRepository`、`IUnitOfWork`、`ILogger`、`ISearchIndexService?`、`IQdrantService?` |
+| `DocumentDomainService` | 构造函数注入 `IDocumentRepository`、`IDocumentPageRepository`、`IDocumentSegmentRepository`、`IQuestionSegmentRepository`、`IDocumentOccurrenceRepository`、`IDocumentIngestionJobRepository`、`IUnitOfWork`、`ILogger`、`ISearchIndexService?` |
 | `DocumentAdminEndpoints` | 静态方法参数注入 `DocumentDomainService`、`IOssService`、`ILogger` |
 | 各仓储接口 | 由 DI 提供 → 对应 Repository 实现 (Scoped) |
 | `ISearchIndexService` | 由 DI 提供 → `OpenSearchIndexService` (可选) |
-| `IQdrantService` | 由 DI 提供 → `QdrantService` (可选) |
 | `IOssService` | 由 DI 提供 → `S3OssService` 或 `LocalFileOssService` |
 
 ---
@@ -170,11 +163,7 @@ DocumentDomainService.DeleteDocumentAsync(title)
     │     ├─ _searchIndexService?.DeleteDocumentIndexAsync(document.Id)
     │     └─ 异常被捕获 → _logger.LogError
     │
-    ├─ 5. ~~清理向量索引（try/catch 容错）~~ — **已移除**（2026-06-12，Qdrant 已移除）
-    │     ~~├─ _qdrantService?.DeleteDocumentVectorsAsync(document.Id)~~
-    │     ~~└─ 异常被捕获 → _logger.LogError~~
-    │
-    └─ 6. 记录日志并返回
+    └─ 5. 记录日志并返回
           ├─ _logger.LogInformation("文档已删除：{Title}", title)
           └─ return true
 ```
@@ -210,11 +199,9 @@ DocumentAdminEndpoints.DeleteDocument(title, documentService, ossService, logger
 |----------|----------|----------------|
 | 文档不存在 | 直接返回 true | 无错误日志（幂等） |
 | 搜索索引清理异常 | `try/catch` 捕获 | `LogError(ex, "删除文档搜索索引失败：{Title}", title)` |
-| 向量索引清理异常 | `try/catch` 捕获 | `LogError(ex, "删除文档向量数据失败：{Title}", title)` |
 | OSS 文件删除异常 | `try/catch` 捕获 | `LogWarning(ex, "删除文档文件失败：{FilePath}", document.FilePath)` |
 | 数据库级联删除异常 | 冒泡给调用方 | 由上层处理 |
 | `ISearchIndexService` 为 null | 跳过搜索索引清理 | 无日志 |
-| `IQdrantService` 为 null | ~~跳过向量索引清理~~ — **已移除**（2026-06-12） | ~~无日志~~ |
 
 ---
 
@@ -229,7 +216,6 @@ DocumentAdminEndpoints.DeleteDocument(title, documentService, ossService, logger
 | `IDocumentPageRepository` | 本仓库 Domain | `DeleteByDocumentIdAsync` |
 | `IUnitOfWork` | 本仓库 Domain | `SaveChangesAsync` |
 | `ISearchIndexService` | 本仓库 Domain | `DeleteDocumentIndexAsync` |
-| `IQdrantService` | 本仓库 Domain | `DeleteDocumentVectorsAsync` |
 | `IOssService` | `Ruoyu.Study.Common.Oss` 包 | `DeleteAsync` |
 
 ---
@@ -238,13 +224,12 @@ DocumentAdminEndpoints.DeleteDocument(title, documentService, ossService, logger
 
 ### 6.1 外部依赖通过接口注入
 
-- 所有仓储、`ISearchIndexService`、`IQdrantService`、`IOssService` 全部为接口，可被 Moq 完全替代。
-- `DocumentDomainService` 构造函数公开，`ISearchIndexService` 和 `IQdrantService` 为可选参数（nullable），测试中可传 null。
+- 所有仓储、`ISearchIndexService`、`IOssService` 全部为接口，可被 Moq 完全替代。
+- `DocumentDomainService` 构造函数公开，`ISearchIndexService` 为可选参数（nullable），测试中可传 null。
 
 ### 6.2 索引清理容错可验证
 
 - 测试中可让 `DeleteDocumentIndexAsync` 抛出异常，验证方法仍返回 true。
-- 测试中可让 ~~`DeleteDocumentVectorsAsync` 抛出异常，验证方法仍返回 true。~~ — **已移除**（2026-06-12，Qdrant 已移除）
 
 ### 6.3 OSS 清理容错可验证
 

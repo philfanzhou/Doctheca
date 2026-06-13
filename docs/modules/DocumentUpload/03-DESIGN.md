@@ -187,8 +187,7 @@ public DocumentDomainService(
     IDocumentIngestionJobRepository jobRepository,
     IUnitOfWork unitOfWork,
     ILogger<DocumentDomainService> logger,
-    ISearchIndexService? searchIndexService = null,
-    ~~IQdrantService? qdrantService = null~~) // **已移除**（2026-06-12）
+    ISearchIndexService? searchIndexService = null)
 ```
 
 - `IDocumentRepository`：文档表仓储，提供 `GetByTitleAsync`、`GetByFileHashAndStatusAsync`、`AddAsync`
@@ -196,7 +195,7 @@ public DocumentDomainService(
 - `IUnitOfWork`：事务控制，提供 `SaveChangesAsync`
 - `IOssService`：OSS 上传，提供 `UploadAsync`
 - `ILogger`：日志记录
-- `ISearchIndexService`/~~`IQdrantService`~~：搜索索引~~与向量服务~~（上传流程不使用，其他方法使用） — 注：`IQdrantService` 已于 2026-06-12 移除
+- `ISearchIndexService`：搜索索引（上传流程不使用，其他方法使用）
 
 ## 数据流描述（步骤序列）
 

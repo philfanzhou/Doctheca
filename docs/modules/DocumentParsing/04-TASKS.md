@@ -105,16 +105,6 @@
     "depends_on": ["TASK-009"]
   },
   {
-    "id": "TASK-011",
-    "title": "~~向量索引同步（Qdrant）~~ — 已移除",
-    "description": "~~解析完成后调用 IQdrantService.IndexDocumentVectorsAsync，失败仅记日志~~ — **已移除**（2026-06-12，Qdrant 已移除）",
-    "status": "removed",
-    "priority": "P1",
-    "requirement": "REQ-PARSE-08",
-    "files": ["src/Service/IngestionWorker.cs", ~~"src/Service/QdrantService.cs"~~],
-    "depends_on": ["TASK-009"]
-  },
-  {
     "id": "TASK-012",
     "title": "错误处理与故障隔离",
     "description": "实现任务级 try/catch、FailIngestionJobAsync 嵌套保护、轮询级异常捕获",
@@ -213,8 +203,7 @@ TASK-001 (IngestionWorker 轮询)
 ├── TASK-006 (Pages 写入)
 │   ├── TASK-007 (Segments 写入)
 │   │   └── TASK-009 (Occurrences 写入)
-│   │       ├── TASK-010 (搜索索引同步)
-│   │       └── TASK-011 (向量索引同步)
+│   │       └── TASK-010 (搜索索引同步)
 │   └── TASK-008 (Questions 写入)
 │       └── TASK-009 (Occurrences 写入)
 │
@@ -245,5 +234,5 @@ TASK-003 → TASK-004 → TASK-005 → TASK-006 → TASK-007 → TASK-008 → TA
 | 组 1 | TASK-001, TASK-002, TASK-003, TASK-004 |
 | 组 2 | TASK-005, TASK-006（TASK-006 仅依赖 TASK-001 + TASK-004） |
 | 组 3 | TASK-007, TASK-008（均依赖 TASK-006，可并行） |
-| 组 4 | TASK-010, ~~TASK-011~~（均依赖 TASK-009，可并行；TASK-011 已移除） |
+| 组 4 | TASK-010（依赖 TASK-009） |
 | 组 5 | TASK-013, TASK-014, TASK-015（测试任务可并行） |

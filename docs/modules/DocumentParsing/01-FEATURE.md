@@ -6,15 +6,15 @@
 
 ## 功能概述
 
-DocumentParsing 是文档检索服务的核心后台处理模块，负责将用户上传的原始文档（PDF/DOCX/PPTX）自动解析为结构化数据，并写入数据库和搜索索引，使文档可被精确检索和语义搜索。
+DocumentParsing 是文档检索服务的核心后台处理模块，负责将用户上传的原始文档（PDF/DOCX/PPTX）自动解析为结构化数据，并写入数据库和搜索索引，使文档可被精确检索。
 
 整个流程由 `IngestionWorker`（后台 BackgroundService）驱动：每 5 秒轮询待处理的导入任务，对每个任务执行 **下载 → 解析 → 结构化写入 → 索引同步** 的完整管线。
 
 ## 单一用户故事
 
 > **作为** 后台工作器（IngestionWorker），
-> **我希望** 每 5 秒轮询待处理的导入任务，对每个任务从 OSS 下载文件、调用解析器、将页面/片段/题目/Token 写入数据库，完成后同步写入搜索索引和向量索引，
-> **以便** 用户上传的文档能够被自动结构化处理并支持后续的精确检索和语义搜索。
+> **我希望** 每 5 秒轮询待处理的导入任务，对每个任务从 OSS 下载文件、调用解析器、将页面/片段/题目/Token 写入数据库，完成后同步写入搜索索引，
+> **以便** 用户上传的文档能够被自动结构化处理并支持后续的精确检索。
 
 ## 验收条件
 
@@ -26,9 +26,8 @@ DocumentParsing 是文档检索服务的核心后台处理模块，负责将用�
 | AC-4 | PageNumber → PageId 映射正确，segment 和 question 的 PageId 字段指向正确的 page 记录 | 单元测试验证映射字典构建逻辑 |
 | AC-5 | SentenceId → SegmentId 映射正确，occurrence 的 SegmentId 指向正确的 segment 记录；QuestionId → QuestionSegmentId 映射正确 | 单元测试验证 occurrence 中 SegmentId/QuestionSegmentId 的正确性 |
 | AC-6 | 解析完成后同步写入搜索索引（ISearchIndexService.IndexDocumentSegmentsAsync），失败仅记日志不影响任务状态 | 单元测试模拟 IndexDocumentSegmentsAsync 抛异常，验证任务仍为 success |
-| AC-7 | 解析完成后同步写入向量索引（IQdrantService.IndexDocumentVectorsAsync），失败仅记日志不影响任务状态 | 单元测试模拟 IndexDocumentVectorsAsync 抛异常，验证任务仍为 success |
-| AC-8 | 解析失败时标记任务 failed + 文档 failed + 记录 ErrorMessage | 单元测试模拟 ParseAsync 抛异常，验证 FailIngestionJobAsync 被调用 |
-| AC-9 | Worker 使用 IServiceProvider.CreateScope 获取 Scoped 服务，避免生命周期问题 | 代码审查验证 `scope.ServiceProvider.GetRequiredService<T>()` 模式 |
+| AC-7 | 解析失败时标记任务 failed + 文档 failed + 记录 ErrorMessage | 单元测试模拟 ParseAsync 抛异常，验证 FailIngestionJobAsync 被调用 |
+| AC-8 | Worker 使用 IServiceProvider.CreateScope 获取 Scoped 服务，避免生命周期问题 | 代码审查验证 `scope.ServiceProvider.GetRequiredService<T>()` 模式 |
 
 ## 范围内
 
@@ -38,7 +37,6 @@ DocumentParsing 是文档检索服务的核心后台处理模块，负责将用�
 - ParsedDocument → 数据库模型转换与写入（pages/segments/questions/occurrences）
 - PageNumber → PageId、SentenceId → SegmentId、QuestionId → QuestionSegmentId 映射
 - 解析完成后同步写入 OpenSearch 搜索索引
-- 解析完成后同步写入 Qdrant 向量索引
 - 解析失败时的错误处理与状态标记
 
 ## 范围外
@@ -61,9 +59,7 @@ DocumentParsing 是文档检索服务的核心后台处理模块，负责将用�
 | DocumentParserService | `src/Service/DocumentParserService.cs` |
 | ParsedDocument 模型 | `src/Domain/Models/DocumentModels.cs` |
 | ISearchIndexService | `src/Domain/Repositories/ISearchIndexService.cs` |
-| IQdrantService | `src/Domain/Repositories/IQdrantService.cs` — **已移除**（2026-06-12） |
 | OpenSearchIndexService | `src/Service/OpenSearchIndexService.cs` |
-| QdrantService | `src/Service/QdrantService.cs` — **已移除**（2026-06-12） |
 | 数据库实体 | `src/Database/Entities/` |
 | 仓储接口 | `src/Domain/Repositories/IRepositories.cs` |
 

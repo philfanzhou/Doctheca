@@ -11,13 +11,11 @@
 
 | # | 场景 | Given | When | Then | 验证 SPEC |
 |---|------|-------|------|------|-----------|
-| UT-01 | 正常删除（文档存在） | mock `GetByTitleAsync` 返回文档；mock 各仓储正常 | `DeleteDocumentAsync("英语试卷2024")` | 各 `DeleteByDocumentIdAsync` 按顺序被调用；`DeleteAsync` 被调用；`SaveChangesAsync` 被调用；搜索索引和向量索引清理被调用；返回 `true` | REQ-DEL-01, REQ-DEL-02 |
+| UT-01 | 正常删除（文档存在） | mock `GetByTitleAsync` 返回文档；mock 各仓储正常 | `DeleteDocumentAsync("英语试卷2024")` | 各 `DeleteByDocumentIdAsync` 按顺序被调用；`DeleteAsync` 被调用；`SaveChangesAsync` 被调用；搜索索引清理被调用；返回 `true` | REQ-DEL-01, REQ-DEL-02 |
 | UT-02 | 文档不存在（幂等） | mock `GetByTitleAsync` 返回 null | `DeleteDocumentAsync("不存在的文档")` | 无级联删除操作被调用；返回 `true` | REQ-DEL-03 |
 | UT-03 | 搜索索引清理失败 | mock `DeleteDocumentIndexAsync` 抛出 `Exception` | `DeleteDocumentAsync("英语试卷2024")` | 异常被捕获；`LogError` 被调用；返回 `true` | REQ-DEL-04 |
-| UT-04 | 向量索引清理失败 | mock `DeleteDocumentVectorsAsync` 抛出 `Exception` | `DeleteDocumentAsync("英语试卷2024")` | 异常被捕获；`LogError` 被调用；返回 `true` | REQ-DEL-05 |
-| UT-05 | 搜索索引服务为 null | `ISearchIndexService` 传 null | `DeleteDocumentAsync("英语试卷2024")` | 不调用搜索索引清理；返回 `true` | REQ-DEL-04 |
-| UT-06 | 向量索引服务为 null | `IQdrantService` 传 null | `DeleteDocumentAsync("英语试卷2024")` | 不调用向量索引清理；返回 `true` | REQ-DEL-05 |
-| UT-07 | 级联删除顺序验证 | mock 各仓储，使用 `CallSequence` 验证调用顺序 | `DeleteDocumentAsync("英语试卷2024")` | 调用顺序为 occurrences → questions → segments → pages → document → SaveChanges | REQ-DEL-02 |
+| UT-04 | 搜索索引服务为 null | `ISearchIndexService` 传 null | `DeleteDocumentAsync("英语试卷2024")` | 不调用搜索索引清理；返回 `true` | REQ-DEL-04 |
+| UT-05 | 级联删除顺序验证 | mock 各仓储，使用 `CallSequence` 验证调用顺序 | `DeleteDocumentAsync("英语试卷2024")` | 调用顺序为 occurrences → questions → segments → pages → document → SaveChanges | REQ-DEL-02 |
 
 ### 1.2 针对 `DocumentAdminEndpoints.DeleteDocument`（使用 Moq 替换依赖）
 
@@ -45,7 +43,7 @@
 | # | 场景 | Given | When | Then | 验证 SPEC |
 |---|------|-------|------|------|-----------|
 | EX-01 | SaveChangesAsync 抛异常 | mock `SaveChangesAsync` 抛 `DbUpdateException` | `DeleteDocumentAsync` | 异常冒泡给调用方 | N/A |
-| EX-02 | 搜索索引和向量索引同时失败 | mock 两个索引服务均抛异常 | `DeleteDocumentAsync` | 两个异常均被捕获；返回 `true` | REQ-DEL-04, REQ-DEL-05 |
+| EX-02 | 搜索索引失败 | mock 搜索索引服务抛异常 | `DeleteDocumentAsync` | 异常被捕获；返回 `true` | REQ-DEL-04 |
 | EX-03 | 标题含特殊字符 | `title = "英语/试卷\\2024"` | `DeleteDocumentAsync` | 标题原样传递给 `GetByTitleAsync` | N/A |
 | EX-04 | 空标题 | `title = ""` | `DeleteDocumentAsync` | `GetByTitleAsync` 返回 null；返回 `true` | REQ-DEL-03 |
 
@@ -76,7 +74,6 @@ public class DocumentDeletionTests
     private readonly Mock<IDocumentIngestionJobRepository> _jobRepository;
     private readonly Mock<IUnitOfWork> _unitOfWork;
     private readonly Mock<ISearchIndexService> _searchIndexService;
-    private readonly Mock<IQdrantService> _qdrantService;
     private readonly Mock<ILogger<DocumentDomainService>> _logger;
     private readonly DocumentDomainService _sut;
 
@@ -90,7 +87,6 @@ public class DocumentDeletionTests
         _jobRepository = new Mock<IDocumentIngestionJobRepository>();
         _unitOfWork = new Mock<IUnitOfWork>();
         _searchIndexService = new Mock<ISearchIndexService>();
-        _qdrantService = new Mock<IQdrantService>();
         _logger = new Mock<ILogger<DocumentDomainService>>();
 
         _sut = new DocumentDomainService(
@@ -102,8 +98,7 @@ public class DocumentDeletionTests
             _jobRepository.Object,
             _unitOfWork.Object,
             _logger.Object,
-            _searchIndexService.Object,
-            ~~_qdrantService.Object~~); // **已移除**（2026-06-12，Qdrant 已移除）
+            _searchIndexService.Object);
     }
 
     [Fact]

@@ -26,14 +26,13 @@
 | 编号 | 需求 | 详见 |
 |------|------|------|
 | FR-08 | 精确搜索：关键词匹配，支持 OpenSearch 或 DB 倒排索引回退 | [ExactSearch](../modules/ExactSearch/01-FEATURE.md) |
-| FR-09 | 混合搜索：关键词 + 语义向量混合搜索，合并去重排序 | [HybridSearch](../modules/HybridSearch/01-FEATURE.md) |
 
 ## 非功能需求
 
 | 编号 | 需求 |
 |------|------|
-| NFR-01 | 搜索响应时间 < 2s（精确搜索）~~/ < 5s（混合搜索）~~ |
+| NFR-01 | 搜索响应时间 < 2s（精确搜索） |
 | NFR-02 | 文档解析异步执行，不阻塞上传响应 |
-| NFR-03 | OpenSearch~~/Qdrant/SiliconFlow~~ 不可用时降级，不中断主流程 |
+| NFR-03 | OpenSearch 不可用时降级，不中断主流程 |
 | NFR-04 | 支持 PostgreSQL 和 SQLite 双数据库 |
 | NFR-05 | 服务双端口：gRPC(5011) + HTTP(5012) |
