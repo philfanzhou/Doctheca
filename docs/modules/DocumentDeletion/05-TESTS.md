@@ -1,4 +1,4 @@
-# DocumentDeletion — 测试计划 (TESTS)
+﻿# DocumentDeletion — 测试计划 (TESTS)
 
 > 测试工具：**xUnit + Moq**
 > 目标：对 `DeleteDocumentAsync` 和 `DeleteDocument` 端点达成 100% 分支覆盖。
@@ -141,7 +141,7 @@ public class DocumentDeletionTests
 ## 6. 运行命令
 
 ```bash
-cd backend/ruoyu.docretrieval
+cd services/ruoyu.docretrieval
 
 # 单元测试
 dotnet test --filter "FullyQualifiedName~DocumentDeletion"

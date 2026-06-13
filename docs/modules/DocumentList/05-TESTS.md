@@ -1,4 +1,4 @@
-# 文档列表查询与筛选 — 测试方案与代码骨架（TESTS）
+﻿# 文档列表查询与筛选 — 测试方案与代码骨架（TESTS）
 
 > 对应测试文件：`test/Ruoyu.Study.DocRetrieval.Tests/DocumentDomainServiceTests.cs`（列表相关测试方法）
 > 运行命令：`dotnet test --filter "FullyQualifiedName~DocumentListTests"`
@@ -280,7 +280,7 @@ public class DocumentListTests
 ## 4. 运行方式
 
 ```bash
-cd backend/ruoyu.docretrieval
+cd services/ruoyu.docretrieval
 dotnet test --filter "FullyQualifiedName~DocumentListTests" -v normal
 ```
 

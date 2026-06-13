@@ -1,9 +1,9 @@
-# DocumentUpload — 设计说明 (DESIGN)
+﻿# DocumentUpload — 设计说明 (DESIGN)
 
 ## 本功能在项目中的目录与文件结构
 
 ```
-backend/ruoyu.docretrieval/
+services/ruoyu.docretrieval/
 ├── src/
 │   ├── Service/
 │   │   └── DocumentAdminEndpoints.cs              # 上传端点 (HTTP 层)

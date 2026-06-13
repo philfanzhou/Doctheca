@@ -1,4 +1,4 @@
-# DocumentDeletion — 任务与验证 (TASKS)
+﻿# DocumentDeletion — 任务与验证 (TASKS)
 
 > 说明：DocumentDeletion 的生产代码已实现完成。以下任务面向代码审查、可测性验证与回归保障，每个任务都有一条可自动执行的命令或一组断言。
 
@@ -72,7 +72,7 @@
 
 ## 命令速查
 
-在 `backend/ruoyu.docretrieval/` 目录下执行：
+在 `services/ruoyu.docretrieval/` 目录下执行：
 
 ```bash
 # 构建

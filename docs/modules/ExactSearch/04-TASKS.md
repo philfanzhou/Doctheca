@@ -1,4 +1,4 @@
-# ExactSearch — 任务清单 (TASKS)
+﻿# ExactSearch — 任务清单 (TASKS)
 
 > 说明：本功能代码已实现完成，下列任务为 **代码评审与自动化验证** 任务。
 
@@ -80,7 +80,7 @@
     "id": "BUILD-01",
     "depends_on": ["TEST-01", "TEST-02", "TEST-03", "TEST-04", "TEST-05"],
     "action": "在 Release 配置下编译解决方案并运行所有测试，打印覆盖率摘要。",
-    "files": ["backend/ruoyu.docretrieval/*.sln", "backend/ruoyu.docretrieval/src/**/*.cs", "backend/ruoyu.docretrieval/test/**/*.cs"],
+    "files": ["services/ruoyu.docretrieval/*.sln", "services/ruoyu.docretrieval/src/**/*.cs", "services/ruoyu.docretrieval/test/**/*.cs"],
     "acceptance": "dotnet test --configuration Release --filter FullyQualifiedName~ExactSearch",
     "notes": "必须零警告，无测试失败。"
   }

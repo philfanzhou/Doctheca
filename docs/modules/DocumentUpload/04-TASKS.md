@@ -1,4 +1,4 @@
-# DocumentUpload — 任务清单 (TASKS)
+﻿# DocumentUpload — 任务清单 (TASKS)
 
 > 说明：本功能代码已实现完成，下列任务为 **代码评审与自动化验证** 任务。
 
@@ -75,10 +75,10 @@
 
 ```bash
 # 编译
-dotnet build backend/ruoyu.docretrieval/Ruoyu.Study.DocRetrieval.sln
+dotnet build services/ruoyu.docretrieval/Ruoyu.Study.DocRetrieval.sln
 
 # 运行所有测试
-dotnet test backend/ruoyu.docretrieval/Ruoyu.Study.DocRetrieval.sln --configuration Release
+dotnet test services/ruoyu.docretrieval/Ruoyu.Study.DocRetrieval.sln --configuration Release
 
 # 运行特定测试
 dotnet test --filter FullyQualifiedName~DocumentDomainServiceTests

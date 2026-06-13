@@ -1,4 +1,4 @@
-# 文档元数据更新 — 测试方案与代码骨架（TESTS）
+﻿# 文档元数据更新 — 测试方案与代码骨架（TESTS）
 
 > 对应测试文件：`test/Ruoyu.Study.DocRetrieval.Tests/DocumentDomainServiceTests.cs`（元数据更新相关测试方法）
 > 运行命令：`dotnet test --filter "FullyQualifiedName~DocumentMetadataTests"`
@@ -357,7 +357,7 @@ public class DocumentMetadataTests
 ## 4. 运行方式
 
 ```bash
-cd backend/ruoyu.docretrieval
+cd services/ruoyu.docretrieval
 dotnet test --filter "FullyQualifiedName~DocumentMetadataTests" -v normal
 ```
 

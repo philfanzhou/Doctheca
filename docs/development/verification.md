@@ -1,4 +1,4 @@
-# Verification Guide
+﻿# Verification Guide
 
 How to verify `ruoyu.docretrieval` is running correctly.
 
@@ -166,7 +166,7 @@ Query parameters: `query` (required), `phrase` (boolean, default false), `pageSi
 
 ## Run Unit Tests
 
-From `backend/ruoyu.docretrieval/` directory:
+From `services/ruoyu.docretrieval/` directory:
 
 ```bash
 dotnet test test/Ruoyu.Study.DocRetrieval.Tests

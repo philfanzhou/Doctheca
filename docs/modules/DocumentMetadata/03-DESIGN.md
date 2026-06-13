@@ -1,11 +1,11 @@
-# 文档元数据更新 — 技术设计（DESIGN）
+﻿# 文档元数据更新 — 技术设计（DESIGN）
 
 ---
 
 ## 1. 目录与文件结构
 
 ```
-backend/ruoyu.docretrieval/
+services/ruoyu.docretrieval/
 ├── src/
 │   ├── Domain/
 │   │   ├── Models/

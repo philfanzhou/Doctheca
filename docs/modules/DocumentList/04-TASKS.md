@@ -1,4 +1,4 @@
-[
+﻿[
   {
     "id": "T-01",
     "title": "代码审查：GetDocumentListAsync 分页参数修正",
@@ -77,8 +77,8 @@
     "id": "T-06",
     "title": "编译验证：dotnet build 成功",
     "type": "build-verify",
-    "description": "在 backend/ruoyu.docretrieval 目录执行 dotnet build -c Release，确认零编译错误。",
-    "target": "backend/ruoyu.docretrieval",
+    "description": "在 services/ruoyu.docretrieval 目录执行 dotnet build -c Release，确认零编译错误。",
+    "target": "services/ruoyu.docretrieval",
     "checkpoints": [
       "dotnet build -c Release 退出码为 0",
       "无 CSxxxx 错误"
@@ -90,7 +90,7 @@
     "title": "测试验证：运行全部单元测试",
     "type": "test-verify",
     "description": "运行文档列表相关的单元测试，确认全部通过。",
-    "target": "backend/ruoyu.docretrieval",
+    "target": "services/ruoyu.docretrieval",
     "checkpoints": [
       "所有 [Fact] 方法全部通过",
       "退出码为 0"

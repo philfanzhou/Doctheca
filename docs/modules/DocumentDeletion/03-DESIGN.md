@@ -1,9 +1,9 @@
-# DocumentDeletion — 架构与设计 (DESIGN)
+﻿# DocumentDeletion — 架构与设计 (DESIGN)
 
 ## 1. 目录与文件结构
 
 ```
-backend/ruoyu.docretrieval/
+services/ruoyu.docretrieval/
 ├── docs/modules/DocumentDeletion/
 │   ├── 01-FEATURE.md
 │   ├── 02-SPEC.md
