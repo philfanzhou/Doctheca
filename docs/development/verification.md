@@ -1,20 +1,20 @@
-# 验证指南
+# Verification Guide
 
-如何验证 `ruoyu.docretrieval` 正常运行。
+How to verify `ruoyu.docretrieval` is running correctly.
 
-## 健康检查
+## Health Check
 
 ```bash
 curl http://localhost:5012/health
 ```
 
-预期响应：
+Expected response:
 
 ```json
 { "status": "healthy", "timestamp": "..." }
 ```
 
-## 上传测试文档
+## Upload Document
 
 ```bash
 curl -X POST http://localhost:5012/admin/documents/upload \
@@ -25,11 +25,11 @@ curl -X POST http://localhost:5012/admin/documents/upload \
   -F "year=2024"
 ```
 
-必填表单字段：`file`、`title`、`subject`、`grade`、`year`。可选：`tags`。
+Required form fields: `file`, `title`, `subject`, `grade`, `year`. Optional: `tags`.
 
-支持的文件类型：PDF、Word（.doc/.docx）、PowerPoint（.ppt/.pptx）。最大大小：200 MB。
+Supported file types: PDF, Word (.doc/.docx), PowerPoint (.ppt/.pptx). Max size: 200 MB.
 
-预期响应：
+Expected response:
 
 ```json
 {
@@ -43,29 +43,60 @@ curl -X POST http://localhost:5012/admin/documents/upload \
 }
 ```
 
-## 文档列表
+## List Documents
 
 ```bash
 curl http://localhost:5012/admin/documents
 ```
 
-支持的查询参数：`page`、`pageSize`、`status`、`subject`、`grade`、`keyword`、`year`。
+Query parameters: `page`, `pageSize`, `status`, `subject`, `grade`, `keyword`, `year`.
 
-带筛选条件的示例：
+With filters:
 
 ```bash
 curl "http://localhost:5012/admin/documents?subject=English&grade=G10&page=1&pageSize=10"
 ```
 
-## 检查文档状态
+## Get Document Detail
 
-将 `{id}` 替换为上传时返回的 `document_id`：
+Replace `{id}` with the `document_id` from upload response:
+
+```bash
+curl http://localhost:5012/admin/documents/{id}
+```
+
+Expected response:
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": "...",
+    "title": "Test Document",
+    "source_type": "pdf",
+    "file_hash": "...",
+    "file_size": 12345,
+    "language": "en",
+    "subject": "English",
+    "grade": "G10",
+    "year": "2024",
+    "tags": null,
+    "status": "ready",
+    "created_at": "...",
+    "updated_at": "..."
+  }
+}
+```
+
+## Check Document Status
+
+Replace `{id}` with the `document_id` from upload response:
 
 ```bash
 curl http://localhost:5012/admin/documents/{id}/status
 ```
 
-预期响应：
+Expected response:
 
 ```json
 {
@@ -89,32 +120,62 @@ curl http://localhost:5012/admin/documents/{id}/status
 }
 ```
 
-文档状态流转：`pending` → `processing` → `ready`（或 `failed`）。
+Document status flow: `pending` -> `processing` -> `ready` (or `failed`).
 
-任务状态流转：`pending` → `processing` → `success`（或 `failed`）。
+Job status flow: `pending` -> `processing` -> `success` (or `failed`).
 
-## 运行测试
+## Update Document Metadata
 
-在 `backend/ruoyu.docretrieval/` 目录下执行：
+Only documents in `ready` status can be updated:
+
+```bash
+curl -X PUT http://localhost:5012/admin/documents/Test%20Document/metadata \
+  -H "Content-Type: application/json" \
+  -d '{"subject":"English","grade":"G11","year":"2025"}'
+```
+
+## Delete Document
+
+By ID (recommended):
+
+```bash
+curl -X DELETE http://localhost:5012/admin/documents/{id}
+```
+
+By title (alternative):
+
+```bash
+curl -X DELETE http://localhost:5012/admin/documents/by-title/Test%20Document
+```
+
+## Search Test Endpoint
+
+Requires OpenSearch (or database fallback) to be available:
+
+```bash
+curl "http://localhost:5012/admin/documents/search-test?query=algebra&pageSize=5"
+```
+
+With filters:
+
+```bash
+curl "http://localhost:5012/admin/documents/search-test?query=algebra&subject=English&grade=G10&pageSize=5"
+```
+
+Query parameters: `query` (required), `phrase` (boolean, default false), `pageSize` (1-100, default 20), `pageToken` (optional cursor), `subject`, `grade`, `year`, `documentTitle` (optional filters).
+
+## Run Unit Tests
+
+From `backend/ruoyu.docretrieval/` directory:
 
 ```bash
 dotnet test test/Ruoyu.Study.DocRetrieval.Tests
 ```
 
-按功能模块筛选：
+Filter by module:
 
 ```bash
 dotnet test --filter "FullyQualifiedName~DocumentUpload"
 dotnet test --filter "FullyQualifiedName~ExactSearch"
 dotnet test --filter "FullyQualifiedName~DocumentDeletion"
 ```
-
-## 搜索测试端点
-
-需要 OpenSearch（或数据库回退）可用：
-
-```bash
-curl "http://localhost:5012/admin/documents/search-test?query=algebra&pageSize=5"
-```
-
-查询参数：`query`（必填）、`phrase`（布尔值，默认 false）、`pageSize`（1–100，默认 20）、`pageToken`（可选游标）。

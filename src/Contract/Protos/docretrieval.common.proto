@@ -4,7 +4,7 @@ package ruoyu.study.docretrieval.v1;
 
 option csharp_namespace = "Ruoyu.Study.DocRetrieval.Contract.Protos";
 
-// 文档状态
+// Document status
 enum DocumentStatus {
   DOCUMENT_STATUS_UNSPECIFIED = 0;
   DOCUMENT_STATUS_PENDING = 1;
@@ -13,7 +13,7 @@ enum DocumentStatus {
   DOCUMENT_STATUS_FAILED = 4;
 }
 
-// 导入任务状态
+// Ingestion job status
 enum IngestionJobStatus {
   INGESTION_JOB_STATUS_UNSPECIFIED = 0;
   INGESTION_JOB_STATUS_PENDING = 1;
@@ -22,7 +22,7 @@ enum IngestionJobStatus {
   INGESTION_JOB_STATUS_FAILED = 4;
 }
 
-// 查询过滤条件
+// Search filter
 message SearchFilter {
   string document_title = 1;
   string subject = 2;
@@ -30,7 +30,7 @@ message SearchFilter {
   string year = 4;
 }
 
-// 精确检索请求
+// Exact search request
 message ExactSearchRequest {
   string query = 1;
   bool phrase = 2;
@@ -39,14 +39,14 @@ message ExactSearchRequest {
   string page_token = 5;
 }
 
-// 检索响应
+// Search response
 message SearchResponse {
   repeated SearchResult results = 1;
   string next_page_token = 2;
   int32 total_count = 3;
 }
 
-// 单条检索结果
+// Single search result
 message SearchResult {
   string document_name = 1;
   int32 page_number = 2;

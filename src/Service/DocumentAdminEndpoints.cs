@@ -31,8 +31,10 @@ public static class DocumentAdminEndpoints
     {
         app.MapPost("/admin/documents/upload", UploadDocument);
         app.MapGet("/admin/documents", ListDocuments);
-        app.MapGet("/admin/documents/{id}/status", GetDocumentStatus);
-        app.MapDelete("/admin/documents/{title}", DeleteDocument);
+        app.MapGet("/admin/documents/{id:guid}", GetDocument);
+        app.MapGet("/admin/documents/{id:guid}/status", GetDocumentStatus);
+        app.MapDelete("/admin/documents/{id:guid}", DeleteDocumentById);
+        app.MapDelete("/admin/documents/by-title/{title}", DeleteDocument);
         app.MapPut("/admin/documents/{title}/metadata", UpdateMetadata);
         app.MapGet("/admin/documents/search-test", SearchTest);
 
@@ -184,7 +186,7 @@ public static class DocumentAdminEndpoints
         if (document == null)
             return Results.NotFound(new { success = false, message = "Document not found", errorCode = "DOCRETRIEVAL_DOCUMENT_NOT_FOUND" });
 
-        var job = await documentService.GetIngestionJobAsync(id);
+        var jobs = await documentService.GetJobsByDocumentIdAsync(id);
 
         return Results.Ok(new
         {
@@ -194,20 +196,78 @@ public static class DocumentAdminEndpoints
                 document_id = id.ToString(),
                 title = document.Title,
                 status = document.Status,
-                jobs = job != null ? new[]
+                jobs = jobs.Select(j => new
                 {
-                    new
-                    {
-                        job_id = job.Id.ToString(),
-                        status = job.Status,
-                        parser_version = job.ParserVersion,
-                        ocr_version = job.OcrVersion,
-                        error_message = job.ErrorMessage,
-                        started_at = job.StartedAt?.UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'"),
-                        finished_at = job.FinishedAt?.UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'")
-                    }
-                } : Array.Empty<object>()
+                    job_id = j.Id.ToString(),
+                    status = j.Status,
+                    parser_version = j.ParserVersion,
+                    ocr_version = j.OcrVersion,
+                    error_message = j.ErrorMessage,
+                    started_at = j.StartedAt?.UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'"),
+                    finished_at = j.FinishedAt?.UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'")
+                })
             }
+        });
+    }
+
+    private static async Task<IResult> GetDocument(
+        Guid id,
+        IDocumentDomainService documentService)
+    {
+        var document = await documentService.GetDocumentAsync(id);
+        if (document == null)
+            return Results.NotFound(new { success = false, message = "Document not found", errorCode = "DOCRETRIEVAL_DOCUMENT_NOT_FOUND" });
+
+        return Results.Ok(new
+        {
+            success = true,
+            data = new
+            {
+                id = document.Id.ToString(),
+                title = document.Title,
+                source_type = document.SourceType,
+                file_hash = document.FileHash,
+                file_size = document.FileSize,
+                language = document.Language,
+                subject = document.Subject,
+                grade = document.Grade,
+                year = document.Year,
+                tags = document.Tags != null ? JsonSerializer.Deserialize<string[]>(document.Tags) : null,
+                status = document.Status,
+                created_at = document.CreatedAt.UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'"),
+                updated_at = document.UpdatedAt?.UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'")
+            }
+        });
+    }
+
+    private static async Task<IResult> DeleteDocumentById(
+        Guid id,
+        IDocumentDomainService documentService,
+        IOssService ossService,
+        ILogger logger)
+    {
+        var document = await documentService.GetDocumentAsync(id);
+        if (document == null)
+            return Results.NotFound(new { success = false, message = "Document not found", errorCode = "DOCRETRIEVAL_DOCUMENT_NOT_FOUND" });
+
+        var deleted = await documentService.DeleteDocumentAsync(document.Title);
+
+        if (!string.IsNullOrEmpty(document.FilePath))
+        {
+            try
+            {
+                await ossService.DeleteAsync(document.FilePath);
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Failed to delete document file: {FilePath}", document.FilePath);
+            }
+        }
+
+        return Results.Ok(new
+        {
+            success = true,
+            data = new { id = id.ToString(), title = document.Title, deleted = true }
         });
     }
 
@@ -326,15 +386,32 @@ public static class DocumentAdminEndpoints
         [FromQuery] string query,
         [FromQuery] bool phrase = false,
         [FromQuery] int pageSize = 20,
-        [FromQuery] string? pageToken = null)
+        [FromQuery] string? pageToken = null,
+        [FromQuery] string? subject = null,
+        [FromQuery] string? grade = null,
+        [FromQuery] string? year = null,
+        [FromQuery] string? documentTitle = null)
     {
         if (string.IsNullOrWhiteSpace(query))
             return Results.BadRequest(new { success = false, message = "Query cannot be empty" });
 
         pageSize = Math.Min(Math.Max(pageSize, 1), 100);
 
+        SearchFilterModel? filter = null;
+        if (!string.IsNullOrWhiteSpace(subject) || !string.IsNullOrWhiteSpace(grade)
+            || !string.IsNullOrWhiteSpace(year) || !string.IsNullOrWhiteSpace(documentTitle))
+        {
+            filter = new SearchFilterModel
+            {
+                Subject = subject,
+                Grade = grade,
+                Year = year,
+                DocumentTitle = documentTitle
+            };
+        }
+
         var (results, totalCount, nextToken) = await searchService.ExactSearchAsync(
-            query, phrase, null, pageSize, pageToken);
+            query, phrase, filter, pageSize, pageToken);
 
         return Results.Ok(new
         {
