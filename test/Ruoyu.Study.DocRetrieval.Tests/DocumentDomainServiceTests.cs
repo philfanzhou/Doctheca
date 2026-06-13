@@ -55,7 +55,7 @@ public class DocumentDomainServiceTests
         // Arrange
         var document = CreateValidDocument();
         _documentRepoMock.Setup(r => r.GetByTitleAsync(document.Title)).ReturnsAsync((DocumentModel?)null);
-        _documentRepoMock.Setup(r => r.GetByFileHashAndStatusAsync(document.FileHash, "ready")).ReturnsAsync((DocumentModel?)null);
+        _documentRepoMock.Setup(r => r.GetByFileHashAndStatusAsync(document.FileHash, DocumentStatus.Ready)).ReturnsAsync((DocumentModel?)null);
 
         // Act
         var result = await _service.CreateDocumentAsync(document);
@@ -63,7 +63,7 @@ public class DocumentDomainServiceTests
         // Assert
         Assert.NotNull(result);
         Assert.NotEqual(Guid.Empty, result.Id);
-        Assert.Equal("pending", result.Status);
+        Assert.Equal(DocumentStatus.Pending, result.Status);
         _documentRepoMock.Verify(r => r.AddAsync(It.IsAny<DocumentModel>()), Times.Once);
         _jobRepoMock.Verify(r => r.AddAsync(It.IsAny<DocumentIngestionJobModel>()), Times.Once);
         _unitOfWorkMock.Verify(u => u.SaveChangesAsync(), Times.Once);
@@ -87,7 +87,7 @@ public class DocumentDomainServiceTests
         // Arrange
         var document = CreateValidDocument();
         _documentRepoMock.Setup(r => r.GetByTitleAsync(document.Title)).ReturnsAsync((DocumentModel?)null);
-        _documentRepoMock.Setup(r => r.GetByFileHashAndStatusAsync(document.FileHash, "ready")).ReturnsAsync(new DocumentModel());
+        _documentRepoMock.Setup(r => r.GetByFileHashAndStatusAsync(document.FileHash, DocumentStatus.Ready)).ReturnsAsync(new DocumentModel());
 
         // Act & Assert
         var ex = await Assert.ThrowsAsync<DocRetrievalValidationException>(() => _service.CreateDocumentAsync(document));
@@ -138,7 +138,7 @@ public class DocumentDomainServiceTests
             Subject = "English",
             Grade = "G1",
             Year = "2023",
-            Status = "ready"
+            Status = DocumentStatus.Ready
         };
         _documentRepoMock.Setup(r => r.GetByTitleAsync(document.Title)).ReturnsAsync(document);
         _documentRepoMock.Setup(r => r.UpdateAsync(It.IsAny<DocumentModel>())).ReturnsAsync(true);
@@ -170,7 +170,7 @@ public class DocumentDomainServiceTests
     public async Task UpdateMetadataAsync_DocumentNotReady_ThrowsValidationException()
     {
         // Arrange
-        var document = new DocumentModel { Title = "pending-doc", Status = "pending" };
+        var document = new DocumentModel { Title = "pending-doc", Status = DocumentStatus.Pending };
         _documentRepoMock.Setup(r => r.GetByTitleAsync("pending-doc")).ReturnsAsync(document);
 
         // Act & Assert
@@ -183,7 +183,7 @@ public class DocumentDomainServiceTests
     public async Task UpdateMetadataAsync_InvalidSubject_ThrowsValidationException()
     {
         // Arrange
-        var document = new DocumentModel { Title = "ready-doc", Status = "ready", Subject = "English", Grade = "G1", Year = "2023" };
+        var document = new DocumentModel { Title = "ready-doc", Status = DocumentStatus.Ready, Subject = "English", Grade = "G1", Year = "2023" };
         _documentRepoMock.Setup(r => r.GetByTitleAsync("ready-doc")).ReturnsAsync(document);
 
         // Act & Assert
@@ -196,7 +196,7 @@ public class DocumentDomainServiceTests
     public async Task UpdateMetadataAsync_InvalidGrade_ThrowsValidationException()
     {
         // Arrange
-        var document = new DocumentModel { Title = "ready-doc", Status = "ready", Subject = "English", Grade = "G1", Year = "2023" };
+        var document = new DocumentModel { Title = "ready-doc", Status = DocumentStatus.Ready, Subject = "English", Grade = "G1", Year = "2023" };
         _documentRepoMock.Setup(r => r.GetByTitleAsync("ready-doc")).ReturnsAsync(document);
 
         // Act & Assert
@@ -212,7 +212,7 @@ public class DocumentDomainServiceTests
         var document = new DocumentModel
         {
             Title = "ready-doc",
-            Status = "ready",
+            Status = DocumentStatus.Ready,
             Subject = "English",
             Grade = "G1",
             Year = "2023"
@@ -275,7 +275,7 @@ public class DocumentDomainServiceTests
         // Arrange
         var document = CreateValidDocument();
         document.Id = Guid.NewGuid();
-        var job = new DocumentIngestionJobModel { Id = Guid.NewGuid(), DocumentId = document.Id, Status = "processing" };
+        var job = new DocumentIngestionJobModel { Id = Guid.NewGuid(), DocumentId = document.Id, Status = DocumentStatus.Processing };
         _documentRepoMock.Setup(r => r.GetByTitleAsync(document.Title)).ReturnsAsync(document);
         _documentRepoMock.Setup(r => r.DeleteAsync(document.Id)).ReturnsAsync(true);
         _jobRepoMock.Setup(r => r.GetByDocumentIdAsync(document.Id)).ReturnsAsync(job);
@@ -286,7 +286,7 @@ public class DocumentDomainServiceTests
         // Assert
         Assert.True(result);
         // Verify job was cancelled
-        _jobRepoMock.Verify(r => r.UpdateAsync(It.Is<DocumentIngestionJobModel>(j => j.Status == "cancelled")), Times.Once);
+        _jobRepoMock.Verify(r => r.UpdateAsync(It.Is<DocumentIngestionJobModel>(j => j.Status == DocumentStatus.Cancelled)), Times.Once);
     }
 
     #endregion
@@ -298,8 +298,8 @@ public class DocumentDomainServiceTests
     {
         // Arrange
         var documentId = Guid.NewGuid();
-        var job = new DocumentIngestionJobModel { Id = Guid.NewGuid(), DocumentId = documentId, Status = "pending" };
-        var document = new DocumentModel { Id = documentId, Status = "pending" };
+        var job = new DocumentIngestionJobModel { Id = Guid.NewGuid(), DocumentId = documentId, Status = DocumentStatus.Pending };
+        var document = new DocumentModel { Id = documentId, Status = DocumentStatus.Pending };
 
         _jobRepoMock.Setup(r => r.GetByIdAsync(job.Id)).ReturnsAsync(job);
         _documentRepoMock.Setup(r => r.GetByIdAsync(documentId)).ReturnsAsync(document);
@@ -308,8 +308,8 @@ public class DocumentDomainServiceTests
         await _service.StartIngestionJobAsync(job.Id, "v1.0", "5.0");
 
         // Assert
-        _jobRepoMock.Verify(r => r.UpdateAsync(It.Is<DocumentIngestionJobModel>(j => j.Status == "processing")), Times.Once);
-        _documentRepoMock.Verify(r => r.UpdateAsync(It.Is<DocumentModel>(d => d.Status == "processing")), Times.Once);
+        _jobRepoMock.Verify(r => r.UpdateAsync(It.Is<DocumentIngestionJobModel>(j => j.Status == DocumentStatus.Processing)), Times.Once);
+        _documentRepoMock.Verify(r => r.UpdateAsync(It.Is<DocumentModel>(d => d.Status == DocumentStatus.Processing)), Times.Once);
     }
 
     [Fact]
@@ -317,8 +317,8 @@ public class DocumentDomainServiceTests
     {
         // Arrange
         var documentId = Guid.NewGuid();
-        var job = new DocumentIngestionJobModel { Id = Guid.NewGuid(), DocumentId = documentId, Status = "processing" };
-        var document = new DocumentModel { Id = documentId, Status = "processing" };
+        var job = new DocumentIngestionJobModel { Id = Guid.NewGuid(), DocumentId = documentId, Status = DocumentStatus.Processing };
+        var document = new DocumentModel { Id = documentId, Status = DocumentStatus.Processing };
 
         _jobRepoMock.Setup(r => r.GetByIdAsync(job.Id)).ReturnsAsync(job);
         _documentRepoMock.Setup(r => r.GetByIdAsync(documentId)).ReturnsAsync(document);
@@ -327,8 +327,8 @@ public class DocumentDomainServiceTests
         await _service.CompleteIngestionJobAsync(job.Id);
 
         // Assert
-        _jobRepoMock.Verify(r => r.UpdateAsync(It.Is<DocumentIngestionJobModel>(j => j.Status == "success")), Times.Once);
-        _documentRepoMock.Verify(r => r.UpdateAsync(It.Is<DocumentModel>(d => d.Status == "ready")), Times.Once);
+        _jobRepoMock.Verify(r => r.UpdateAsync(It.Is<DocumentIngestionJobModel>(j => j.Status == DocumentStatus.Success)), Times.Once);
+        _documentRepoMock.Verify(r => r.UpdateAsync(It.Is<DocumentModel>(d => d.Status == DocumentStatus.Ready)), Times.Once);
     }
 
     [Fact]
@@ -336,8 +336,8 @@ public class DocumentDomainServiceTests
     {
         // Arrange
         var documentId = Guid.NewGuid();
-        var job = new DocumentIngestionJobModel { Id = Guid.NewGuid(), DocumentId = documentId, Status = "processing" };
-        var document = new DocumentModel { Id = documentId, Status = "processing" };
+        var job = new DocumentIngestionJobModel { Id = Guid.NewGuid(), DocumentId = documentId, Status = DocumentStatus.Processing };
+        var document = new DocumentModel { Id = documentId, Status = DocumentStatus.Processing };
 
         _jobRepoMock.Setup(r => r.GetByIdAsync(job.Id)).ReturnsAsync(job);
         _documentRepoMock.Setup(r => r.GetByIdAsync(documentId)).ReturnsAsync(document);
@@ -346,8 +346,8 @@ public class DocumentDomainServiceTests
         await _service.FailIngestionJobAsync(job.Id, "解析失败");
 
         // Assert
-        _jobRepoMock.Verify(r => r.UpdateAsync(It.Is<DocumentIngestionJobModel>(j => j.Status == "failed" && j.ErrorMessage == "解析失败")), Times.Once);
-        _documentRepoMock.Verify(r => r.UpdateAsync(It.Is<DocumentModel>(d => d.Status == "failed")), Times.Once);
+        _jobRepoMock.Verify(r => r.UpdateAsync(It.Is<DocumentIngestionJobModel>(j => j.Status == DocumentStatus.Failed && j.ErrorMessage == "解析失败")), Times.Once);
+        _documentRepoMock.Verify(r => r.UpdateAsync(It.Is<DocumentModel>(d => d.Status == DocumentStatus.Failed)), Times.Once);
     }
 
     [Fact]
@@ -355,14 +355,14 @@ public class DocumentDomainServiceTests
     {
         // Arrange
         var documentId = Guid.NewGuid();
-        var job = new DocumentIngestionJobModel { Id = Guid.NewGuid(), DocumentId = documentId, Status = "pending" };
+        var job = new DocumentIngestionJobModel { Id = Guid.NewGuid(), DocumentId = documentId, Status = DocumentStatus.Pending };
         _jobRepoMock.Setup(r => r.GetByDocumentIdAsync(documentId)).ReturnsAsync(job);
 
         // Act
         await _service.CancelIngestionJobAsync(documentId);
 
         // Assert
-        _jobRepoMock.Verify(r => r.UpdateAsync(It.Is<DocumentIngestionJobModel>(j => j.Status == "cancelled")), Times.Once);
+        _jobRepoMock.Verify(r => r.UpdateAsync(It.Is<DocumentIngestionJobModel>(j => j.Status == DocumentStatus.Cancelled)), Times.Once);
     }
 
     [Fact]
@@ -370,14 +370,14 @@ public class DocumentDomainServiceTests
     {
         // Arrange
         var documentId = Guid.NewGuid();
-        var job = new DocumentIngestionJobModel { Id = Guid.NewGuid(), DocumentId = documentId, Status = "processing" };
+        var job = new DocumentIngestionJobModel { Id = Guid.NewGuid(), DocumentId = documentId, Status = DocumentStatus.Processing };
         _jobRepoMock.Setup(r => r.GetByDocumentIdAsync(documentId)).ReturnsAsync(job);
 
         // Act
         await _service.CancelIngestionJobAsync(documentId);
 
         // Assert
-        _jobRepoMock.Verify(r => r.UpdateAsync(It.Is<DocumentIngestionJobModel>(j => j.Status == "cancelled")), Times.Once);
+        _jobRepoMock.Verify(r => r.UpdateAsync(It.Is<DocumentIngestionJobModel>(j => j.Status == DocumentStatus.Cancelled)), Times.Once);
     }
 
     [Fact]
@@ -385,7 +385,7 @@ public class DocumentDomainServiceTests
     {
         // Arrange
         var documentId = Guid.NewGuid();
-        var job = new DocumentIngestionJobModel { Id = Guid.NewGuid(), DocumentId = documentId, Status = "success" };
+        var job = new DocumentIngestionJobModel { Id = Guid.NewGuid(), DocumentId = documentId, Status = DocumentStatus.Success };
         _jobRepoMock.Setup(r => r.GetByDocumentIdAsync(documentId)).ReturnsAsync(job);
 
         // Act
@@ -401,10 +401,10 @@ public class DocumentDomainServiceTests
         // Arrange
         var pendingJobs = new List<DocumentIngestionJobModel>
         {
-            new() { Id = Guid.NewGuid(), Status = "pending" },
-            new() { Id = Guid.NewGuid(), Status = "pending" }
+            new() { Id = Guid.NewGuid(), Status = DocumentStatus.Pending },
+            new() { Id = Guid.NewGuid(), Status = DocumentStatus.Pending }
         };
-        _jobRepoMock.Setup(r => r.GetByStatusAsync("pending")).ReturnsAsync(pendingJobs);
+        _jobRepoMock.Setup(r => r.GetByStatusAsync(DocumentStatus.Pending)).ReturnsAsync(pendingJobs);
 
         // Act
         var result = await _service.GetPendingJobsAsync();
@@ -436,11 +436,11 @@ public class DocumentDomainServiceTests
     {
         // Arrange
         var items = new List<DocumentModel> { CreateValidDocument() };
-        _documentRepoMock.Setup(r => r.GetListAsync(1, 20, "ready", "English", "G1", "keyword", "2023"))
+        _documentRepoMock.Setup(r => r.GetListAsync(1, 20, DocumentStatus.Ready, "English", "G1", "keyword", "2023"))
             .ReturnsAsync((items, 1));
 
         // Act
-        var (result, totalCount) = await _service.GetDocumentListAsync(1, 20, "ready", "English", "G1", "keyword", "2023");
+        var (result, totalCount) = await _service.GetDocumentListAsync(1, 20, DocumentStatus.Ready, "English", "G1", "keyword", "2023");
 
         // Assert
         Assert.Single(result);

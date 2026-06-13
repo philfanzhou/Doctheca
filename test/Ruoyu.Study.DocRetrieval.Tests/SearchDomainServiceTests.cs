@@ -79,7 +79,7 @@ public class SearchDomainServiceTests
 
         var documents = new List<DocumentModel>
         {
-            new() { Id = Guid.NewGuid(), Title = "test.pdf", Status = "ready", Subject = "English", Grade = "G10", Year = "2023" }
+            new() { Id = Guid.NewGuid(), Title = "test.pdf", Status = DocumentStatus.Ready, Subject = "English", Grade = "G10", Year = "2023" }
         };
         _documentRepoMock
             .Setup(r => r.GetListAsync(It.IsAny<int>(), It.IsAny<int>(), null, null, null, null, null))
@@ -119,9 +119,9 @@ public class SearchDomainServiceTests
 
         var documents = new List<DocumentModel>
         {
-            new() { Id = Guid.NewGuid(), Title = "ready-doc", Status = "ready", Subject = "English", Grade = "G10", Year = "2023" },
-            new() { Id = Guid.NewGuid(), Title = "pending-doc", Status = "pending", Subject = "English", Grade = "G10", Year = "2023" },
-            new() { Id = Guid.NewGuid(), Title = "failed-doc", Status = "failed", Subject = "English", Grade = "G10", Year = "2023" }
+            new() { Id = Guid.NewGuid(), Title = "ready-doc", Status = DocumentStatus.Ready, Subject = "English", Grade = "G10", Year = "2023" },
+            new() { Id = Guid.NewGuid(), Title = "pending-doc", Status = DocumentStatus.Pending, Subject = "English", Grade = "G10", Year = "2023" },
+            new() { Id = Guid.NewGuid(), Title = "failed-doc", Status = DocumentStatus.Failed, Subject = "English", Grade = "G10", Year = "2023" }
         };
         _documentRepoMock
             .Setup(r => r.GetListAsync(It.IsAny<int>(), It.IsAny<int>(), null, null, null, null, null))
@@ -210,7 +210,7 @@ public class SearchDomainServiceTests
             {
                 Id = Guid.NewGuid(),
                 Title = $"doc{i}.pdf",
-                Status = "ready",
+                Status = DocumentStatus.Ready,
                 Subject = "English",
                 Grade = "G10",
                 Year = "2023"
@@ -261,7 +261,7 @@ public class SearchDomainServiceTests
             .Setup(s => s.ExactSearchAsync(It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<SearchFilterModel?>(), It.IsAny<int>(), It.IsAny<string?>()))
             .ThrowsAsync(new Exception("OpenSearch unavailable"));
 
-        var doc = new DocumentModel { Id = Guid.NewGuid(), Title = "exam.pdf", Status = "ready", Subject = "English", Grade = "G10", Year = "2023" };
+        var doc = new DocumentModel { Id = Guid.NewGuid(), Title = "exam.pdf", Status = DocumentStatus.Ready, Subject = "English", Grade = "G10", Year = "2023" };
         _documentRepoMock
             .Setup(r => r.GetListAsync(It.IsAny<int>(), It.IsAny<int>(), null, null, null, null, null))
             .ReturnsAsync((new List<DocumentModel> { doc }, 1));
