@@ -20,7 +20,7 @@ curl http://localhost:5012/health
 curl -X POST http://localhost:5012/admin/documents/upload \
   -F "file=@test.pdf" \
   -F "title=Test Document" \
-  -F "subject=英语" \
+  -F "subject=English" \
   -F "grade=G10" \
   -F "year=2024"
 ```
@@ -54,7 +54,7 @@ curl http://localhost:5012/admin/documents
 带筛选条件的示例：
 
 ```bash
-curl "http://localhost:5012/admin/documents?subject=英语&grade=G10&page=1&pageSize=10"
+curl "http://localhost:5012/admin/documents?subject=English&grade=G10&page=1&pageSize=10"
 ```
 
 ## 检查文档状态

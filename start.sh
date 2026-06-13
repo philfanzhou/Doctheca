@@ -2,24 +2,28 @@
 set -e
 
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-IMAGE_TAG="20260602"
+IMAGE_TAG="20260613"
 IMAGE_NAME="ruoyu.docretrieval:${IMAGE_TAG}"
 CONTAINER_NAME="ruoyu-docretrieval"
 NETWORK_NAME="ruoyu-net"
 
-DOCRETRIEVAL_GRPC_PORT="10911"
-DOCRETRIEVAL_HTTP_PORT="10912"
+# Prerequisites: start these services first
+#   .env-script/01-start-postgres.sh
+#   .env-script/03-start-seaweedfs.sh
+#   .env-script/04-start-opensearch.sh
+
+DB_HOST="ruoyu-postgres"
+DB_PORT="5432"
+DB_NAME="ruoyu_study_docretrieval"
+DB_USER="postgres"
+DB_PASS="postgres"
+
+CONNECTION_STRING="Host=${DB_HOST};Port=${DB_PORT};Database=${DB_NAME};Username=${DB_USER};Password=${DB_PASS};"
 
 OSS_ENDPOINT="ruoyu-seaweedfs:8333"
 OSS_ACCESS_KEY="seaweedfs_admin"
 OSS_SECRET_KEY="seaweedfs_admin"
 OSS_BUCKET="ruoyu-study"
-
-POSTGRES_HOST="ruoyu-postgres"
-POSTGRES_PORT="5432"
-POSTGRES_DB="ruoyu_study_docretrieval"
-POSTGRES_USER="postgres"
-POSTGRES_PASSWORD="postgres"
 
 OPENSEARCH_URL="http://ruoyu-opensearch:9200"
 
@@ -38,10 +42,10 @@ docker run -d \
   --name "$CONTAINER_NAME" \
   --restart unless-stopped \
   --network "$NETWORK_NAME" \
-  -p "${DOCRETRIEVAL_GRPC_PORT}:5011" \
-  -p "${DOCRETRIEVAL_HTTP_PORT}:5012" \
   -e TZ=Asia/Shanghai \
-  -e ConnectionStrings__Default="Host=${POSTGRES_HOST};Port=${POSTGRES_PORT};Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}" \
+  -e Endpoints__Grpc="5011" \
+  -e Endpoints__Http="5012" \
+  -e ConnectionStrings__Default="${CONNECTION_STRING}" \
   -e Oss__Endpoint="${OSS_ENDPOINT}" \
   -e Oss__AccessKey="${OSS_ACCESS_KEY}" \
   -e Oss__SecretKey="${OSS_SECRET_KEY}" \
@@ -51,12 +55,12 @@ docker run -d \
   "$IMAGE_NAME"
 
 echo "${CONTAINER_NAME} started"
-echo "-> gRPC Port: ${DOCRETRIEVAL_GRPC_PORT}"
-echo "-> HTTP Port: ${DOCRETRIEVAL_HTTP_PORT}"
-echo "-> PostgreSQL: ${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}"
+echo "-> gRPC: 5011 (internal)"
+echo "-> HTTP: 5012 (internal)"
+echo "-> DB: ${DB_HOST}:${DB_PORT}/${DB_NAME}"
 echo "-> OpenSearch: ${OPENSEARCH_URL}"
 echo "-> OSS: ${OSS_ENDPOINT}"
 echo "-> Network: ${NETWORK_NAME}"
-echo "-> Image: $IMAGE_NAME"
+echo "-> Image: ${IMAGE_NAME}"
 echo "=== Real-time Logs ==="
 docker logs -f -t "$CONTAINER_NAME"
