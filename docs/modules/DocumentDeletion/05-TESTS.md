@@ -141,7 +141,7 @@ public class DocumentDeletionTests
 ## 6. 运行命令
 
 ```bash
-cd services/ruoyu.docretrieval
+cd src/services/ruoyu.docretrieval
 
 # 单元测试
 dotnet test --filter "FullyQualifiedName~DocumentDeletion"

@@ -72,7 +72,7 @@
 
 ## 命令速查
 
-在 `services/ruoyu.docretrieval/` 目录下执行：
+在 `src/services/ruoyu.docretrieval/` 目录下执行：
 
 ```bash
 # 构建

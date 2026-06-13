@@ -80,7 +80,7 @@
     "id": "BUILD-01",
     "depends_on": ["TEST-01", "TEST-02", "TEST-03", "TEST-04", "TEST-05"],
     "action": "在 Release 配置下编译解决方案并运行所有测试，打印覆盖率摘要。",
-    "files": ["services/ruoyu.docretrieval/*.sln", "services/ruoyu.docretrieval/src/**/*.cs", "services/ruoyu.docretrieval/test/**/*.cs"],
+    "files": ["src/services/ruoyu.docretrieval/*.sln", "src/services/ruoyu.docretrieval/src/**/*.cs", "src/services/ruoyu.docretrieval/test/**/*.cs"],
     "acceptance": "dotnet test --configuration Release --filter FullyQualifiedName~ExactSearch",
     "notes": "必须零警告，无测试失败。"
   }

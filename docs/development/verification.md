@@ -166,7 +166,7 @@ Query parameters: `query` (required), `phrase` (boolean, default false), `pageSi
 
 ## Run Unit Tests
 
-From `services/ruoyu.docretrieval/` directory:
+From `src/services/ruoyu.docretrieval/` directory:
 
 ```bash
 dotnet test test/Ruoyu.Study.DocRetrieval.Tests

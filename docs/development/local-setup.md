@@ -48,7 +48,7 @@ Host=localhost;Port=5432;Database=ruoyu_study_docretrieval;Username=phil
 
 ## 运行服务
 
-在 `services/ruoyu.docretrieval/` 目录下执行：
+在 `src/services/ruoyu.docretrieval/` 目录下执行：
 
 ```bash
 dotnet run --project src/Host

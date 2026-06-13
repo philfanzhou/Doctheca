@@ -3,7 +3,7 @@
 ## 1. 目录与文件结构
 
 ```
-services/ruoyu.docretrieval/
+src/services/ruoyu.docretrieval/
 ├── docs/modules/DocumentDeletion/
 │   ├── 01-FEATURE.md
 │   ├── 02-SPEC.md

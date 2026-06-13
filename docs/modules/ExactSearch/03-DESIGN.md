@@ -3,7 +3,7 @@
 ## 本功能在项目中的目录与文件结构
 
 ```
-services/ruoyu.docretrieval/
+src/services/ruoyu.docretrieval/
 ├── src/
 │   ├── Domain/
 │   │   ├── Models/

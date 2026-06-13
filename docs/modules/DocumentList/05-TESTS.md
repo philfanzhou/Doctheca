@@ -280,7 +280,7 @@ public class DocumentListTests
 ## 4. 运行方式
 
 ```bash
-cd services/ruoyu.docretrieval
+cd src/services/ruoyu.docretrieval
 dotnet test --filter "FullyQualifiedName~DocumentListTests" -v normal
 ```
 

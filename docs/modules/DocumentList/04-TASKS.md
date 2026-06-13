@@ -77,8 +77,8 @@
     "id": "T-06",
     "title": "编译验证：dotnet build 成功",
     "type": "build-verify",
-    "description": "在 services/ruoyu.docretrieval 目录执行 dotnet build -c Release，确认零编译错误。",
-    "target": "services/ruoyu.docretrieval",
+    "description": "在 src/services/ruoyu.docretrieval 目录执行 dotnet build -c Release，确认零编译错误。",
+    "target": "src/services/ruoyu.docretrieval",
     "checkpoints": [
       "dotnet build -c Release 退出码为 0",
       "无 CSxxxx 错误"
@@ -90,7 +90,7 @@
     "title": "测试验证：运行全部单元测试",
     "type": "test-verify",
     "description": "运行文档列表相关的单元测试，确认全部通过。",
-    "target": "services/ruoyu.docretrieval",
+    "target": "src/services/ruoyu.docretrieval",
     "checkpoints": [
       "所有 [Fact] 方法全部通过",
       "退出码为 0"

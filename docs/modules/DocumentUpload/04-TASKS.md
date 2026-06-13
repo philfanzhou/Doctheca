@@ -75,10 +75,10 @@
 
 ```bash
 # 编译
-dotnet build services/ruoyu.docretrieval/Ruoyu.Study.DocRetrieval.sln
+dotnet build src/services/ruoyu.docretrieval/Ruoyu.Study.DocRetrieval.sln
 
 # 运行所有测试
-dotnet test services/ruoyu.docretrieval/Ruoyu.Study.DocRetrieval.sln --configuration Release
+dotnet test src/services/ruoyu.docretrieval/Ruoyu.Study.DocRetrieval.sln --configuration Release
 
 # 运行特定测试
 dotnet test --filter FullyQualifiedName~DocumentDomainServiceTests

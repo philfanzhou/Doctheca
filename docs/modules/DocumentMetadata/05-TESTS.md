@@ -357,7 +357,7 @@ public class DocumentMetadataTests
 ## 4. 运行方式
 
 ```bash
-cd services/ruoyu.docretrieval
+cd src/services/ruoyu.docretrieval
 dotnet test --filter "FullyQualifiedName~DocumentMetadataTests" -v normal
 ```
 

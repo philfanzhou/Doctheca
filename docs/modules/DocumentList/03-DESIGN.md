@@ -5,7 +5,7 @@
 ## 1. 目录与文件结构
 
 ```
-services/ruoyu.docretrieval/
+src/services/ruoyu.docretrieval/
 ├── src/
 │   ├── Domain/
 │   │   ├── Models/
