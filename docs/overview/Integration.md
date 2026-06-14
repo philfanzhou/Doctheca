@@ -9,6 +9,7 @@
 | **PostgreSQL** | TCP | 出 | 文档 CRUD + 倒排索引搜索 | 无可降级，返回 gRPC 错误 |
 | **MinIO/SeaweedFS** | S3 | 出 | 文件上传下载 | 上游返回错误，上传/解析失败 |
 | **OpenSearch** | HTTP | 出 | 全文搜索索引写/查 | 索引失败不阻塞主流程，搜索回退到数据库 |
+| **QuantumZhou.Identity** | gRPC | 出 | JWT 签发（GetToken） | 登录/刷新失败返回 401/503 |
 
 ## gRPC 接口（入方向）
 
@@ -19,6 +20,24 @@
 | `ExactSearch` | `ExactSearchRequest` | `SearchResponse` | 精确关键词搜索 |
 
 ## HTTP API（入方向）
+
+### 认证端点（AllowAnonymous）
+
+定义在 [AuthEndpoints.cs](../../src/Service/AuthEndpoints.cs)：
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| POST | `/admin/auth/login` | 用户名密码登录，返回 JWT + RefreshToken |
+| POST | `/admin/auth/refresh` | 使用 RefreshToken 刷新 JWT |
+
+### 认证端点（需认证）
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/admin/auth/me` | 获取当前用户信息 |
+| POST | `/admin/auth/logout` | 登出（吊销 RefreshToken） |
+
+### 文档管理端点（需认证）
 
 定义在 [DocumentAdminEndpoints.cs](../../src/Service/DocumentAdminEndpoints.cs)：
 

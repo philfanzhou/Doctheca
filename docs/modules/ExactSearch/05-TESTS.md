@@ -42,9 +42,9 @@
 
 ### UT-07 数据库搜索 — segments 和 questions 匹配（验证 SPEC FR-07）
 
-- **Given**：文档 status = "ready"，segments 包含匹配文本 "hello world"，questions 包含匹配文本 "hello question"。
+- **Given**：`SearchByTextAsync` 返回 1 条匹配 segment（文本包含 "hello world"），`SearchByStemAsync` 返回 1 条匹配 question（Stem 包含 "hello question"）。
 - **When**：调用 `DatabaseSearchAsync("hello", false, null, 10, null)`。
-- **Then**：返回 2 条结果，分别来自 segment 和 question。
+- **Then**：返回 2 条结果，分别来自 segment 和 question。验证 `SearchByTextAsync` 和 `SearchByStemAsync` 被正确调用。
 
 ### UT-08 仅搜索 ready 文档（验证 SPEC FR-08）
 
@@ -72,11 +72,11 @@
 
 ### UT-12 游标分页（验证 SPEC FR-12）
 
-- **Given**：共 15 条匹配结果，`pageSize = 10`。
+- **Given**：`SearchByTextAsync` 和 `SearchByStemAsync` 合计返回 15 条匹配结果，`pageSize = 10`。
 - **When**：第一次调用 `DatabaseSearchAsync("test", false, null, 10, null)`。
-- **Then**：返回 10 条结果，`nextToken` 不为 null（Base64 编码的 `{"skip":10}`）。
+- **Then**：`SearchByTextAsync` 和 `SearchByStemAsync` 被以 `skip=0, pageSize=10` 调用，返回 10 条结果，`nextToken` 不为 null（Base64 编码的 `{"skip":10}`）。
 - **When**：使用 `nextToken` 第二次调用。
-- **Then**：返回 5 条结果，`nextToken` 为 null。
+- **Then**：仓储方法被以 `skip=10` 调用，返回 5 条结果，`nextToken` 为 null。
 
 ### UT-13 SearchFilter 空字符串不筛选（验证 SPEC FR-13）
 

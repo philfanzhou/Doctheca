@@ -1,4 +1,4 @@
-﻿# ExactSearch — 设计说明 (DESIGN)
+# ExactSearch — 设计说明 (DESIGN)
 
 ## 本功能在项目中的目录与文件结构
 
@@ -133,7 +133,7 @@ public DocumentRetrievalServiceImpl(
 ```csharp
 // SearchDomainService 构造函数
 public SearchDomainService(
-    IServiceProvider serviceProvider,
+    ISearchIndexService? searchIndexService,
     IDocumentRepository documentRepository,
     IDocumentSegmentRepository segmentRepository,
     IQuestionSegmentRepository questionRepository,
@@ -141,10 +141,10 @@ public SearchDomainService(
     ILogger<SearchDomainService> logger)
 ```
 
-- `ISearchIndexService?`：通过 `IServiceProvider.GetService` 可选获取，提供 OpenSearch BM25 搜索能力。
+- `ISearchIndexService?`：通过构造函数可选注入（nullable），提供 OpenSearch BM25 搜索能力；为 `null` 时直接走数据库回退路径。
 - `IDocumentRepository`：文档仓储，提供 `GetListAsync` 用于获取文档列表。
-- `IDocumentSegmentRepository`：文档片段仓储，提供 `GetByDocumentIdAsync`。
-- `IQuestionSegmentRepository`：题目片段仓储，提供 `GetByDocumentIdAsync`。
+- `IDocumentSegmentRepository`：文档片段仓储，提供 `GetByDocumentIdAsync` 和 `SearchByTextAsync(query, pageSize, skip, status?)` 用于数据库级 LIKE 搜索与分页。
+- `IQuestionSegmentRepository`：题目片段仓储，提供 `GetByDocumentIdAsync` 和 `SearchByStemAsync(query, pageSize, skip, status?)` 用于数据库级 LIKE 搜索与分页。
 - `IDocumentPageRepository`：文档页面仓储，提供 `GetByDocumentIdAsync` 用于页码映射。
 
 ## 数据流描述（步骤序列）
@@ -188,13 +188,9 @@ private static async Task<IResult> SearchTest(
 
 ### 数据库回退搜索流程 (DatabaseSearchAsync)
 
-1. 调用 `GetFilteredDocumentsAsync(filter)` 获取符合筛选条件的文档列表。
-2. 过滤 `status == "ready"` 的文档。
-3. 对每个文档：
-   a. 获取页面列表，构建 `PageId → PageNumber` 映射。
-   b. 遍历 segments，对 `seg.Text` 执行 `IndexOf(query, StringComparison.OrdinalIgnoreCase)` 匹配。
-   c. 遍历 questions，对 `q.Stem` 执行 `IndexOf(query, StringComparison.OrdinalIgnoreCase)` 匹配。
-   d. 匹配成功时构建 `SearchResultModel`，设置 `Score` 和 `MatchType`。
+1. 调用 `IDocumentSegmentRepository.SearchByTextAsync(query, pageSize, skip, status?)` 执行数据库级 `LIKE` 查询，返回匹配的文档片段。
+2. 调用 `IQuestionSegmentRepository.SearchByStemAsync(query, pageSize, skip, status?)` 执行数据库级 `LIKE` 查询，返回匹配的题目片段。
+3. 合并两批结果，对每条匹配记录获取页面列表，构建 `PageId → PageNumber` 映射以解析页码。
 4. 结果去重：按 `$"{DocumentName}|{PageNumber}|{SegmentId}"` 分组，每组取首条。
 5. 按 `Score` 降序排列。
 6. 游标分页：解码 `page_token` 获取 `skip` 值，`Skip(skip).Take(pageSize)` 分页。
@@ -224,13 +220,14 @@ private static async Task<IResult> SearchTest(
 | --- | --- | --- |
 | `ISearchIndexService` | OpenSearch BM25 精确搜索 | `Ruoyu.Study.DocRetrieval.Domain.Repositories` |
 | `IDocumentRepository` | 文档列表查询（含筛选） | `Ruoyu.Study.DocRetrieval.Domain.Repositories` |
-| `IDocumentSegmentRepository` | 文档片段按文档 ID 查询 | `Ruoyu.Study.DocRetrieval.Domain.Repositories` |
-| `IQuestionSegmentRepository` | 题目片段按文档 ID 查询 | `Ruoyu.Study.DocRetrieval.Domain.Repositories` |
+| `IDocumentSegmentRepository` | 文档片段按文档 ID 查询；数据库级 LIKE 搜索与分页（`SearchByTextAsync`） | `Ruoyu.Study.DocRetrieval.Domain.Repositories` |
+| `IQuestionSegmentRepository` | 题目片段按文档 ID 查询；数据库级 LIKE 搜索与分页（`SearchByStemAsync`） | `Ruoyu.Study.DocRetrieval.Domain.Repositories` |
 | `IDocumentPageRepository` | 文档页面按文档 ID 查询 | `Ruoyu.Study.DocRetrieval.Domain.Repositories` |
 
 ## 可测试性设计
 
-- **依赖注入接口化**：`ISearchIndexService` 通过 `IServiceProvider` 可选获取，可设为 null 模拟不可用场景。
+- **依赖注入接口化**：`ISearchIndexService` 通过构造函数可选注入（nullable），可直接传 `null` 模拟不可用场景。
 - **回退逻辑可验证**：Mock `ISearchIndexService.ExactSearchAsync` 抛异常，验证回退到 `DatabaseSearchAsync`。
 - **分页逻辑可验证**：通过 mock 仓储返回预设数据，验证游标分页的编码/解码和 skip/take 行为。
 - **去重逻辑可验证**：构造重复 `DocumentName+PageNumber+SegmentId` 的数据，验证去重保留首条。
+- **数据库搜索可验证**：Mock `SearchByTextAsync` 和 `SearchByStemAsync` 返回预设匹配结果，验证数据库回退搜索流程。

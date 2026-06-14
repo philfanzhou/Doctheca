@@ -1,4 +1,4 @@
-﻿# 文档元数据更新 — 技术设计（DESIGN）
+# 文档元数据更新 — 技术设计（DESIGN）
 
 ---
 
@@ -9,11 +9,14 @@ src/services/ruoyu.docretrieval/
 ├── src/
 │   ├── Domain/
 │   │   ├── Models/
-│   │   │   ├── DocumentModels.cs                              # DocumentModel 实体
-│   │   │   └── Constants.cs                                   # DocRetrievalConstants（学科/年级校验）
+│   │   │   ├── DocumentModel.cs                              # DocumentModel 实体
+│   │   │   └── DocRetrievalConstants.cs                      # DocRetrievalConstants（学科/年级校验）
+│   │   ├── Exceptions/
+│   │   │   └── DocRetrievalValidationException.cs            # 验证异常
 │   │   ├── Repositories/
-│   │   │   ├── IRepositories.cs                               # IDocumentRepository（含 GetByTitleAsync/UpdateAsync）
-│   │   │   └── ISearchIndexService.cs                         # ISearchIndexService（含 UpdateDocumentMetadataAsync）
+│   │   │   ├── IDocumentRepository.cs                        # IDocumentRepository（含 GetByTitleAsync/UpdateAsync）
+│   │   │   ├── IUnitOfWork.cs                                # 事务接口
+│   │   │   └── ISearchIndexService.cs                        # ISearchIndexService（含 UpdateDocumentMetadataAsync）
 │   │   └── Services/
 │   │       └── DocumentDomainService.cs                       # ★ UpdateMetadataAsync
 │   ├── Database/
@@ -107,6 +110,8 @@ public interface ISearchIndexService
 
 ### 2.4 Admin 端点
 
+> ★ `/admin/documents/` 端点组通过 `.RequireAuthorization()` 要求 JWT Bearer 认证（Identity 签发，JWKS 验证），未认证请求返回 401。
+
 ```csharp
 // src/Service/DocumentAdminEndpoints.cs
 private static async Task<IResult> UpdateMetadata(
@@ -114,6 +119,8 @@ private static async Task<IResult> UpdateMetadata(
     HttpRequest request,
     DocumentDomainService documentService)
 {
+    // 读取 request body，检查大小限制 (≤ 10KB)
+    // 超过 10KB → 返回 413 Payload Too Large
     // 解析 JSON body
     // subject/grade/year/tags 四个字段
     // tags 使用 GetRawText() 获取
@@ -126,7 +133,7 @@ private static async Task<IResult> UpdateMetadata(
 ### 2.5 常量类
 
 ```csharp
-// src/Domain/Models/Constants.cs
+// src/Domain/Models/DocRetrievalConstants.cs
 public static class DocRetrievalConstants
 {
     public const string SubjectEnglish = "英语";
@@ -147,7 +154,10 @@ public static class DocRetrievalConstants
   ▼
 DocumentAdminEndpoints.UpdateMetadata
   │
-  ├── 读取 request body，解析为 JsonElement
+  ├── 读取 request body
+  │     └── body 长度 > 10KB → 返回 413 Payload Too Large
+  │
+  ├── 解析 body 为 JsonElement
   │
   ├── 提取字段：
   │     subject → GetString()
@@ -198,6 +208,8 @@ DocumentAdminEndpoints.UpdateMetadata
 
 | 位置 | 可能异常 | 处理方式 | 日志级别 |
 |------|----------|----------|----------|
+| ASP.NET Core 中间件 | 未认证请求 | 自动拦截，返回 401 | — |
+| `UpdateMetadata` 端点 | 请求体超过 10KB | 返回 413 Payload Too Large | - |
 | `UpdateMetadataAsync` | 文档不存在 | 抛 `DocRetrievalValidationException("文档不存在")` | - |
 | `UpdateMetadataAsync` | 文档未就绪 | 抛 `DocRetrievalValidationException("文档未就绪，不允许修改元数据")` | - |
 | `UpdateMetadataAsync` | 学科无效 | 抛 `DocRetrievalValidationException("学科仅支持：英语")` | - |

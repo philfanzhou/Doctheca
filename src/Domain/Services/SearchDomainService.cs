@@ -20,14 +20,14 @@ public class SearchDomainService : ISearchDomainService
     private readonly ILogger<SearchDomainService> _logger;
 
     public SearchDomainService(
-        IServiceProvider serviceProvider,
+        ISearchIndexService? searchIndexService,
         IDocumentRepository documentRepository,
         IDocumentSegmentRepository segmentRepository,
         IQuestionSegmentRepository questionRepository,
         IDocumentPageRepository pageRepository,
         ILogger<SearchDomainService> logger)
     {
-        _searchIndexService = serviceProvider.GetService(typeof(ISearchIndexService)) as ISearchIndexService;
+        _searchIndexService = searchIndexService;
         _documentRepository = documentRepository;
         _segmentRepository = segmentRepository;
         _questionRepository = questionRepository;
@@ -58,90 +58,6 @@ public class SearchDomainService : ISearchDomainService
     private async Task<(List<SearchResultModel>, int, string?)> DatabaseSearchAsync(
         string query, bool phrase, SearchFilterModel? filter, int pageSize, string? pageToken)
     {
-        var results = new List<SearchResultModel>();
-        var documents = await GetFilteredDocumentsAsync(filter);
-
-        foreach (var doc in documents.Where(d => d.Status == DocumentStatus.Ready))
-        {
-            var pages = await _pageRepository.GetByDocumentIdAsync(doc.Id);
-            var pageLookup = pages.ToDictionary(p => p.Id, p => p.PageNumber);
-
-            var segments = await _segmentRepository.GetByDocumentIdAsync(doc.Id);
-            foreach (var seg in segments)
-            {
-                bool matched;
-                int matchIndex;
-                if (phrase)
-                {
-                    // Phrase query: must contain the complete phrase (no splitting)
-                    matchIndex = seg.Text.IndexOf(query, StringComparison.OrdinalIgnoreCase);
-                    matched = matchIndex >= 0;
-                }
-                else
-                {
-                    // Word query: contains match
-                    matchIndex = seg.Text.IndexOf(query, StringComparison.OrdinalIgnoreCase);
-                    matched = matchIndex >= 0;
-                }
-
-                if (matched)
-                {
-                    var pageNumber = pageLookup.TryGetValue(seg.PageId, out var pn) ? pn : 0;
-                    results.Add(new SearchResultModel
-                    {
-                        DocumentName = doc.Title,
-                        PageNumber = pageNumber,
-                        AssociatedText = seg.Text,
-                        Score = phrase ? 1.0 : 0.8,
-                        MatchType = phrase ? SearchMatchType.ExactPhrase : SearchMatchType.ExactWord,
-                        SegmentId = seg.SentenceId,
-                        StartOffset = matchIndex,
-                        EndOffset = matchIndex + query.Length
-                    });
-                }
-            }
-
-            var questions = await _questionRepository.GetByDocumentIdAsync(doc.Id);
-            foreach (var q in questions)
-            {
-                bool matched;
-                int matchIndex;
-                if (phrase)
-                {
-                    matchIndex = q.Stem.IndexOf(query, StringComparison.OrdinalIgnoreCase);
-                    matched = matchIndex >= 0;
-                }
-                else
-                {
-                    matchIndex = q.Stem.IndexOf(query, StringComparison.OrdinalIgnoreCase);
-                    matched = matchIndex >= 0;
-                }
-
-                if (matched)
-                {
-                    var pageNumber = pageLookup.TryGetValue(q.PageId, out var pn) ? pn : 0;
-                    results.Add(new SearchResultModel
-                    {
-                        DocumentName = doc.Title,
-                        PageNumber = pageNumber,
-                        AssociatedText = q.Stem,
-                        Score = phrase ? 1.0 : 0.8,
-                        MatchType = phrase ? SearchMatchType.ExactPhrase : SearchMatchType.ExactWord,
-                        SegmentId = q.QuestionId,
-                        StartOffset = matchIndex,
-                        EndOffset = matchIndex + query.Length
-                    });
-                }
-            }
-        }
-
-        results = results
-            .GroupBy(r => $"{r.DocumentName}|{r.PageNumber}|{r.SegmentId}")
-            .Select(g => g.First())
-            .OrderByDescending(r => r.Score)
-            .ToList();
-
-        var totalCount = results.Count;
         var skip = 0;
         if (!string.IsNullOrEmpty(pageToken))
         {
@@ -154,35 +70,85 @@ public class SearchDomainService : ISearchDomainService
             catch { skip = 0; }
         }
 
-        var pagedResults = results.Skip(skip).Take(pageSize).ToList();
-        var nextToken = (skip + pagedResults.Count) < totalCount
+        var subject = filter?.Subject;
+        var grade = filter?.Grade;
+        var year = filter?.Year;
+
+        // Query segments and questions with database-level LIKE + pagination
+        var (segments, segmentTotal) = await _segmentRepository.SearchByTextAsync(query, pageSize, skip, DocumentStatus.Ready, subject, grade, year);
+        var (questions, questionTotal) = await _questionRepository.SearchByStemAsync(query, pageSize, skip, DocumentStatus.Ready, subject, grade, year);
+
+        var results = new List<SearchResultModel>();
+
+        // Build document title lookup (batch by document IDs)
+        var documentIds = segments.Select(s => s.DocumentId)
+            .Concat(questions.Select(q => q.DocumentId))
+            .Distinct()
+            .ToList();
+
+        var documentTitles = new Dictionary<Guid, string>();
+        var pageNumbers = new Dictionary<Guid, int>(); // PageId -> PageNumber
+
+        foreach (var docId in documentIds)
+        {
+            var doc = await _documentRepository.GetByIdAsync(docId);
+            if (doc != null)
+                documentTitles[docId] = doc.Title;
+
+            var pages = await _pageRepository.GetByDocumentIdAsync(docId);
+            foreach (var p in pages)
+                pageNumbers[p.Id] = p.PageNumber;
+        }
+
+        // Map segment results
+        foreach (var seg in segments)
+        {
+            var pageNumber = pageNumbers.TryGetValue(seg.PageId, out var pn) ? pn : 0;
+            var docTitle = documentTitles.TryGetValue(seg.DocumentId, out var t) ? t : "";
+            results.Add(new SearchResultModel
+            {
+                DocumentName = docTitle,
+                PageNumber = pageNumber,
+                AssociatedText = seg.Text,
+                Score = phrase ? 1.0 : 0.8,
+                MatchType = phrase ? SearchMatchType.ExactPhrase : SearchMatchType.ExactWord,
+                SegmentId = seg.SentenceId,
+                StartOffset = seg.StartOffset,
+                EndOffset = seg.EndOffset
+            });
+        }
+
+        // Map question results
+        foreach (var q in questions)
+        {
+            var pageNumber = pageNumbers.TryGetValue(q.PageId, out var pn) ? pn : 0;
+            var docTitle = documentTitles.TryGetValue(q.DocumentId, out var t) ? t : "";
+            results.Add(new SearchResultModel
+            {
+                DocumentName = docTitle,
+                PageNumber = pageNumber,
+                AssociatedText = q.Stem,
+                Score = phrase ? 1.0 : 0.8,
+                MatchType = phrase ? SearchMatchType.ExactPhrase : SearchMatchType.ExactWord,
+                SegmentId = q.QuestionId,
+                StartOffset = q.StartOffset,
+                EndOffset = q.EndOffset
+            });
+        }
+
+        // Deduplicate and sort
+        results = results
+            .GroupBy(r => $"{r.DocumentName}|{r.PageNumber}|{r.SegmentId}")
+            .Select(g => g.First())
+            .OrderByDescending(r => r.Score)
+            .ToList();
+
+        var totalCount = segmentTotal + questionTotal;
+        var nextToken = (skip + results.Count) < totalCount
             ? Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(
-                JsonSerializer.Serialize(new { skip = skip + pagedResults.Count })))
+                JsonSerializer.Serialize(new { skip = skip + pageSize })))
             : null;
 
-        return (pagedResults, totalCount, nextToken);
-    }
-
-    private async Task<List<DocumentModel>> GetFilteredDocumentsAsync(SearchFilterModel? filter)
-    {
-        var allDocs = new List<DocumentModel>();
-        var currentPage = 1;
-        const int batchSize = 500;
-        int fetched;
-
-        do
-        {
-            var (items, totalCount) = filter == null
-                ? await _documentRepository.GetListAsync(currentPage, batchSize)
-                : await _documentRepository.GetListAsync(
-                    currentPage, batchSize, status: null, subject: filter.Subject,
-                    grade: filter.Grade, keyword: filter.DocumentTitle, year: filter.Year);
-
-            allDocs.AddRange(items);
-            fetched = items.Count;
-            currentPage++;
-        } while (fetched == batchSize);
-
-        return allDocs;
+        return (results, totalCount, nextToken);
     }
 }

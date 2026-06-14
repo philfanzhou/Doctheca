@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using Ruoyu.Study.Common.Oss;
+using Ruoyu.Study.DocRetrieval.Domain.Exceptions;
 using Ruoyu.Study.DocRetrieval.Domain.Models;
 using Ruoyu.Study.DocRetrieval.Domain.Services;
 
@@ -29,14 +30,17 @@ public static class DocumentAdminEndpoints
 
     public static WebApplication MapDocumentAdminEndpoints(this WebApplication app)
     {
-        app.MapPost("/admin/documents/upload", UploadDocument);
-        app.MapGet("/admin/documents", ListDocuments);
-        app.MapGet("/admin/documents/{id:guid}", GetDocument);
-        app.MapGet("/admin/documents/{id:guid}/status", GetDocumentStatus);
-        app.MapDelete("/admin/documents/{id:guid}", DeleteDocumentById);
-        app.MapDelete("/admin/documents/by-title/{title}", DeleteDocument);
-        app.MapPut("/admin/documents/{title}/metadata", UpdateMetadata);
-        app.MapGet("/admin/documents/search-test", SearchTest);
+        var group = app.MapGroup("/admin/documents")
+            .RequireAuthorization();
+
+        group.MapPost("/upload", UploadDocument);
+        group.MapGet("/", ListDocuments);
+        group.MapGet("/{id:guid}", GetDocument);
+        group.MapGet("/{id:guid}/status", GetDocumentStatus);
+        group.MapDelete("/{id:guid}", DeleteDocumentById);
+        group.MapDelete("/by-title/{title}", DeleteDocument);
+        group.MapPut("/{title}/metadata", UpdateMetadata);
+        group.MapGet("/search-test", SearchTest);
 
         return app;
     }
@@ -310,6 +314,8 @@ public static class DocumentAdminEndpoints
     {
         using var reader = new StreamReader(request.Body);
         var body = await reader.ReadToEndAsync();
+        if (body.Length > 10 * 1024)
+            return Results.StatusCode(StatusCodes.Status413RequestEntityTooLarge);
 
         JsonElement json;
         try

@@ -1,4 +1,4 @@
-﻿# 文档列表查询与筛选 — 技术设计（DESIGN）
+# 文档列表查询与筛选 — 技术设计（DESIGN）
 
 ---
 
@@ -9,10 +9,10 @@ src/services/ruoyu.docretrieval/
 ├── src/
 │   ├── Domain/
 │   │   ├── Models/
-│   │   │   ├── DocumentModels.cs                              # DocumentModel 实体
-│   │   │   └── Constants.cs                                   # DocRetrievalConstants（学科/年级校验）
+│   │   │   ├── DocumentModel.cs                              # DocumentModel 实体
+│   │   │   └── DocRetrievalConstants.cs                      # DocRetrievalConstants（学科/年级校验）
 │   │   ├── Repositories/
-│   │   │   └── IRepositories.cs                               # IDocumentRepository（含 GetListAsync）
+│   │   │   └── IDocumentRepository.cs                        # IDocumentRepository（含 GetListAsync）
 │   │   └── Services/
 │   │       └── DocumentDomainService.cs                       # ★ GetDocumentListAsync
 │   ├── Database/
@@ -59,7 +59,7 @@ public class DocumentDomainService
 ### 2.2 Repository 接口
 
 ```csharp
-// src/Domain/Repositories/IRepositories.cs
+// src/Domain/Repositories/IDocumentRepository.cs
 public interface IDocumentRepository
 {
     Task<(List<DocumentModel> Items, int TotalCount)> GetListAsync(
@@ -73,6 +73,8 @@ public interface IDocumentRepository
 ```
 
 ### 2.3 Admin 端点
+
+> ★ `/admin/documents/` 端点组通过 `.RequireAuthorization()` 要求 JWT Bearer 认证（Identity 签发，JWKS 验证），未认证请求返回 401。
 
 ```csharp
 // src/Service/DocumentAdminEndpoints.cs
@@ -209,6 +211,7 @@ DocumentAdminEndpoints.GetDocument
 
 | 位置 | 可能异常 | 处理方式 | 日志级别 |
 |------|----------|----------|----------|
+| ASP.NET Core 中间件 | 未认证请求 | 自动拦截，返回 401 | — |
 | `GetDocumentListAsync` | 数据库连接失败等 | 异常向上抛出，由端点层或中间件统一处理 | `LogError` |
 | `ListDocuments` 端点 | `DocRetrievalValidationException` | 当前列表查询不抛此异常 | - |
 | `ListDocuments` 端点 | 未预期异常 | ASP.NET Core 中间件统一捕获，返回 500 | `LogError` |

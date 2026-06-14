@@ -8,6 +8,7 @@
 
   <ItemGroup>
     <PackageReference Include="Grpc.AspNetCore" Version="2.62.0" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.11" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="8.0.11" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="8.0.11" />
     <PackageReference Include="OpenSearch.Net" Version="1.8.0" />
@@ -17,6 +18,7 @@
     <ProjectReference Include="..\Service\Ruoyu.Study.DocRetrieval.Service.csproj" />
     <ProjectReference Include="..\..\..\ruoyu.common\src\Ruoyu.Study.Common\Ruoyu.Study.Common.csproj" />
     <ProjectReference Include="..\Database\Ruoyu.Study.DocRetrieval.Database.csproj" />
+    <ProjectReference Include="..\..\..\QuantumZhou.Identity\backend\Contract\QuantumZhou.Identity.Contract.csproj" />
   </ItemGroup>
 
 </Project>

@@ -45,6 +45,31 @@ public class QuestionSegmentRepository : IQuestionSegmentRepository
         _dbContext.QuestionSegments.RemoveRange(entities);
     }
 
+    public async Task<(List<QuestionSegmentModel> Items, int TotalCount)> SearchByStemAsync(string query, int pageSize, int skip, string? status = null, string? subject = null, string? grade = null, string? year = null)
+    {
+        var questionQuery = from q in _dbContext.QuestionSegments
+                            join doc in _dbContext.Documents on q.DocumentId equals doc.Id
+                            where q.Stem.Contains(query)
+                            where doc.Status == (status ?? DocumentStatus.Ready)
+                            select new { Question = q, Document = doc };
+
+        if (!string.IsNullOrWhiteSpace(subject))
+            questionQuery = questionQuery.Where(x => x.Document.Subject == subject);
+        if (!string.IsNullOrWhiteSpace(grade))
+            questionQuery = questionQuery.Where(x => x.Document.Grade == grade);
+        if (!string.IsNullOrWhiteSpace(year))
+            questionQuery = questionQuery.Where(x => x.Document.Year == year);
+
+        var totalCount = await questionQuery.CountAsync();
+        var items = await questionQuery
+            .Skip(skip)
+            .Take(pageSize)
+            .Select(x => x.Question)
+            .ToListAsync();
+
+        return (items.Select(MapToModel).ToList(), totalCount);
+    }
+
     private static QuestionSegmentEntity MapToEntity(QuestionSegmentModel model) => new()
     {
         Id = model.Id,

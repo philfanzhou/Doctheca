@@ -1,4 +1,4 @@
-﻿# DocumentDeletion — 架构与设计 (DESIGN)
+# DocumentDeletion — 架构与设计 (DESIGN)
 
 ## 1. 目录与文件结构
 
@@ -15,10 +15,15 @@ src/services/ruoyu.docretrieval/
 ├── src/
 │   ├── Domain/
 │   │   ├── Repositories/
-│   │   │   └── IRepositories.cs            # 各仓储接口定义
+│   │   │   ├── IDocumentRepository.cs             # 文档仓储接口
+│   │   │   ├── IDocumentPageRepository.cs         # 文档页面仓储接口
+│   │   │   ├── IDocumentSegmentRepository.cs      # 文档片段仓储接口
+│   │   │   ├── IQuestionSegmentRepository.cs      # 题目片段仓储接口
+│   │   │   ├── IDocumentOccurrenceRepository.cs   # 文档出现记录仓储接口
+│   │   │   └── IUnitOfWork.cs                     # 事务接口
 │   │   └── Services/
-│   │       ├── IDocumentDomainService.cs    # DeleteDocumentAsync 核心接口
-│   │       └── DocumentDomainService.cs     # DeleteDocumentAsync 核心实现
+│   │       ├── IDocumentDomainService.cs          # DeleteDocumentAsync 核心接口
+│   │       └── DocumentDomainService.cs           # DeleteDocumentAsync 核心实现
 │   ├── Database/
 │   │   └── Repositories/
 │   │       ├── DocumentOccurrenceRepository.cs  # DeleteByDocumentIdAsync 实现
@@ -50,6 +55,8 @@ src/services/ruoyu.docretrieval/
 ## 2. 关键接口签名与数据结构
 
 ### 2.1 Admin HTTP 端点
+
+> ★ `/admin/documents/` 端点组通过 `.RequireAuthorization()` 要求 JWT Bearer 认证（Identity 签发，JWKS 验证），未认证请求返回 401。
 
 ```
 DELETE /admin/documents/{id}
@@ -98,7 +105,7 @@ public interface IDocumentDomainService
 ### 2.3 仓储接口
 
 ```csharp
-// src/Domain/Repositories/IRepositories.cs
+// src/Domain/Repositories/IDocumentRepository.cs
 public interface IDocumentRepository
 {
     Task<DocumentModel?> GetByTitleAsync(string title);
@@ -239,6 +246,7 @@ DocumentAdminEndpoints.DeleteDocumentById(id, documentService, ossService, logge
 
 | 错误场景 | 处理方式 | 返回值 / 日志 |
 |----------|----------|----------------|
+| 未认证请求 | ASP.NET Core 中间件自动拦截 | 401 Unauthorized |
 | 文档不存在 | 直接返回 true | 无错误日志（幂等） |
 | 搜索索引清理异常 | `try/catch` 捕获 | `LogError(ex, "Failed to delete document search index: {Title}", title)` |
 | OSS 文件删除异常 | `try/catch` 捕获 | `LogWarning(ex, "Failed to delete document file: {FilePath}", document.FilePath)` |

@@ -10,15 +10,35 @@ src/
 │   ├── OpenSearchIndexService.cs       # OpenSearch 搜索索引服务
 ├── Domain/
 │   ├── Models/
-│   │   ├── DocumentModels.cs           # 所有领域模型（含 ParsedDocument）
-│   │   ├── Constants.cs               # 常量定义（学科、年级）
-│   │   └── SearchConfig.cs            # 搜索配置模型
+│   │   ├── DocumentModel.cs              # 文档领域模型
+│   │   ├── DocumentPageModel.cs          # 文档页面领域模型
+│   │   ├── DocumentSegmentModel.cs       # 文档片段领域模型
+│   │   ├── QuestionSegmentModel.cs       # 题目片段领域模型
+│   │   ├── DocumentOccurrenceModel.cs    # 文档出现记录领域模型
+│   │   ├── DocumentIngestionJobModel.cs  # 导入任务领域模型
+│   │   ├── ParsedDocument.cs             # 解析器输出模型
+│   │   ├── ParsedPage.cs                 # 解析器输出页面
+│   │   ├── ParsedSegment.cs              # 解析器输出片段
+│   │   ├── ParsedQuestion.cs             # 解析器输出题目
+│   │   ├── ParsedToken.cs                # 解析器输出词元
+│   │   ├── DocRetrievalConstants.cs      # 常量定义（学科、年级）
+│   │   ├── DocumentStatus.cs             # 文档状态常量
+│   │   ├── SegmentTypes.cs               # 片段类型常量
+│   │   ├── SourceTypes.cs                # 来源类型常量
+│   │   ├── SearchMatchType.cs            # 搜索匹配类型常量
+│   │   └── SearchConfig.cs              # 搜索配置模型
 │   ├── Repositories/
-│   │   ├── IDocumentParserService.cs   # 解析器接口
-│   │   ├── ISearchIndexService.cs      # 搜索索引接口
-│   │   └── IRepositories.cs           # 仓储接口集合
+│   │   ├── IDocumentParserService.cs     # 解析器接口
+│   │   ├── ISearchIndexService.cs        # 搜索索引接口
+│   │   ├── IDocumentRepository.cs        # 文档仓储接口
+│   │   ├── IDocumentPageRepository.cs    # 文档页面仓储接口
+│   │   ├── IDocumentSegmentRepository.cs # 文档片段仓储接口
+│   │   ├── IQuestionSegmentRepository.cs # 题目片段仓储接口
+│   │   ├── IDocumentOccurrenceRepository.cs # 文档出现记录仓储接口
+│   │   ├── IDocumentIngestionJobRepository.cs # 导入任务仓储接口
+│   │   └── IUnitOfWork.cs               # 事务接口
 │   └── Services/
-│       └── DocumentDomainService.cs    # 领域服务（任务状态管理）
+│       └── DocumentDomainService.cs      # 领域服务（任务状态管理）
 ├── Database/
 │   ├── Entities/
 │   │   ├── DocumentEntity.cs

@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Moq;
 using Ruoyu.Study.DocRetrieval.Domain.Models;
@@ -18,7 +17,6 @@ public class SearchDomainServiceTests
     private readonly Mock<IDocumentSegmentRepository> _segmentRepoMock;
     private readonly Mock<IQuestionSegmentRepository> _questionRepoMock;
     private readonly Mock<IDocumentPageRepository> _pageRepoMock;
-    private readonly Mock<IServiceProvider> _serviceProviderMock;
     private readonly SearchDomainService _service;
 
     public SearchDomainServiceTests()
@@ -31,14 +29,8 @@ public class SearchDomainServiceTests
 
         var loggerMock = new Mock<ILogger<SearchDomainService>>();
 
-        // Setup service provider to return ISearchIndexService
-        _serviceProviderMock = new Mock<IServiceProvider>();
-        _serviceProviderMock
-            .Setup(sp => sp.GetService(typeof(ISearchIndexService)))
-            .Returns(_searchIndexServiceMock.Object);
-
         _service = new SearchDomainService(
-            _serviceProviderMock.Object,
+            _searchIndexServiceMock.Object,
             _documentRepoMock.Object,
             _segmentRepoMock.Object,
             _questionRepoMock.Object,
@@ -77,30 +69,30 @@ public class SearchDomainServiceTests
             .Setup(s => s.ExactSearchAsync(It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<SearchFilterModel?>(), It.IsAny<int>(), It.IsAny<string?>()))
             .ThrowsAsync(new Exception("OpenSearch unavailable"));
 
-        var documents = new List<DocumentModel>
-        {
-            new() { Id = Guid.NewGuid(), Title = "test.pdf", Status = DocumentStatus.Ready, Subject = "English", Grade = "G10", Year = "2023" }
-        };
-        _documentRepoMock
-            .Setup(r => r.GetListAsync(It.IsAny<int>(), It.IsAny<int>(), null, null, null, null, null))
-            .ReturnsAsync((documents, 1));
+        var docId = Guid.NewGuid();
+        var pageId = Guid.NewGuid();
 
         var segment = new DocumentSegmentModel
         {
             Id = Guid.NewGuid(),
-            DocumentId = documents[0].Id,
-            PageId = Guid.NewGuid(),
+            DocumentId = docId,
+            PageId = pageId,
             SentenceId = "p1-b1-s1",
             Text = "Hello world",
             BlockId = "p1-b1",
             SegmentType = "sentence"
         };
-        _segmentRepoMock.Setup(r => r.GetByDocumentIdAsync(documents[0].Id)).ReturnsAsync(new List<DocumentSegmentModel> { segment });
+        _segmentRepoMock.Setup(r => r.SearchByTextAsync("hello", 50, 0, DocumentStatus.Ready, null, null, null))
+            .ReturnsAsync((new List<DocumentSegmentModel> { segment }, 1));
 
-        var page = new DocumentPageModel { Id = segment.PageId, PageNumber = 1 };
-        _pageRepoMock.Setup(r => r.GetByDocumentIdAsync(documents[0].Id)).ReturnsAsync(new List<DocumentPageModel> { page });
+        _questionRepoMock.Setup(r => r.SearchByStemAsync("hello", 50, 0, DocumentStatus.Ready, null, null, null))
+            .ReturnsAsync((new List<QuestionSegmentModel>(), 0));
 
-        _questionRepoMock.Setup(r => r.GetByDocumentIdAsync(documents[0].Id)).ReturnsAsync(new List<QuestionSegmentModel>());
+        _documentRepoMock.Setup(r => r.GetByIdAsync(docId))
+            .ReturnsAsync(new DocumentModel { Id = docId, Title = "test.pdf", Status = DocumentStatus.Ready });
+
+        var page = new DocumentPageModel { Id = pageId, PageNumber = 1 };
+        _pageRepoMock.Setup(r => r.GetByDocumentIdAsync(docId)).ReturnsAsync(new List<DocumentPageModel> { page });
 
         // Act
         var (results, totalCount, nextToken) = await _service.ExactSearchAsync("hello", true, null, 50, null);
@@ -117,30 +109,33 @@ public class SearchDomainServiceTests
             .Setup(s => s.ExactSearchAsync(It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<SearchFilterModel?>(), It.IsAny<int>(), It.IsAny<string?>()))
             .ThrowsAsync(new Exception("OpenSearch unavailable"));
 
-        var documents = new List<DocumentModel>
-        {
-            new() { Id = Guid.NewGuid(), Title = "ready-doc", Status = DocumentStatus.Ready, Subject = "English", Grade = "G10", Year = "2023" },
-            new() { Id = Guid.NewGuid(), Title = "pending-doc", Status = DocumentStatus.Pending, Subject = "English", Grade = "G10", Year = "2023" },
-            new() { Id = Guid.NewGuid(), Title = "failed-doc", Status = DocumentStatus.Failed, Subject = "English", Grade = "G10", Year = "2023" }
-        };
-        _documentRepoMock
-            .Setup(r => r.GetListAsync(It.IsAny<int>(), It.IsAny<int>(), null, null, null, null, null))
-            .ReturnsAsync((documents, 3));
+        var readyDocId = Guid.NewGuid();
+        var pageId = Guid.NewGuid();
 
-        // Setup segments for all documents
-        foreach (var doc in documents)
+        // Only ready document's segment will be returned by SearchByTextAsync (DB filters by status)
+        var segment = new DocumentSegmentModel
         {
-            var pageId = Guid.NewGuid();
-            _pageRepoMock.Setup(r => r.GetByDocumentIdAsync(doc.Id)).ReturnsAsync(new List<DocumentPageModel>
-            {
-                new() { Id = pageId, PageNumber = 1 }
-            });
-            _segmentRepoMock.Setup(r => r.GetByDocumentIdAsync(doc.Id)).ReturnsAsync(new List<DocumentSegmentModel>
-            {
-                new() { Id = Guid.NewGuid(), DocumentId = doc.Id, PageId = pageId, SentenceId = "s1", Text = "Hello world", BlockId = "b1", SegmentType = "sentence" }
-            });
-            _questionRepoMock.Setup(r => r.GetByDocumentIdAsync(doc.Id)).ReturnsAsync(new List<QuestionSegmentModel>());
-        }
+            Id = Guid.NewGuid(),
+            DocumentId = readyDocId,
+            PageId = pageId,
+            SentenceId = "s1",
+            Text = "Hello world",
+            BlockId = "b1",
+            SegmentType = "sentence"
+        };
+        _segmentRepoMock.Setup(r => r.SearchByTextAsync("hello", 50, 0, DocumentStatus.Ready, null, null, null))
+            .ReturnsAsync((new List<DocumentSegmentModel> { segment }, 1));
+
+        _questionRepoMock.Setup(r => r.SearchByStemAsync("hello", 50, 0, DocumentStatus.Ready, null, null, null))
+            .ReturnsAsync((new List<QuestionSegmentModel>(), 0));
+
+        _documentRepoMock.Setup(r => r.GetByIdAsync(readyDocId))
+            .ReturnsAsync(new DocumentModel { Id = readyDocId, Title = "ready-doc", Status = DocumentStatus.Ready });
+
+        _pageRepoMock.Setup(r => r.GetByDocumentIdAsync(readyDocId)).ReturnsAsync(new List<DocumentPageModel>
+        {
+            new() { Id = pageId, PageNumber = 1 }
+        });
 
         // Act
         var (results, _, _) = await _service.ExactSearchAsync("hello", false, null, 50, null);
@@ -184,55 +179,45 @@ public class SearchDomainServiceTests
     public async Task ExactSearchAsync_WithPagination_ReturnsNextToken()
     {
         // Arrange
-        var results = new List<SearchResultModel>();
-        for (int i = 0; i < 10; i++)
-        {
-            results.Add(new SearchResultModel
-            {
-                DocumentName = $"doc{i}.pdf",
-                PageNumber = 1,
-                AssociatedText = $"Result {i}",
-                Score = 1.0,
-                MatchType = "exact_word",
-                SegmentId = $"s{i}"
-            });
-        }
-
-        // Simulate that OpenSearch is not available - we need database fallback
         _searchIndexServiceMock
             .Setup(s => s.ExactSearchAsync(It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<SearchFilterModel?>(), It.IsAny<int>(), It.IsAny<string?>()))
             .ThrowsAsync(new Exception("OpenSearch unavailable"));
 
-        var documents = new List<DocumentModel>();
+        var segments = new List<DocumentSegmentModel>();
+        var docIds = new List<Guid>();
         for (int i = 0; i < 10; i++)
         {
-            documents.Add(new DocumentModel
+            var docId = Guid.NewGuid();
+            var pageId = Guid.NewGuid();
+            docIds.Add(docId);
+            segments.Add(new DocumentSegmentModel
             {
                 Id = Guid.NewGuid(),
-                Title = $"doc{i}.pdf",
-                Status = DocumentStatus.Ready,
-                Subject = "English",
-                Grade = "G10",
-                Year = "2023"
+                DocumentId = docId,
+                PageId = pageId,
+                SentenceId = $"s{i}",
+                Text = "Hello world",
+                BlockId = "b1",
+                SegmentType = "sentence"
             });
-        }
-        _documentRepoMock
-            .Setup(r => r.GetListAsync(It.IsAny<int>(), It.IsAny<int>(), null, null, null, null, null))
-            .ReturnsAsync((documents, 10));
 
-        foreach (var doc in documents)
-        {
-            var pageId = Guid.NewGuid();
-            _pageRepoMock.Setup(r => r.GetByDocumentIdAsync(doc.Id)).ReturnsAsync(new List<DocumentPageModel>
+            _documentRepoMock.Setup(r => r.GetByIdAsync(docId))
+                .ReturnsAsync(new DocumentModel { Id = docId, Title = $"doc{i}.pdf", Status = DocumentStatus.Ready });
+            _pageRepoMock.Setup(r => r.GetByDocumentIdAsync(docId)).ReturnsAsync(new List<DocumentPageModel>
             {
                 new() { Id = pageId, PageNumber = 1 }
             });
-            _segmentRepoMock.Setup(r => r.GetByDocumentIdAsync(doc.Id)).ReturnsAsync(new List<DocumentSegmentModel>
-            {
-                new() { Id = Guid.NewGuid(), DocumentId = doc.Id, PageId = pageId, SentenceId = $"s-{doc.Title}", Text = "Hello world", BlockId = "b1", SegmentType = "sentence" }
-            });
-            _questionRepoMock.Setup(r => r.GetByDocumentIdAsync(doc.Id)).ReturnsAsync(new List<QuestionSegmentModel>());
         }
+
+        // Page 1: first 5 segments
+        _segmentRepoMock.Setup(r => r.SearchByTextAsync("hello", 5, 0, DocumentStatus.Ready, null, null, null))
+            .ReturnsAsync((segments.Take(5).ToList(), 10));
+        // Page 2: next 5 segments
+        _segmentRepoMock.Setup(r => r.SearchByTextAsync("hello", 5, 5, DocumentStatus.Ready, null, null, null))
+            .ReturnsAsync((segments.Skip(5).Take(5).ToList(), 10));
+
+        _questionRepoMock.Setup(r => r.SearchByStemAsync("hello", It.IsAny<int>(), It.IsAny<int>(), DocumentStatus.Ready, null, null, null))
+            .ReturnsAsync((new List<QuestionSegmentModel>(), 0));
 
         // Act - request 5 per page
         var (page1, totalCount1, nextToken) = await _service.ExactSearchAsync("hello", false, null, 5, null);
@@ -261,20 +246,24 @@ public class SearchDomainServiceTests
             .Setup(s => s.ExactSearchAsync(It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<SearchFilterModel?>(), It.IsAny<int>(), It.IsAny<string?>()))
             .ThrowsAsync(new Exception("OpenSearch unavailable"));
 
-        var doc = new DocumentModel { Id = Guid.NewGuid(), Title = "exam.pdf", Status = DocumentStatus.Ready, Subject = "English", Grade = "G10", Year = "2023" };
-        _documentRepoMock
-            .Setup(r => r.GetListAsync(It.IsAny<int>(), It.IsAny<int>(), null, null, null, null, null))
-            .ReturnsAsync((new List<DocumentModel> { doc }, 1));
-
+        var docId = Guid.NewGuid();
         var pageId = Guid.NewGuid();
-        _pageRepoMock.Setup(r => r.GetByDocumentIdAsync(doc.Id)).ReturnsAsync(new List<DocumentPageModel>
+
+        _segmentRepoMock.Setup(r => r.SearchByTextAsync("capital", 50, 0, DocumentStatus.Ready, null, null, null))
+            .ReturnsAsync((new List<DocumentSegmentModel>(), 0));
+
+        _questionRepoMock.Setup(r => r.SearchByStemAsync("capital", 50, 0, DocumentStatus.Ready, null, null, null))
+            .ReturnsAsync((new List<QuestionSegmentModel>
+            {
+                new() { Id = Guid.NewGuid(), DocumentId = docId, PageId = pageId, QuestionId = "q1", Stem = "What is the capital of France?" }
+            }, 1));
+
+        _documentRepoMock.Setup(r => r.GetByIdAsync(docId))
+            .ReturnsAsync(new DocumentModel { Id = docId, Title = "exam.pdf", Status = DocumentStatus.Ready });
+
+        _pageRepoMock.Setup(r => r.GetByDocumentIdAsync(docId)).ReturnsAsync(new List<DocumentPageModel>
         {
             new() { Id = pageId, PageNumber = 1 }
-        });
-        _segmentRepoMock.Setup(r => r.GetByDocumentIdAsync(doc.Id)).ReturnsAsync(new List<DocumentSegmentModel>());
-        _questionRepoMock.Setup(r => r.GetByDocumentIdAsync(doc.Id)).ReturnsAsync(new List<QuestionSegmentModel>
-        {
-            new() { Id = Guid.NewGuid(), DocumentId = doc.Id, PageId = pageId, QuestionId = "q1", Stem = "What is the capital of France?" }
         });
 
         // Act

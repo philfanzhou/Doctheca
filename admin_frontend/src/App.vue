@@ -9,7 +9,10 @@ import {
   type DocumentStatus,
   type SearchResult
 } from './services/docApi'
+import { authService } from './services/authService'
+import LoginPage from './components/LoginPage.vue'
 
+const isAuthenticated = ref(false)
 const appTitle = ref('DocRetrieval Admin')
 const activeTab = ref('documents')
 const loadingDocuments = ref(false)
@@ -58,6 +61,9 @@ const metadataForm = ref({
 })
 
 const client = createDocApiClient()
+
+const currentUser = computed(() => authService.getUser())
+const displayName = computed(() => currentUser.value?.username ?? '管理员')
 
 const navItems = [
   {
@@ -312,13 +318,34 @@ async function handleSearch() {
   }
 }
 
-onMounted(() => {
+function handleLoginSuccess() {
+  isAuthenticated.value = true
   loadDocuments()
+}
+
+async function handleLogout() {
+  await authService.logout()
+  isAuthenticated.value = false
+}
+
+onMounted(async () => {
+  // Check if already authenticated
+  if (authService.isAuthenticated()) {
+    isAuthenticated.value = true
+    loadDocuments()
+  } else if (authService.canRefresh()) {
+    const newTokens = await authService.refresh()
+    if (newTokens) {
+      isAuthenticated.value = true
+      loadDocuments()
+    }
+  }
 })
 </script>
 
 <template>
-  <div class="admin-layout">
+  <LoginPage v-if="!isAuthenticated" @login-success="handleLoginSuccess" />
+  <div v-else class="admin-layout">
     <aside class="sidebar" :class="{ open: sidebarOpen, collapsed: sidebarCollapsed }">
       <div class="sidebar-header">
         <div class="sidebar-logo">DR</div>
@@ -345,13 +372,20 @@ onMounted(() => {
       </nav>
       <div class="sidebar-footer">
         <div class="sidebar-footer-user">
-          <div class="sidebar-footer-avatar">A</div>
+          <div class="sidebar-footer-avatar">{{ displayName.charAt(0).toUpperCase() }}</div>
           <div class="sidebar-footer-info">
-            <div class="sidebar-footer-name">管理员</div>
+            <div class="sidebar-footer-name">{{ displayName }}</div>
             <div class="sidebar-footer-status">
               {{ lastRefreshTime ? `上次同步 ${lastRefreshTime}` : '会话活跃' }}
             </div>
           </div>
+          <button class="sidebar-logout-btn" title="登出" @click="handleLogout">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+              <polyline points="16 17 21 12 16 7" />
+              <line x1="21" y1="12" x2="9" y2="12" />
+            </svg>
+          </button>
         </div>
       </div>
     </aside>

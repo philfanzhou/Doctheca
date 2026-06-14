@@ -1,4 +1,4 @@
-import axios, { type AxiosInstance } from 'axios'
+import { createAuthenticatedClient } from './authService'
 
 export interface DocPagedResponse<T> {
   success: boolean
@@ -75,12 +75,10 @@ export interface SearchResult {
 }
 
 class DocApiClient {
-  private client: AxiosInstance
+  private client: ReturnType<typeof createAuthenticatedClient>
 
   constructor() {
-    this.client = axios.create({
-      timeout: 30000
-    })
+    this.client = createAuthenticatedClient()
   }
 
   async uploadDocument(
@@ -165,12 +163,13 @@ export function createDocApiClient(): DocApiClient {
 }
 
 export function getDocErrorMessage(error: unknown): string {
-  if (axios.isAxiosError(error)) {
-    const data = error.response?.data as { message?: string } | undefined
+  if (error && typeof error === 'object' && 'isAxiosError' in error) {
+    const axiosError = error as { response?: { data?: { message?: string } }; message: string }
+    const data = axiosError.response?.data as { message?: string } | undefined
     if (data?.message) {
       return data.message
     }
-    return error.message
+    return axiosError.message
   }
 
   if (error instanceof Error) {

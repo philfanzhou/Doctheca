@@ -2,15 +2,11 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using Ruoyu.Study.DocRetrieval.Domain.Exceptions;
 using Ruoyu.Study.DocRetrieval.Domain.Models;
 using Ruoyu.Study.DocRetrieval.Domain.Repositories;
 
 namespace Ruoyu.Study.DocRetrieval.Domain.Services;
-
-public class DocRetrievalValidationException : Exception
-{
-    public DocRetrievalValidationException(string message) : base(message) { }
-}
 
 public class DocumentDomainService : IDocumentDomainService
 {

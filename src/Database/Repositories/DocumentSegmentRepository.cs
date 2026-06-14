@@ -45,6 +45,31 @@ public class DocumentSegmentRepository : IDocumentSegmentRepository
         _dbContext.DocumentSegments.RemoveRange(entities);
     }
 
+    public async Task<(List<DocumentSegmentModel> Items, int TotalCount)> SearchByTextAsync(string query, int pageSize, int skip, string? status = null, string? subject = null, string? grade = null, string? year = null)
+    {
+        var segmentQuery = from seg in _dbContext.DocumentSegments
+                           join doc in _dbContext.Documents on seg.DocumentId equals doc.Id
+                           where seg.Text.Contains(query)
+                           where doc.Status == (status ?? DocumentStatus.Ready)
+                           select new { Segment = seg, Document = doc };
+
+        if (!string.IsNullOrWhiteSpace(subject))
+            segmentQuery = segmentQuery.Where(x => x.Document.Subject == subject);
+        if (!string.IsNullOrWhiteSpace(grade))
+            segmentQuery = segmentQuery.Where(x => x.Document.Grade == grade);
+        if (!string.IsNullOrWhiteSpace(year))
+            segmentQuery = segmentQuery.Where(x => x.Document.Year == year);
+
+        var totalCount = await segmentQuery.CountAsync();
+        var items = await segmentQuery
+            .Skip(skip)
+            .Take(pageSize)
+            .Select(x => x.Segment)
+            .ToListAsync();
+
+        return (items.Select(MapToModel).ToList(), totalCount);
+    }
+
     private static DocumentSegmentEntity MapToEntity(DocumentSegmentModel model) => new()
     {
         Id = model.Id,

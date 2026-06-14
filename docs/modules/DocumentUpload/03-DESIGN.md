@@ -1,4 +1,4 @@
-﻿# DocumentUpload — 设计说明 (DESIGN)
+# DocumentUpload — 设计说明 (DESIGN)
 
 ## 本功能在项目中的目录与文件结构
 
@@ -9,12 +9,17 @@ src/services/ruoyu.docretrieval/
 │   │   └── DocumentAdminEndpoints.cs              # 上传端点 (HTTP 层)
 │   ├── Domain/
 │   │   ├── Models/
-│   │   │   ├── DocumentModels.cs                  # 文档领域模型 (DocumentModel, DocumentIngestionJobModel)
-│   │   │   └── Constants.cs                       # 常量定义 (DocRetrievalConstants)
+│   │   │   ├── DocumentModel.cs                   # 文档领域模型
+│   │   │   ├── DocumentIngestionJobModel.cs       # 导入任务领域模型
+│   │   │   └── DocRetrievalConstants.cs           # 常量定义
+│   │   ├── Exceptions/
+│   │   │   └── DocRetrievalValidationException.cs # 验证异常
 │   │   ├── Services/
 │   │   │   └── DocumentDomainService.cs           # 领域服务 (核心逻辑)
 │   │   └── Repositories/
-│   │       └── IRepositories.cs                   # 仓储接口
+│   │       ├── IDocumentRepository.cs             # 文档仓储接口
+│   │       ├── IDocumentIngestionJobRepository.cs # 导入任务仓储接口
+│   │       └── IUnitOfWork.cs                     # 事务接口
 │   └── Database/
 │       ├── Entities/
 │       │   ├── DocumentEntity.cs                  # 文档数据库实体
@@ -93,7 +98,7 @@ public static class DocRetrievalConstants
 ### 验证异常
 
 ```csharp
-// src/Domain/Services/DocumentDomainService.cs
+// src/Domain/Exceptions/DocRetrievalValidationException.cs
 public class DocRetrievalValidationException : Exception
 {
     public DocRetrievalValidationException(string message) : base(message) { }
@@ -104,6 +109,7 @@ public class DocRetrievalValidationException : Exception
 
 ```csharp
 // src/Service/DocumentAdminEndpoints.cs
+// ★ /admin/documents/ 端点组通过 .RequireAuthorization() 要求 JWT Bearer 认证（Identity 签发，JWKS 验证）
 POST /admin/documents/upload (multipart/form-data: file, title, subject, grade, year, tags)
 
 // 内部逻辑流程：
@@ -138,7 +144,7 @@ public async Task<DocumentModel> CreateDocumentAsync(DocumentModel document);
 ### 仓储接口
 
 ```csharp
-// src/Domain/Repositories/IRepositories.cs
+// src/Domain/Repositories/IDocumentRepository.cs
 public interface IDocumentRepository
 {
     Task AddAsync(DocumentModel model);
@@ -268,6 +274,7 @@ pending ──IngestionWorker消费──▶ processing ──成功──▶ re
 
 | 错误场景 | 处理层 | 异常/返回 | HTTP 状态码 | 错误码 |
 | --- | --- | --- | --- | --- |
+| 未认证请求 | ASP.NET Core 中间件 | 自动拦截 | 401 | — |
 | 非 multipart/form-data | 端点 | `Results.BadRequest` | 400 | — |
 | 文件为空 | 端点 | `Results.BadRequest` | 400 | `DOCRETRIEVAL_FILE_REQUIRED` |
 | 文件大小超限 | 端点 | `Results.BadRequest` | 400 | — |
