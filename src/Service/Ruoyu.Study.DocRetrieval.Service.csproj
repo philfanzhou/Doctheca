@@ -2,7 +2,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Domain\Ruoyu.Study.DocRetrieval.Domain.csproj" />
-    <ProjectReference Include="..\..\..\QuantumZhou.Identity\backend\Contract\QuantumZhou.Identity.Contract.csproj" />
   </ItemGroup>
 
   <ItemGroup>

@@ -23,7 +23,7 @@
 
 ### 认证端点（AllowAnonymous）
 
-定义在 [AuthEndpoints.cs](../../src/Service/AuthEndpoints.cs)：
+定义在 Identity.Client SDK（[AuthEndpoints.cs](../../../../QuantumZhou.Identity/backend/Client/AuthEndpoints.cs)）：
 
 | 方法 | 路径 | 说明 |
 |------|------|------|

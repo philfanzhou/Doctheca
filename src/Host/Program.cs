@@ -1,10 +1,5 @@
-using Grpc.Net.Client;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
-using Microsoft.IdentityModel.Protocols;
-using Microsoft.IdentityModel.Protocols.OpenIdConnect;
-using Microsoft.IdentityModel.Tokens;
 using Ruoyu.Study.Common.Oss;
 using Ruoyu.Study.DocRetrieval.Database;
 using Ruoyu.Study.DocRetrieval.Database.Repositories;
@@ -12,7 +7,7 @@ using Ruoyu.Study.DocRetrieval.Domain.Models;
 using Ruoyu.Study.DocRetrieval.Domain.Repositories;
 using Ruoyu.Study.DocRetrieval.Domain.Services;
 using Ruoyu.Study.DocRetrieval.Service;
-using QuantumZhou.Identity.Contract.Protos;
+using QuantumZhou.Identity.Client;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -87,56 +82,8 @@ builder.Services.AddScoped<IDocumentParserService, DocumentParserService>();
 // Background Workers
 builder.Services.AddHostedService<IngestionWorker>();
 
-// ========== Identity gRPC Client ==========
-var identityGrpcEndpoint = builder.Configuration["Identity:GrpcEndpoint"] ?? "http://localhost:5001";
-builder.Services.AddSingleton(sp =>
-{
-    var channel = GrpcChannel.ForAddress(identityGrpcEndpoint);
-    return new AuthGrpcService.AuthGrpcServiceClient(channel);
-});
-
-// ========== JWT Bearer Authentication ==========
-var jwtIssuer = builder.Configuration["Jwt:Issuer"] ?? "QuantumZhou.Identity";
-var jwtAudience = builder.Configuration["Jwt:Audience"] ?? "QuantumZhou.microservices";
-var jwksEndpoint = builder.Configuration["Jwt:JwksEndpoint"] ?? "http://localhost:5002/.well-known/jwks";
-
-builder.Services.AddSingleton<IConfigurationManager<OpenIdConnectConfiguration>>(sp =>
-{
-    var httpClient = new HttpClient();
-    var retriever = new OpenIdConnectConfigurationRetriever();
-    return new ConfigurationManager<OpenIdConnectConfiguration>(
-        jwksEndpoint,
-        retriever,
-        new HttpDocumentRetriever(httpClient));
-});
-
-builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-    .AddJwtBearer(options =>
-    {
-        options.TokenValidationParameters = new TokenValidationParameters
-        {
-            ValidateIssuer = true,
-            ValidateAudience = true,
-            ValidateLifetime = true,
-            ValidateIssuerSigningKey = true,
-            ValidIssuer = jwtIssuer,
-            ValidAudience = jwtAudience,
-            ClockSkew = TimeSpan.FromSeconds(30)
-        };
-
-        options.Events = new JwtBearerEvents
-        {
-            OnMessageReceived = async context =>
-            {
-                // 从 Identity JWKS 端点动态获取签名密钥
-                var configManager = context.HttpContext.RequestServices
-                    .GetRequiredService<IConfigurationManager<OpenIdConnectConfiguration>>();
-                var config = await configManager.GetConfigurationAsync(context.HttpContext.RequestAborted);
-                context.Options.TokenValidationParameters.IssuerSigningKeys = config.SigningKeys;
-            }
-        };
-    });
-builder.Services.AddAuthorization();
+// ========== Identity Client SDK ==========
+builder.Services.AddIdentityClient(builder.Configuration);
 
 var app = builder.Build();
 
@@ -165,14 +112,13 @@ using (var initScope = app.Services.CreateScope())
 
 app.MapGrpcService<DocumentRetrievalServiceImpl>();
 
-app.UseAuthentication();
-app.UseAuthorization();
+app.UseIdentityClient();
 
 app.UseDefaultFiles();
 app.UseStaticFiles();
 
 // Web Admin API endpoints
-app.MapAuthEndpoints();
+app.MapIdentityAuthEndpoints();
 app.MapDocumentAdminEndpoints();
 
 app.MapGet("/health", () => Results.Ok(new { status = "healthy", timestamp = DateTimeOffset.UtcNow }));

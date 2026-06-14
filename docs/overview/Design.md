@@ -120,12 +120,11 @@ DocRetrieval 的 Admin API 通过 JWT Bearer Token 进行认证，Token 由 Quan
 | OSS 支持 LocalFile / S3 切换 | 环境变量 `USE_LOCAL_OSS` 控制 |
 | JWT Bearer 认证（Identity 签发） | 统一认证中心，微服务间标准方案 |
 
-## 关键源文件
+##### 关键源文件
 
 | 文件 | 用途 |
 |------|------|
-| [Program.cs](../../src/Host/Program.cs) | 服务启动配置 + JWT 认证配置 |
-| [AuthEndpoints.cs](../../src/Service/AuthEndpoints.cs) | 登录/刷新/登出端点 |
+| [Program.cs](../../src/Host/Program.cs) | 服务启动配置 + `AddIdentityClient()` 调用 |
 | [docretrieval.proto](../../src/Contract/Protos/docretrieval.proto) | gRPC 契约 |
 | [IDocumentDomainService.cs](../../src/Domain/Services/IDocumentDomainService.cs) | 文档领域接口 |
 | [DocumentDomainService.cs](../../src/Domain/Services/DocumentDomainService.cs) | 文档领域实现 |
