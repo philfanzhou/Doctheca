@@ -29,6 +29,7 @@ OSS_SECRET_KEY="seaweedfs_admin"
 OSS_BUCKET="ruoyu-study"
 
 OPENSEARCH_URL="http://ruoyu-opensearch:9200"
+OPENSEARCH_INDEX="docretrieval-segments"
 
 docker network inspect "$NETWORK_NAME" >/dev/null 2>&1 || docker network create "$NETWORK_NAME"
 
