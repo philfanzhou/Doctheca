@@ -12,6 +12,9 @@ NETWORK_NAME="ruoyu-net"
 #   script/env-script/03-start-seaweedfs.sh
 #   script/env-script/04-start-opensearch.sh
 
+GRPC_PORT="5011"
+HTTP_PORT="5012"
+
 DB_HOST="ruoyu-postgres"
 DB_PORT="5432"
 DB_NAME="ruoyu_study_docretrieval"
@@ -43,15 +46,15 @@ docker run -d \
   --restart unless-stopped \
   --network "$NETWORK_NAME" \
   -e TZ=Asia/Shanghai \
-  -e Endpoints__Grpc="5011" \
-  -e Endpoints__Http="5012" \
+  -e Endpoints__Grpc="${GRPC_PORT}" \
+  -e Endpoints__Http="${HTTP_PORT}" \
   -e ConnectionStrings__Default="${CONNECTION_STRING}" \
   -e Oss__Endpoint="${OSS_ENDPOINT}" \
   -e Oss__AccessKey="${OSS_ACCESS_KEY}" \
   -e Oss__SecretKey="${OSS_SECRET_KEY}" \
   -e Oss__BucketName="${OSS_BUCKET}" \
   -e OpenSearch__Url="${OPENSEARCH_URL}" \
-  -e OpenSearch__IndexName="docretrieval-segments" \
+  -e OpenSearch__IndexName="${OPENSEARCH_INDEX}" \
   "$IMAGE_NAME"
 
 echo "${CONTAINER_NAME} started"
