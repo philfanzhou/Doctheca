@@ -1,3 +1,4 @@
+using System.Data.Common;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Ruoyu.Study.Common.Oss;
@@ -86,6 +87,20 @@ builder.Services.AddHostedService<IngestionWorker>();
 builder.Services.AddIdentityClient(builder.Configuration);
 
 var app = builder.Build();
+
+app.Logger.LogInformation("DocRetrieval Service starting");
+app.Logger.LogInformation("Endpoints: gRPC={GrpcPort}, HTTP={HttpPort}", grpcPort, httpPort);
+if (isPostgreSql && !string.IsNullOrEmpty(connectionString))
+{
+    var csb = new DbConnectionStringBuilder { ConnectionString = connectionString };
+    app.Logger.LogInformation("Database: PostgreSQL {Host}:{Port}/{Database}", csb["Host"], csb.TryGetValue("Port", out var dbPort) ? dbPort : "5432", csb["Database"]);
+}
+else
+{
+    app.Logger.LogInformation("Database: SQLite");
+}
+app.Logger.LogInformation("OSS: {OssType}", useLocalOss ? "local" : "S3");
+app.Logger.LogInformation("OpenSearch: {Url}", builder.Configuration["OpenSearch:Url"] ?? "(not configured)");
 
 using (var scope = app.Services.CreateScope())
 {
