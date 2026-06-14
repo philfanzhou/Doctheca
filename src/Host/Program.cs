@@ -58,7 +58,8 @@ else
     builder.Services.AddScoped<IOssService, S3OssService>(sp =>
     {
         var options = sp.GetRequiredService<IOptions<OssOptions>>().Value;
-        return new S3OssService(options.Endpoint, options.AccessKey, options.SecretKey, options.BucketName);
+        return new S3OssService(options.Endpoint, options.AccessKey, options.SecretKey, options.BucketName,
+            publicEndpoint: options.PublicEndpoint);
     });
 }
 
