@@ -103,6 +103,10 @@ else
 app.Logger.LogInformation("OSS: {OssType}", useLocalOss ? "local" : "S3");
 app.Logger.LogInformation("OpenSearch: {Url}", builder.Configuration["OpenSearch:Url"] ?? "(not configured)");
 
+var identityOptions = app.Services.GetRequiredService<IdentityClientOptions>();
+app.Logger.LogInformation("Identity: gRPC={GrpcEndpoint}, JWKS={JwksEndpoint}, RequireHttps={RequireHttps}",
+    identityOptions.GrpcEndpoint, identityOptions.JwksEndpoint, identityOptions.RequireHttpsForJwks);
+
 using (var scope = app.Services.CreateScope())
 {
     var dbContext = scope.ServiceProvider.GetRequiredService<DocRetrievalDbContext>();

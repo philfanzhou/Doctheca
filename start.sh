@@ -6,9 +6,14 @@ IMAGE_TAG="20260613"
 IMAGE_NAME="ruoyu.docretrieval:${IMAGE_TAG}"
 CONTAINER_NAME="ruoyu-docretrieval"
 NETWORK_NAME="ruoyu-net"
-
 GRPC_PORT="5011"
 HTTP_PORT="5012"
+
+IDENTITY_GRPC_ENDPOINT="http://ruoyu-identity:5001"
+IDENTITY_JWKS_ENDPOINT="http://ruoyu-identity:5002/.well-known/jwks"
+
+OPENSEARCH_URL="http://ruoyu-opensearch:9200"
+OPENSEARCH_INDEX="docretrieval-segments"
 
 DB_HOST="ruoyu-postgres"
 DB_PORT="5432"
@@ -22,9 +27,6 @@ OSS_ENDPOINT="ruoyu-seaweedfs:8333"
 OSS_ACCESS_KEY="seaweedfs_admin"
 OSS_SECRET_KEY="seaweedfs_admin"
 OSS_BUCKET="ruoyu-study"
-
-OPENSEARCH_URL="http://192.168.100.1:9200"
-OPENSEARCH_INDEX="docretrieval-segments"
 
 docker network inspect "$NETWORK_NAME" >/dev/null 2>&1 || docker network create "$NETWORK_NAME"
 
@@ -52,6 +54,8 @@ docker run -d \
   -e Oss__BucketName="${OSS_BUCKET}" \
   -e OpenSearch__Url="${OPENSEARCH_URL}" \
   -e OpenSearch__IndexName="${OPENSEARCH_INDEX}" \
+  -e Identity__GrpcEndpoint="${IDENTITY_GRPC_ENDPOINT}" \
+  -e Identity__JwksEndpoint="${IDENTITY_JWKS_ENDPOINT}" \
   "$IMAGE_NAME"
 
 echo "${CONTAINER_NAME} started"
