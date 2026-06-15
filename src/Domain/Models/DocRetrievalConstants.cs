@@ -2,7 +2,7 @@ namespace Ruoyu.Study.DocRetrieval.Domain.Models;
 
 public static class DocRetrievalConstants
 {
-    public const string SubjectEnglish = "English";
+    public const string SubjectEnglish = "英语";
 
     public static readonly string[] ValidSubjects = [SubjectEnglish];
 

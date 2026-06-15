@@ -138,18 +138,18 @@
 {
   "success": true,
   "data": {
-    "document_id": "...",
+    "documentId": "...",
     "title": "...",
     "status": "ready",
     "jobs": [
       {
-        "job_id": "...",
+        "jobId": "...",
         "status": "success",
-        "parser_version": "...",
-        "ocr_version": "...",
-        "error_message": null,
-        "started_at": "2024-01-01T00:00:00.000Z",
-        "finished_at": "2024-01-01T00:01:00.000Z"
+        "parserVersion": "...",
+        "ocrVersion": "...",
+        "errorMessage": null,
+        "startedAt": "2024-01-01T00:00:00.000Z",
+        "finishedAt": "2024-01-01T00:01:00.000Z"
       }
     ]
   }

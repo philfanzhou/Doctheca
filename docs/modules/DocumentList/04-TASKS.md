@@ -1,4 +1,4 @@
-﻿[
+[
   {
     "id": "T-01",
     "title": "代码审查：GetDocumentListAsync 分页参数修正",
@@ -36,7 +36,7 @@
     "checkpoints": [
       "返回 Results.Ok 包含 success=true",
       "data 为 items.Select 映射后的数组",
-      "每条 item 包含 id/title/source_type/subject/grade/year/tags/status/created_at/updated_at",
+      "每条 item 包含 id/title/sourceType/subject/grade/year/tags/status/createdAt/updatedAt",
       "tags 使用 JsonSerializer.Deserialize<string[]> 反序列化",
       "tags 为 null 时返回 null",
       "totalPages 计算公式为 (totalCount + pageSize - 1) / pageSize"

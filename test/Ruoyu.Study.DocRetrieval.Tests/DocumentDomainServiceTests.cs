@@ -96,13 +96,13 @@ public class DocumentDomainServiceTests
     }
 
     [Theory]
-    [InlineData("", "English", "G1", "2023", "Document title cannot be empty")]
+    [InlineData("", "英语", "G1", "2023", "Document title cannot be empty")]
     [InlineData("test", "", "G1", "2023", "Subject cannot be empty")]
-    [InlineData("test", "English", "", "2023", "Grade cannot be empty")]
-    [InlineData("test", "English", "G1", "", "Year cannot be empty")]
+    [InlineData("test", "英语", "", "2023", "Grade cannot be empty")]
+    [InlineData("test", "英语", "G1", "", "Year cannot be empty")]
     [InlineData("test", "Invalid", "G1", "2023", "Subject only supports")]
-    [InlineData("test", "English", "Invalid", "2023", "Invalid grade value")]
-    [InlineData("empty-hash", "English", "G1", "2023", "File hash cannot be empty")]
+    [InlineData("test", "英语", "Invalid", "2023", "Invalid grade value")]
+    [InlineData("empty-hash", "英语", "G1", "2023", "File hash cannot be empty")]
     public async Task CreateDocumentAsync_InvalidMetadata_ThrowsValidationException(
         string title, string subject, string grade, string year, string expectedErrorPart)
     {
@@ -136,7 +136,7 @@ public class DocumentDomainServiceTests
         {
             Id = Guid.NewGuid(),
             Title = "test-doc",
-            Subject = "English",
+            Subject = "英语",
             Grade = "G1",
             Year = "2023",
             Status = DocumentStatus.Ready
@@ -146,7 +146,7 @@ public class DocumentDomainServiceTests
         _searchIndexServiceMock.Setup(s => s.UpdateDocumentMetadataAsync(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>())).Returns(Task.CompletedTask);
 
         // Act
-        var result = await _service.UpdateMetadataAsync("test-doc", "English", "G2", "2024", "[\"tag1\"]");
+        var result = await _service.UpdateMetadataAsync("test-doc", "英语", "G2", "2024", "[\"tag1\"]");
 
         // Assert
         Assert.Equal("G2", result.Grade);
@@ -163,7 +163,7 @@ public class DocumentDomainServiceTests
 
         // Act & Assert
         var ex = await Assert.ThrowsAsync<DocRetrievalValidationException>(() =>
-            _service.UpdateMetadataAsync("nonexistent", "English", "G1", "2023", null));
+            _service.UpdateMetadataAsync("nonexistent", "英语", "G1", "2023", null));
         Assert.Contains("Document not found", ex.Message);
     }
 
@@ -176,7 +176,7 @@ public class DocumentDomainServiceTests
 
         // Act & Assert
         var ex = await Assert.ThrowsAsync<DocRetrievalValidationException>(() =>
-            _service.UpdateMetadataAsync("pending-doc", "English", "G1", "2023", null));
+            _service.UpdateMetadataAsync("pending-doc", "英语", "G1", "2023", null));
         Assert.Contains("Document not ready", ex.Message);
     }
 
@@ -184,7 +184,7 @@ public class DocumentDomainServiceTests
     public async Task UpdateMetadataAsync_InvalidSubject_ThrowsValidationException()
     {
         // Arrange
-        var document = new DocumentModel { Title = "ready-doc", Status = DocumentStatus.Ready, Subject = "English", Grade = "G1", Year = "2023" };
+        var document = new DocumentModel { Title = "ready-doc", Status = DocumentStatus.Ready, Subject = "英语", Grade = "G1", Year = "2023" };
         _documentRepoMock.Setup(r => r.GetByTitleAsync("ready-doc")).ReturnsAsync(document);
 
         // Act & Assert
@@ -197,7 +197,7 @@ public class DocumentDomainServiceTests
     public async Task UpdateMetadataAsync_InvalidGrade_ThrowsValidationException()
     {
         // Arrange
-        var document = new DocumentModel { Title = "ready-doc", Status = DocumentStatus.Ready, Subject = "English", Grade = "G1", Year = "2023" };
+        var document = new DocumentModel { Title = "ready-doc", Status = DocumentStatus.Ready, Subject = "英语", Grade = "G1", Year = "2023" };
         _documentRepoMock.Setup(r => r.GetByTitleAsync("ready-doc")).ReturnsAsync(document);
 
         // Act & Assert
@@ -214,7 +214,7 @@ public class DocumentDomainServiceTests
         {
             Title = "ready-doc",
             Status = DocumentStatus.Ready,
-            Subject = "English",
+            Subject = "英语",
             Grade = "G1",
             Year = "2023"
         };
@@ -225,7 +225,7 @@ public class DocumentDomainServiceTests
         var result = await _service.UpdateMetadataAsync("ready-doc", null, "G3", null, null);
 
         // Assert
-        Assert.Equal("English", result.Subject); // unchanged
+        Assert.Equal("英语", result.Subject); // unchanged
         Assert.Equal("G3", result.Grade);     // changed
         Assert.Equal("2023", result.Year);    // unchanged
     }
@@ -437,11 +437,11 @@ public class DocumentDomainServiceTests
     {
         // Arrange
         var items = new List<DocumentModel> { CreateValidDocument() };
-        _documentRepoMock.Setup(r => r.GetListAsync(1, 20, DocumentStatus.Ready, "English", "G1", "keyword", "2023"))
+        _documentRepoMock.Setup(r => r.GetListAsync(1, 20, DocumentStatus.Ready, "英语", "G1", "keyword", "2023"))
             .ReturnsAsync((items, 1));
 
         // Act
-        var (result, totalCount) = await _service.GetDocumentListAsync(1, 20, DocumentStatus.Ready, "English", "G1", "keyword", "2023");
+        var (result, totalCount) = await _service.GetDocumentListAsync(1, 20, DocumentStatus.Ready, "英语", "G1", "keyword", "2023");
 
         // Assert
         Assert.Single(result);
@@ -461,7 +461,7 @@ public class DocumentDomainServiceTests
         FileSize = 102400,
         Language = "en",
         Grade = "G10",
-        Subject = "English",
+        Subject = "英语",
         Year = "2023",
         Tags = "[\"高考\"]"
     };

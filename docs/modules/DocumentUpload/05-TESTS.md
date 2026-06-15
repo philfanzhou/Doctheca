@@ -100,7 +100,7 @@
 
 1. 使用 mock OSS 和真实测试数据库上下文。
 2. 上传合法 PDF 文件，提供完整元数据。
-3. 断言返回 200，`data.document_id` 非空，`data.job_id` 非空，`data.status == "pending"`。
+3. 断言返回 200，`data.documentId` 非空，`data.jobId` 非空，`data.status == "pending"`。
 4. 通过 `GetDocumentAsync(id)` 查询文档，断言字段一致。
 5. 通过 `GetIngestionJobAsync(id)` 查询任务，断言 `Status == "pending"`，`DocumentId` 一致。
 

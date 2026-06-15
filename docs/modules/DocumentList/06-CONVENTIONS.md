@@ -31,7 +31,7 @@
 
 - 路由：`GET /admin/documents`
 - 查询参数：`page`、`pageSize`、`status`、`subject`、`grade`、`keyword`、`year`
-- 响应字段：`snake_case`（`source_type`、`created_at`、`updated_at`），与项目现有风格一致
+- 响应字段：`camelCase`（`sourceType`、`createdAt`、`updatedAt`），与前端 TypeScript 接口一致
 
 ---
 

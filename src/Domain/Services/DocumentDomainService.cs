@@ -104,7 +104,7 @@ public class DocumentDomainService : IDocumentDomainService
             throw new DocRetrievalValidationException("Document not ready, metadata update not allowed");
 
         if (subject != null && !DocRetrievalConstants.IsValidSubject(subject))
-            throw new DocRetrievalValidationException("Subject only supports: English");
+            throw new DocRetrievalValidationException("Subject only supports: 英语");
 
         if (grade != null && !DocRetrievalConstants.IsValidGrade(grade))
             throw new DocRetrievalValidationException($"Invalid grade value, valid values: {string.Join(", ", DocRetrievalConstants.ValidGrades)}");
@@ -286,7 +286,7 @@ public class DocumentDomainService : IDocumentDomainService
         if (string.IsNullOrWhiteSpace(document.Subject))
             errors.Add("Subject cannot be empty");
         else if (!DocRetrievalConstants.IsValidSubject(document.Subject))
-            errors.Add("Subject only supports: English");
+            errors.Add("Subject only supports: 英语");
 
         if (string.IsNullOrWhiteSpace(document.Grade))
             errors.Add("Grade cannot be empty");

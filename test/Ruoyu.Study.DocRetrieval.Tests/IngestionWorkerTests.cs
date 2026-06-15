@@ -100,7 +100,7 @@ public class IngestionWorkerTests
             Title = "test.pdf",
             SourceType = SourceTypes.Pdf,
             FilePath = "/test/path.pdf",
-            Subject = "English",
+            Subject = "英语",
             Grade = "G10",
             Year = "2023"
         };
@@ -186,7 +186,7 @@ public class IngestionWorkerTests
             Title = "corrupt.pdf",
             SourceType = SourceTypes.Pdf,
             FilePath = "/test/corrupt.pdf",
-            Subject = "English",
+            Subject = "英语",
             Grade = "G10",
             Year = "2023"
         };
@@ -231,7 +231,7 @@ public class IngestionWorkerTests
             Title = "test.pdf",
             SourceType = SourceTypes.Pdf,
             FilePath = "/test/path.pdf",
-            Subject = "English",
+            Subject = "英语",
             Grade = "G10",
             Year = "2023"
         };
@@ -299,7 +299,7 @@ public class IngestionWorkerTests
             Title = "exam.pdf",
             SourceType = SourceTypes.Pdf,
             FilePath = "/test/exam.pdf",
-            Subject = "English",
+            Subject = "英语",
             Grade = "G10",
             Year = "2023"
         };

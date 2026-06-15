@@ -22,13 +22,13 @@
 - [x] REQ-UPLOAD-11 能检测文件哈希重复：相同哈希且状态为 `ready` 的文档已存在返回 409（`DOCRETRIEVAL_FILE_HASH_ALREADY_EXISTS`）。
 - [x] REQ-UPLOAD-12 能原子创建文档记录与导入任务：在同一 `SaveChangesAsync` 中写入 `documents` 和 `document_ingestion_jobs` 表。
 - [x] REQ-UPLOAD-13 能根据 MIME 类型推导 `sourceType`：PDF→`pdf`、Word→`word`、PPT→`ppt`。
-- [x] REQ-UPLOAD-14 能返回创建结果：包含 `document_id`、`title`、`job_id`、`status`。
+- [x] REQ-UPLOAD-14 能返回创建结果：包含 `documentId`、`title`、`jobId`、`status`。
 
 ## 详细的验收标准（可自动验证）
 
 ### 场景 A：正常上传
 
-- AC-A1：上传合法 PDF 文件，提供完整元数据（title="英语G3测试", subject="英语", grade="G3", year="2025"），返回 200，`success=true`，`data.document_id` 非 `Guid.Empty`，`data.status=="pending"`，`data.job_id` 非 `Guid.Empty`。
+- AC-A1：上传合法 PDF 文件，提供完整元数据（title="英语G3测试", subject="英语", grade="G3", year="2025"），返回 200，`success=true`，`data.documentId` 非 `Guid.Empty`，`data.status=="pending"`，`data.jobId` 非 `Guid.Empty`。
 - AC-A2：数据库中 `documents` 表新增一条记录，`Status=="pending"`，`SourceType=="pdf"`，`FileHash` 为 64 位小写十六进制字符串，`FilePath` 以 `docretrieval/` 开头。
 - AC-A3：数据库中 `document_ingestion_jobs` 表新增一条记录，`DocumentId` 与文档 `Id` 一致，`Status=="pending"`。
 - AC-A4：`CreatedAt` 接近当前时间（误差 < 5s）。

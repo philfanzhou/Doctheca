@@ -120,7 +120,7 @@ private static async Task<IResult> GetDocument(
     IDocumentDomainService documentService)
 ```
 
-返回完整文档详情，包含 `file_hash`、`file_size`、`language` 等字段：
+返回完整文档详情，包含 `fileHash`、`fileSize`、`language` 等字段：
 
 ```json
 {
@@ -128,17 +128,17 @@ private static async Task<IResult> GetDocument(
   "data": {
     "id": "...",
     "title": "...",
-    "source_type": "...",
-    "file_hash": "...",
-    "file_size": 12345,
+    "sourceType": "...",
+    "fileHash": "...",
+    "fileSize": 12345,
     "language": "en",
     "subject": "...",
     "grade": "...",
     "year": "...",
     "tags": ["..."],
     "status": "...",
-    "created_at": "...",
-    "updated_at": "..."
+    "createdAt": "...",
+    "updatedAt": "..."
   }
 }
 ```
@@ -150,7 +150,7 @@ private static async Task<IResult> GetDocument(
 ## 3. 数据流描述（步骤序列）
 
 ```
-客户端 GET /admin/documents?page=1&pageSize=20&status=ready&subject=English
+客户端 GET /admin/documents?page=1&pageSize=20&status=ready&subject=英语
   │
   ▼
 DocumentAdminEndpoints.ListDocuments
@@ -173,8 +173,8 @@ DocumentAdminEndpoints.ListDocuments
   └── 构造 JSON 响应
         {
           success: true,
-          data: items.Select(d => { id, title, source_type, subject, grade, year,
-                                    tags (反序列化), status, created_at, updated_at }),
+          data: items.Select(d => { id, title, sourceType, subject, grade, year,
+                                    tags (反序列化), status, createdAt, updatedAt }),
           total: totalCount,
           page,
           pageSize,
@@ -199,9 +199,9 @@ DocumentAdminEndpoints.GetDocument
   └── 构造 JSON 响应
         {
           success: true,
-          data: { id, title, source_type, file_hash, file_size, language,
+          data: { id, title, sourceType, fileHash, fileSize, language,
                   subject, grade, year, tags (反序列化), status,
-                  created_at, updated_at }
+                  createdAt, updatedAt }
         }
 ```
 

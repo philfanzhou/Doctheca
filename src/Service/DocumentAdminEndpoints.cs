@@ -125,9 +125,9 @@ public static class DocumentAdminEndpoints
                 success = true,
                 data = new
                 {
-                    document_id = created.Id.ToString(),
+                    documentId = created.Id.ToString(),
                     title = created.Title,
-                    job_id = job?.Id.ToString(),
+                    jobId = job?.Id.ToString(),
                     status = created.Status
                 }
             });
@@ -166,14 +166,14 @@ public static class DocumentAdminEndpoints
             {
                 id = d.Id.ToString(),
                 title = d.Title,
-                source_type = d.SourceType,
+                sourceType = d.SourceType,
                 subject = d.Subject,
                 grade = d.Grade,
                 year = d.Year,
                 tags = d.Tags != null ? JsonSerializer.Deserialize<string[]>(d.Tags) : null,
                 status = d.Status,
-                created_at = d.CreatedAt.UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'"),
-                updated_at = d.UpdatedAt?.UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'")
+                createdAt = d.CreatedAt.UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'"),
+                updatedAt = d.UpdatedAt?.UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'")
             }),
             total = totalCount,
             page,
@@ -197,18 +197,18 @@ public static class DocumentAdminEndpoints
             success = true,
             data = new
             {
-                document_id = id.ToString(),
+                documentId = id.ToString(),
                 title = document.Title,
                 status = document.Status,
                 jobs = jobs.Select(j => new
                 {
-                    job_id = j.Id.ToString(),
+                    jobId = j.Id.ToString(),
                     status = j.Status,
-                    parser_version = j.ParserVersion,
-                    ocr_version = j.OcrVersion,
-                    error_message = j.ErrorMessage,
-                    started_at = j.StartedAt?.UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'"),
-                    finished_at = j.FinishedAt?.UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'")
+                    parserVersion = j.ParserVersion,
+                    ocrVersion = j.OcrVersion,
+                    errorMessage = j.ErrorMessage,
+                    startedAt = j.StartedAt?.UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'"),
+                    finishedAt = j.FinishedAt?.UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'")
                 })
             }
         });
@@ -229,17 +229,17 @@ public static class DocumentAdminEndpoints
             {
                 id = document.Id.ToString(),
                 title = document.Title,
-                source_type = document.SourceType,
-                file_hash = document.FileHash,
-                file_size = document.FileSize,
+                sourceType = document.SourceType,
+                fileHash = document.FileHash,
+                fileSize = document.FileSize,
                 language = document.Language,
                 subject = document.Subject,
                 grade = document.Grade,
                 year = document.Year,
                 tags = document.Tags != null ? JsonSerializer.Deserialize<string[]>(document.Tags) : null,
                 status = document.Status,
-                created_at = document.CreatedAt.UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'"),
-                updated_at = document.UpdatedAt?.UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'")
+                createdAt = document.CreatedAt.UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'"),
+                updatedAt = document.UpdatedAt?.UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'")
             }
         });
     }

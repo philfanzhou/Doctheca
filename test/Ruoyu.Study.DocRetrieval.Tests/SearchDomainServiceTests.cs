@@ -154,7 +154,7 @@ public class SearchDomainServiceTests
         // Arrange
         var filter = new SearchFilterModel
         {
-            Subject = "English",
+            Subject = "英语",
             Grade = "G10",
             Year = "2023",
             DocumentTitle = "test.pdf"

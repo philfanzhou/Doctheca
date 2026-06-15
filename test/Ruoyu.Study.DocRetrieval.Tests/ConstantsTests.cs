@@ -9,7 +9,7 @@ public class ConstantsTests
     #region Subject Validation
 
     [Theory]
-    [InlineData("English", true)]
+    [InlineData("英语", true)]
     [InlineData("数学", false)]
     [InlineData("语文", false)]
     [InlineData("", false)]
@@ -22,7 +22,7 @@ public class ConstantsTests
     public void ValidSubjects_ContainsOnlyEnglish()
     {
         Assert.Single(DocRetrievalConstants.ValidSubjects);
-        Assert.Equal("English", DocRetrievalConstants.ValidSubjects[0]);
+        Assert.Equal("英语", DocRetrievalConstants.ValidSubjects[0]);
     }
 
     #endregion
@@ -71,7 +71,7 @@ public class ConstantsTests
     [Fact]
     public void SubjectEnglish_IsEnglish()
     {
-        Assert.Equal("English", DocRetrievalConstants.SubjectEnglish);
+        Assert.Equal("英语", DocRetrievalConstants.SubjectEnglish);
     }
 
     #endregion

@@ -145,7 +145,7 @@ class DocApiClient {
   }
 
   async deleteDocument(title: string): Promise<ApiResponse<{ title: string; deleted: boolean }>> {
-    const response = await this.client.delete(`/admin/documents/${title}`)
+    const response = await this.client.delete(`/admin/documents/by-title/${encodeURIComponent(title)}`)
     return response.data
   }
 

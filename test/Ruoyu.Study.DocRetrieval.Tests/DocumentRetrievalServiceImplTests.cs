@@ -218,7 +218,7 @@ public class DocumentRetrievalServiceImplTests
             Phrase = false,
             Filter = new SearchFilter
             {
-                Subject = "English",
+                Subject = "英语",
                 Grade = "G10",
                 Year = "2023",
                 DocumentTitle = "test.pdf"
@@ -229,7 +229,7 @@ public class DocumentRetrievalServiceImplTests
         _searchServiceMock.Verify(s => s.ExactSearchAsync(
             "hello", false,
             It.Is<SearchFilterModel>(f =>
-                f.Subject == "English" &&
+                f.Subject == "英语" &&
                 f.Grade == "G10" &&
                 f.Year == "2023" &&
                 f.DocumentTitle == "test.pdf"),

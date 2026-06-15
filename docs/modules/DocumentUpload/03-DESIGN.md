@@ -255,7 +255,7 @@ DocumentAdminEndpoints.UploadDocument
   │
   ├─ 8. 捕获 DocRetrievalValidationException → 映射错误码与 HTTP 状态码
   │
-  └─ 9. 返回 200 { success, data: { document_id, title, job_id, status } }
+  └─ 9. 返回 200 { success, data: { documentId, title, jobId, status } }
 ```
 
 ### 文档状态流转
