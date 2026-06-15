@@ -49,7 +49,7 @@ public static class DocumentAdminEndpoints
         HttpRequest request,
         IDocumentDomainService documentService,
         IOssService ossService,
-        ILogger logger)
+        [FromServices] ILogger logger)
     {
         if (!request.HasFormContentType)
             return Results.BadRequest(new { success = false, message = "Request must be multipart/form-data" });
@@ -248,7 +248,7 @@ public static class DocumentAdminEndpoints
         Guid id,
         IDocumentDomainService documentService,
         IOssService ossService,
-        ILogger logger)
+        [FromServices] ILogger logger)
     {
         var document = await documentService.GetDocumentAsync(id);
         if (document == null)
@@ -279,7 +279,7 @@ public static class DocumentAdminEndpoints
         string title,
         IDocumentDomainService documentService,
         IOssService ossService,
-        ILogger logger)
+        [FromServices] ILogger logger)
     {
         // Get document info first (for OSS file deletion), then delete database records, finally delete OSS file
         var document = await documentService.GetDocumentByTitleAsync(title);
