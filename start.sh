@@ -56,6 +56,7 @@ docker run -d \
   -e OpenSearch__IndexName="${OPENSEARCH_INDEX}" \
   -e Identity__GrpcEndpoint="${IDENTITY_GRPC_ENDPOINT}" \
   -e Identity__JwksEndpoint="${IDENTITY_JWKS_ENDPOINT}" \
+  -e Logging__LogLevel__Microsoft_EntityFrameworkCore_Database_Command="Warning" \
   "$IMAGE_NAME"
 
 echo "${CONTAINER_NAME} started"
