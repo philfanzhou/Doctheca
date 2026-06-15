@@ -164,7 +164,7 @@ export function createDocApiClient(): DocApiClient {
 
 export function getDocErrorMessage(error: unknown): string {
   if (error && typeof error === 'object' && 'isAxiosError' in error) {
-    const axiosError = error as { response?: { data?: { message?: string } }; message: string }
+    const axiosError = error as unknown as { response?: { data?: { message?: string } }; message: string }
     const data = axiosError.response?.data as { message?: string } | undefined
     if (data?.message) {
       return data.message
