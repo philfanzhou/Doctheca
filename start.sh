@@ -41,6 +41,7 @@ docker run -d \
   --name "$CONTAINER_NAME" \
   --restart unless-stopped \
   --network "$NETWORK_NAME" \
+  -p "${HTTP_PORT}:${HTTP_PORT}" \
   -e TZ=Asia/Shanghai \
   -e Endpoints__Grpc="${GRPC_PORT}" \
   -e Endpoints__Http="${HTTP_PORT}" \
