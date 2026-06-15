@@ -282,6 +282,9 @@ function handleFilterChange() {
 
 function handleFileChange(file: UploadUserFile) {
   uploadFile.value = file.raw as File
+  if (!uploadForm.value.title && file.name) {
+    uploadForm.value.title = file.name.replace(/\.[^.]+$/, '')
+  }
 }
 
 function resetUploadForm() {
