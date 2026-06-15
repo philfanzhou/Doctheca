@@ -7,11 +7,6 @@ IMAGE_NAME="ruoyu.docretrieval:${IMAGE_TAG}"
 CONTAINER_NAME="ruoyu-docretrieval"
 NETWORK_NAME="ruoyu-net"
 
-# Prerequisites: start these services first
-#   script/env-script/01-start-postgres.sh
-#   script/env-script/03-start-seaweedfs.sh
-#   script/env-script/04-start-opensearch.sh
-
 GRPC_PORT="5011"
 HTTP_PORT="5012"
 
@@ -28,7 +23,7 @@ OSS_ACCESS_KEY="seaweedfs_admin"
 OSS_SECRET_KEY="seaweedfs_admin"
 OSS_BUCKET="ruoyu-study"
 
-OPENSEARCH_URL="http://ruoyu-opensearch:9200"
+OPENSEARCH_URL="http://192.168.100.1:9200"
 OPENSEARCH_INDEX="docretrieval-segments"
 
 docker network inspect "$NETWORK_NAME" >/dev/null 2>&1 || docker network create "$NETWORK_NAME"
