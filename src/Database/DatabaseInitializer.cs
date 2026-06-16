@@ -5,9 +5,9 @@ namespace Ruoyu.Study.DocRetrieval.Database;
 
 public static class DatabaseInitializer
 {
-    public static async Task InitializeAsync(DocRetrievalDbContext context, ILogger logger)
+    public static async Task InitializeAsync(DocRetrievalDbContext context, ILoggerFactory loggerFactory)
     {
-        await Common.Database.DatabaseInitializer.InitializeAsync(context, logger, GetTableCreationSql);
+        await Common.Database.DatabaseInitializer.InitializeAsync(context, loggerFactory, GetTableCreationSql);
     }
 
     private static string? GetTableCreationSql(string tableName)

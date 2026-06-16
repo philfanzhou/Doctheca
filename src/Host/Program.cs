@@ -110,8 +110,8 @@ app.Logger.LogInformation("Identity: gRPC={GrpcEndpoint}, JWKS={JwksEndpoint}, R
 using (var scope = app.Services.CreateScope())
 {
     var dbContext = scope.ServiceProvider.GetRequiredService<DocRetrievalDbContext>();
-    var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
-    await DatabaseInitializer.InitializeAsync(dbContext, logger);
+    var loggerFactory = scope.ServiceProvider.GetRequiredService<ILoggerFactory>();
+    await DatabaseInitializer.InitializeAsync(dbContext, loggerFactory);
 }
 
 // Initialize search indices
