@@ -140,13 +140,11 @@ public class DocumentDomainService : IDocumentDomainService
         var document = await _documentRepository.GetByTitleAsync(title);
         if (document == null) return true; // Idempotent
 
-        // Cancel ongoing ingestion job if document is being ingested
-        await CancelIngestionJobAsync(document.Id);
-
         await _occurrenceRepository.DeleteByDocumentIdAsync(document.Id);
         await _questionRepository.DeleteByDocumentIdAsync(document.Id);
         await _segmentRepository.DeleteByDocumentIdAsync(document.Id);
         await _pageRepository.DeleteByDocumentIdAsync(document.Id);
+        await _jobRepository.DeleteByDocumentIdAsync(document.Id);
         await _documentRepository.DeleteAsync(document.Id);
         await _unitOfWork.SaveChangesAsync();
 

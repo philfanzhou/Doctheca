@@ -112,6 +112,11 @@ public interface IDocumentRepository
     Task<bool> DeleteAsync(Guid id);
 }
 
+public interface IDocumentIngestionJobRepository
+{
+    Task DeleteByDocumentIdAsync(Guid documentId);
+}
+
 public interface IDocumentOccurrenceRepository
 {
     Task DeleteByDocumentIdAsync(Guid documentId);
@@ -180,6 +185,7 @@ DocumentDomainService.DeleteDocumentAsync(title)
     │     ├─ _questionRepository.DeleteByDocumentIdAsync(document.Id)
     │     ├─ _segmentRepository.DeleteByDocumentIdAsync(document.Id)
     │     ├─ _pageRepository.DeleteByDocumentIdAsync(document.Id)
+    │     ├─ _jobRepository.DeleteByDocumentIdAsync(document.Id)
     │     └─ _documentRepository.DeleteAsync(document.Id)
     │
     ├─ 3. 提交数据库事务

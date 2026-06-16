@@ -271,23 +271,20 @@ public class DocumentDomainServiceTests
     }
 
     [Fact]
-    public async Task DeleteDocumentAsync_ProcessingDocument_CancelsJob()
+    public async Task DeleteDocumentAsync_ProcessingDocument_DeletesJob()
     {
         // Arrange
         var document = CreateValidDocument();
         document.Id = Guid.NewGuid();
-        var job = new DocumentIngestionJobModel { Id = Guid.NewGuid(), DocumentId = document.Id, Status = DocumentStatus.Processing };
         _documentRepoMock.Setup(r => r.GetByTitleAsync(document.Title)).ReturnsAsync(document);
         _documentRepoMock.Setup(r => r.DeleteAsync(document.Id)).ReturnsAsync(true);
-        _jobRepoMock.Setup(r => r.GetByDocumentIdAsync(document.Id)).ReturnsAsync(job);
 
         // Act
         var result = await _service.DeleteDocumentAsync(document.Title);
 
         // Assert
         Assert.True(result);
-        // Verify job was cancelled
-        _jobRepoMock.Verify(r => r.UpdateAsync(It.Is<DocumentIngestionJobModel>(j => j.Status == DocumentStatus.Cancelled)), Times.Once);
+        _jobRepoMock.Verify(r => r.DeleteByDocumentIdAsync(document.Id), Times.Once);
     }
 
     #endregion

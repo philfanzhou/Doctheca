@@ -61,6 +61,14 @@ public class DocumentIngestionJobRepository : IDocumentIngestionJobRepository
         return true;
     }
 
+    public async Task DeleteByDocumentIdAsync(Guid documentId)
+    {
+        var entities = await _dbContext.DocumentIngestionJobs
+            .Where(j => j.DocumentId == documentId)
+            .ToListAsync();
+        _dbContext.DocumentIngestionJobs.RemoveRange(entities);
+    }
+
     private static DocumentIngestionJobEntity MapToEntity(DocumentIngestionJobModel model) => new()
     {
         Id = model.Id,

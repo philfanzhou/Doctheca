@@ -11,4 +11,5 @@ public interface IDocumentIngestionJobRepository
     Task<DocumentIngestionJobModel?> GetByDocumentIdAsync(Guid documentId);
     Task<List<DocumentIngestionJobModel>> GetByStatusAsync(string status);
     Task<bool> UpdateAsync(DocumentIngestionJobModel model);
+    Task DeleteByDocumentIdAsync(Guid documentId);
 }
