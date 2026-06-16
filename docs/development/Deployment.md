@@ -2,7 +2,7 @@
 
 ## 构建与部署
 
-- Dockerfile：见项目 scripts/ 目录
+- Dockerfile：`deploy/Dockerfile`
 - 部署脚本：见项目 scripts/ 目录
 
 ## 配置项
