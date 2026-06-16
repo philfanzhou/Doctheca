@@ -274,6 +274,42 @@ public class DocumentDomainService : IDocumentDomainService
     }
 
     /// <summary>
+    /// Retry failed document: clear old data, reset status, create new job.
+    /// </summary>
+    public async Task RetryIngestionAsync(Guid documentId)
+    {
+        var document = await _documentRepository.GetByIdAsync(documentId)
+            ?? throw new InvalidOperationException($"Document not found: {documentId}");
+
+        if (document.Status != DocumentStatus.Failed)
+            throw new DocRetrievalValidationException("Document status is not failed, cannot retry");
+
+        // Clear old parsed data
+        await _occurrenceRepository.DeleteByDocumentIdAsync(documentId);
+        await _questionRepository.DeleteByDocumentIdAsync(documentId);
+        await _segmentRepository.DeleteByDocumentIdAsync(documentId);
+        await _pageRepository.DeleteByDocumentIdAsync(documentId);
+
+        // Reset document status
+        document.Status = DocumentStatus.Pending;
+        document.UpdatedAt = DateTimeOffset.UtcNow;
+        await _documentRepository.UpdateAsync(document);
+
+        // Create new ingestion job
+        var job = new DocumentIngestionJobModel
+        {
+            Id = Guid.NewGuid(),
+            DocumentId = documentId,
+            Status = DocumentStatus.Pending,
+            CreatedAt = DateTimeOffset.UtcNow
+        };
+        await _jobRepository.AddAsync(job);
+        await _unitOfWork.SaveChangesAsync();
+
+        _logger.LogInformation("Document ingestion retry queued: {DocumentId}, new job: {JobId}", documentId, job.Id);
+    }
+
+    /// <summary>
     /// Get all ingestion jobs for a document
     /// </summary>
     public async Task<List<DocumentIngestionJobModel>> GetJobsByDocumentIdAsync(Guid documentId)

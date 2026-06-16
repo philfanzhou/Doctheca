@@ -41,6 +41,7 @@ public static class DocumentAdminEndpoints
         group.MapDelete("/by-title/{title}", DeleteDocument);
         group.MapPut("/{title}/metadata", UpdateMetadata);
         group.MapGet("/search-test", SearchTest);
+        group.MapPost("/{id:guid}/retry", RetryIngestion);
 
         return app;
     }
@@ -441,5 +442,24 @@ public static class DocumentAdminEndpoints
             totalCount,
             nextPageToken = nextToken ?? string.Empty
         });
+    }
+
+    private static async Task<IResult> RetryIngestion(
+        Guid id,
+        IDocumentDomainService documentService)
+    {
+        try
+        {
+            await documentService.RetryIngestionAsync(id);
+            return Results.Ok(new { success = true, message = "Ingestion retry queued" });
+        }
+        catch (InvalidOperationException)
+        {
+            return Results.NotFound(new { success = false, message = "Document not found", errorCode = "DOCRETRIEVAL_DOCUMENT_NOT_FOUND" });
+        }
+        catch (DocRetrievalValidationException ex)
+        {
+            return Results.Json(new { success = false, message = ex.Message, errorCode = "DOCRETRIEVAL_DOCUMENT_NOT_FAILED" }, statusCode: StatusCodes.Status422UnprocessableEntity);
+        }
     }
 }

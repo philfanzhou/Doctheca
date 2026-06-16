@@ -100,8 +100,25 @@ public class DocumentDomainService
 
     // 获取文档信息
     public async Task<DocumentModel?> GetDocumentAsync(Guid id);
+
+    // 重试失败文档：清除旧数据 → 重置状态 → 创建新 job
+    public async Task RetryIngestionAsync(Guid documentId);
 }
 ```
+
+### 重试端点
+
+```
+POST /admin/documents/{id}/retry
+```
+
+**前置条件**：文档 status = `failed`，否则返回 422。
+
+**流程**：
+1. 清除旧数据（pages、segments、questions、occurrences）
+2. 重置 document.Status = `pending`
+3. 创建新 ingestion job（status = `pending`）
+4. IngestionWorker 下一轮自动处理
 
 ### IDocumentParserService
 

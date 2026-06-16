@@ -19,4 +19,5 @@ public interface IDocumentDomainService
     Task FailIngestionJobAsync(Guid jobId, string errorMessage);
     Task CancelIngestionJobAsync(Guid documentId);
     Task<List<DocumentIngestionJobModel>> GetJobsByDocumentIdAsync(Guid documentId);
+    Task RetryIngestionAsync(Guid documentId);
 }

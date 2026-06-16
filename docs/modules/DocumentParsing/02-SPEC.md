@@ -208,6 +208,38 @@ Scenario: 搜索索引写入失败不影响任务状态
 
 ---
 
+### REQ-PARSE-08：失败任务重试
+
+**优先级**: P1 | **状态**: 待实现
+
+管理员可通过管理面板对 `failed` 状态的文档重新发起解析，无需重新上传文件。
+
+- 端点：`POST /admin/documents/{id}/retry`
+- 前置条件：文档状态必须为 `failed`，否则返回 422
+- 重试逻辑：
+  1. 清除文档关联的旧数据（pages、segments、questions、occurrences）
+  2. 重置文档状态为 `pending`
+  3. 创建新的 ingestion job（`pending`）
+  4. IngestionWorker 下一轮轮询自动处理
+- 不需要重新上传文件，OSS 中的文件继续使用
+
+**验收场景**:
+```gherkin
+Scenario: 重试失败文档
+  Given 文档 status = "failed"
+  When 调用 POST /admin/documents/{id}/retry
+  Then 文档 status = "pending"
+  And 新建一个 pending 状态的 ingestion job
+  And IngestionWorker 自动处理该任务
+
+Scenario: 非 failed 状态不可重试
+  Given 文档 status = "ready"
+  When 调用 POST /admin/documents/{id}/retry
+  Then 返回 422，错误码 DOCRETRIEVAL_DOCUMENT_NOT_FAILED
+```
+
+---
+
 ### REQ-PARSE-09：错误处理与故障恢复
 
 **优先级**: P0 | **状态**: 已实现
