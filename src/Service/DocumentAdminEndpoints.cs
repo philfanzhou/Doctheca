@@ -397,6 +397,7 @@ public static class DocumentAdminEndpoints
 
     private static async Task<IResult> SearchTest(
         ISearchDomainService searchService,
+        [FromServices] ILoggerFactory loggerFactory,
         [FromQuery] string query,
         [FromQuery] bool phrase = false,
         [FromQuery] int pageSize = 20,
@@ -406,6 +407,8 @@ public static class DocumentAdminEndpoints
         [FromQuery] string? year = null,
         [FromQuery] string? documentTitle = null)
     {
+        var logger = loggerFactory.CreateLogger("DocumentAdminEndpoints");
+
         if (string.IsNullOrWhiteSpace(query))
             return Results.BadRequest(new { success = false, message = "Query cannot be empty" });
 
@@ -424,8 +427,12 @@ public static class DocumentAdminEndpoints
             };
         }
 
+        logger.LogInformation("Search request: query={Query}, phrase={Phrase}, pageSize={PageSize}", query, phrase, pageSize);
+
         var (results, totalCount, nextToken) = await searchService.ExactSearchAsync(
             query, phrase, filter, pageSize, pageToken);
+
+        logger.LogInformation("Search completed: query={Query}, results={Count}, total={Total}", query, results.Count, totalCount);
 
         return Results.Ok(new
         {

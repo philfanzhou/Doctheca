@@ -43,7 +43,11 @@ public class SearchDomainService : ISearchDomainService
         {
             try
             {
-                return await _searchIndexService.ExactSearchAsync(query, phrase, filter, pageSize, pageToken);
+                var (results, totalCount, nextToken) = await _searchIndexService.ExactSearchAsync(query, phrase, filter, pageSize, pageToken);
+                if (results.Count > 0)
+                    return (results, totalCount, nextToken);
+
+                _logger.LogInformation("OpenSearch returned 0 results for query '{Query}', falling back to database search", query);
             }
             catch (Exception ex)
             {

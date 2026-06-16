@@ -151,7 +151,7 @@ public class SearchDomainServiceTests
     [Fact]
     public async Task ExactSearchAsync_WithFilter_PassesFilterCorrectly()
     {
-        // Arrange
+        // Arrange - OpenSearch returns results, so no fallback to database
         var filter = new SearchFilterModel
         {
             Subject = "英语",
@@ -161,14 +161,14 @@ public class SearchDomainServiceTests
         };
         _searchIndexServiceMock
             .Setup(s => s.ExactSearchAsync("hello", false, filter, 20, null))
-            .ReturnsAsync((new List<SearchResultModel>(), 0, null));
+            .ReturnsAsync((new List<SearchResultModel> { new() { DocumentName = "test.pdf", Score = 1.0 } }, 1, null));
 
         // Act
         var (results, totalCount, _) = await _service.ExactSearchAsync("hello", false, filter, 20, null);
 
         // Assert
-        Assert.Empty(results);
-        Assert.Equal(0, totalCount);
+        Assert.Single(results);
+        Assert.Equal(1, totalCount);
     }
 
     #endregion
