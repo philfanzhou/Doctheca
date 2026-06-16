@@ -609,20 +609,37 @@ onMounted(async () => {
               共 {{ searchTotalCount }} 条结果
             </div>
 
-            <div v-if="searchResults.length > 0">
-              <div v-for="(result, idx) in searchResults" :key="idx" style="padding: 12px; border: 1px solid var(--border-light); border-radius: 6px; margin-bottom: 8px">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px">
-                  <span style="font-weight: 500">{{ result.documentName }}</span>
-                  <div style="display: flex; gap: 8px; align-items: center">
-                    <span class="tag tag-info" style="font-size: 11px">P{{ result.pageNumber }}</span>
-                    <span class="tag" :class="result.matchType === 'exact_phrase' ? 'tag-success' : result.matchType === 'exact_word' ? 'tag-info' : 'tag-warning'" style="font-size: 11px">
-                      {{ result.matchType === 'exact_phrase' ? '精确短语' : result.matchType === 'exact_word' ? '精确词' : result.matchType === 'stem_match' ? '词干匹配' : result.matchType }}
-                    </span>
-                    <span style="font-size: 12px; color: var(--text-muted)">{{ result.score.toFixed(2) }}</span>
-                  </div>
-                </div>
-                <div style="font-size: 13px; line-height: 1.6; color: var(--text-secondary); white-space: pre-wrap">{{ result.associatedText }}</div>
-              </div>
+            <div v-if="searchResults.length > 0" style="overflow-x: auto">
+              <table style="width: 100%; border-collapse: collapse; font-size: 13px">
+                <thead>
+                  <tr style="background: var(--bg-secondary); text-align: left">
+                    <th style="padding: 8px 12px; border-bottom: 2px solid var(--border-light); white-space: nowrap">#</th>
+                    <th style="padding: 8px 12px; border-bottom: 2px solid var(--border-light); white-space: nowrap">文档标题</th>
+                    <th style="padding: 8px 12px; border-bottom: 2px solid var(--border-light); white-space: nowrap">页码</th>
+                    <th style="padding: 8px 12px; border-bottom: 2px solid var(--border-light); white-space: nowrap">匹配类型</th>
+                    <th style="padding: 8px 12px; border-bottom: 2px solid var(--border-light); white-space: nowrap">相关度</th>
+                    <th style="padding: 8px 12px; border-bottom: 2px solid var(--border-light)">匹配文本</th>
+                    <th style="padding: 8px 12px; border-bottom: 2px solid var(--border-light); white-space: nowrap">Segment ID</th>
+                    <th style="padding: 8px 12px; border-bottom: 2px solid var(--border-light); white-space: nowrap">偏移量</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="(result, idx) in searchResults" :key="idx" style="border-bottom: 1px solid var(--border-light)">
+                    <td style="padding: 8px 12px; color: var(--text-muted)">{{ idx + 1 }}</td>
+                    <td style="padding: 8px 12px; font-weight: 500; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap" :title="result.documentName">{{ result.documentName }}</td>
+                    <td style="padding: 8px 12px"><span class="tag tag-info" style="font-size: 11px">P{{ result.pageNumber }}</span></td>
+                    <td style="padding: 8px 12px">
+                      <span class="tag" :class="result.matchType === 'exact_phrase' ? 'tag-success' : result.matchType === 'exact_word' ? 'tag-info' : 'tag-warning'" style="font-size: 11px">
+                        {{ result.matchType === 'exact_phrase' ? '精确短语' : result.matchType === 'exact_word' ? '精确词' : result.matchType === 'stem_match' ? '词干匹配' : result.matchType }}
+                      </span>
+                    </td>
+                    <td style="padding: 8px 12px; font-family: monospace">{{ result.score.toFixed(2) }}</td>
+                    <td style="padding: 8px 12px; max-width: 400px; line-height: 1.5; color: var(--text-secondary); white-space: pre-wrap; word-break: break-word">{{ result.associatedText }}</td>
+                    <td style="padding: 8px 12px; font-family: monospace; font-size: 11px; color: var(--text-muted); max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap" :title="result.segmentId">{{ result.segmentId }}</td>
+                    <td style="padding: 8px 12px; font-family: monospace; font-size: 11px; color: var(--text-muted); white-space: nowrap">{{ result.startOffset }}–{{ result.endOffset }}</td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
 
             <div v-else-if="searchQuery && !searchLoading" class="empty-state">
