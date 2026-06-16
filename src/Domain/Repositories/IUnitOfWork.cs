@@ -5,4 +5,5 @@ namespace Ruoyu.Study.DocRetrieval.Domain.Repositories;
 public interface IUnitOfWork
 {
     Task<int> SaveChangesAsync();
+    void ClearChangeTracker();
 }

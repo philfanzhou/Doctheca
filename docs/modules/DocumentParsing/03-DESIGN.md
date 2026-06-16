@@ -318,7 +318,8 @@ ExecuteAsync
 | 解析器内部错误 | 抛出异常 | 任务标记 failed |
 | 数据库写入失败 | 抛出异常 | 任务标记 failed |
 | 搜索索引写入失败 | try/catch + LogError | 不影响任务状态 |
-| FailIngestionJobAsync 失败 | 嵌套 try/catch + LogError | 仅记日志 |
+| FailIngestionJobAsync 失败 | 清除 ChangeTracker + 重试 | 保证失败状态写入 |
+| 重复 QuestionId | GroupBy 去重，保留首个 | 避免唯一约束冲突 |
 | 轮询级异常 | 外层 try/catch + LogError | Worker 继续运行 |
 
 ## 外部依赖

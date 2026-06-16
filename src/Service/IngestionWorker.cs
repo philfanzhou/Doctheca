@@ -115,6 +115,8 @@ public class IngestionWorker : BackgroundService
                                 EndOffset = q.EndOffset,
                                 CreatedAt = DateTimeOffset.UtcNow
                             }))
+                            .GroupBy(q => q.QuestionId)
+                            .Select(g => g.First())
                             .ToList();
 
                         await questionRepository.AddRangeAsync(questionModels);

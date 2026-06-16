@@ -223,25 +223,53 @@ public class DocumentDomainService : IDocumentDomainService
 
     public async Task FailIngestionJobAsync(Guid jobId, string errorMessage)
     {
-        var job = await _jobRepository.GetByIdAsync(jobId);
-        if (job == null) return;
-
-        job.Status = DocumentStatus.Failed;
-        job.ErrorMessage = errorMessage;
-        job.FinishedAt = DateTimeOffset.UtcNow;
-
-        var document = await _documentRepository.GetByIdAsync(job.DocumentId);
-        if (document != null)
+        try
         {
-            document.Status = DocumentStatus.Failed;
-            document.UpdatedAt = DateTimeOffset.UtcNow;
-            await _documentRepository.UpdateAsync(document);
+            var job = await _jobRepository.GetByIdAsync(jobId);
+            if (job == null) return;
+
+            job.Status = DocumentStatus.Failed;
+            job.ErrorMessage = errorMessage;
+            job.FinishedAt = DateTimeOffset.UtcNow;
+
+            var document = await _documentRepository.GetByIdAsync(job.DocumentId);
+            if (document != null)
+            {
+                document.Status = DocumentStatus.Failed;
+                document.UpdatedAt = DateTimeOffset.UtcNow;
+                await _documentRepository.UpdateAsync(document);
+            }
+
+            await _jobRepository.UpdateAsync(job);
+            await _unitOfWork.SaveChangesAsync();
+        }
+        catch (Exception ex)
+        {
+            // DbContext may be in a corrupted state from a prior SaveChanges failure.
+            // Clear the tracker and re-fetch to persist the failure status.
+            _logger.LogWarning(ex, "First attempt to mark job as failed failed, clearing change tracker and retrying");
+            _unitOfWork.ClearChangeTracker();
+
+            var job = await _jobRepository.GetByIdAsync(jobId);
+            if (job == null) return;
+
+            job.Status = DocumentStatus.Failed;
+            job.ErrorMessage = errorMessage;
+            job.FinishedAt = DateTimeOffset.UtcNow;
+
+            var document = await _documentRepository.GetByIdAsync(job.DocumentId);
+            if (document != null)
+            {
+                document.Status = DocumentStatus.Failed;
+                document.UpdatedAt = DateTimeOffset.UtcNow;
+                await _documentRepository.UpdateAsync(document);
+            }
+
+            await _jobRepository.UpdateAsync(job);
+            await _unitOfWork.SaveChangesAsync();
         }
 
-        await _jobRepository.UpdateAsync(job);
-        await _unitOfWork.SaveChangesAsync();
-
-        _logger.LogError("Document ingestion failed: {DocumentId}, reason: {Error}", job.DocumentId, errorMessage);
+        _logger.LogError("Document ingestion failed: {DocumentId}, reason: {Error}", jobId, errorMessage);
     }
 
     /// <summary>
