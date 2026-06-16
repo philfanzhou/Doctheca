@@ -24,16 +24,6 @@ public class DocumentParserServiceTests
     #region PDF Parsing Tests
 
     [Fact]
-    public async Task ParseAsync_UnsupportedType_ThrowsNotSupportedException()
-    {
-        // Arrange
-        using var stream = new MemoryStream();
-
-        // Act & Assert
-        await Assert.ThrowsAsync<NotSupportedException>(() => _service.ParseAsync(stream, "xlsx"));
-    }
-
-    [Fact]
     public async Task ParseAsync_PdfExtractsTextCorrectly()
     {
         // Arrange - create minimal valid PDF with text content
@@ -183,7 +173,7 @@ public class DocumentParserServiceTests
         using var stream = new MemoryStream(docxBytes);
 
         // Act
-        var result = await _service.ParseAsync(stream, "docx");
+        var result = await _service.ParseAsync(stream, SourceTypes.Word);
 
         // Assert
         Assert.NotNull(result);
@@ -202,7 +192,7 @@ public class DocumentParserServiceTests
         using var stream = new MemoryStream(pptxBytes);
 
         // Act
-        var result = await _service.ParseAsync(stream, "pptx");
+        var result = await _service.ParseAsync(stream, SourceTypes.Ppt);
 
         // Assert
         Assert.NotNull(result);
@@ -211,52 +201,42 @@ public class DocumentParserServiceTests
 
     #endregion
 
-    #region SourceType Variations
+    #region SourceType Constants Coverage
 
     [Theory]
-    [InlineData("PDF")]
-    [InlineData("Pdf")]
-    [InlineData("pdf")]
-    public async Task ParseAsync_HandlesCaseInsensitiveSourceType(string sourceType)
+    [InlineData(SourceTypes.Pdf)]
+    [InlineData(SourceTypes.Word)]
+    [InlineData(SourceTypes.Ppt)]
+    public async Task ParseAsync_AcceptsAllSourceTypes(string sourceType)
     {
-        var pdfBytes = CreateMinimalPdf("Hello world.");
-        using var stream = new MemoryStream(pdfBytes);
+        // Verify all SourceTypes constants are handled
+        var bytes = sourceType switch
+        {
+            SourceTypes.Pdf => CreateMinimalPdf("Hello world."),
+            SourceTypes.Word => CreateMinimalDocx("Hello world."),
+            SourceTypes.Ppt => CreateMinimalPptx("Hello world."),
+            _ => throw new ArgumentException($"Unexpected sourceType: {sourceType}")
+        };
+        using var stream = new MemoryStream(bytes);
 
-        // Act
         var result = await _service.ParseAsync(stream, sourceType);
 
-        // Assert
         Assert.NotNull(result);
+        Assert.NotEmpty(result.Pages);
     }
 
-    [Theory]
-    [InlineData("DOCX")]
-    [InlineData("doc")]
-    public async Task ParseAsync_HandlesWordSourceTypeVariations(string sourceType)
+    [Fact]
+    public async Task ParseAsync_UnknownType_ThrowsNotSupportedException()
     {
-        var docxBytes = CreateMinimalDocx("Hello world.");
-        using var stream = new MemoryStream(docxBytes);
-
-        // Act
-        var result = await _service.ParseAsync(stream, sourceType);
-
-        // Assert
-        Assert.NotNull(result);
+        using var stream = new MemoryStream();
+        await Assert.ThrowsAsync<NotSupportedException>(() => _service.ParseAsync(stream, SourceTypes.Unknown));
     }
 
-    [Theory]
-    [InlineData("PPTX")]
-    [InlineData("ppt")]
-    public async Task ParseAsync_HandlesPptSourceTypeVariations(string sourceType)
+    [Fact]
+    public async Task ParseAsync_UnsupportedType_ThrowsNotSupportedException()
     {
-        var pptxBytes = CreateMinimalPptx("Hello world.");
-        using var stream = new MemoryStream(pptxBytes);
-
-        // Act
-        var result = await _service.ParseAsync(stream, sourceType);
-
-        // Assert
-        Assert.NotNull(result);
+        using var stream = new MemoryStream();
+        await Assert.ThrowsAsync<NotSupportedException>(() => _service.ParseAsync(stream, "xlsx"));
     }
 
     #endregion

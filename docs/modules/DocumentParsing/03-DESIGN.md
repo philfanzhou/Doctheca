@@ -109,11 +109,13 @@ public class DocumentDomainService
 public interface IDocumentParserService
 {
     /// <param name="fileStream">文件流</param>
-    /// <param name="sourceType">文件类型（pdf/docx/pptx）</param>
+    /// <param name="sourceType">文件类型，使用 SourceTypes 常量（pdf/word/ppt）</param>
     /// <param name="cancellationToken">取消令牌</param>
     Task<ParsedDocument> ParseAsync(Stream fileStream, string sourceType, CancellationToken cancellationToken = default);
 }
 ```
+
+> **注意**：`sourceType` 使用 `SourceTypes` 常量（`pdf`/`word`/`ppt`），不是文件扩展名（`docx`/`pptx`）。`SourceTypes.Unknown` 不可解析，调用方应在校验阶段拦截。
 
 ### ISearchIndexService
 
@@ -223,9 +225,11 @@ ParsedToken (q)    → DocumentOccurrenceModel
 │  │  │  ② document = domainService.GetDocumentAsync(job.DocumentId) │     │
 │  │  │                                                              │     │
 │  │  │  ③ fileStream = ossService.DownloadAsync(document.FilePath) │     │
+│  │  │     fileStream == null → 抛异常 "文件不存在于 OSS"          │     │
 │  │  │                                                              │     │
 │  │  │  ④ parsedDocument = parserService.ParseAsync(fileStream,    │     │
 │  │  │         document.SourceType, stoppingToken)                  │     │
+│  │  │     parsedDocument.Pages.Count == 0 → LogWarning "解析结果为空" │  │
 │  │  │                                                              │     │
 │  │  │  ⑤ 写入 pages                                               │     │
 │  │  │     pageModels = parsedDocument.Pages → DocumentPageModel[]  │     │
@@ -291,6 +295,8 @@ ExecuteAsync
 |---------|---------|------|
 | 文档不存在 | 抛出 InvalidOperationException | 任务标记 failed |
 | OSS 下载失败 | 抛出异常 | 任务标记 failed |
+| OSS 文件为空/null | 抛出 InvalidOperationException | 任务标记 failed |
+| 解析结果零页 | LogWarning，任务仍标记 success | 文档 searchable 但无内容 |
 | 不支持的文件类型 | 抛出 NotSupportedException | 任务标记 failed |
 | 解析器内部错误 | 抛出异常 | 任务标记 failed |
 | 数据库写入失败 | 抛出异常 | 任务标记 failed |

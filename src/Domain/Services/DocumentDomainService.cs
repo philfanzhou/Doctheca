@@ -258,6 +258,15 @@ public class DocumentDomainService : IDocumentDomainService
 
         job.Status = DocumentStatus.Cancelled;
         job.FinishedAt = DateTimeOffset.UtcNow;
+
+        var document = await _documentRepository.GetByIdAsync(documentId);
+        if (document != null)
+        {
+            document.Status = DocumentStatus.Cancelled;
+            document.UpdatedAt = DateTimeOffset.UtcNow;
+            await _documentRepository.UpdateAsync(document);
+        }
+
         await _jobRepository.UpdateAsync(job);
         await _unitOfWork.SaveChangesAsync();
 

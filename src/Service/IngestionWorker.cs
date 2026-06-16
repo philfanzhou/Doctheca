@@ -60,9 +60,13 @@ public class IngestionWorker : BackgroundService
 
                         // Download file stream from OSS
                         using var fileStream = await ossService.DownloadAsync(document.FilePath);
+                        if (fileStream == null)
+                            throw new InvalidOperationException($"File not found in OSS: {document.FilePath}");
 
                         // Call document parsing service
                         var parsedDocument = await parserService.ParseAsync(fileStream, document.SourceType, stoppingToken);
+                        if (parsedDocument.Pages.Count == 0)
+                            _logger.LogWarning("Document parsing produced zero pages: {DocumentId}, sourceType={SourceType}", job.DocumentId, document.SourceType);
                         _logger.LogInformation("Document parsing completed: {DocumentId}, {PageCount} pages", job.DocumentId, parsedDocument.Pages.Count);
 
                         // Write parsing results to database

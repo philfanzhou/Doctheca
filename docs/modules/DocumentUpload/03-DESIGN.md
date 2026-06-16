@@ -268,6 +268,9 @@ pending ──IngestionWorker消费──▶ processing ──成功──▶ re
    │                            failed
    │
    └──管理员删除──▶ (已删除)
+                       ↑
+                       CancelIngestionJobAsync: 标记 job 为 cancelled，
+                       同时更新 document.Status = cancelled（与 FailIngestionJobAsync 一致）
 ```
 
 ## 错误处理策略

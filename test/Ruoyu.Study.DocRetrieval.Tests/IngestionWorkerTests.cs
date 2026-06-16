@@ -390,4 +390,40 @@ public class IngestionWorkerTests
         // Assert - worker should have stopped without errors
         Assert.True(true); // No exception means success
     }
+
+    [Fact]
+    public async Task ExecuteAsync_NullOssStream_MarksJobFailed()
+    {
+        // Arrange - OSS returns null stream
+        var documentId = Guid.NewGuid();
+        var jobId = Guid.NewGuid();
+        var job = new DocumentIngestionJobModel { Id = jobId, DocumentId = documentId, Status = DocumentStatus.Pending };
+        var document = new DocumentModel
+        {
+            Id = documentId,
+            Title = "missing.pdf",
+            SourceType = SourceTypes.Pdf,
+            FilePath = "/test/missing.pdf"
+        };
+
+        _domainServiceMock.Setup(d => d.GetPendingJobsAsync()).ReturnsAsync(new List<DocumentIngestionJobModel> { job });
+        _domainServiceMock.Setup(d => d.StartIngestionJobAsync(jobId, "v1.0", null)).Returns(Task.CompletedTask);
+        _domainServiceMock.Setup(d => d.GetDocumentAsync(documentId)).ReturnsAsync(document);
+        _domainServiceMock.Setup(d => d.FailIngestionJobAsync(jobId, It.IsAny<string>())).Returns(Task.CompletedTask);
+        _ossServiceMock.Setup(o => o.DownloadAsync(document.FilePath)).ReturnsAsync(default(System.IO.Stream)!);
+
+        var worker = new IngestionWorker(
+            _serviceProviderMock.Object,
+            _loggerMock.Object,
+            _searchIndexServiceMock.Object);
+
+        using var cts = new CancellationTokenSource(3000);
+
+        // Act
+        await worker.StartAsync(cts.Token);
+        await Task.Delay(500);
+
+        // Assert - job should be marked failed with meaningful error
+        _domainServiceMock.Verify(d => d.FailIngestionJobAsync(jobId, It.Is<string>(msg => msg.Contains("OSS") || msg.Contains("null"))), Times.AtLeastOnce());
+    }
 }
