@@ -1,19 +1,5 @@
 namespace Ruoyu.Study.DocRetrieval.Domain.Models;
 
-public class OpenSearchOptions
-{
-    public string Url { get; set; } = "http://localhost:9200";
-    public string IndexName { get; set; } = "docretrieval-segments";
-}
-
-public class SearchFilterModel
-{
-    public string? DocumentTitle { get; set; }
-    public string? Subject { get; set; }
-    public string? Grade { get; set; }
-    public string? Year { get; set; }
-}
-
 public class SearchResultModel
 {
     public string DocumentName { get; set; } = string.Empty;

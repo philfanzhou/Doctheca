@@ -23,6 +23,7 @@ public class DocumentRetrievalServiceImpl : DocumentRetrievalService.DocumentRet
         _logger = logger;
     }
 
+    // ExactSearch: name constrained by proto definition, no Async suffix per gRPC convention
     public override async Task<SearchResponse> ExactSearch(ExactSearchRequest request, ServerCallContext context)
     {
         ValidateSearchRequest(request.Query, request.PageSize);
