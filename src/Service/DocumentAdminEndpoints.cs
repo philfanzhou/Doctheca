@@ -49,8 +49,10 @@ public static class DocumentAdminEndpoints
         HttpRequest request,
         IDocumentDomainService documentService,
         IOssService ossService,
-        [FromServices] ILogger logger)
+        [FromServices] ILoggerFactory loggerFactory)
     {
+        var logger = loggerFactory.CreateLogger("DocumentAdminEndpoints");
+
         if (!request.HasFormContentType)
             return Results.BadRequest(new { success = false, message = "Request must be multipart/form-data" });
 
@@ -248,8 +250,10 @@ public static class DocumentAdminEndpoints
         Guid id,
         IDocumentDomainService documentService,
         IOssService ossService,
-        [FromServices] ILogger logger)
+        [FromServices] ILoggerFactory loggerFactory)
     {
+        var logger = loggerFactory.CreateLogger("DocumentAdminEndpoints");
+
         var document = await documentService.GetDocumentAsync(id);
         if (document == null)
             return Results.NotFound(new { success = false, message = "Document not found", errorCode = "DOCRETRIEVAL_DOCUMENT_NOT_FOUND" });
@@ -279,8 +283,10 @@ public static class DocumentAdminEndpoints
         string title,
         IDocumentDomainService documentService,
         IOssService ossService,
-        [FromServices] ILogger logger)
+        [FromServices] ILoggerFactory loggerFactory)
     {
+        var logger = loggerFactory.CreateLogger("DocumentAdminEndpoints");
+
         // Get document info first (for OSS file deletion), then delete database records, finally delete OSS file
         var document = await documentService.GetDocumentByTitleAsync(title);
 
