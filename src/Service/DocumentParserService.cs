@@ -45,8 +45,8 @@ public partial class DocumentParserService : IDocumentParserService
         return sourceTypeLower switch
         {
             "pdf" => await ParsePdfAsync(fileStream, cancellationToken),
-            "docx" or "doc" => await ParseWordAsync(fileStream, cancellationToken),
-            "pptx" or "ppt" => await ParsePptAsync(fileStream, cancellationToken),
+            "word" or "docx" or "doc" => await ParseWordAsync(fileStream, cancellationToken),
+            "ppt" or "pptx" => await ParsePptAsync(fileStream, cancellationToken),
             _ => throw new NotSupportedException($"Unsupported file type: {sourceType}")
         };
     }
