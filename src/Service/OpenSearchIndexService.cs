@@ -192,7 +192,7 @@ public class OpenSearchIndexService : ISearchIndexService
         }
 
         var bulkJson = string.Join("\n", bulkOps.Select(op => JsonSerializer.Serialize(op))) + "\n";
-        var response = await _client.BulkAsync<BytesResponse>(bulkJson, indexName);
+        var response = await _client.BulkAsync<BytesResponse>(PostData.String(bulkJson));
 
         if (response.Success && (response.HttpStatusCode == 200 || response.HttpStatusCode == 201))
         {
