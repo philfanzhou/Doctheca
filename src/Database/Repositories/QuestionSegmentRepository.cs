@@ -62,6 +62,7 @@ public class QuestionSegmentRepository : IQuestionSegmentRepository
 
         var totalCount = await questionQuery.CountAsync();
         var items = await questionQuery
+            .OrderByDescending(x => x.Question.CreatedAt)
             .Skip(skip)
             .Take(pageSize)
             .Select(x => x.Question)

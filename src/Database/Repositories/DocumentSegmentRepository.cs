@@ -62,6 +62,7 @@ public class DocumentSegmentRepository : IDocumentSegmentRepository
 
         var totalCount = await segmentQuery.CountAsync();
         var items = await segmentQuery
+            .OrderByDescending(x => x.Segment.CreatedAt)
             .Skip(skip)
             .Take(pageSize)
             .Select(x => x.Segment)
