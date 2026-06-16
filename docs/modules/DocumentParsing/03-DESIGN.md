@@ -120,6 +120,19 @@ POST /admin/documents/{id}/retry
 3. 创建新 ingestion job（status = `pending`）
 4. IngestionWorker 下一轮自动处理
 
+### 取消端点
+
+```
+POST /admin/documents/{id}/cancel
+```
+
+**前置条件**：当前 job 状态为 `pending` 或 `processing`，否则返回 422。
+
+**流程**：
+1. 标记 job.Status = `cancelled`，job.FinishedAt = now
+2. 标记 document.Status = `cancelled`，document.UpdatedAt = now
+3. 不清除已写入的解析数据
+
 ### IDocumentParserService
 
 ```csharp

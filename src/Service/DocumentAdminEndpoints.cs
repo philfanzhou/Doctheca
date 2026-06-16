@@ -42,6 +42,7 @@ public static class DocumentAdminEndpoints
         group.MapPut("/{title}/metadata", UpdateMetadata);
         group.MapGet("/search-test", SearchTest);
         group.MapPost("/{id:guid}/retry", RetryIngestion);
+        group.MapPost("/{id:guid}/cancel", CancelIngestion);
 
         return app;
     }
@@ -442,6 +443,22 @@ public static class DocumentAdminEndpoints
             totalCount,
             nextPageToken = nextToken ?? string.Empty
         });
+    }
+
+    private static async Task<IResult> CancelIngestion(
+        Guid id,
+        IDocumentDomainService documentService)
+    {
+        var document = await documentService.GetDocumentAsync(id);
+        if (document == null)
+            return Results.NotFound(new { success = false, message = "Document not found", errorCode = "DOCRETRIEVAL_DOCUMENT_NOT_FOUND" });
+
+        var job = await documentService.GetIngestionJobAsync(id);
+        if (job == null || (job.Status != DocumentStatus.Pending && job.Status != DocumentStatus.Processing))
+            return Results.Json(new { success = false, message = "No cancellable job found for this document", errorCode = "DOCRETRIEVAL_JOB_NOT_CANCELLABLE" }, statusCode: StatusCodes.Status422UnprocessableEntity);
+
+        await documentService.CancelIngestionJobAsync(id);
+        return Results.Ok(new { success = true, message = "Ingestion job cancelled" });
     }
 
     private static async Task<IResult> RetryIngestion(

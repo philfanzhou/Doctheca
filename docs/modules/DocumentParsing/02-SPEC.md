@@ -240,6 +240,40 @@ Scenario: 非 failed 状态不可重试
 
 ---
 
+### REQ-PARSE-08b：手动取消任务
+
+**优先级**: P1 | **状态**: 待实现
+
+管理员可通过管理面板取消正在排队或处理中的导入任务。
+
+- 端点：`POST /admin/documents/{id}/cancel`
+- 前置条件：文档当前 job 状态为 `pending` 或 `processing`，否则返回 422
+- 取消逻辑：
+  1. 标记 job status = `cancelled`
+  2. 标记 document status = `cancelled`
+  3. 不清除已写入的解析数据（保留部分结果供参考）
+- 注意：如果任务正在 IngestionWorker 中执行（已过 ParseAsync 阶段），取消不会中断正在进行的数据库写入，仅在下一轮状态检查时生效
+
+**验收场景**:
+```gherkin
+Scenario: 取消 pending 任务
+  Given 文档有一个 pending 状态的 job
+  When 调用 POST /admin/documents/{id}/cancel
+  Then job.Status = "cancelled" 且 document.Status = "cancelled"
+
+Scenario: 取消 processing 任务
+  Given 文档有一个 processing 状态的 job
+  When 调用 POST /admin/documents/{id}/cancel
+  Then job.Status = "cancelled" 且 document.Status = "cancelled"
+
+Scenario: 无可取消任务
+  Given 文档 job 状态为 "success"
+  When 调用 POST /admin/documents/{id}/cancel
+  Then 返回 422，错误码 DOCRETRIEVAL_JOB_NOT_CANCELLABLE
+```
+
+---
+
 ### REQ-PARSE-09：错误处理与故障恢复
 
 **优先级**: P0 | **状态**: 已实现
