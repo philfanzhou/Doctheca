@@ -4,9 +4,9 @@ ARG NPM_REGISTRY=https://mirrors.huaweicloud.com/repository/npm/
 ENV npm_config_registry=${NPM_REGISTRY}
 ENV npm_config_replace_registry_host=always
 WORKDIR /frontend
-COPY src/services/ruoyu.docretrieval/admin_frontend/package*json ./
+COPY src/services/ruoyu.docretrieval/frontend/package*json ./
 RUN npm ci --registry=${NPM_REGISTRY}
-COPY src/services/ruoyu.docretrieval/admin_frontend/ ./
+COPY src/services/ruoyu.docretrieval/frontend/ ./
 RUN npm run build
 
 # ========== Stage 2: Build & Publish Backend ==========
