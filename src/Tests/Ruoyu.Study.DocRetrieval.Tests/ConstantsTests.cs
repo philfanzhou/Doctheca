@@ -1,5 +1,5 @@
 using System;
-using Ruoyu.Study.DocRetrieval.Domain.Models;
+using global::Ruoyu.Study.DocRetrieval.Domain.Models;
 using Xunit;
 
 namespace Ruoyu.Study.DocRetrieval.Tests;

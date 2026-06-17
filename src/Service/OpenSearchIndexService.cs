@@ -262,6 +262,25 @@ public class OpenSearchIndexService : ISearchIndexService
     {
         var indexName = _options.IndexName;
 
+        var searchBody = BuildSearchBody(query, phrase, filter, pageSize, pageToken);
+        var json = JsonSerializer.Serialize(searchBody);
+        var response = await _client.SearchAsync<BytesResponse>(indexName, json);
+
+        if (!response.Success || response.HttpStatusCode != 200)
+        {
+            throw new InvalidOperationException($"OpenSearch query failed, status code: {response.HttpStatusCode}");
+        }
+
+        var responseJson = Encoding.UTF8.GetString(response.Body);
+        return ParseSearchResponse(responseJson, phrase, pageSize);
+    }
+
+    /// <summary>
+    /// Builds the OpenSearch search request body (pure logic, testable).
+    /// </summary>
+    internal static Dictionary<string, object> BuildSearchBody(
+        string query, bool phrase, SearchFilterModel? filter, int pageSize, string? pageToken)
+    {
         // Build the main query
         // Phrase query uses text.exact field (english_phrase analyzer, lowercase only without stemming, ensures phrase integrity)
         // Non-phrase query uses text field (english_custom analyzer, stemming for expanded recall)
@@ -338,19 +357,20 @@ public class OpenSearchIndexService : ISearchIndexService
             searchBody["search_after"] = searchAfter;
         }
 
-        var json = JsonSerializer.Serialize(searchBody);
-        var response = await _client.SearchAsync<BytesResponse>(indexName, json);
+        return searchBody;
+    }
 
-        if (!response.Success || response.HttpStatusCode != 200)
-        {
-            throw new InvalidOperationException($"OpenSearch query failed, status code: {response.HttpStatusCode}");
-        }
-
-        var responseJson = Encoding.UTF8.GetString(response.Body);
+    /// <summary>
+    /// Parses the OpenSearch search response JSON (pure logic, testable).
+    /// </summary>
+    internal static (List<SearchResultModel> Results, int TotalCount, string? NextToken) ParseSearchResponse(
+        string responseJson, bool phrase, int pageSize)
+    {
         using var doc = JsonDocument.Parse(responseJson);
         var root = doc.RootElement;
 
-        var totalCount = root.TryGetProperty("hits", out var hitsEl)
+        var hasHits = root.TryGetProperty("hits", out var hitsEl);
+        var totalCount = hasHits
             && hitsEl.TryGetProperty("total", out var totalEl)
             && totalEl.TryGetProperty("value", out var valueEl)
             ? valueEl.GetInt32()
@@ -360,7 +380,7 @@ public class OpenSearchIndexService : ISearchIndexService
         JsonElement lastSort = default;
         var hasLastSort = false;
 
-        if (hitsEl.TryGetProperty("hits", out var hitArray))
+        if (hasHits && hitsEl.TryGetProperty("hits", out var hitArray))
         {
             foreach (var hit in hitArray.EnumerateArray())
             {

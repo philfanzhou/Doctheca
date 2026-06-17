@@ -84,6 +84,115 @@
 - **When**：调用 `MapFilter`。
 - **Then**：返回的 `SearchFilterModel` 所有字段均为 `null`。
 
+## OpenSearchIndexService 单元测试
+
+`OpenSearchIndexService` 因 `OpenSearchLowLevelClient` 在构造函数中 `new` 创建而无法整体 Mock。为提升可测试性，将纯逻辑提取为 `internal static` 方法，直接测试。
+
+### 可测试性重构
+
+将以下纯逻辑提取为 `internal static` 方法（行为不变，仅拆分）：
+
+| 方法 | 职责 |
+|------|------|
+| `BuildSearchBody(query, phrase, filter, pageSize, pageToken)` | 构建完整 OpenSearch 搜索请求体（含 query/filter/sort/highlight/search_after） |
+| `ParseSearchResponse(responseJson, phrase, pageSize)` | 解析 OpenSearch 响应 JSON，返回 `(Results, TotalCount, NextToken)` |
+
+### UT-OS-01 短语查询构建（phrase=true）
+
+- **Given**：`query="machine learning"`, `phrase=true`, `filter=null`, `pageSize=10`, `pageToken=null`。
+- **When**：调用 `BuildSearchBody`。
+- **Then**：序列化后 JSON 包含 `match_phrase` 且字段为 `text.exact`。
+
+### UT-OS-02 词干查询构建（phrase=false）
+
+- **Given**：`query="machine"`, `phrase=false`, `filter=null`, `pageSize=10`, `pageToken=null`。
+- **When**：调用 `BuildSearchBody`。
+- **Then**：序列化后 JSON 包含 `match` 且字段为 `text`。
+
+### UT-OS-03 过滤器构建（全字段）
+
+- **Given**：`filter = { Subject="英语", Grade="G10", Year="2024", DocumentTitle="exam.pdf" }`。
+- **When**：调用 `BuildSearchBody`。
+- **Then**：序列化后 JSON 包含 `bool.must + filter`，filter 含 subject/grade/year/document_title 四个 term 子句。
+
+### UT-OS-04 过滤器为 null 时不包装 bool
+
+- **Given**：`filter=null`。
+- **When**：调用 `BuildSearchBody`。
+- **Then**：query 直接为 mainQuery，无 `bool` 包装。
+
+### UT-OS-05 过滤器部分字段为空时跳过
+
+- **Given**：`filter = { Subject="英语", Grade="", Year=null, DocumentTitle="" }`。
+- **When**：调用 `BuildSearchBody`。
+- **Then**：filter 仅含 subject 一个 term 子句。
+
+### UT-OS-06 有效 pageToken 解码为 search_after
+
+- **Given**：`pageToken = Base64("[1.5, \"doc1\", \"sentence\"]")`。
+- **When**：调用 `BuildSearchBody`。
+- **Then**：序列化后 JSON 含 `search_after` 字段。
+
+### UT-OS-07 无效 pageToken 静默忽略
+
+- **Given**：`pageToken = "!!!invalid base64!!!"`。
+- **When**：调用 `BuildSearchBody`。
+- **Then**：序列化后 JSON 不含 `search_after` 字段。
+
+### UT-OS-08 空 pageToken 不加 search_after
+
+- **Given**：`pageToken=null` 或 `pageToken=""`。
+- **When**：调用 `BuildSearchBody`。
+- **Then**：序列化后 JSON 不含 `search_after` 字段。
+
+### UT-OS-09 正常响应解析
+
+- **Given**：含 2 条 hit 的响应 JSON（1 sentence + 1 question）。
+- **When**：调用 `ParseSearchResponse(json, phrase=false, pageSize=10)`。
+- **Then**：返回 2 条结果，SegmentId 分别取自 sentence_id 和 question_id，MatchType=Stemmed。
+
+### UT-OS-10 短语查询 MatchType=ExactPhrase
+
+- **Given**：含 1 条 hit 的响应 JSON。
+- **When**：调用 `ParseSearchResponse(json, phrase=true, pageSize=10)`。
+- **Then**：结果的 MatchType=ExactPhrase。
+
+### UT-OS-11 highlight 优先于 source.text
+
+- **Given**：hit 同时含 `_source.text` 和 `highlight.text`。
+- **When**：调用 `ParseSearchResponse`。
+- **Then**：`AssociatedText` 取 highlight 值。
+
+### UT-OS-12 满页时生成 nextToken
+
+- **Given**：1 条 hit，`pageSize=1`。
+- **When**：调用 `ParseSearchResponse`。
+- **Then**：`nextToken` 不为 null（Base64 编码的 sort 数组）。
+
+### UT-OS-13 未满页时不生成 nextToken
+
+- **Given**：1 条 hit，`pageSize=10`。
+- **When**：调用 `ParseSearchResponse`。
+- **Then**：`nextToken` 为 null。
+
+### UT-OS-14 空命中返回空结果
+
+- **Given**：`hits.total.value=0`, `hits.hits=[]`。
+- **When**：调用 `ParseSearchResponse`。
+- **Then**：`Results` 为空，`TotalCount=0`，`NextToken=null`。
+
+### UT-OS-15 缺失字段使用默认值
+
+- **Given**：hit 的 `_source` 为空对象 `{}`。
+- **When**：调用 `ParseSearchResponse`。
+- **Then**：结果的 DocumentName/PageNumber/AssociatedText/SegmentId 均为默认值，Score=0。
+
+### UT-OS-16 缺失 _score 时默认为 0
+
+- **Given**：hit 不含 `_score` 字段。
+- **When**：调用 `ParseSearchResponse`。
+- **Then**：结果的 Score=0。
+
 ## 集成测试
 
 ### IT-01 端到端精确检索流程

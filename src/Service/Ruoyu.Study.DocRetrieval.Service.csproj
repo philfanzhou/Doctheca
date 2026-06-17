@@ -20,7 +20,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <InternalsVisibleTo Include="Ruoyu.Study.DocRetrieval.Service.Tests" />
+    <InternalsVisibleTo Include="Ruoyu.Study.DocRetrieval.Tests" />
   </ItemGroup>
 
 </Project>

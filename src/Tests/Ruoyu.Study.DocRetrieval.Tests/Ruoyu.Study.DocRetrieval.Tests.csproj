@@ -10,6 +10,7 @@
 
   <ItemGroup>
     <PackageReference Include="FluentAssertions" Version="7.1.0" />
+    <PackageReference Include="Grpc.AspNetCore" Version="2.62.0" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
     <PackageReference Include="Moq" Version="4.20.72" />
     <PackageReference Include="xunit" Version="2.9.2" />
@@ -24,9 +25,9 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Domain\Ruoyu.Study.DocRetrieval.Domain.csproj" />
-    <ProjectReference Include="..\Service\Ruoyu.Study.DocRetrieval.Service.csproj" />
-    <ProjectReference Include="..\Database\Ruoyu.Study.DocRetrieval.Database.csproj" />
+    <ProjectReference Include="..\..\Domain\Ruoyu.Study.DocRetrieval.Domain.csproj" />
+    <ProjectReference Include="..\..\Service\Ruoyu.Study.DocRetrieval.Service.csproj" />
+    <ProjectReference Include="..\..\Database\Ruoyu.Study.DocRetrieval.Database.csproj" />
   </ItemGroup>
 
 </Project>

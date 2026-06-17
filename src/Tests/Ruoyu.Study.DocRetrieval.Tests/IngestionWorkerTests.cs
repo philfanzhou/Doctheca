@@ -5,11 +5,11 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Moq;
-using Ruoyu.Study.Common.Oss;
-using Ruoyu.Study.DocRetrieval.Domain.Models;
-using Ruoyu.Study.DocRetrieval.Domain.Repositories;
-using Ruoyu.Study.DocRetrieval.Domain.Services;
-using Ruoyu.Study.DocRetrieval.Service;
+using global::Ruoyu.Study.Common.Oss;
+using global::Ruoyu.Study.DocRetrieval.Domain.Models;
+using global::Ruoyu.Study.DocRetrieval.Domain.Repositories;
+using global::Ruoyu.Study.DocRetrieval.Domain.Services;
+using global::Ruoyu.Study.DocRetrieval.Service;
 using Xunit;
 
 namespace Ruoyu.Study.DocRetrieval.Tests;

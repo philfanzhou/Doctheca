@@ -5,8 +5,8 @@ using System.Text;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Moq;
-using Ruoyu.Study.DocRetrieval.Domain.Models;
-using Ruoyu.Study.DocRetrieval.Service;
+using global::Ruoyu.Study.DocRetrieval.Domain.Models;
+using global::Ruoyu.Study.DocRetrieval.Service;
 using Xunit;
 
 namespace Ruoyu.Study.DocRetrieval.Tests;

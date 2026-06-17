@@ -4,10 +4,10 @@ using System.Threading.Tasks;
 using Grpc.Core;
 using Microsoft.Extensions.Logging;
 using Moq;
-using Ruoyu.Study.DocRetrieval.Contract.Protos;
-using Ruoyu.Study.DocRetrieval.Domain.Models;
-using Ruoyu.Study.DocRetrieval.Domain.Services;
-using Ruoyu.Study.DocRetrieval.Service;
+using global::Ruoyu.Study.DocRetrieval.Contract.Protos;
+using global::Ruoyu.Study.DocRetrieval.Domain.Models;
+using global::Ruoyu.Study.DocRetrieval.Domain.Services;
+using global::Ruoyu.Study.DocRetrieval.Service;
 using Xunit;
 
 namespace Ruoyu.Study.DocRetrieval.Tests;
