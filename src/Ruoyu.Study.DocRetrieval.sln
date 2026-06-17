@@ -3,19 +3,19 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.0.31903.59
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ruoyu.Study.DocRetrieval.Contract", "src\Contract\Ruoyu.Study.DocRetrieval.Contract.csproj", "{A1B2C3D4-0001-0001-0001-000000000001}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ruoyu.Study.DocRetrieval.Contract", "Contract\Ruoyu.Study.DocRetrieval.Contract.csproj", "{A1B2C3D4-0001-0001-0001-000000000001}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ruoyu.Study.DocRetrieval.Database", "src\Database\Ruoyu.Study.DocRetrieval.Database.csproj", "{A1B2C3D4-0001-0001-0001-000000000002}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ruoyu.Study.DocRetrieval.Database", "Database\Ruoyu.Study.DocRetrieval.Database.csproj", "{A1B2C3D4-0001-0001-0001-000000000002}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ruoyu.Study.DocRetrieval.Domain", "src\Domain\Ruoyu.Study.DocRetrieval.Domain.csproj", "{A1B2C3D4-0001-0001-0001-000000000003}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ruoyu.Study.DocRetrieval.Domain", "Domain\Ruoyu.Study.DocRetrieval.Domain.csproj", "{A1B2C3D4-0001-0001-0001-000000000003}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ruoyu.Study.DocRetrieval.Service", "src\Service\Ruoyu.Study.DocRetrieval.Service.csproj", "{A1B2C3D4-0001-0001-0001-000000000004}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ruoyu.Study.DocRetrieval.Service", "Service\Ruoyu.Study.DocRetrieval.Service.csproj", "{A1B2C3D4-0001-0001-0001-000000000004}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ruoyu.Study.DocRetrieval.Host", "src\Host\Ruoyu.Study.DocRetrieval.Host.csproj", "{A1B2C3D4-0001-0001-0001-000000000005}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ruoyu.Study.DocRetrieval.Host", "Host\Ruoyu.Study.DocRetrieval.Host.csproj", "{A1B2C3D4-0001-0001-0001-000000000005}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "test", "test", "{0C88DD14-F956-CE84-757C-A364CCF449FC}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ruoyu.Study.DocRetrieval.Tests", "test\Ruoyu.Study.DocRetrieval.Tests\Ruoyu.Study.DocRetrieval.Tests.csproj", "{6F9765F9-E972-4A84-9778-40842B98052B}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ruoyu.Study.DocRetrieval.Tests", "Tests\Ruoyu.Study.DocRetrieval.Tests\Ruoyu.Study.DocRetrieval.Tests.csproj", "{6F9765F9-E972-4A84-9778-40842B98052B}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{827E0CD3-B72D-47B6-A68D-7590B98EB39B}"
 EndProject

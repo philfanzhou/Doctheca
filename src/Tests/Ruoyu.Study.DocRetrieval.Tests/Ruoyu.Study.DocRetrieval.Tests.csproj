@@ -24,9 +24,9 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\Domain\Ruoyu.Study.DocRetrieval.Domain.csproj" />
-    <ProjectReference Include="..\..\src\Service\Ruoyu.Study.DocRetrieval.Service.csproj" />
-    <ProjectReference Include="..\..\src\Database\Ruoyu.Study.DocRetrieval.Database.csproj" />
+    <ProjectReference Include="..\Domain\Ruoyu.Study.DocRetrieval.Domain.csproj" />
+    <ProjectReference Include="..\Service\Ruoyu.Study.DocRetrieval.Service.csproj" />
+    <ProjectReference Include="..\Database\Ruoyu.Study.DocRetrieval.Database.csproj" />
   </ItemGroup>
 
 </Project>
