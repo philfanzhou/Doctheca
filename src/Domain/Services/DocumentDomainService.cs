@@ -364,9 +364,6 @@ public class DocumentDomainService : IDocumentDomainService
         else if (!DocRetrievalConstants.IsValidGrade(document.Grade))
             errors.Add($"Invalid grade value, valid values: {string.Join(", ", DocRetrievalConstants.ValidGrades)}");
 
-        if (string.IsNullOrWhiteSpace(document.Year))
-            errors.Add("Year cannot be empty");
-
         if (string.IsNullOrWhiteSpace(document.FileHash))
             errors.Add("File hash cannot be empty");
 

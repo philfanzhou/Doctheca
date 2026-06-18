@@ -99,7 +99,6 @@ public class DocumentDomainServiceTests
     [InlineData("", "英语", "G1", "2023", "Document title cannot be empty")]
     [InlineData("test", "", "G1", "2023", "Subject cannot be empty")]
     [InlineData("test", "英语", "", "2023", "Grade cannot be empty")]
-    [InlineData("test", "英语", "G1", "", "Year cannot be empty")]
     [InlineData("test", "Invalid", "G1", "2023", "Subject only supports")]
     [InlineData("test", "英语", "Invalid", "2023", "Invalid grade value")]
     [InlineData("empty-hash", "英语", "G1", "2023", "File hash cannot be empty")]
