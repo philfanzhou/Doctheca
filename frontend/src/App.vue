@@ -170,7 +170,7 @@ async function loadDocuments() {
 }
 
 async function handleUpload() {
-  if (!uploadFile.value || !uploadForm.value.title || !uploadForm.value.subject || !uploadForm.value.grade || !uploadForm.value.year) {
+  if (!uploadFile.value || !uploadForm.value.title || !uploadForm.value.subject || !uploadForm.value.grade) {
     ElMessage.warning('请填写所有必填字段并选择文件')
     return
   }
@@ -186,7 +186,7 @@ async function handleUpload() {
       uploadForm.value.title,
       uploadForm.value.subject,
       uploadForm.value.grade,
-      uploadForm.value.year,
+      uploadForm.value.year || undefined,
       tags
     )
 
@@ -726,7 +726,7 @@ onMounted(async () => {
             </div>
           </div>
           <div class="form-group">
-            <label>年份</label>
+            <label>年份 (可选)</label>
             <div class="input-wrap">
               <input v-model="uploadForm.year" type="text" placeholder="例如: 2024" />
             </div>

@@ -77,8 +77,8 @@ public static class DocumentAdminEndpoints
         var tags = form["tags"].ToString();
 
         if (string.IsNullOrWhiteSpace(title) || string.IsNullOrWhiteSpace(subject)
-            || string.IsNullOrWhiteSpace(grade) || string.IsNullOrWhiteSpace(year))
-            return Results.BadRequest(new { success = false, message = "Required metadata missing (title/subject/grade/year)", errorCode = "DOCRETRIEVAL_METADATA_REQUIRED" });
+            || string.IsNullOrWhiteSpace(grade))
+            return Results.BadRequest(new { success = false, message = "Required metadata missing (title/subject/grade)", errorCode = "DOCRETRIEVAL_METADATA_REQUIRED" });
 
         string fileHash;
         string filePath;
