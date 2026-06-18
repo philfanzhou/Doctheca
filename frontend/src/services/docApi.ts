@@ -86,7 +86,7 @@ class DocApiClient {
     title: string,
     subject: string,
     grade: string,
-    year: string,
+    year?: string,
     tags?: string[]
   ): Promise<ApiResponse<{ documentId: string; title: string; jobId: string; status: string }>> {
     const formData = new FormData()
@@ -94,7 +94,9 @@ class DocApiClient {
     formData.append('title', title)
     formData.append('subject', subject)
     formData.append('grade', grade)
-    formData.append('year', year)
+    if (year) {
+      formData.append('year', year)
+    }
     if (tags && tags.length > 0) {
       formData.append('tags', JSON.stringify(tags))
     }
