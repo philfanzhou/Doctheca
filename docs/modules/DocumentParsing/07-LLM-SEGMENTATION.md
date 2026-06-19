@@ -308,21 +308,35 @@ public class LlmSegmentationService : ILlmSegmentationService
 
 ### LLM 配置
 
+用户只需配置 3 个必要参数：
+
 ```json
 {
   "LlmSegmentation": {
-    "Provider": "openai|anthropic|local",
-    "Model": "gpt-4o-mini|claude-haiku|local-model",
     "ApiKey": "${LLM_API_KEY}",
-    "BaseUrl": "https://api.openai.com/v1",
-    "MaxTokens": 4096,
-    "Temperature": 0.1,
-    "ChunkSize": 2500,
-    "MaxRetries": 3,
-    "TimeoutSeconds": 60
+    "BaseUrl": "https://api.siliconflow.cn/v1",
+    "Model": "Qwen/Qwen2.5-7B-Instruct"
   }
 }
 ```
+
+其余参数由系统动态计算：
+
+| 参数 | 计算方式 | 说明 |
+|------|---------|------|
+| MaxTokens | `context_length × 0.25` | 输出占上下文窗口 25% |
+| ChunkSize | `(context_length - 200 - MaxTokens) × 1.5` | 输入占剩余空间，1.5 字符/token |
+| Temperature | 写死 0.1 | 结构化输出任务的最佳实践 |
+| MaxRetries | 写死 3 | 重试 3 次 |
+| TimeoutSeconds | 写死 60 | 超时 60 秒 |
+
+**动态参数获取流程**：
+
+1. 服务启动时调用 `GET /models/{model_id}` 获取模型信息
+2. 从响应中提取 `context_length`（上下文窗口大小）
+3. 计算 MaxTokens 和 ChunkSize
+4. 打印日志到控制台
+5. 获取失败则使用安全默认值（MaxTokens=2048, ChunkSize=1500）
 
 ### 成本估算
 

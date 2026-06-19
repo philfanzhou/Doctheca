@@ -432,10 +432,19 @@ public class LlmSegmentationServiceTests
     {
         var handlerMock = new Mock<HttpMessageHandler>();
 
-        var response = new HttpResponseMessage(statusCode);
+        // Mock /models endpoint for initialization
+        var modelResponse = new HttpResponseMessage(HttpStatusCode.OK);
+        var modelInfo = new { id = "gpt-4o-mini", context_length = 32768 };
+        modelResponse.Content = new StringContent(
+            JsonSerializer.Serialize(modelInfo),
+            System.Text.Encoding.UTF8,
+            "application/json");
+
+        // Mock /chat/completions endpoint
+        var chatResponse = new HttpResponseMessage(statusCode);
         if (llmResponse != null && statusCode == HttpStatusCode.OK)
         {
-            var chatResponse = new
+            var chatCompletionResponse = new
             {
                 choices = new[]
                 {
@@ -445,8 +454,8 @@ public class LlmSegmentationServiceTests
                     }
                 }
             };
-            response.Content = new StringContent(
-                JsonSerializer.Serialize(chatResponse),
+            chatResponse.Content = new StringContent(
+                JsonSerializer.Serialize(chatCompletionResponse),
                 System.Text.Encoding.UTF8,
                 "application/json");
         }
@@ -455,9 +464,17 @@ public class LlmSegmentationServiceTests
             .Protected()
             .Setup<Task<HttpResponseMessage>>(
                 "SendAsync",
-                ItExpr.IsAny<HttpRequestMessage>(),
+                ItExpr.Is<HttpRequestMessage>(r => r.RequestUri!.PathAndQuery.Contains("/models/")),
                 ItExpr.IsAny<CancellationToken>())
-            .ReturnsAsync(response);
+            .ReturnsAsync(modelResponse);
+
+        handlerMock
+            .Protected()
+            .Setup<Task<HttpResponseMessage>>(
+                "SendAsync",
+                ItExpr.Is<HttpRequestMessage>(r => r.RequestUri!.PathAndQuery.Contains("/chat/completions")),
+                ItExpr.IsAny<CancellationToken>())
+            .ReturnsAsync(chatResponse);
 
         var httpClient = new HttpClient(handlerMock.Object)
         {
@@ -466,15 +483,11 @@ public class LlmSegmentationServiceTests
 
         var options = Options.Create(new LlmSegmentationOptions
         {
-            Provider = "openai",
             Model = "gpt-4o-mini",
             ApiKey = "test-key",
             BaseUrl = "https://api.openai.com/v1",
             MaxTokens = 4096,
-            Temperature = 0.1,
-            ChunkSize = 2500,
-            MaxRetries = 1, // Single retry for tests
-            TimeoutSeconds = 30
+            ChunkSize = 2500
         });
 
         return new LlmSegmentationService(httpClient, options, _loggerMock.Object);

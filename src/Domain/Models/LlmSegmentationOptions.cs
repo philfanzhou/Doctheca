@@ -1,54 +1,51 @@
 namespace Ruoyu.Study.DocRetrieval.Domain.Models;
 
 /// <summary>
-/// Configuration options for LLM segmentation service
+/// Configuration options for LLM segmentation service.
+/// Only ApiKey, BaseUrl, and Model need to be configured by user.
+/// Other parameters are dynamically calculated based on model capabilities.
 /// </summary>
 public class LlmSegmentationOptions
 {
     public const string SectionName = "LlmSegmentation";
 
     /// <summary>
-    /// LLM provider: openai, anthropic, local
-    /// </summary>
-    public string Provider { get; set; } = "openai";
-
-    /// <summary>
-    /// Model name: gpt-4o-mini, claude-haiku, local-model, etc.
-    /// </summary>
-    public string Model { get; set; } = "gpt-4o-mini";
-
-    /// <summary>
-    /// API key for the LLM provider
+    /// API key for the LLM provider (required)
     /// </summary>
     public string ApiKey { get; set; } = string.Empty;
 
     /// <summary>
-    /// Base URL for the LLM API
+    /// Base URL for the LLM API (required)
     /// </summary>
-    public string BaseUrl { get; set; } = "https://api.openai.com/v1";
+    public string BaseUrl { get; set; } = string.Empty;
 
     /// <summary>
-    /// Maximum tokens for LLM response
+    /// Model ID (required)
     /// </summary>
-    public int MaxTokens { get; set; } = 4096;
+    public string Model { get; set; } = string.Empty;
 
     /// <summary>
-    /// Temperature parameter (0.0 = deterministic, 1.0 = creative)
+    /// Maximum tokens for LLM response (dynamically calculated at startup)
     /// </summary>
-    public double Temperature { get; set; } = 0.1;
+    public int MaxTokens { get; set; } = 2048;
 
     /// <summary>
-    /// Text chunk size in characters for segmentation
+    /// Temperature parameter (fixed at 0.1 for structured output)
     /// </summary>
-    public int ChunkSize { get; set; } = 2500;
+    public double Temperature => 0.1;
 
     /// <summary>
-    /// Maximum retry attempts for LLM calls
+    /// Text chunk size in characters (dynamically calculated at startup)
     /// </summary>
-    public int MaxRetries { get; set; } = 3;
+    public int ChunkSize { get; set; } = 1500;
 
     /// <summary>
-    /// Timeout in seconds for LLM API calls
+    /// Maximum retry attempts (fixed at 3)
     /// </summary>
-    public int TimeoutSeconds { get; set; } = 60;
+    public int MaxRetries => 3;
+
+    /// <summary>
+    /// Timeout in seconds (fixed at 60)
+    /// </summary>
+    public int TimeoutSeconds => 60;
 }

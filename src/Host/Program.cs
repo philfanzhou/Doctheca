@@ -73,19 +73,7 @@ var llmSection = builder.Configuration.GetSection(LlmSegmentationOptions.Section
 if (llmSection.Exists() && !string.IsNullOrEmpty(llmSection["ApiKey"]))
 {
     builder.Services.Configure<LlmSegmentationOptions>(llmSection);
-    builder.Services.AddHttpClient<ILlmSegmentationService, LlmSegmentationService>(client =>
-    {
-        var baseUrl = llmSection["BaseUrl"] ?? "https://api.openai.com/v1";
-        client.BaseAddress = new Uri(baseUrl);
-        var apiKey = llmSection["ApiKey"];
-        if (!string.IsNullOrEmpty(apiKey))
-        {
-            client.DefaultRequestHeaders.Authorization =
-                new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", apiKey);
-        }
-        var timeout = llmSection["TimeoutSeconds"];
-        client.Timeout = TimeSpan.FromSeconds(int.TryParse(timeout, out var t) ? t : 60);
-    });
+    builder.Services.AddHttpClient<ILlmSegmentationService, LlmSegmentationService>();
 }
 
 // Repositories

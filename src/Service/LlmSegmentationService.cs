@@ -12,12 +12,14 @@ namespace Ruoyu.Study.DocRetrieval.Service;
 /// <summary>
 /// LLM-based intelligent document segmentation service implementation.
 /// Uses OpenAI-compatible API for document analysis and text segmentation.
+/// Dynamically fetches model capabilities at startup to optimize parameters.
 /// </summary>
 public class LlmSegmentationService : ILlmSegmentationService
 {
     private readonly HttpClient _httpClient;
     private readonly LlmSegmentationOptions _options;
     private readonly ILogger<LlmSegmentationService> _logger;
+    private bool _initialized;
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -44,8 +46,47 @@ public class LlmSegmentationService : ILlmSegmentationService
         }
     }
 
+    /// <summary>
+    /// Initialize model parameters by fetching model info from API.
+    /// Called once at startup.
+    /// </summary>
+    public async Task InitializeAsync(CancellationToken cancellationToken = default)
+    {
+        if (_initialized) return;
+
+        try
+        {
+            var response = await _httpClient.GetAsync($"/models/{_options.Model}", cancellationToken);
+            response.EnsureSuccessStatusCode();
+
+            var modelInfo = await response.Content.ReadFromJsonAsync<ModelInfoResponse>(JsonOptions, cancellationToken);
+            var contextLength = modelInfo?.ContextLength ?? 8192;
+
+            // Calculate optimal parameters
+            // Reserve 25% of context for output
+            _options.MaxTokens = (int)(contextLength * 0.25);
+            // Remaining context for input, with 1.5 chars/token ratio for Chinese
+            var availableInputTokens = contextLength - 200 - _options.MaxTokens;
+            _options.ChunkSize = (int)(availableInputTokens * 1.5);
+
+            _logger.LogInformation(
+                "LLM model initialized: Model={Model}, ContextLength={ContextLength}, MaxTokens={MaxTokens}, ChunkSize={ChunkSize}",
+                _options.Model, contextLength, _options.MaxTokens, _options.ChunkSize);
+
+            _initialized = true;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to fetch model info, using safe defaults: MaxTokens={MaxTokens}, ChunkSize={ChunkSize}",
+                _options.MaxTokens, _options.ChunkSize);
+            _initialized = true;
+        }
+    }
+
     public async Task<DocumentProfile> AnalyzeDocumentAsync(string textPreview, CancellationToken cancellationToken = default)
     {
+        await InitializeAsync(cancellationToken);
+
         if (string.IsNullOrWhiteSpace(textPreview))
         {
             _logger.LogWarning("Empty text preview provided for document analysis");
@@ -70,6 +111,8 @@ public class LlmSegmentationService : ILlmSegmentationService
 
     public async Task<List<SegmentResult>> SegmentTextAsync(string text, DocumentProfile profile, CancellationToken cancellationToken = default)
     {
+        await InitializeAsync(cancellationToken);
+
         if (string.IsNullOrWhiteSpace(text))
         {
             return [];
@@ -372,6 +415,15 @@ public class LlmSegmentationService : ILlmSegmentationService
     #endregion
 
     #region API Response Models
+
+    private record ModelInfoResponse
+    {
+        [JsonPropertyName("id")]
+        public string? Id { get; init; }
+
+        [JsonPropertyName("context_length")]
+        public int ContextLength { get; init; }
+    }
 
     private record ChatCompletionResponse
     {

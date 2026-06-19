@@ -28,28 +28,11 @@ OSS_ACCESS_KEY="seaweedfs_admin"
 OSS_SECRET_KEY="seaweedfs_admin"
 OSS_BUCKET="ruoyu-study"
 
-# ============================================================
-# LLM Segmentation Configuration (智能文档分段)
-# ============================================================
-# 留空 LLM_API_KEY 即可禁用 LLM 分段，自动回退到规则切割
-#
-# 支持的 API 端点示例：
-#   OpenAI:      https://api.openai.com/v1
-#   硅基流动:    https://api.siliconflow.cn/v1
-#   DeepSeek:    https://api.deepseek.com/v1
-#   月之暗面:    https://api.moonshot.cn/v1
-#   智谱AI:      https://open.bigmodel.cn/api/paas/v4
-#   本地Ollama:  http://localhost:11434/v1
-# ============================================================
-
+# LLM Segmentation - only 3 parameters needed
+# Leave LLM_API_KEY empty to disable LLM segmentation
 LLM_API_KEY=""
 LLM_BASE_URL="https://api.siliconflow.cn/v1"
 LLM_MODEL="Qwen/Qwen2.5-7B-Instruct"
-LLM_MAX_TOKENS="4096"
-LLM_TEMPERATURE="0.1"
-LLM_CHUNK_SIZE="2500"
-LLM_MAX_RETRIES="3"
-LLM_TIMEOUT_SECONDS="60"
 
 docker network inspect "$NETWORK_NAME" >/dev/null 2>&1 || docker network create "$NETWORK_NAME"
 
@@ -82,11 +65,6 @@ docker run -d \
   -e LlmSegmentation__ApiKey="${LLM_API_KEY}" \
   -e LlmSegmentation__BaseUrl="${LLM_BASE_URL}" \
   -e LlmSegmentation__Model="${LLM_MODEL}" \
-  -e LlmSegmentation__MaxTokens="${LLM_MAX_TOKENS}" \
-  -e LlmSegmentation__Temperature="${LLM_TEMPERATURE}" \
-  -e LlmSegmentation__ChunkSize="${LLM_CHUNK_SIZE}" \
-  -e LlmSegmentation__MaxRetries="${LLM_MAX_RETRIES}" \
-  -e LlmSegmentation__TimeoutSeconds="${LLM_TIMEOUT_SECONDS}" \
   -e Logging__LogLevel__Microsoft_EntityFrameworkCore_Database_Command="Warning" \
   "$IMAGE_NAME"
 
