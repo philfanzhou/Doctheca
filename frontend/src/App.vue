@@ -456,8 +456,8 @@ onMounted(async () => {
             </div>
           </div>
           <div class="card-body">
-            <div class="filter-bar">
-              <div class="select-wrap" style="width: 160px">
+            <div class="filter-bar filter-bar-compact">
+              <div class="select-wrap filter-item">
                 <select v-model="statusFilter" @change="handleFilterChange">
                   <option value="">所有状态</option>
                   <option value="pending">待处理</option>
@@ -466,13 +466,13 @@ onMounted(async () => {
                   <option value="failed">失败</option>
                 </select>
               </div>
-              <div class="select-wrap" style="width: 140px">
+              <div class="select-wrap filter-item">
                 <select v-model="subjectFilter" @change="handleFilterChange">
                   <option value="">所有科目</option>
                   <option value="英语">英语</option>
                 </select>
               </div>
-              <div class="select-wrap" style="width: 140px">
+              <div class="select-wrap filter-item">
                 <select v-model="gradeFilter" @change="handleFilterChange">
                   <option value="">所有年级</option>
                   <option value="K">幼儿园</option>
@@ -490,10 +490,10 @@ onMounted(async () => {
                   <option value="G12">高三</option>
                 </select>
               </div>
-              <div class="input-wrap" style="width: 180px">
+              <div class="input-wrap filter-item filter-item-wide">
                 <input v-model="keywordFilter" type="text" placeholder="搜索文档标题..." @keyup.enter="handleFilterChange" />
               </div>
-              <div class="input-wrap" style="width: 100px">
+              <div class="input-wrap filter-item filter-item-narrow">
                 <input v-model="yearFilter" type="text" placeholder="年份" @keyup.enter="handleFilterChange" />
               </div>
             </div>

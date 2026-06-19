@@ -4,3 +4,9 @@ dist
 .vite
 *.log
 .env.local
+# vue-tsc/Volar generated type-checking artifacts
+*.vue.js
+# Transpiled JS copies alongside TS sources
+src/main.js
+src/services/authService.js
+src/services/docApi.js
