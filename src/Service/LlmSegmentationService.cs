@@ -36,8 +36,11 @@ public class LlmSegmentationService : ILlmSegmentationService
         _options = options.Value;
         _logger = logger;
 
-        // Configure HttpClient
-        _httpClient.BaseAddress = new Uri(_options.BaseUrl);
+        // Configure HttpClient - ensure BaseUrl ends with /v1 for OpenAI-compatible APIs
+        var baseUrl = _options.BaseUrl.TrimEnd('/');
+        if (!baseUrl.EndsWith("/v1"))
+            baseUrl += "/v1";
+        _httpClient.BaseAddress = new Uri(baseUrl + "/");
         _httpClient.Timeout = TimeSpan.FromSeconds(_options.TimeoutSeconds);
         if (!string.IsNullOrEmpty(_options.ApiKey))
         {
