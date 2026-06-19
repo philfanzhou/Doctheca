@@ -1,3 +1,4 @@
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Ruoyu.Study.Common.Database;
 
@@ -8,6 +9,51 @@ public static class DatabaseInitializer
     public static async Task InitializeAsync(DocRetrievalDbContext context, ILoggerFactory loggerFactory)
     {
         await Common.Database.DatabaseInitializer.InitializeAsync(context, loggerFactory, GetTableCreationSql);
+        await EnsureColumnsAsync(context, loggerFactory);
+    }
+
+    private static async Task EnsureColumnsAsync(DocRetrievalDbContext context, ILoggerFactory loggerFactory)
+    {
+        var logger = loggerFactory.CreateLogger("DatabaseInitializer");
+
+        if (context.Database.ProviderName != "Npgsql.EntityFrameworkCore.PostgreSQL")
+            return;
+
+        // Column migrations for legacy databases (migrations stamped but DDL not applied)
+        var alterStatements = new[]
+        {
+            "ALTER TABLE documents ADD COLUMN IF NOT EXISTS llm_profile_json text NULL"
+        };
+
+        foreach (var sql in alterStatements)
+        {
+            try
+            {
+                await context.Database.ExecuteSqlRawAsync(sql);
+            }
+            catch (Exception ex)
+            {
+                // Column may already exist, log and continue
+                logger.LogDebug(ex, "Column migration statement skipped: {Sql}", sql);
+            }
+        }
+
+        // Create backup table if not exists
+        await context.Database.ExecuteSqlRawAsync(@"
+            CREATE TABLE IF NOT EXISTS document_segment_backups (
+                id uuid NOT NULL,
+                document_id uuid NOT NULL,
+                backup_data text NOT NULL,
+                correction_count integer NOT NULL,
+                created_at timestamp with time zone NOT NULL,
+                CONSTRAINT PK_document_segment_backups PRIMARY KEY (id),
+                CONSTRAINT FK_backups_document_document_id
+                    FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE
+            );
+            CREATE INDEX IF NOT EXISTS IX_document_segment_backups_document_id ON document_segment_backups (document_id);
+        ");
+
+        logger.LogInformation("Column migration check completed");
     }
 
     private static string? GetTableCreationSql(string tableName)
