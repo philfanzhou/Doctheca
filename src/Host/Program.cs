@@ -121,6 +121,17 @@ var identityOptions = app.Services.GetRequiredService<IdentityClientOptions>();
 app.Logger.LogInformation("Identity: gRPC={GrpcEndpoint}, JWKS={JwksEndpoint}, RequireHttps={RequireHttps}",
     identityOptions.GrpcEndpoint, identityOptions.JwksEndpoint, identityOptions.RequireHttpsForJwks);
 
+// Log LLM configuration
+var llmApiKey = builder.Configuration["LlmSegmentation:ApiKey"];
+var llmBaseUrl = builder.Configuration["LlmSegmentation:BaseUrl"];
+var llmModel = builder.Configuration["LlmSegmentation:Model"];
+var llmEnabled = !string.IsNullOrEmpty(llmApiKey);
+app.Logger.LogInformation("LLM Segmentation: Enabled={Enabled}, BaseUrl={BaseUrl}, Model={Model}, ApiKey={ApiKeyStatus}",
+    llmEnabled,
+    llmBaseUrl ?? "(not configured)",
+    llmModel ?? "(not configured)",
+    string.IsNullOrEmpty(llmApiKey) ? "(empty - service disabled)" : "(configured)");
+
 using (var scope = app.Services.CreateScope())
 {
     var dbContext = scope.ServiceProvider.GetRequiredService<DocRetrievalDbContext>();
