@@ -1,14 +1,19 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Ruoyu.Study.Common.Oss;
+using Ruoyu.Study.DocRetrieval.Database;
+using Ruoyu.Study.DocRetrieval.Database.Entities;
 using Ruoyu.Study.DocRetrieval.Domain.Exceptions;
 using Ruoyu.Study.DocRetrieval.Domain.Models;
 using Ruoyu.Study.DocRetrieval.Domain.Services;
@@ -43,6 +48,8 @@ public static class DocumentAdminEndpoints
         group.MapGet("/search-test", SearchTest);
         group.MapPost("/{id:guid}/retry", RetryIngestion);
         group.MapPost("/{id:guid}/cancel", CancelIngestion);
+        group.MapGet("/{id:guid}/segments", GetDocumentSegments);
+        group.MapPost("/{id:guid}/refine", RefineDocumentSegments);
 
         return app;
     }
@@ -484,6 +491,163 @@ public static class DocumentAdminEndpoints
         catch (DocRetrievalValidationException ex)
         {
             return Results.Json(new { success = false, message = ex.Message, errorCode = "DOCRETRIEVAL_DOCUMENT_NOT_FAILED" }, statusCode: StatusCodes.Status422UnprocessableEntity);
+        }
+    }
+
+    private static async Task<IResult> GetDocumentSegments(
+        Guid id,
+        IDocumentDomainService documentService)
+    {
+        try
+        {
+            var result = await documentService.GetSegmentsAsync(id);
+            return Results.Ok(new
+            {
+                success = true,
+                data = new
+                {
+                    documentId = result.DocumentId.ToString(),
+                    title = result.Title,
+                    status = result.Status,
+                    profile = result.Profile != null ? new
+                    {
+                        subject = result.Profile.Subject,
+                        docType = result.Profile.DocType,
+                        segmentStrategy = result.Profile.SegmentStrategy,
+                        structure = new
+                        {
+                            hasChapters = result.Profile.Structure.HasChapters,
+                            hasQuestions = result.Profile.Structure.HasQuestions,
+                            hasWordList = result.Profile.Structure.HasWordList,
+                            hasFormulas = result.Profile.Structure.HasFormulas
+                        }
+                    } : null,
+                    segments = result.Segments.Select(s => new
+                    {
+                        id = s.Id.ToString(),
+                        sentenceId = s.SentenceId,
+                        segmentType = s.SegmentType,
+                        text = s.Text,
+                        startOffset = s.StartOffset,
+                        endOffset = s.EndOffset,
+                        pageNumber = s.PageNumber
+                    }),
+                    totalCount = result.TotalCount
+                }
+            });
+        }
+        catch (KeyNotFoundException)
+        {
+            return Results.NotFound(new { success = false, message = "Document not found", errorCode = "DOCRETRIEVAL_DOCUMENT_NOT_FOUND" });
+        }
+    }
+
+    private static async Task<IResult> RefineDocumentSegments(
+        Guid id,
+        HttpRequest request,
+        IDocumentDomainService documentService,
+        DocRetrievalDbContext dbContext,
+        [FromServices] ILoggerFactory loggerFactory)
+    {
+        var logger = loggerFactory.CreateLogger("DocumentAdminEndpoints");
+
+        using var reader = new StreamReader(request.Body);
+        var body = await reader.ReadToEndAsync();
+        if (body.Length > 100 * 1024)
+            return Results.StatusCode(StatusCodes.Status413RequestEntityTooLarge);
+
+        JsonElement json;
+        try
+        {
+            json = JsonSerializer.Deserialize<JsonElement>(body);
+        }
+        catch
+        {
+            return Results.BadRequest(new { success = false, message = "Invalid JSON" });
+        }
+
+        if (!json.TryGetProperty("corrections", out var correctionsElement) || correctionsElement.GetArrayLength() == 0)
+            return Results.BadRequest(new { success = false, message = "Corrections list required" });
+
+        var corrections = new List<SegmentCorrection>();
+        foreach (var item in correctionsElement.EnumerateArray())
+        {
+            var action = item.TryGetProperty("action", out var a) ? a.GetString() : null;
+            if (string.IsNullOrWhiteSpace(action) || action is not ("merge" or "split" or "retype"))
+                return Results.BadRequest(new { success = false, message = $"Invalid action: {action}" });
+
+            var originalIds = new List<string>();
+            if (item.TryGetProperty("originalSentenceIds", out var idsElement))
+            {
+                foreach (var sid in idsElement.EnumerateArray())
+                {
+                    var sidStr = sid.GetString();
+                    if (!string.IsNullOrEmpty(sidStr)) originalIds.Add(sidStr);
+                }
+            }
+
+            if (originalIds.Count == 0)
+                return Results.BadRequest(new { success = false, message = "originalSentenceIds required" });
+
+            corrections.Add(new SegmentCorrection
+            {
+                OriginalSentenceIds = originalIds,
+                Action = action,
+                NewText = item.TryGetProperty("newText", out var nt) ? nt.GetString() : null,
+                SplitPosition = item.TryGetProperty("splitPosition", out var sp) ? sp.GetInt32() : null,
+                NewSegmentType = item.TryGetProperty("newSegmentType", out var nst) ? nst.GetString() : null
+            });
+        }
+
+        try
+        {
+            var result = await documentService.RefineSegmentsAsync(id, corrections);
+
+            // Save backup to database
+            var backupEntity = new DocumentSegmentBackupEntity
+            {
+                Id = result.BackupId,
+                DocumentId = id,
+                BackupData = result.BackupDataJson,
+                CorrectionCount = result.CorrectionCount,
+                CreatedAt = DateTimeOffset.UtcNow
+            };
+            dbContext.DocumentSegmentBackups.Add(backupEntity);
+            await dbContext.SaveChangesAsync();
+
+            logger.LogInformation("Document refinement completed: {DocumentId}, {CorrectionCount} corrections", id, corrections.Count);
+
+            return Results.Ok(new
+            {
+                success = true,
+                data = new
+                {
+                    documentId = result.DocumentId.ToString(),
+                    backupId = result.BackupId.ToString(),
+                    correctionCount = result.CorrectionCount,
+                    message = result.Message
+                }
+            });
+        }
+        catch (KeyNotFoundException)
+        {
+            return Results.NotFound(new { success = false, message = "Document not found", errorCode = "DOCRETRIEVAL_DOCUMENT_NOT_FOUND" });
+        }
+        catch (DocRetrievalValidationException ex)
+        {
+            var (statusCode, errorCode) = ex.Message switch
+            {
+                var msg when msg.Contains("not ready") => (StatusCodes.Status422UnprocessableEntity, "DOCRETRIEVAL_DOCUMENT_NOT_READY"),
+                var msg when msg.Contains("Too many") => (StatusCodes.Status400BadRequest, "DOCRETRIEVAL_TOO_MANY_CORRECTIONS"),
+                var msg when msg.Contains("not configured") => (StatusCodes.Status503ServiceUnavailable, "DOCRETRIEVAL_LLM_NOT_CONFIGURED"),
+                _ => (StatusCodes.Status400BadRequest, "DOCRETRIEVAL_REFINE_FAILED")
+            };
+            return Results.Json(new { success = false, message = ex.Message, errorCode }, statusCode: statusCode);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Document refinement failed: {DocumentId}", id);
+            return Results.Json(new { success = false, message = "Refinement failed", errorCode = "DOCRETRIEVAL_LLM_REFINE_FAILED" }, statusCode: StatusCodes.Status500InternalServerError);
         }
     }
 }

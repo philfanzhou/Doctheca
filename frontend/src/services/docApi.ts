@@ -74,6 +74,54 @@ export interface SearchResult {
   endOffset: number
 }
 
+// ========== Segment Refinement Types ==========
+
+export interface DocumentProfile {
+  subject: string
+  docType: string
+  segmentStrategy: string
+  structure: {
+    hasChapters: boolean
+    hasQuestions: boolean
+    hasWordList: boolean
+    hasFormulas: boolean
+  }
+}
+
+export interface SegmentDto {
+  id: string
+  sentenceId: string
+  segmentType: string
+  text: string
+  startOffset: number
+  endOffset: number
+  pageNumber: number
+}
+
+export interface DocumentSegmentsData {
+  documentId: string
+  title: string
+  status: string
+  profile: DocumentProfile | null
+  segments: SegmentDto[]
+  totalCount: number
+}
+
+export interface CorrectionDto {
+  originalSentenceIds: string[]
+  action: 'merge' | 'split' | 'retype'
+  newText?: string
+  splitPosition?: number
+  newSegmentType?: string
+}
+
+export interface RefinementResult {
+  documentId: string
+  backupId: string
+  correctionCount: number
+  message: string
+}
+
 class DocApiClient {
   private client: ReturnType<typeof createAuthenticatedClient>
 
@@ -156,6 +204,18 @@ class DocApiClient {
     data: UpdateMetadataRequest
   ): Promise<ApiResponse<{ id: string; title: string; subject: string; grade: string; year: string; tags: string[] | null }>> {
     const response = await this.client.put(`/admin/documents/${title}/metadata`, data)
+    return response.data
+  }
+
+  // ========== Segment Refinement ==========
+
+  async getDocumentSegments(documentId: string): Promise<ApiResponse<DocumentSegmentsData>> {
+    const response = await this.client.get(`/admin/documents/${documentId}/segments`)
+    return response.data
+  }
+
+  async refineDocumentSegments(documentId: string, corrections: CorrectionDto[]): Promise<ApiResponse<RefinementResult>> {
+    const response = await this.client.post(`/admin/documents/${documentId}/refine`, { corrections })
     return response.data
   }
 }

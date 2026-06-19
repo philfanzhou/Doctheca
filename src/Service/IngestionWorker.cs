@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Hosting;
@@ -68,6 +69,15 @@ public class IngestionWorker : BackgroundService
                         if (parsedDocument.Pages.Count == 0)
                             _logger.LogWarning("Document parsing produced zero pages: {DocumentId}, sourceType={SourceType}", job.DocumentId, document.SourceType);
                         _logger.LogInformation("Document parsing completed: {DocumentId}, {PageCount} pages", job.DocumentId, parsedDocument.Pages.Count);
+
+                        // Save LLM profile to document if available
+                        if (parsedDocument.Profile != null)
+                        {
+                            document.LlmProfileJson = JsonSerializer.Serialize(parsedDocument.Profile);
+                            await domainService.UpdateDocumentProfileAsync(document.Id, document.LlmProfileJson);
+                            _logger.LogInformation("LLM profile saved: {DocumentId}, Subject={Subject}, Strategy={Strategy}",
+                                document.Id, parsedDocument.Profile.Subject, parsedDocument.Profile.SegmentStrategy);
+                        }
 
                         // Write parsing results to database
                         var pageModels = parsedDocument.Pages.Select(p => new DocumentPageModel

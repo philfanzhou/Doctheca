@@ -69,4 +69,7 @@ public class DocumentEntity
     [Column("updated_at")]
     [ConcurrencyCheck]
     public DateTimeOffset? UpdatedAt { get; set; }
+
+    [Column("llm_profile_json")]
+    public string? LlmProfileJson { get; set; }
 }

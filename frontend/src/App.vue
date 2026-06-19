@@ -7,7 +7,10 @@ import {
   getDocErrorMessage,
   type Document,
   type DocumentStatus,
-  type SearchResult
+  type SearchResult,
+  type DocumentSegmentsData,
+  type SegmentDto,
+  type CorrectionDto
 } from './services/docApi'
 import { authService } from './services/authService'
 import LoginPage from './components/LoginPage.vue'
@@ -41,6 +44,18 @@ const showUploadDialog = ref(false)
 const showStatusDialog = ref(false)
 const showUpdateMetadataDialog = ref(false)
 const showDeleteConfirm = ref(false)
+
+// Segment Refinement state
+const showSegmentDialog = ref(false)
+const segmentLoading = ref(false)
+const segmentData = ref<DocumentSegmentsData | null>(null)
+const segmentDocTitle = ref('')
+const selectedSegmentIds = ref<Set<string>>(new Set())
+const corrections = ref<CorrectionDto[]>([])
+const refining = ref(false)
+const showSplitDialog = ref(false)
+const splitTarget = ref<SegmentDto | null>(null)
+const splitPosition = ref(10)
 
 const selectedDocument = ref<Document | null>(null)
 const selectedDocumentStatus = ref<DocumentStatus | null>(null)
@@ -344,6 +359,193 @@ onMounted(async () => {
     }
   }
 })
+
+// ========== Segment Refinement ==========
+
+async function openSegmentDialog(doc: Document) {
+  segmentDocTitle.value = doc.title
+  showSegmentDialog.value = true
+  segmentLoading.value = true
+  selectedSegmentIds.value = new Set()
+  corrections.value = []
+
+  try {
+    const response = await client.getDocumentSegments(doc.id)
+    segmentData.value = response.data
+  } catch (error) {
+    handleApiError('获取分段数据失败', error)
+    showSegmentDialog.value = false
+  } finally {
+    segmentLoading.value = false
+  }
+}
+
+function toggleSegmentSelect(sentenceId: string) {
+  const newSet = new Set(selectedSegmentIds.value)
+  if (newSet.has(sentenceId)) {
+    newSet.delete(sentenceId)
+  } else {
+    newSet.add(sentenceId)
+  }
+  selectedSegmentIds.value = newSet
+}
+
+function selectAllSegments() {
+  if (!segmentData.value) return
+  if (selectedSegmentIds.value.size === segmentData.value.segments.length) {
+    selectedSegmentIds.value = new Set()
+  } else {
+    selectedSegmentIds.value = new Set(segmentData.value.segments.map(s => s.sentenceId))
+  }
+}
+
+function mergeSelected() {
+  if (!segmentData.value) return
+  const selected = segmentData.value.segments
+    .filter(s => selectedSegmentIds.value.has(s.sentenceId))
+    .sort((a, b) => a.startOffset - b.startOffset)
+
+  if (selected.length < 2) {
+    ElMessage.warning('请至少选中 2 条 segment')
+    return
+  }
+
+  const mergedText = selected.map(s => s.text).join(' ')
+  const firstType = selected[0].segmentType
+
+  corrections.value.push({
+    originalSentenceIds: selected.map(s => s.sentenceId),
+    action: 'merge',
+    newText: mergedText,
+    newSegmentType: firstType
+  })
+
+  const newSegments = segmentData.value.segments.filter(s => !selectedSegmentIds.value.has(s.sentenceId))
+  newSegments.push({
+    id: 'merged-' + Date.now(),
+    sentenceId: selected[0].sentenceId,
+    segmentType: firstType,
+    text: mergedText,
+    startOffset: selected[0].startOffset,
+    endOffset: selected[selected.length - 1].endOffset,
+    pageNumber: selected[0].pageNumber
+  })
+  newSegments.sort((a, b) => a.startOffset - b.startOffset)
+
+  segmentData.value = { ...segmentData.value, segments: newSegments, totalCount: newSegments.length }
+  selectedSegmentIds.value = new Set()
+  ElMessage.success(`已合并 ${selected.length} 条 segment`)
+}
+
+function changeSegmentType(sentenceId: string, newType: string) {
+  if (!segmentData.value) return
+  const seg = segmentData.value.segments.find(s => s.sentenceId === sentenceId)
+  if (!seg || seg.segmentType === newType) return
+
+  corrections.value.push({
+    originalSentenceIds: [sentenceId],
+    action: 'retype',
+    newSegmentType: newType
+  })
+  seg.segmentType = newType
+  ElMessage.success(`已修改 ${sentenceId} 类型为 ${newType}`)
+}
+
+function startSplit(seg: SegmentDto) {
+  splitTarget.value = seg
+  splitPosition.value = Math.floor(seg.text.length / 2)
+  showSplitDialog.value = true
+}
+
+function confirmSplit() {
+  if (!splitTarget.value || !segmentData.value) return
+  const seg = splitTarget.value
+  const pos = splitPosition.value
+
+  if (pos <= 0 || pos >= seg.text.length) {
+    ElMessage.warning('拆分位置无效')
+    return
+  }
+
+  corrections.value.push({
+    originalSentenceIds: [seg.sentenceId],
+    action: 'split',
+    splitPosition: pos
+  })
+
+  const idx = segmentData.value.segments.findIndex(s => s.sentenceId === seg.sentenceId)
+  if (idx < 0) return
+
+  const part1: SegmentDto = {
+    id: seg.id + '-part1',
+    sentenceId: seg.sentenceId + '-a',
+    segmentType: seg.segmentType,
+    text: seg.text.slice(0, pos),
+    startOffset: seg.startOffset,
+    endOffset: seg.startOffset + pos,
+    pageNumber: seg.pageNumber
+  }
+  const part2: SegmentDto = {
+    id: seg.id + '-part2',
+    sentenceId: seg.sentenceId + '-b',
+    segmentType: seg.segmentType,
+    text: seg.text.slice(pos),
+    startOffset: seg.startOffset + pos,
+    endOffset: seg.endOffset,
+    pageNumber: seg.pageNumber
+  }
+
+  const newSegments = [...segmentData.value.segments]
+  newSegments.splice(idx, 1, part1, part2)
+  segmentData.value = { ...segmentData.value, segments: newSegments, totalCount: newSegments.length }
+  showSplitDialog.value = false
+  ElMessage.success(`已拆分 ${seg.sentenceId}`)
+}
+
+function undoLastCorrection() {
+  if (corrections.value.length === 0) return
+  corrections.value.pop()
+  // Reload segments from server
+  if (segmentData.value) {
+    const docId = segmentData.value.documentId
+    client.getDocumentSegments(docId).then(r => { segmentData.value = r.data })
+  }
+  ElMessage.info('已撤销上一步操作')
+}
+
+function isCorrected(sentenceId: string): boolean {
+  return corrections.value.some(c => c.originalSentenceIds.includes(sentenceId))
+}
+
+async function submitRefinement() {
+  if (!segmentData.value || corrections.value.length === 0) return
+  if (!confirm(`确定要提交 ${corrections.value.length} 条修正并重新拆分文档吗？此操作将替换所有现有分段。`)) return
+
+  refining.value = true
+  try {
+    const response = await client.refineDocumentSegments(segmentData.value.documentId, corrections.value)
+    ElMessage.success(response.data.message || '修正完成')
+    corrections.value = []
+    // Reload segments
+    const refreshed = await client.getDocumentSegments(segmentData.value.documentId)
+    segmentData.value = refreshed.data
+  } catch (error) {
+    handleApiError('修正失败', error)
+  } finally {
+    refining.value = false
+  }
+}
+
+function getSegmentTypeLabel(type: string): string {
+  const map: Record<string, string> = {
+    sentence: 'sentence',
+    concept: 'concept',
+    word_entry: 'word_entry',
+    knowledge_point: 'knowledge_point',
+    question: 'question'
+  }
+  return map[type] || type
+}
 </script>
 
 <template>
@@ -526,6 +728,9 @@ onMounted(async () => {
                     <div class="table-actions">
                       <button class="btn btn-link btn-small" @click="handleViewStatus(doc)">
                         查看状态
+                      </button>
+                      <button class="btn btn-link btn-small" :disabled="doc.status !== 'ready'" @click="openSegmentDialog(doc)">
+                        分段管理
                       </button>
                       <button class="btn btn-link btn-small" @click="handleUpdateMetadata(doc)">
                         更新元数据
@@ -886,6 +1091,120 @@ onMounted(async () => {
             </svg>
             {{ deleting ? '删除中...' : '删除' }}
           </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Segment Management Dialog -->
+    <div v-if="showSegmentDialog" class="dialog-overlay" @click.self="showSegmentDialog = false">
+      <div class="dialog dialog-wide">
+        <div class="dialog-header">
+          分段管理 — {{ segmentDocTitle }}
+        </div>
+        <div class="dialog-body">
+          <div v-if="segmentLoading" class="empty-state">
+            <svg class="spinner empty-spinner" viewBox="0 0 50 50">
+              <circle cx="25" cy="25" r="20" fill="none" stroke="var(--primary-color)" stroke-width="4" stroke-linecap="round" stroke-dasharray="80" stroke-dashoffset="60">
+                <animateTransform attributeName="transform" type="rotate" from="0 25 25" to="360 25 25" dur="1s" repeatCount="indefinite" />
+              </circle>
+            </svg>
+            <div class="empty-state-text">加载中...</div>
+          </div>
+          <div v-else-if="segmentData">
+            <!-- LLM Profile -->
+            <div v-if="segmentData.profile" class="profile-section">
+              <div class="profile-title">LLM 分析结果</div>
+              <div class="profile-grid">
+                <div class="profile-item"><span class="profile-label">学科</span><span>{{ segmentData.profile.subject }}</span></div>
+                <div class="profile-item"><span class="profile-label">文档类型</span><span>{{ segmentData.profile.docType }}</span></div>
+                <div class="profile-item"><span class="profile-label">分段策略</span><span class="tag tag-info">{{ segmentData.profile.segmentStrategy }}</span></div>
+                <div class="profile-item">
+                  <span class="profile-label">结构</span>
+                  <span v-if="segmentData.profile.structure.hasChapters" class="tag tag-success" style="margin-right: 4px">章节</span>
+                  <span v-if="segmentData.profile.structure.hasQuestions" class="tag tag-warning" style="margin-right: 4px">题目</span>
+                  <span v-if="segmentData.profile.structure.hasWordList" class="tag tag-info" style="margin-right: 4px">单词表</span>
+                  <span v-if="segmentData.profile.structure.hasFormulas" class="tag tag-danger">公式</span>
+                  <span v-if="!segmentData.profile.structure.hasChapters && !segmentData.profile.structure.hasQuestions && !segmentData.profile.structure.hasWordList && !segmentData.profile.structure.hasFormulas">—</span>
+                </div>
+              </div>
+            </div>
+            <div v-else class="profile-section">
+              <div class="empty-state" style="padding: 12px">
+                <div class="empty-state-text">该文档无 LLM 分析记录（使用规则切割）</div>
+              </div>
+            </div>
+
+            <!-- Toolbar -->
+            <div class="segment-toolbar">
+              <span class="segment-count">共 {{ segmentData.totalCount }} 条分段</span>
+              <div class="segment-toolbar-actions">
+                <button class="btn btn-secondary btn-small" @click="selectAllSegments">
+                  {{ selectedSegmentIds.size === segmentData.segments.length ? '取消全选' : '全选' }}
+                </button>
+                <button class="btn btn-primary btn-small" :disabled="selectedSegmentIds.size < 2" @click="mergeSelected">
+                  合并选中 ({{ selectedSegmentIds.size }})
+                </button>
+                <button class="btn btn-secondary btn-small" :disabled="corrections.length === 0" @click="undoLastCorrection">
+                  撤销 ({{ corrections.length }})
+                </button>
+                <button class="btn btn-success btn-small" :disabled="corrections.length === 0 || refining" @click="submitRefinement">
+                  {{ refining ? '提交中...' : `提交修正 (${corrections.length})` }}
+                </button>
+              </div>
+            </div>
+
+            <!-- Segment List -->
+            <div class="segment-list">
+              <div v-for="seg in segmentData.segments" :key="seg.sentenceId" class="segment-item" :class="{ selected: selectedSegmentIds.has(seg.sentenceId), corrected: isCorrected(seg.sentenceId) }">
+                <div class="segment-header">
+                  <input type="checkbox" :checked="selectedSegmentIds.has(seg.sentenceId)" @change="toggleSegmentSelect(seg.sentenceId)" />
+                  <span class="segment-id">{{ seg.sentenceId }}</span>
+                  <select :value="seg.segmentType" @change="changeSegmentType(seg.sentenceId, ($event.target as HTMLSelectElement).value)" class="segment-type-select">
+                    <option value="sentence">sentence</option>
+                    <option value="concept">concept</option>
+                    <option value="word_entry">word_entry</option>
+                    <option value="knowledge_point">knowledge_point</option>
+                    <option value="question">question</option>
+                  </select>
+                  <span class="segment-page">P{{ seg.pageNumber }}</span>
+                  <button class="btn btn-link btn-small" @click="startSplit(seg)">拆分</button>
+                </div>
+                <div class="segment-text">{{ seg.text }}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="dialog-footer">
+          <button class="btn btn-secondary btn-small" @click="showSegmentDialog = false">关闭</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Split Dialog -->
+    <div v-if="showSplitDialog" class="dialog-overlay" @click.self="showSplitDialog = false">
+      <div class="dialog dialog-narrow">
+        <div class="dialog-header">拆分 Segment</div>
+        <div class="dialog-body">
+          <div v-if="splitTarget">
+            <div class="split-preview">{{ splitTarget.text }}</div>
+            <div class="form-group">
+              <label>拆分位置（字符偏移）</label>
+              <input type="range" v-model.number="splitPosition" :min="1" :max="splitTarget.text.length - 1" style="width: 100%" />
+              <div style="display: flex; justify-content: space-between; font-size: 12px; color: var(--text-muted)">
+                <span>0</span>
+                <span>{{ splitPosition }}</span>
+                <span>{{ splitTarget.text.length - 1 }}</span>
+              </div>
+            </div>
+            <div class="split-result">
+              <div class="split-part"><span class="split-label">前半部分：</span>{{ splitTarget.text.slice(0, splitPosition) }}</div>
+              <div class="split-part"><span class="split-label">后半部分：</span>{{ splitTarget.text.slice(splitPosition) }}</div>
+            </div>
+          </div>
+        </div>
+        <div class="dialog-footer">
+          <button class="btn btn-secondary btn-small" @click="showSplitDialog = false">取消</button>
+          <button class="btn btn-primary btn-small" @click="confirmSplit">确认拆分</button>
         </div>
       </div>
     </div>

@@ -123,6 +123,51 @@ public class LlmSegmentationService : ILlmSegmentationService
         return ParseSegmentResults(response, text);
     }
 
+    public async Task<DocumentProfile> RefineProfileAsync(
+        string textPreview,
+        DocumentProfile originalProfile,
+        List<SegmentCorrection> corrections,
+        CancellationToken cancellationToken = default)
+    {
+        await InitializeAsync(cancellationToken);
+
+        if (string.IsNullOrWhiteSpace(textPreview) || corrections.Count == 0)
+        {
+            return originalProfile;
+        }
+
+        try
+        {
+            var preview = textPreview.Length > 2000 ? textPreview[..2000] : textPreview;
+            var prompt = BuildRefinementAnalysisPrompt(preview, originalProfile, corrections);
+            var response = await CallLlmAsync(prompt, cancellationToken);
+            return ParseDocumentProfile(response);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "LLM profile refinement failed, returning original profile");
+            return originalProfile;
+        }
+    }
+
+    public async Task<List<SegmentResult>> RefineSegmentTextAsync(
+        string text,
+        DocumentProfile profile,
+        List<SegmentCorrection> corrections,
+        CancellationToken cancellationToken = default)
+    {
+        await InitializeAsync(cancellationToken);
+
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return [];
+        }
+
+        var prompt = BuildRefinementSegmentationPrompt(text, profile, corrections);
+        var response = await CallLlmAsync(prompt, cancellationToken);
+        return ParseSegmentResults(response, text);
+    }
+
     #region Prompt Building
 
     private static string BuildAnalysisPrompt(string textPreview)
@@ -227,6 +272,123 @@ public class LlmSegmentationService : ILlmSegmentationService
             {{text}}
             ---
             """;
+    }
+
+    private static string BuildRefinementAnalysisPrompt(string textPreview, DocumentProfile originalProfile, List<SegmentCorrection> corrections)
+    {
+        var examplesBuilder = new StringBuilder();
+        for (var i = 0; i < corrections.Count; i++)
+        {
+            var c = corrections[i];
+            examplesBuilder.AppendLine($"示例 {i + 1}:");
+            examplesBuilder.AppendLine($"  操作: {c.Action}");
+            examplesBuilder.AppendLine($"  原始 IDs: [{string.Join(", ", c.OriginalSentenceIds)}]");
+            if (c.Action == "merge" && c.NewText != null)
+                examplesBuilder.AppendLine($"  合并后文本: \"{c.NewText}\"");
+            if (c.Action == "split" && c.SplitPosition.HasValue)
+                examplesBuilder.AppendLine($"  拆分位置: {c.SplitPosition}");
+            if (c.NewSegmentType != null)
+                examplesBuilder.AppendLine($"  目标类型: {c.NewSegmentType}");
+            examplesBuilder.AppendLine();
+        }
+
+        return $$"""
+            你是一个文档分析专家。用户对文档的分段结果进行了修正，请根据修正示例重新分析文档的学科、类型和分段策略。
+
+            用户修正示例：
+            {{examplesBuilder}}
+
+            原始分析结果：学科={{originalProfile.Subject}}，类型={{originalProfile.DocType}}，策略={{originalProfile.SegmentStrategy}}
+
+            请根据用户的修正意图，重新分析文档画像。只返回 JSON，不要有其他文字。
+
+            ```json
+            {
+              "subject": "学科",
+              "doc_type": "文档类型",
+              "segment_strategy": "分段策略",
+              "structure": {
+                "has_chapters": true/false,
+                "has_questions": true/false,
+                "has_word_list": true/false,
+                "has_formulas": true/false
+              }
+            }
+            ```
+
+            文本片段：
+            ---
+            {{textPreview}}
+            ---
+            """;
+    }
+
+    private static string BuildRefinementSegmentationPrompt(string text, DocumentProfile profile, List<SegmentCorrection> corrections)
+    {
+        var examplesBuilder = new StringBuilder();
+        for (var i = 0; i < corrections.Count; i++)
+        {
+            var c = corrections[i];
+            examplesBuilder.AppendLine($"示例 {i + 1}:");
+            examplesBuilder.AppendLine($"  操作: {c.Action}");
+            if (c.Action == "merge" && c.NewText != null)
+            {
+                examplesBuilder.AppendLine($"  正确分段: [{{\"text\": \"{EscapeJson(c.NewText)}\", \"segment_type\": \"{c.NewSegmentType ?? profile.SegmentStrategy}\"}}]");
+            }
+            else if (c.Action == "split" && c.SplitPosition.HasValue)
+            {
+                examplesBuilder.AppendLine($"  在位置 {c.SplitPosition} 处拆分为两段");
+            }
+            else if (c.Action == "retype" && c.NewSegmentType != null)
+            {
+                examplesBuilder.AppendLine($"  类型应改为: {c.NewSegmentType}");
+            }
+            examplesBuilder.AppendLine();
+        }
+
+        var strategyDescription = profile.SegmentStrategy switch
+        {
+            SegmentTypes.Sentence => "按完整句子分段。",
+            SegmentTypes.Concept => "按知识点/概念分段。",
+            SegmentTypes.WordEntry => "按词条分段。",
+            SegmentTypes.Question => "按题目分段。",
+            SegmentTypes.KnowledgePoint => "按知识点分段。",
+            _ => "按完整句子分段。"
+        };
+
+        return $$"""
+            你是一个文档分段专家。用户对之前的分段结果进行了修正，请参照修正示例重新分段。
+
+            分段规则：{{strategyDescription}}
+
+            用户修正示例（请严格按照这些示例的风格和类型选择来分段）：
+            {{examplesBuilder}}
+
+            请将以下文本分段，返回 JSON 格式。只返回 JSON，不要有其他文字。
+
+            ```json
+            {
+              "segments": [
+                {"text": "第一段文本", "start_offset": 0, "end_offset": 50, "segment_type": "{{profile.SegmentStrategy}}"}
+              ]
+            }
+            ```
+
+            文本：
+            ---
+            {{text}}
+            ---
+            """;
+    }
+
+    private static string EscapeJson(string text)
+    {
+        return text
+            .Replace("\\", "\\\\")
+            .Replace("\"", "\\\"")
+            .Replace("\n", "\\n")
+            .Replace("\r", "\\r")
+            .Replace("\t", "\\t");
     }
 
     #endregion

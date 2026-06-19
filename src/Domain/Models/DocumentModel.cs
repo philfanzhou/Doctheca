@@ -18,4 +18,5 @@ public class DocumentModel
     public string Status { get; set; } = DocumentStatus.Pending;
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset? UpdatedAt { get; set; }
+    public string? LlmProfileJson { get; set; }
 }

@@ -15,6 +15,7 @@ public class DocRetrievalDbContext : DbContext
     public DbSet<QuestionSegmentEntity> QuestionSegments { get; set; } = null!;
     public DbSet<DocumentOccurrenceEntity> DocumentOccurrences { get; set; } = null!;
     public DbSet<DocumentIngestionJobEntity> DocumentIngestionJobs { get; set; } = null!;
+    public DbSet<DocumentSegmentBackupEntity> DocumentSegmentBackups { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

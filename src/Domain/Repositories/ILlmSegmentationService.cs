@@ -24,4 +24,22 @@ public interface ILlmSegmentationService
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>List of segment results</returns>
     Task<List<SegmentResult>> SegmentTextAsync(string text, DocumentProfile profile, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Re-analyze document profile using user corrections as few-shot examples.
+    /// </summary>
+    Task<DocumentProfile> RefineProfileAsync(
+        string textPreview,
+        DocumentProfile originalProfile,
+        List<SegmentCorrection> corrections,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Re-segment text using user corrections as few-shot examples.
+    /// </summary>
+    Task<List<SegmentResult>> RefineSegmentTextAsync(
+        string text,
+        DocumentProfile profile,
+        List<SegmentCorrection> corrections,
+        CancellationToken cancellationToken = default);
 }

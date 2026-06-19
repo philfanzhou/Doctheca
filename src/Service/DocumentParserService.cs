@@ -89,6 +89,9 @@ public partial class DocumentParserService : IDocumentParserService
             profile = await AnalyzeDocumentAsync(pageTexts, cancellationToken);
         }
 
+        // Store profile in result
+        result.Profile = profile;
+
         // Second pass: segment each page
         foreach (var (pageNumber, pageText) in pageTexts)
         {
@@ -242,6 +245,9 @@ public partial class DocumentParserService : IDocumentParserService
             profile = await AnalyzeDocumentAsync([(1, preview)], cancellationToken);
         }
 
+        // Store profile in result
+        result.Profile = profile;
+
         // Word document treated as single page
         var parsedPage = new ParsedPage { PageNumber = 1 };
         var globalOffset = 0;
@@ -347,6 +353,9 @@ public partial class DocumentParserService : IDocumentParserService
                 profile = await AnalyzeDocumentAsync([(1, preview)], cancellationToken);
             }
         }
+
+        // Store profile in result
+        result.Profile = profile;
 
         // Second pass: segment each slide
         foreach (var (pageNumber, texts) in slideTexts)

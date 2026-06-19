@@ -20,4 +20,9 @@ public interface IDocumentDomainService
     Task CancelIngestionJobAsync(Guid documentId);
     Task<List<DocumentIngestionJobModel>> GetJobsByDocumentIdAsync(Guid documentId);
     Task RetryIngestionAsync(Guid documentId);
+
+    // Segment Refinement
+    Task<DocumentSegmentsDto> GetSegmentsAsync(Guid documentId, CancellationToken ct = default);
+    Task<RefinementResult> RefineSegmentsAsync(Guid documentId, List<SegmentCorrection> corrections, CancellationToken ct = default);
+    Task UpdateDocumentProfileAsync(Guid documentId, string profileJson);
 }

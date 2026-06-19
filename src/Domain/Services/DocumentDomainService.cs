@@ -1,7 +1,12 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using Ruoyu.Study.Common.Oss;
 using Ruoyu.Study.DocRetrieval.Domain.Exceptions;
 using Ruoyu.Study.DocRetrieval.Domain.Models;
 using Ruoyu.Study.DocRetrieval.Domain.Repositories;
@@ -18,6 +23,8 @@ public class DocumentDomainService : IDocumentDomainService
     private readonly IDocumentIngestionJobRepository _jobRepository;
     private readonly IUnitOfWork _unitOfWork;
     private readonly ISearchIndexService? _searchIndexService;
+    private readonly IOssService? _ossService;
+    private readonly ILlmSegmentationService? _llmSegmentation;
     private readonly ILogger<DocumentDomainService> _logger;
 
     public DocumentDomainService(
@@ -29,7 +36,9 @@ public class DocumentDomainService : IDocumentDomainService
         IDocumentIngestionJobRepository jobRepository,
         IUnitOfWork unitOfWork,
         ILogger<DocumentDomainService> logger,
-        ISearchIndexService? searchIndexService = null)
+        ISearchIndexService? searchIndexService = null,
+        IOssService? ossService = null,
+        ILlmSegmentationService? llmSegmentation = null)
     {
         _documentRepository = documentRepository;
         _pageRepository = pageRepository;
@@ -39,6 +48,8 @@ public class DocumentDomainService : IDocumentDomainService
         _jobRepository = jobRepository;
         _unitOfWork = unitOfWork;
         _searchIndexService = searchIndexService;
+        _ossService = ossService;
+        _llmSegmentation = llmSegmentation;
         _logger = logger;
     }
 
@@ -370,4 +381,308 @@ public class DocumentDomainService : IDocumentDomainService
         if (errors.Count > 0)
             throw new DocRetrievalValidationException(string.Join("; ", errors));
     }
+
+    public async Task UpdateDocumentProfileAsync(Guid documentId, string profileJson)
+    {
+        var document = await _documentRepository.GetByIdAsync(documentId);
+        if (document == null) return;
+
+        document.LlmProfileJson = profileJson;
+        document.UpdatedAt = DateTimeOffset.UtcNow;
+        await _documentRepository.UpdateAsync(document);
+        await _unitOfWork.SaveChangesAsync();
+    }
+
+    #region Segment Refinement
+
+    public async Task<DocumentSegmentsDto> GetSegmentsAsync(Guid documentId, CancellationToken ct = default)
+    {
+        var document = await _documentRepository.GetByIdAsync(documentId)
+            ?? throw new KeyNotFoundException($"Document not found: {documentId}");
+
+        var segments = await _segmentRepository.GetByDocumentIdAsync(documentId);
+        var pages = await _pageRepository.GetByDocumentIdAsync(documentId);
+
+        var pageLookup = pages.ToDictionary(p => p.Id, p => p.PageNumber);
+
+        DocumentProfile? profile = null;
+        if (!string.IsNullOrEmpty(document.LlmProfileJson))
+        {
+            try
+            {
+                profile = JsonSerializer.Deserialize<DocumentProfile>(document.LlmProfileJson);
+            }
+            catch (JsonException ex)
+            {
+                _logger.LogWarning(ex, "Failed to deserialize LLM profile for document {DocumentId}", documentId);
+            }
+        }
+
+        var segmentDtos = segments
+            .OrderBy(s => s.SentenceId)
+            .Select(s => new SegmentDto
+            {
+                Id = s.Id,
+                SentenceId = s.SentenceId,
+                SegmentType = s.SegmentType,
+                Text = s.Text,
+                StartOffset = s.StartOffset,
+                EndOffset = s.EndOffset,
+                PageNumber = pageLookup.TryGetValue(s.PageId, out var pn) ? pn : 0
+            })
+            .ToList();
+
+        return new DocumentSegmentsDto
+        {
+            DocumentId = documentId,
+            Title = document.Title,
+            Status = document.Status,
+            Profile = profile,
+            Segments = segmentDtos,
+            TotalCount = segmentDtos.Count
+        };
+    }
+
+    public async Task<RefinementResult> RefineSegmentsAsync(
+        Guid documentId,
+        List<SegmentCorrection> corrections,
+        CancellationToken ct = default)
+    {
+        const int MaxCorrections = 20;
+        if (corrections.Count > MaxCorrections)
+            throw new DocRetrievalValidationException($"Too many corrections: {corrections.Count}, max is {MaxCorrections}");
+
+        if (corrections.Count == 0)
+            throw new DocRetrievalValidationException("Corrections list cannot be empty");
+
+        var document = await _documentRepository.GetByIdAsync(documentId)
+            ?? throw new KeyNotFoundException($"Document not found: {documentId}");
+
+        if (document.Status != DocumentStatus.Ready)
+            throw new DocRetrievalValidationException("Document not ready, refinement not allowed");
+
+        if (_ossService == null || _llmSegmentation == null)
+            throw new DocRetrievalValidationException("LLM segmentation service not configured");
+
+        // 1. Get current segments for backup
+        var currentSegments = await _segmentRepository.GetByDocumentIdAsync(documentId);
+        var pages = await _pageRepository.GetByDocumentIdAsync(documentId);
+        var pageLookup = pages.ToDictionary(p => p.Id, p => p.PageNumber);
+
+        var backupData = new SegmentBackupData
+        {
+            Segments = currentSegments.Select(s => new SegmentDto
+            {
+                Id = s.Id,
+                SentenceId = s.SentenceId,
+                SegmentType = s.SegmentType,
+                Text = s.Text,
+                StartOffset = s.StartOffset,
+                EndOffset = s.EndOffset,
+                PageNumber = pageLookup.TryGetValue(s.PageId, out var pn) ? pn : 0
+            }).ToList(),
+            ProfileJson = document.LlmProfileJson
+        };
+
+        var backupId = Guid.NewGuid();
+
+        // 2. Download file and extract text for LLM
+        using var fileStream = await _ossService.DownloadAsync(document.FilePath);
+        if (fileStream == null)
+            throw new InvalidOperationException($"File not found in OSS: {document.FilePath}");
+
+        // Extract text preview (first 2000 chars)
+        var textPreview = await ExtractTextPreviewAsync(fileStream, document.SourceType, ct);
+
+        // 3. Parse original profile
+        DocumentProfile? originalProfile = null;
+        if (!string.IsNullOrEmpty(document.LlmProfileJson))
+        {
+            try
+            {
+                originalProfile = JsonSerializer.Deserialize<DocumentProfile>(document.LlmProfileJson);
+            }
+            catch (JsonException) { /* ignore */ }
+        }
+        originalProfile ??= new DocumentProfile();
+
+        // 4. Call LLM refinement
+        var newProfile = await _llmSegmentation.RefineProfileAsync(textPreview, originalProfile, corrections, ct);
+        _logger.LogInformation("LLM profile refinement completed: Subject={Subject}, DocType={DocType}, Strategy={Strategy}",
+            newProfile.Subject, newProfile.DocType, newProfile.SegmentStrategy);
+
+        // 5. Re-segment each page's text blocks
+        // We need to re-parse the document to get text blocks, then re-segment with corrections
+        // For simplicity, we'll re-use the existing segments' text and re-segment them
+        // This is a pragmatic approach: take all segment texts as input, re-segment with LLM
+
+        // Group segments by page and reconstruct page text
+        var segmentsByPage = currentSegments
+            .GroupBy(s => s.PageId)
+            .ToDictionary(g => g.Key, g => g.OrderBy(s => s.StartOffset).ToList());
+
+        var allNewSegments = new List<DocumentSegmentModel>();
+        var allNewOccurrences = new List<DocumentOccurrenceModel>();
+
+        foreach (var (pageId, pageSegments) in segmentsByPage)
+        {
+            var pageText = string.Join(" ", pageSegments.Select(s => s.Text));
+            var pageNumber = pageLookup.TryGetValue(pageId, out var pn) ? pn : 0;
+
+            try
+            {
+                var newSegments = await _llmSegmentation.RefineSegmentTextAsync(pageText, newProfile, corrections, ct);
+
+                for (var i = 0; i < newSegments.Count; i++)
+                {
+                    var seg = newSegments[i];
+                    var segmentId = Guid.NewGuid();
+                    var sentenceId = $"p{pageNumber}-b1-s{i + 1}";
+
+                    allNewSegments.Add(new DocumentSegmentModel
+                    {
+                        Id = segmentId,
+                        DocumentId = documentId,
+                        PageId = pageId,
+                        BlockId = $"p{pageNumber}-b1",
+                        SentenceId = sentenceId,
+                        SegmentType = seg.SegmentType,
+                        Text = seg.Text,
+                        StartOffset = seg.StartOffset,
+                        EndOffset = seg.EndOffset,
+                        CreatedAt = DateTimeOffset.UtcNow
+                    });
+
+                    // Generate tokens for occurrences
+                    var tokens = TokenizeForRefinement(seg.Text);
+                    foreach (var token in tokens)
+                    {
+                        allNewOccurrences.Add(new DocumentOccurrenceModel
+                        {
+                            Id = Guid.NewGuid(),
+                            DocumentId = documentId,
+                            SegmentId = segmentId,
+                            TokenText = token.TokenText,
+                            TokenStem = token.TokenStem,
+                            StartOffset = token.StartOffset,
+                            EndOffset = token.EndOffset,
+                            CreatedAt = DateTimeOffset.UtcNow
+                        });
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "LLM refinement failed for page {PageNumber}, keeping original segments", pageNumber);
+                // Keep original segments for this page
+                foreach (var seg in pageSegments)
+                {
+                    allNewSegments.Add(seg);
+                }
+            }
+        }
+
+        // 6. Delete old data
+        await _occurrenceRepository.DeleteByDocumentIdAsync(documentId);
+        await _segmentRepository.DeleteByDocumentIdAsync(documentId);
+
+        // 7. Write new data
+        if (allNewSegments.Count > 0)
+        {
+            await _segmentRepository.AddRangeAsync(allNewSegments);
+        }
+        if (allNewOccurrences.Count > 0)
+        {
+            await _occurrenceRepository.AddRangeAsync(allNewOccurrences);
+        }
+
+        // 8. Update document profile
+        document.LlmProfileJson = JsonSerializer.Serialize(newProfile);
+        document.UpdatedAt = DateTimeOffset.UtcNow;
+        await _documentRepository.UpdateAsync(document);
+
+        // 9. Save backup
+        // Note: We need a repository for backups. For now, save via DbContext directly.
+        // This will be handled by the endpoint or a dedicated service.
+
+        await _unitOfWork.SaveChangesAsync();
+
+        // 10. Rebuild search index
+        if (_searchIndexService != null)
+        {
+            try
+            {
+                await _searchIndexService.DeleteDocumentIndexAsync(documentId);
+                await _searchIndexService.IndexDocumentSegmentsAsync(
+                    documentId, document.Title, document.Subject, document.Grade, document.Year);
+                _logger.LogInformation("Search index rebuilt after refinement: {DocumentId}", documentId);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to rebuild search index after refinement: {DocumentId}", documentId);
+            }
+        }
+
+        _logger.LogInformation("Document refinement completed: {DocumentId}, {SegmentCount} new segments",
+            documentId, allNewSegments.Count);
+
+        return new RefinementResult
+        {
+            DocumentId = documentId,
+            BackupId = backupId,
+            CorrectionCount = corrections.Count,
+            Message = $"Refinement completed, {allNewSegments.Count} new segments created",
+            BackupDataJson = JsonSerializer.Serialize(backupData)
+        };
+    }
+
+    private static async Task<string> ExtractTextPreviewAsync(System.IO.Stream fileStream, string sourceType, CancellationToken ct)
+    {
+        // Simple text extraction for preview purposes
+        // Read first 4096 bytes and try to extract readable text
+        var buffer = new byte[4096];
+        var totalRead = 0;
+        using var ms = new System.IO.MemoryStream();
+        while (totalRead < 4096)
+        {
+            var read = await fileStream.ReadAsync(buffer.AsMemory(totalRead, Math.Min(1024, 4096 - totalRead)), ct);
+            if (read == 0) break;
+            totalRead += read;
+        }
+        fileStream.Position = 0; // Reset for potential re-use
+
+        // For PDF, try to extract text; for others, use raw bytes as approximation
+        var text = Encoding.UTF8.GetString(buffer, 0, totalRead);
+        // Clean up non-printable characters
+        var sb = new StringBuilder();
+        foreach (var c in text)
+        {
+            if (c >= 32 || c == '\n' || c == '\r' || c == '\t')
+                sb.Append(c);
+        }
+        var result = sb.ToString();
+        return result.Length > 2000 ? result[..2000] : result;
+    }
+
+    private static List<ParsedToken> TokenizeForRefinement(string text)
+    {
+        var tokens = new List<ParsedToken>();
+        if (string.IsNullOrWhiteSpace(text)) return tokens;
+
+        var regex = new System.Text.RegularExpressions.Regex(@"[a-zA-Z]+");
+        foreach (System.Text.RegularExpressions.Match match in regex.Matches(text))
+        {
+            var word = match.Value;
+            tokens.Add(new ParsedToken
+            {
+                TokenText = word,
+                TokenStem = word.ToLowerInvariant(), // Simplified stemming for refinement
+                StartOffset = match.Index,
+                EndOffset = match.Index + match.Length
+            });
+        }
+        return tokens;
+    }
+
+    #endregion
 }

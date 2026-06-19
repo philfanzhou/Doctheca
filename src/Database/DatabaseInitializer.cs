@@ -30,6 +30,7 @@ public static class DatabaseInitializer
                     status character varying(20) NOT NULL DEFAULT 'pending',
                     created_at timestamp with time zone NOT NULL,
                     updated_at timestamp with time zone NULL,
+                    llm_profile_json text NULL,
                     CONSTRAINT PK_documents PRIMARY KEY (id)
                 );
                 CREATE UNIQUE INDEX IF NOT EXISTS IX_documents_title ON documents (title);
@@ -128,6 +129,19 @@ public static class DatabaseInitializer
                         FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE
                 );
                 CREATE INDEX IF NOT EXISTS IX_document_ingestion_jobs_status ON document_ingestion_jobs (status);",
+
+            "document_segment_backups" => @"
+                CREATE TABLE IF NOT EXISTS document_segment_backups (
+                    id uuid NOT NULL,
+                    document_id uuid NOT NULL,
+                    backup_data text NOT NULL,
+                    correction_count integer NOT NULL,
+                    created_at timestamp with time zone NOT NULL,
+                    CONSTRAINT PK_document_segment_backups PRIMARY KEY (id),
+                    CONSTRAINT FK_backups_document_document_id
+                        FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE
+                );
+                CREATE INDEX IF NOT EXISTS IX_document_segment_backups_document_id ON document_segment_backups (document_id);",
 
             _ => null
         };
