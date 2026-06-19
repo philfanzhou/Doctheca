@@ -99,5 +99,15 @@ public class DocRetrievalDbContext : DbContext
                 .HasForeignKey(e => e.DocumentId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
+
+        modelBuilder.Entity<DocumentSegmentBackupEntity>(entity =>
+        {
+            entity.HasIndex(e => e.DocumentId);
+
+            entity.HasOne(e => e.Document)
+                .WithMany()
+                .HasForeignKey(e => e.DocumentId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
     }
 }

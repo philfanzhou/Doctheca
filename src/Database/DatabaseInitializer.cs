@@ -1,4 +1,3 @@
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Ruoyu.Study.Common.Database;
 
@@ -9,57 +8,6 @@ public static class DatabaseInitializer
     public static async Task InitializeAsync(DocRetrievalDbContext context, ILoggerFactory loggerFactory)
     {
         await Common.Database.DatabaseInitializer.InitializeAsync(context, loggerFactory, GetTableCreationSql);
-        await EnsureColumnsAsync(context, loggerFactory);
-    }
-
-    private static async Task EnsureColumnsAsync(DocRetrievalDbContext context, ILoggerFactory loggerFactory)
-    {
-        var logger = loggerFactory.CreateLogger("DatabaseInitializer");
-
-        var isPostgreSql = context.Database.ProviderName == "Npgsql.EntityFrameworkCore.PostgreSQL";
-        if (!isPostgreSql) return;
-
-        var columnMigrations = new (string Table, string Column, string Definition)[]
-        {
-            ("documents", "llm_profile_json", "ALTER TABLE documents ADD COLUMN IF NOT EXISTS llm_profile_json text NULL")
-        };
-
-        await context.Database.OpenConnectionAsync();
-        try
-        {
-            foreach (var (table, column, ddl) in columnMigrations)
-            {
-                await using var cmd = context.Database.GetDbConnection().CreateCommand();
-                cmd.CommandText = @"
-                    SELECT EXISTS (
-                        SELECT FROM information_schema.columns
-                        WHERE table_schema = 'public'
-                        AND table_name = @tableName
-                        AND column_name = @columnName
-                    )";
-
-                var tableParam = cmd.CreateParameter();
-                tableParam.ParameterName = "@tableName";
-                tableParam.Value = table;
-                cmd.Parameters.Add(tableParam);
-
-                var columnParam = cmd.CreateParameter();
-                columnParam.ParameterName = "@columnName";
-                columnParam.Value = column;
-                cmd.Parameters.Add(columnParam);
-
-                var exists = (bool)(await cmd.ExecuteScalarAsync())!;
-                if (!exists)
-                {
-                    await context.Database.ExecuteSqlRawAsync(ddl);
-                    logger.LogInformation("Added missing column {Column} to {Table}", column, table);
-                }
-            }
-        }
-        finally
-        {
-            await context.Database.CloseConnectionAsync();
-        }
     }
 
     private static string? GetTableCreationSql(string tableName)
