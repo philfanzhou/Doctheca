@@ -10,12 +10,16 @@
 | 领域服务 | `{Feature}DomainService` | `DocumentDomainService` |
 | 解析器接口 | `I{Feature}ParserService` | `IDocumentParserService` |
 | 解析器实现 | `{Feature}ParserService` | `DocumentParserService` |
+| LLM 分段服务接口 | `I{Feature}Service` | `ILlmSegmentationService` |
+| LLM 分段服务实现 | `{Feature}Service` | `LlmSegmentationService` |
 | 索引服务接口 | `I{Technology}Service` | `ISearchIndexService` |
 | 领域模型 | `{Entity}Model` | `DocumentModel`、`DocumentPageModel` |
 | 解析结果模型 | `Parsed{Entity}` | `ParsedDocument`、`ParsedPage`、`ParsedSegment` |
+| LLM 分段结果模型 | `{Entity}Result` | `SegmentResult` |
+| LLM 文档画像模型 | `{Entity}Profile` | `DocumentProfile` |
 | 数据库实体 | `{Entity}Entity` | `DocumentEntity`、`DocumentIngestionJobEntity` |
 | 仓储接口 | `I{Entity}Repository` | `IDocumentPageRepository` |
-| 配置选项 | `{Technology}Options` | `OpenSearchOptions` |
+| 配置选项 | `{Technology}Options` | `OpenSearchOptions`、`LlmSegmentationOptions` |
 | 自定义异常 | `{Feature}ValidationException` | `DocRetrievalValidationException` |
 
 ### 方法命名
@@ -77,12 +81,16 @@
 | Token 写入完成 | Information | `"Token 写入完成：{DocumentId}，共 {TokenCount} 个 Token"` |
 | 导入任务完成 | Information | `"导入任务完成：{JobId}，共 {SegmentCount} 个片段，{QuestionCount} 道题目"` |
 | 搜索索引创建成功 | Information | `"文档搜索索引已创建：{DocumentId}"` |
+| LLM 文档分析完成 | Information | `"文档分析完成：DocumentId={DocumentId}, Subject={Subject}, DocType={DocType}, Strategy={Strategy}"` |
+| LLM 分段完成 | Information | `"LLM 分段完成：DocumentId={DocumentId}, ChunkCount={ChunkCount}, SegmentCount={SegmentCount}"` |
 | PDF 页文本为空 | Warning | `"PDF 第 {PageNumber} 页文本为空，可能需要 OCR 支持"` |
 | PPT 页文本为空 | Warning | `"PPT 第 {PageNumber} 页文本为空"` |
+| LLM 分段失败回退 | Warning | `"LLM 分段失败，回退到规则切割：DocumentId={DocumentId}, Error={Error}"` |
 | 搜索索引创建失败 | Error | `"创建文档搜索索引失败：{DocumentId}"` |
 | 任务处理失败 | Error | `"导入任务失败：{JobId}"` |
 | FailIngestionJob 失败 | Error | `"标记导入任务失败时出错：{JobId}"` |
 | 轮询出错 | Error | `"导入工作器轮询出错"` |
+| LLM 调用失败 | Error | `"LLM 调用失败：DocumentId={DocumentId}, RetryCount={RetryCount}, Error={Error}"` |
 
 ## 错误消息约定
 
@@ -109,6 +117,9 @@
 | Word 缺少 Body | InvalidOperationException | `"Word 文档缺少 Body"` |
 | PPT 缺少 PresentationPart | InvalidOperationException | `"PPT 文档缺少 PresentationPart"` |
 | OpenSearch 查询失败 | InvalidOperationException | `"OpenSearch 查询失败，状态码：{statusCode}"` |
+| LLM API 调用失败 | HttpRequestException | `"LLM API 调用失败：{provider}，状态码：{statusCode}"` |
+| LLM 返回格式异常 | JsonException | `"LLM 返回格式异常：{response}"` |
+| LLM 配置缺失 | InvalidOperationException | `"LLM 配置缺失：{configKey}"` |
 
 ## 代码风格
 
@@ -259,6 +270,109 @@ public partial class DocumentParserService : IDocumentParserService
 }
 ```
 
+### LLM 分段代码模式
+
+```csharp
+// LLM 服务接口定义
+public interface ILlmSegmentationService
+{
+    Task<DocumentProfile> AnalyzeDocumentAsync(string textPreview, CancellationToken cancellationToken = default);
+    Task<List<SegmentResult>> SegmentTextAsync(string text, DocumentProfile profile, CancellationToken cancellationToken = default);
+}
+
+// LLM 服务实现 - 调用外部 API
+public class LlmSegmentationService : ILlmSegmentationService
+{
+    private readonly HttpClient _httpClient;
+    private readonly LlmSegmentationOptions _options;
+    private readonly ILogger<LlmSegmentationService> _logger;
+
+    public async Task<DocumentProfile> AnalyzeDocumentAsync(string textPreview, CancellationToken cancellationToken)
+    {
+        var prompt = BuildAnalysisPrompt(textPreview);
+        var response = await CallLlmAsync(prompt, cancellationToken);
+        return ParseDocumentProfile(response);
+    }
+
+    public async Task<List<SegmentResult>> SegmentTextAsync(string text, DocumentProfile profile, CancellationToken cancellationToken)
+    {
+        var prompt = BuildSegmentationPrompt(text, profile);
+        var response = await CallLlmAsync(prompt, cancellationToken);
+        return ParseSegmentResults(response);
+    }
+
+    private async Task<string> CallLlmAsync(string prompt, CancellationToken cancellationToken)
+    {
+        // 实现 LLM API 调用，支持重试和超时
+    }
+}
+
+// DocumentParserService 集成 LLM 分段
+public class DocumentParserService : IDocumentParserService
+{
+    private readonly ILlmSegmentationService? _llmSegmentation;
+
+    // 构造函数注入，可选依赖
+    public DocumentParserService(
+        ILogger<DocumentParserService> logger,
+        ILlmSegmentationService? llmSegmentation = null)
+    {
+        _logger = logger;
+        _llmSegmentation = llmSegmentation;
+    }
+
+    private async Task<List<ParsedSegment>> SplitSentencesWithFallbackAsync(
+        string blockText,
+        DocumentProfile? profile,
+        CancellationToken cancellationToken)
+    {
+        // 优先使用 LLM 分段
+        if (_llmSegmentation != null && profile != null)
+        {
+            try
+            {
+                return await SplitSentencesWithLlmAsync(blockText, profile, cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "LLM 分段失败，回退到规则切割");
+            }
+        }
+
+        // 回退到规则切割
+        return SplitSentences(blockText);
+    }
+}
+```
+
+### LLM 配置模式
+
+```csharp
+// 配置选项类
+public class LlmSegmentationOptions
+{
+    public const string SectionName = "LlmSegmentation";
+
+    public string Provider { get; set; } = "openai";  // openai, anthropic, local
+    public string Model { get; set; } = "gpt-4o-mini";
+    public string ApiKey { get; set; } = string.Empty;
+    public string BaseUrl { get; set; } = "https://api.openai.com/v1";
+    public int MaxTokens { get; set; } = 4096;
+    public double Temperature { get; set; } = 0.1;
+    public int ChunkSize { get; set; } = 2500;
+    public int MaxRetries { get; set; } = 3;
+    public int TimeoutSeconds { get; set; } = 60;
+}
+
+// DI 注册
+services.Configure<LlmSegmentationOptions>(
+    configuration.GetSection(LlmSegmentationOptions.SectionName));
+
+// 支持环境变量覆盖
+// LLM_SEGMENTATION__PROVIDER=anthropic
+// LLM_SEGMENTATION__API_KEY=sk-xxx
+```
+
 ### 数据库表命名
 
 - 表名：snake_case 复数形式，如 `document_ingestion_jobs`、`document_occurrences`
@@ -271,5 +385,21 @@ public partial class DocumentParserService : IDocumentParserService
 |------|------|--------|
 | Document | Status | `pending`、`processing`、`ready`、`failed` |
 | DocumentIngestionJob | Status | `pending`、`processing`、`success`、`failed` |
-| DocumentSegment | SegmentType | `sentence` |
+| DocumentSegment | SegmentType | `sentence`、`concept`、`word_entry`、`question`、`knowledge_point` |
 | DocumentOccurrence | — | SegmentId 和 QuestionSegmentId 互斥，一个为 null，另一个非 null |
+
+### LLM 分段策略约定
+
+| 学科 | 文档类型 | 分段策略 | 说明 |
+|------|---------|---------|------|
+| English | 教材 | sentence | 按完整句子分段 |
+| English | 单词表 | word_entry | 每个词条为一个 segment |
+| English | 短语表 | word_entry | 每个短语条目为一个 segment |
+| English | 试卷 | question | 每道题为一个 segment |
+| 语文 | 教材 | sentence | 按完整句子分段 |
+| 数学 | 教材 | concept | 按知识点/公式分段 |
+| 数学 | 试卷 | question | 每道题为一个 segment |
+| 物理 | 教材 | concept | 按概念解释分段 |
+| 化学 | 教材 | concept | 按概念解释分段 |
+| 生物 | 教材 | concept | 按概念解释分段 |
+| * | 知识点过关单 | knowledge_point | 每个知识点条目为一个 segment |

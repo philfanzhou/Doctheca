@@ -9,6 +9,7 @@ using Ruoyu.Study.DocRetrieval.Domain.Repositories;
 using Ruoyu.Study.DocRetrieval.Domain.Services;
 using Ruoyu.Study.DocRetrieval.Service;
 using QuantumZhou.Identity.Client;
+using IHttpClientFactory = System.Net.Http.IHttpClientFactory;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -67,6 +68,26 @@ else
 builder.Services.Configure<OpenSearchOptions>(builder.Configuration.GetSection("OpenSearch"));
 builder.Services.AddSingleton<ISearchIndexService, OpenSearchIndexService>();
 
+// LLM Segmentation Services (optional, falls back to rule-based if not configured)
+var llmSection = builder.Configuration.GetSection(LlmSegmentationOptions.SectionName);
+if (llmSection.Exists() && !string.IsNullOrEmpty(llmSection["ApiKey"]))
+{
+    builder.Services.Configure<LlmSegmentationOptions>(llmSection);
+    builder.Services.AddHttpClient<ILlmSegmentationService, LlmSegmentationService>(client =>
+    {
+        var baseUrl = llmSection["BaseUrl"] ?? "https://api.openai.com/v1";
+        client.BaseAddress = new Uri(baseUrl);
+        var apiKey = llmSection["ApiKey"];
+        if (!string.IsNullOrEmpty(apiKey))
+        {
+            client.DefaultRequestHeaders.Authorization =
+                new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", apiKey);
+        }
+        var timeout = llmSection["TimeoutSeconds"];
+        client.Timeout = TimeSpan.FromSeconds(int.TryParse(timeout, out var t) ? t : 60);
+    });
+}
+
 // Repositories
 builder.Services.AddScoped<IDocumentRepository, DocumentRepository>();
 builder.Services.AddScoped<IDocumentPageRepository, DocumentPageRepository>();
@@ -79,7 +100,12 @@ builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
 // Domain Services
 builder.Services.AddScoped<IDocumentDomainService, DocumentDomainService>();
 builder.Services.AddScoped<ISearchDomainService, SearchDomainService>();
-builder.Services.AddScoped<IDocumentParserService, DocumentParserService>();
+builder.Services.AddScoped<IDocumentParserService>(sp =>
+{
+    var logger = sp.GetRequiredService<ILogger<DocumentParserService>>();
+    var llmSegmentation = sp.GetService<ILlmSegmentationService>(); // Optional
+    return new DocumentParserService(logger, llmSegmentation);
+});
 
 // Background Workers
 builder.Services.AddHostedService<IngestionWorker>();

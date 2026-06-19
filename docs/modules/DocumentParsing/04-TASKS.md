@@ -153,6 +153,73 @@
     "requirement": "REQ-PARSE-01~09",
     "files": ["test/Ruoyu.Study.DocRetrieval.Tests/IngestionIntegrationTests.cs [当前无测试覆盖]"],
     "depends_on": ["TASK-013", "TASK-014", "TASK-015"]
+  },
+  {
+    "id": "TASK-017",
+    "title": "LLM 分段服务接口与模型定义",
+    "description": "定义 ILlmSegmentationService 接口、DocumentProfile 和 SegmentResult 模型",
+    "status": "pending",
+    "priority": "P0",
+    "requirement": "REQ-PARSE-10",
+    "files": [
+      "src/Domain/Repositories/ILlmSegmentationService.cs",
+      "src/Domain/Models/DocumentProfile.cs",
+      "src/Domain/Models/SegmentResult.cs"
+    ],
+    "depends_on": []
+  },
+  {
+    "id": "TASK-018",
+    "title": "LLM 分段服务实现",
+    "description": "实现 LlmSegmentationService，包含文档分析（AnalyzeDocumentAsync）和智能分段（SegmentTextAsync），支持 OpenAI/Anthropic/本地模型",
+    "status": "pending",
+    "priority": "P0",
+    "requirement": "REQ-PARSE-10",
+    "files": ["src/Service/LlmSegmentationService.cs"],
+    "depends_on": ["TASK-017"]
+  },
+  {
+    "id": "TASK-019",
+    "title": "DocumentParserService 集成 LLM 分段",
+    "description": "修改 DocumentParserService，注入 ILlmSegmentationService，在 ParseAsync 中调用 LLM 分段，失败时回退到现有规则切割",
+    "status": "pending",
+    "priority": "P0",
+    "requirement": "REQ-PARSE-10",
+    "files": ["src/Service/DocumentParserService.cs"],
+    "depends_on": ["TASK-018", "TASK-005"]
+  },
+  {
+    "id": "TASK-020",
+    "title": "LLM 分段配置支持",
+    "description": "添加 LlmSegmentation 配置项（Provider/Model/ApiKey/BaseUrl 等），支持环境变量覆盖",
+    "status": "pending",
+    "priority": "P1",
+    "requirement": "REQ-PARSE-11",
+    "files": [
+      "src/Host/Program.cs",
+      "appsettings.json"
+    ],
+    "depends_on": ["TASK-018"]
+  },
+  {
+    "id": "TASK-021",
+    "title": "LLM 分段单元测试",
+    "description": "测试 LlmSegmentationService 的文档分析、智能分段、错误处理和回退机制",
+    "status": "pending",
+    "priority": "P0",
+    "requirement": "REQ-PARSE-10",
+    "files": ["test/Ruoyu.Study.DocRetrieval.Tests/LlmSegmentationServiceTests.cs"],
+    "depends_on": ["TASK-018"]
+  },
+  {
+    "id": "TASK-022",
+    "title": "DocumentParserService LLM 集成测试",
+    "description": "测试 ParseAsync 调用 LLM 分段、失败回退、SegmentType 正确设置",
+    "status": "pending",
+    "priority": "P0",
+    "requirement": "REQ-PARSE-10",
+    "files": ["test/Ruoyu.Study.DocRetrieval.Tests/DocumentParserServiceLlmTests.cs"],
+    "depends_on": ["TASK-019", "TASK-021"]
   }
 ]
 ```
@@ -210,8 +277,16 @@ TASK-001 (IngestionWorker 轮询)
 TASK-002 (任务状态管理)
 │
 TASK-003 (解析器接口) ─── TASK-005 (解析器实现)
+│                         │
+TASK-004 (领域模型) ──────┘
 │
-TASK-004 (领域模型) ─── TASK-005 (解析器实现)
+TASK-017 (LLM 接口与模型) ─── TASK-018 (LLM 分段服务实现)
+│                              │
+│                              ├── TASK-019 (Parser 集成 LLM) ─── TASK-022 (集成测试)
+│                              │
+│                              └── TASK-020 (配置支持)
+│
+│                              TASK-018 ─── TASK-021 (LLM 单元测试)
 
 TASK-001 + TASK-002 ─── TASK-012 (错误处理)
 
@@ -225,14 +300,16 @@ TASK-013 + TASK-014 + TASK-015 ─── TASK-016 (集成测试)
 
 ```
 TASK-003 → TASK-004 → TASK-005 → TASK-006 → TASK-007 → TASK-008 → TASK-009 → TASK-010/011
+TASK-017 → TASK-018 → TASK-019 → TASK-022
 ```
 
 ### 可并行的任务
 
 | 并行组 | 任务 |
 |--------|------|
-| 组 1 | TASK-001, TASK-002, TASK-003, TASK-004 |
-| 组 2 | TASK-005, TASK-006（TASK-006 仅依赖 TASK-001 + TASK-004） |
-| 组 3 | TASK-007, TASK-008（均依赖 TASK-006，可并行） |
-| 组 4 | TASK-010（依赖 TASK-009） |
-| 组 5 | TASK-013, TASK-014, TASK-015（测试任务可并行） |
+| 组 1 | TASK-001, TASK-002, TASK-003, TASK-004, TASK-017 |
+| 组 2 | TASK-005, TASK-006（TASK-006 仅依赖 TASK-001 + TASK-004）, TASK-018（依赖 TASK-017） |
+| 组 3 | TASK-007, TASK-008（均依赖 TASK-006，可并行）, TASK-020（依赖 TASK-018） |
+| 组 4 | TASK-010（依赖 TASK-009）, TASK-019（依赖 TASK-018 + TASK-005） |
+| 组 5 | TASK-013, TASK-014, TASK-015, TASK-021（测试任务可并行） |
+| 组 6 | TASK-016, TASK-022（集成测试可并行） |

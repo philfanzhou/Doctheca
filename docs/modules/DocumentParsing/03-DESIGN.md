@@ -7,6 +7,7 @@ src/
 ├── Service/
 │   ├── IngestionWorker.cs              # 后台工作器，轮询 + 编排
 │   ├── DocumentParserService.cs        # 解析器实现（PDF/Word/PPT）
+│   ├── LlmSegmentationService.cs      # LLM 智能分段服务
 │   ├── OpenSearchIndexService.cs       # OpenSearch 搜索索引服务
 ├── Domain/
 │   ├── Models/
@@ -26,9 +27,12 @@ src/
 │   │   ├── SegmentTypes.cs               # 片段类型常量
 │   │   ├── SourceTypes.cs                # 来源类型常量
 │   │   ├── SearchMatchType.cs            # 搜索匹配类型常量
-│   │   └── SearchConfig.cs              # 搜索配置模型
+│   │   ├── SearchConfig.cs              # 搜索配置模型
+│   │   ├── DocumentProfile.cs           # LLM 文档画像模型
+│   │   └── SegmentResult.cs             # LLM 分段结果模型
 │   ├── Repositories/
 │   │   ├── IDocumentParserService.cs     # 解析器接口
+│   │   ├── ILlmSegmentationService.cs   # LLM 分段服务接口
 │   │   ├── ISearchIndexService.cs        # 搜索索引接口
 │   │   ├── IDocumentRepository.cs        # 文档仓储接口
 │   │   ├── IDocumentPageRepository.cs    # 文档页面仓储接口
@@ -261,6 +265,13 @@ ParsedToken (q)    → DocumentOccurrenceModel
 │  │  │         document.SourceType, stoppingToken)                  │     │
 │  │  │     parsedDocument.Pages.Count == 0 → LogWarning "解析结果为空" │  │
 │  │  │                                                              │     │
+│  │  │     注：ParseAsync 内部流程（详见 07-LLM-SEGMENTATION.md）：  │  │
+│  │  │     4a. 提取原始文本（PDF/Word/PPT）                         │  │
+│  │  │     4b. 合并文本块（MergeTextIntoBlocks）                    │  │
+│  │  │     4c. LLM 文档分析 → DocumentProfile（学科+类型+策略）     │  │
+│  │  │     4d. LLM 智能分段 → List<SegmentResult>                  │  │
+│  │  │     4e. 构建 ParsedSegment + Tokenize                       │  │
+│  │  │                                                              │     │
 │  │  │  ⑤ 写入 pages                                               │     │
 │  │  │     pageModels = parsedDocument.Pages → DocumentPageModel[]  │     │
 │  │  │     pageRepository.AddRangeAsync(pageModels)                 │     │
@@ -354,6 +365,9 @@ ExecuteAsync
 |------|---------|------|
 | PdfPig | UglyToad.PdfPig | PDF 文本提取 |
 | OpenXml SDK | DocumentFormat.OpenXml | Word/PPT 文本提取 |
+| LLM 分段服务 | - | 智能文档分段（替代规则切割） |
+
+> **注意**：LLM 分段服务的设计详见 [07-LLM-SEGMENTATION.md](./07-LLM-SEGMENTATION.md)
 
 ### 索引服务外部依赖
 

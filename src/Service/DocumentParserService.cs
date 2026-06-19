@@ -13,11 +13,13 @@ using DocumentFormat.OpenXml.Presentation;
 namespace Ruoyu.Study.DocRetrieval.Service;
 
 /// <summary>
-/// Document parsing service implementation, supports PDF, Word, PPT
+/// Document parsing service implementation, supports PDF, Word, PPT.
+/// Uses LLM for intelligent segmentation when available, falls back to rule-based splitting.
 /// </summary>
 public partial class DocumentParserService : IDocumentParserService
 {
     private readonly ILogger<DocumentParserService> _logger;
+    private readonly ILlmSegmentationService? _llmSegmentation;
 
     // Abbreviation list, used to exclude false positives in sentence boundary detection
     private static readonly HashSet<string> Abbreviations =
@@ -33,9 +35,12 @@ public partial class DocumentParserService : IDocumentParserService
     [GeneratedRegex(@"^\s*([A-Da-d])\s*[.、．)\]】]", RegexOptions.Compiled)]
     private static partial Regex OptionRegex();
 
-    public DocumentParserService(ILogger<DocumentParserService> logger)
+    public DocumentParserService(
+        ILogger<DocumentParserService> logger,
+        ILlmSegmentationService? llmSegmentation = null)
     {
         _logger = logger;
+        _llmSegmentation = llmSegmentation;
     }
 
     public async Task<ParsedDocument> ParseAsync(Stream fileStream, string sourceType, CancellationToken cancellationToken = default)
@@ -53,58 +58,81 @@ public partial class DocumentParserService : IDocumentParserService
 
     #region PDF Parsing
 
-    private Task<ParsedDocument> ParsePdfAsync(Stream fileStream, CancellationToken cancellationToken)
+    private async Task<ParsedDocument> ParsePdfAsync(Stream fileStream, CancellationToken cancellationToken)
     {
         var result = new ParsedDocument();
 
+        // First pass: extract all page texts
+        var pageTexts = new List<(int PageNumber, string Text)>();
         using var document = PdfDocument.Open(fileStream);
 
-        var pageNumber = 0;
         foreach (var page in document.GetPages())
         {
             cancellationToken.ThrowIfCancellationRequested();
-            pageNumber++;
-
-            var parsedPage = new ParsedPage { PageNumber = pageNumber };
-
+            var pageNumber = pageTexts.Count + 1;
             var pageText = page.Text;
 
             if (string.IsNullOrWhiteSpace(pageText))
             {
                 _logger.LogWarning("PDF page {PageNumber} has no text, OCR support may be needed", pageNumber);
+                pageTexts.Add((pageNumber, string.Empty));
+                continue;
+            }
+
+            pageTexts.Add((pageNumber, OcrPostProcess(pageText)));
+        }
+
+        // LLM analysis: determine document profile from first non-empty pages
+        DocumentProfile? profile = null;
+        if (_llmSegmentation != null)
+        {
+            profile = await AnalyzeDocumentAsync(pageTexts, cancellationToken);
+        }
+
+        // Second pass: segment each page
+        foreach (var (pageNumber, pageText) in pageTexts)
+        {
+            var parsedPage = new ParsedPage { PageNumber = pageNumber };
+
+            if (string.IsNullOrWhiteSpace(pageText))
+            {
                 result.Pages.Add(parsedPage);
                 continue;
             }
 
-            // OCR post-processing: merge hyphens, remove extra whitespace, fix common OCR errors
-            pageText = OcrPostProcess(pageText);
-
-            // Split by newlines, merge consecutive non-empty lines into blocks (paragraphs)
             var blocks = MergeTextIntoBlocks(pageText);
-
-            // Perform sentence boundary detection and question boundary detection for each block
             var globalOffset = 0;
+
             for (var blockIndex = 0; blockIndex < blocks.Count; blockIndex++)
             {
                 var blockText = blocks[blockIndex];
                 var blockId = $"p{pageNumber}-b{blockIndex + 1}";
 
-                // Sentence splitting
-                var sentences = SplitSentences(blockText);
-                for (var sentIndex = 0; sentIndex < sentences.Count; sentIndex++)
+                // Sentence splitting with LLM fallback
+                var segments = await SplitSentencesWithFallbackAsync(blockText, profile, cancellationToken);
+                for (var sentIndex = 0; sentIndex < segments.Count; sentIndex++)
                 {
-                    var sentenceText = sentences[sentIndex];
+                    var seg = segments[sentIndex];
                     parsedPage.Segments.Add(new ParsedSegment
                     {
                         BlockId = blockId,
                         SentenceId = $"{blockId}-s{sentIndex + 1}",
-                        SegmentType = SegmentTypes.Sentence,
-                        Text = sentenceText,
-                        StartOffset = globalOffset,
-                        EndOffset = globalOffset + sentenceText.Length,
-                        Tokens = Tokenize(sentenceText)
+                        SegmentType = seg.SegmentType,
+                        Text = seg.Text,
+                        StartOffset = globalOffset + seg.StartOffset,
+                        EndOffset = globalOffset + seg.EndOffset,
+                        Tokens = Tokenize(seg.Text)
                     });
-                    globalOffset += sentenceText.Length;
+                }
+
+                // Update globalOffset based on last segment
+                if (segments.Count > 0)
+                {
+                    globalOffset += segments[^1].EndOffset;
+                }
+                else
+                {
+                    globalOffset += blockText.Length;
                 }
 
                 // Question boundary detection
@@ -115,7 +143,7 @@ public partial class DocumentParserService : IDocumentParserService
             result.Pages.Add(parsedPage);
         }
 
-        return Task.FromResult(result);
+        return result;
     }
 
     /// <summary>
@@ -174,8 +202,7 @@ public partial class DocumentParserService : IDocumentParserService
 
         var paragraphs = body.Elements<Paragraph>().ToList();
 
-        // Word document treated as single page
-        var parsedPage = new ParsedPage { PageNumber = 1 };
+        // Extract all blocks from paragraphs
         var blocks = new List<string>();
         var currentBlock = new StringBuilder();
 
@@ -207,28 +234,46 @@ public partial class DocumentParserService : IDocumentParserService
             blocks.Add(currentBlock.ToString());
         }
 
-        // Perform sentence boundary detection and question boundary detection for each block
+        // LLM analysis
+        DocumentProfile? profile = null;
+        if (_llmSegmentation != null && blocks.Count > 0)
+        {
+            var preview = string.Join("\n\n", blocks.Take(3));
+            profile = await AnalyzeDocumentAsync([(1, preview)], cancellationToken);
+        }
+
+        // Word document treated as single page
+        var parsedPage = new ParsedPage { PageNumber = 1 };
         var globalOffset = 0;
+
         for (var blockIndex = 0; blockIndex < blocks.Count; blockIndex++)
         {
             var blockText = OcrPostProcess(blocks[blockIndex]);
             var blockId = $"p1-b{blockIndex + 1}";
 
-            var sentences = SplitSentences(blockText);
-            for (var sentIndex = 0; sentIndex < sentences.Count; sentIndex++)
+            var segments = await SplitSentencesWithFallbackAsync(blockText, profile, cancellationToken);
+            for (var sentIndex = 0; sentIndex < segments.Count; sentIndex++)
             {
-                var sentenceText = sentences[sentIndex];
+                var seg = segments[sentIndex];
                 parsedPage.Segments.Add(new ParsedSegment
                 {
                     BlockId = blockId,
                     SentenceId = $"{blockId}-s{sentIndex + 1}",
-                    SegmentType = SegmentTypes.Sentence,
-                    Text = sentenceText,
-                    StartOffset = globalOffset,
-                    EndOffset = globalOffset + sentenceText.Length,
-                    Tokens = Tokenize(sentenceText)
+                    SegmentType = seg.SegmentType,
+                    Text = seg.Text,
+                    StartOffset = globalOffset + seg.StartOffset,
+                    EndOffset = globalOffset + seg.EndOffset,
+                    Tokens = Tokenize(seg.Text)
                 });
-                globalOffset += sentenceText.Length;
+            }
+
+            if (segments.Count > 0)
+            {
+                globalOffset += segments[^1].EndOffset;
+            }
+            else
+            {
+                globalOffset += blockText.Length;
             }
 
             var questions = ExtractQuestions(blockText, blockId, ref globalOffset);
@@ -236,7 +281,7 @@ public partial class DocumentParserService : IDocumentParserService
         }
 
         result.Pages.Add(parsedPage);
-        return await Task.FromResult(result);
+        return result;
     }
 
     #endregion
@@ -253,13 +298,12 @@ public partial class DocumentParserService : IDocumentParserService
 
         var slideParts = presentationPart.SlideParts.ToList();
 
-        for (var slideIndex = 0; slideIndex < slideParts.Count; slideIndex++)
+        // First pass: extract all slide texts
+        var slideTexts = new List<(int PageNumber, List<string> Blocks)>();
+        foreach (var slidePart in slideParts)
         {
             cancellationToken.ThrowIfCancellationRequested();
-
-            var slidePart = slideParts[slideIndex];
-            var pageNumber = slideIndex + 1;
-            var parsedPage = new ParsedPage { PageNumber = pageNumber };
+            var pageNumber = slideTexts.Count + 1;
 
             var texts = new List<string>();
             var shapes = slidePart.Slide.CommonSlideData?.ShapeTree?.Elements<DocumentFormat.OpenXml.Presentation.Shape>();
@@ -285,32 +329,65 @@ public partial class DocumentParserService : IDocumentParserService
             if (texts.Count == 0)
             {
                 _logger.LogWarning("PPT page {PageNumber} has no text", pageNumber);
+            }
+
+            slideTexts.Add((pageNumber, texts));
+        }
+
+        // LLM analysis
+        DocumentProfile? profile = null;
+        if (_llmSegmentation != null)
+        {
+            var preview = string.Join("\n\n", slideTexts
+                .Where(s => s.Blocks.Count > 0)
+                .Take(3)
+                .SelectMany(s => s.Blocks));
+            if (preview.Length > 0)
+            {
+                profile = await AnalyzeDocumentAsync([(1, preview)], cancellationToken);
+            }
+        }
+
+        // Second pass: segment each slide
+        foreach (var (pageNumber, texts) in slideTexts)
+        {
+            var parsedPage = new ParsedPage { PageNumber = pageNumber };
+
+            if (texts.Count == 0)
+            {
                 result.Pages.Add(parsedPage);
                 continue;
             }
 
-            // Each text box treated as a block
             var globalOffset = 0;
             for (var blockIndex = 0; blockIndex < texts.Count; blockIndex++)
             {
                 var blockText = OcrPostProcess(texts[blockIndex]);
                 var blockId = $"p{pageNumber}-b{blockIndex + 1}";
 
-                var sentences = SplitSentences(blockText);
-                for (var sentIndex = 0; sentIndex < sentences.Count; sentIndex++)
+                var segments = await SplitSentencesWithFallbackAsync(blockText, profile, cancellationToken);
+                for (var sentIndex = 0; sentIndex < segments.Count; sentIndex++)
                 {
-                    var sentenceText = sentences[sentIndex];
+                    var seg = segments[sentIndex];
                     parsedPage.Segments.Add(new ParsedSegment
                     {
                         BlockId = blockId,
                         SentenceId = $"{blockId}-s{sentIndex + 1}",
-                        SegmentType = SegmentTypes.Sentence,
-                        Text = sentenceText,
-                        StartOffset = globalOffset,
-                        EndOffset = globalOffset + sentenceText.Length,
-                        Tokens = Tokenize(sentenceText)
+                        SegmentType = seg.SegmentType,
+                        Text = seg.Text,
+                        StartOffset = globalOffset + seg.StartOffset,
+                        EndOffset = globalOffset + seg.EndOffset,
+                        Tokens = Tokenize(seg.Text)
                     });
-                    globalOffset += sentenceText.Length;
+                }
+
+                if (segments.Count > 0)
+                {
+                    globalOffset += segments[^1].EndOffset;
+                }
+                else
+                {
+                    globalOffset += blockText.Length;
                 }
 
                 var questions = ExtractQuestions(blockText, blockId, ref globalOffset);
@@ -320,7 +397,99 @@ public partial class DocumentParserService : IDocumentParserService
             result.Pages.Add(parsedPage);
         }
 
-        return await Task.FromResult(result);
+        return result;
+    }
+
+    #endregion
+
+    #region LLM Segmentation Helpers
+
+    /// <summary>
+    /// Analyze document using LLM to determine subject, type, and segmentation strategy.
+    /// Falls back to default profile on failure.
+    /// </summary>
+    private async Task<DocumentProfile> AnalyzeDocumentAsync(
+        List<(int PageNumber, string Text)> pageTexts,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            // Build preview from first non-empty pages (up to 2000 chars)
+            var previewBuilder = new StringBuilder();
+            foreach (var (_, text) in pageTexts)
+            {
+                if (string.IsNullOrWhiteSpace(text)) continue;
+                if (previewBuilder.Length > 0) previewBuilder.Append("\n\n");
+                previewBuilder.Append(text);
+                if (previewBuilder.Length >= 2000) break;
+            }
+
+            var preview = previewBuilder.ToString();
+            if (preview.Length > 2000)
+                preview = preview[..2000];
+
+            var profile = await _llmSegmentation!.AnalyzeDocumentAsync(preview, cancellationToken);
+            _logger.LogInformation("Document analysis completed: Subject={Subject}, DocType={DocType}, Strategy={Strategy}",
+                profile.Subject, profile.DocType, profile.SegmentStrategy);
+            return profile;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "LLM document analysis failed, using default profile");
+            return new DocumentProfile();
+        }
+    }
+
+    /// <summary>
+    /// Split text into segments using LLM, with fallback to rule-based splitting.
+    /// </summary>
+    private async Task<List<SegmentWithOffset>> SplitSentencesWithFallbackAsync(
+        string blockText,
+        DocumentProfile? profile,
+        CancellationToken cancellationToken)
+    {
+        // Try LLM segmentation if available and profile is set
+        if (_llmSegmentation != null && profile != null)
+        {
+            try
+            {
+                var llmSegments = await _llmSegmentation.SegmentTextAsync(blockText, profile, cancellationToken);
+                if (llmSegments.Count > 0)
+                {
+                    return llmSegments.Select(s => new SegmentWithOffset
+                    {
+                        Text = s.Text,
+                        StartOffset = s.StartOffset,
+                        EndOffset = s.EndOffset,
+                        SegmentType = s.SegmentType
+                    }).ToList();
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "LLM segmentation failed, falling back to rule-based splitting");
+            }
+        }
+
+        // Fallback to rule-based splitting
+        return SplitSentences(blockText).Select((text, i) => new SegmentWithOffset
+        {
+            Text = text,
+            StartOffset = 0, // Will be recalculated by caller
+            EndOffset = text.Length,
+            SegmentType = SegmentTypes.Sentence
+        }).ToList();
+    }
+
+    /// <summary>
+    /// Internal record for segment with offset information
+    /// </summary>
+    private record SegmentWithOffset
+    {
+        public string Text { get; init; } = string.Empty;
+        public int StartOffset { get; init; }
+        public int EndOffset { get; init; }
+        public string SegmentType { get; init; } = SegmentTypes.Sentence;
     }
 
     #endregion

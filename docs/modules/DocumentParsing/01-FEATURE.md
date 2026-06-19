@@ -73,3 +73,4 @@ DocumentParsing 是文档检索服务的核心后台处理模块，负责将用�
 | [04-TASKS.md](./04-TASKS.md) | JSON 任务列表、命令速查、依赖图 |
 | [05-TESTS.md](./05-TESTS.md) | 单元/集成/边界测试表、骨架代码 |
 | [06-CONVENTIONS.md](./06-CONVENTIONS.md) | 命名、日志、错误消息、代码风格 |
+| [07-LLM-SEGMENTATION.md](./07-LLM-SEGMENTATION.md) | LLM 智能文档分段设计（替代规则切割） |

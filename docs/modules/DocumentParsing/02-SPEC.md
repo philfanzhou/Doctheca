@@ -240,6 +240,94 @@ Scenario: 非 failed 状态不可重试
 
 ---
 
+### REQ-PARSE-10：LLM 智能文档分段
+
+**优先级**: P0 | **状态**: 待实现
+
+使用 LLM 替代规则切割，实现基于文档类型和学科的智能分段。
+
+- 两阶段处理：
+  1. 阶段一：文档分析（1 次 LLM 调用）→ 识别学科、文档类型、分段策略
+  2. 阶段二：智能分段（N 次 LLM 调用，按分块处理）→ 基于文档画像分段
+- 支持的学科：English、语文、数学、物理、化学、生物、其他
+- 支持的文档类型：教材、知识点过关单、单词表、短语表、试卷、其他
+- 分段策略：sentence（按句子）、concept（按概念）、word_entry（按词条）、question（按题目）、knowledge_point（按知识点）
+- 分块大小：2000-3000 字
+- LLM 调用失败时回退到现有规则切割
+
+**验收场景**:
+```gherkin
+Scenario: English 教材按句子分段
+  Given 文档学科 = "English"，文档类型 = "教材"
+  When LLM 分析完成
+  Then 分段策略 = "sentence"
+  And 每个 segment 是一个完整的英语句子
+
+Scenario: 数学教材按概念分段
+  Given 文档学科 = "数学"，文档类型 = "教材"
+  When LLM 分析完成
+  Then 分段策略 = "concept"
+  And 每个 segment 包含一个完整的数学概念或公式
+
+Scenario: 单词表按词条分段
+  Given 文档学科 = "English"，文档类型 = "单词表"
+  When LLM 分析完成
+  Then 分段策略 = "word_entry"
+  And 每个 segment 包含一个完整的词条（单词+释义+例句）
+
+Scenario: 试卷按题目分段
+  Given 文档学科 = "数学"，文档类型 = "试卷"
+  When LLM 分析完成
+  Then 分段策略 = "question"
+  And 每个 segment 包含一道完整的题目（题干+选项）
+
+Scenario: LLM 调用失败回退到规则切割
+  Given LLM API 调用超时或返回格式异常
+  When 分段流程执行
+  Then 回退到现有 SplitSentences 规则切割
+  And 记录 LogWarning 日志
+```
+
+---
+
+### REQ-PARSE-11：LLM 分段配置
+
+**优先级**: P1 | **状态**: 待实现
+
+LLM 分段服务支持配置化，可通过配置文件或环境变量调整。
+
+- 配置项：
+  - `LlmSegmentation.Provider`：LLM 提供商（openai/anthropic/local）
+  - `LlmSegmentation.Model`：模型名称（gpt-4o-mini/claude-haiku/local-model）
+  - `LlmSegmentation.ApiKey`：API 密钥
+  - `LlmSegmentation.BaseUrl`：API 基础 URL
+  - `LlmSegmentation.MaxTokens`：最大 token 数
+  - `LlmSegmentation.Temperature`：温度参数
+  - `LlmSegmentation.ChunkSize`：分块大小
+  - `LlmSegmentation.MaxRetries`：最大重试次数
+  - `LlmSegmentation.TimeoutSeconds`：超时时间
+- 支持通过环境变量覆盖配置
+
+**验收场景**:
+```gherkin
+Scenario: 通过配置文件设置 LLM 参数
+  Given appsettings.json 中配置了 LlmSegmentation.Provider = "openai"
+  When 服务启动
+  Then LlmSegmentationService 使用 openai 提供商
+
+Scenario: 通过环境变量覆盖配置
+  Given 环境变量 LLM_SEGMENTATION__PROVIDER = "anthropic"
+  When 服务启动
+  Then LlmSegmentationService 使用 anthropic 提供商
+
+Scenario: 配置缺失时使用默认值
+  Given LlmSegmentation.Provider 未配置
+  When 服务启动
+  Then LlmSegmentationService 使用默认值（openai）
+```
+
+---
+
 ### REQ-PARSE-08b：手动取消任务
 
 **优先级**: P1 | **状态**: 待实现

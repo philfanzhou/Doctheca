@@ -67,6 +67,35 @@
 | BT-05 | 超大文档（100+ 页） | 非功能需求 | 100 页 PDF | 解析成功，所有映射正确 |
 | BT-06 | 取消令牌在解析中触发 | REQ-PARSE-01 | 解析过程中取消 | 抛出 OperationCanceledException |
 
+## LLM 分段测试
+
+### LlmSegmentationService 测试
+
+| # | 测试用例 | 覆盖需求 | 前置条件 | 预期结果 |
+|---|---------|---------|---------|---------|
+| UT-LLM-01 | 文档分析 - English 教材 | REQ-PARSE-10 | 输入 English 教材文本 | subject=English, docType=教材, strategy=sentence |
+| UT-LLM-02 | 文档分析 - 数学试卷 | REQ-PARSE-10 | 输入数学试卷文本 | subject=数学, docType=试卷, strategy=question |
+| UT-LLM-03 | 文档分析 - 单词表 | REQ-PARSE-10 | 输入单词表文本 | subject=English, docType=单词表, strategy=word_entry |
+| UT-LLM-04 | 文档分析 - 知识点过关单 | REQ-PARSE-10 | 输入知识点过关单文本 | subject=数学, docType=知识点过关单, strategy=knowledge_point |
+| UT-LLM-05 | 智能分段 - 完整句子 | REQ-PARSE-10 | English 教材文本 + sentence 策略 | 每个 segment 是完整句子，不在句子中间断开 |
+| UT-LLM-06 | 智能分段 - 数学公式 | REQ-PARSE-10 | 数学教材文本 + concept 策略 | 公式保持完整，不被拆断 |
+| UT-LLM-07 | 智能分段 - 单词表词条 | REQ-PARSE-10 | 单词表文本 + word_entry 策略 | 每个词条（单词+释义+例句）为一个 segment |
+| UT-LLM-08 | 智能分段 - 试卷题目 | REQ-PARSE-10 | 试卷文本 + question 策略 | 每道题（题干+选项）为一个 segment |
+| UT-LLM-09 | LLM 调用超时回退 | REQ-PARSE-10 | LLM API 超时 | 回退到规则切割，记录 LogWarning |
+| UT-LLM-10 | LLM 返回格式异常回退 | REQ-PARSE-10 | LLM 返回非 JSON 格式 | 重试后回退到规则切割 |
+| UT-LLM-11 | LLM 返回空结果回退 | REQ-PARSE-10 | LLM 返回空 segments | 回退到规则切割 |
+| UT-LLM-12 | 配置读取 - Provider | REQ-PARSE-11 | 配置 Provider=openai | 使用 openai 提供商 |
+| UT-LLM-13 | 配置读取 - 环境变量覆盖 | REQ-PARSE-11 | 环境变量覆盖 Provider | 使用环境变量的值 |
+| UT-LLM-14 | 配置读取 - 默认值 | REQ-PARSE-11 | 未配置 Provider | 使用默认值 |
+
+### DocumentParserService LLM 集成测试
+
+| # | 测试用例 | 覆盖需求 | 前置条件 | 预期结果 |
+|---|---------|---------|---------|---------|
+| UT-P-L-01 | ParseAsync 调用 LLM 分段 | REQ-PARSE-10 | LLM 服务可用 | 调用 AnalyzeDocumentAsync 和 SegmentTextAsync |
+| UT-P-L-02 | ParseAsync LLM 失败回退 | REQ-PARSE-10 | LLM 服务不可用 | 回退到 SplitSentences，结果与现有逻辑一致 |
+| UT-P-L-03 | ParseAsync 结果包含正确 SegmentType | REQ-PARSE-10 | LLM 返回 segment_type | ParsedSegment.SegmentType 正确设置 |
+
 ## 骨架代码
 
 ### IngestionWorkerTests.cs [当前无测试覆盖]
