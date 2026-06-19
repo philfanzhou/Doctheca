@@ -573,7 +573,7 @@ public static class DocumentAdminEndpoints
         foreach (var item in correctionsElement.EnumerateArray())
         {
             var action = item.TryGetProperty("action", out var a) ? a.GetString() : null;
-            if (string.IsNullOrWhiteSpace(action) || action is not ("merge" or "split" or "retype"))
+            if (string.IsNullOrWhiteSpace(action) || action is not ("merge" or "split" or "retype" or "splitMerge"))
                 return Results.BadRequest(new { success = false, message = $"Invalid action: {action}" });
 
             var originalIds = new List<string>();
@@ -595,7 +595,9 @@ public static class DocumentAdminEndpoints
                 Action = action,
                 NewText = item.TryGetProperty("newText", out var nt) ? nt.GetString() : null,
                 SplitPosition = item.TryGetProperty("splitPosition", out var sp) ? sp.GetInt32() : null,
-                NewSegmentType = item.TryGetProperty("newSegmentType", out var nst) ? nst.GetString() : null
+                NewSegmentType = item.TryGetProperty("newSegmentType", out var nst) ? nst.GetString() : null,
+                MergeFirstWithPrevious = item.TryGetProperty("mergeFirstWithPrevious", out var mfp) && mfp.GetBoolean(),
+                MergeSecondWithNext = item.TryGetProperty("mergeSecondWithNext", out var msn) && msn.GetBoolean()
             });
         }
 

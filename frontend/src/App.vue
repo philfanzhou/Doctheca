@@ -56,6 +56,11 @@ const refining = ref(false)
 const showSplitDialog = ref(false)
 const splitTarget = ref<SegmentDto | null>(null)
 const splitPosition = ref(10)
+const showSplitMergeDialog = ref(false)
+const splitMergeTarget = ref<SegmentDto | null>(null)
+const splitMergePosition = ref(10)
+const splitMergeWithPrev = ref(true)
+const splitMergeWithNext = ref(true)
 
 const selectedDocument = ref<Document | null>(null)
 const selectedDocumentStatus = ref<DocumentStatus | null>(null)
@@ -500,6 +505,116 @@ function confirmSplit() {
   segmentData.value = { ...segmentData.value, segments: newSegments, totalCount: newSegments.length }
   showSplitDialog.value = false
   ElMessage.success(`已拆分 ${seg.sentenceId}`)
+}
+
+function startSplitMerge(seg: SegmentDto) {
+  splitMergeTarget.value = seg
+  splitMergePosition.value = Math.floor(seg.text.length / 2)
+  splitMergeWithPrev.value = true
+  splitMergeWithNext.value = true
+  showSplitMergeDialog.value = true
+}
+
+function confirmSplitMerge() {
+  if (!splitMergeTarget.value || !segmentData.value) return
+  const seg = splitMergeTarget.value
+  const pos = splitMergePosition.value
+  const withPrev = splitMergeWithPrev.value
+  const withNext = splitMergeWithNext.value
+
+  if (pos <= 0 || pos >= seg.text.length) {
+    ElMessage.warning('拆分位置无效')
+    return
+  }
+
+  if (!withPrev && !withNext) {
+    ElMessage.warning('请至少选择合并一个方向')
+    return
+  }
+
+  const segments = segmentData.value.segments
+  const idx = segments.findIndex(s => s.sentenceId === seg.sentenceId)
+  if (idx < 0) return
+
+  const prevSeg = idx > 0 ? segments[idx - 1] : null
+  const nextSeg = idx < segments.length - 1 ? segments[idx + 1] : null
+
+  if (withPrev && !prevSeg) {
+    ElMessage.warning('该段落是第一段，无法与上一段合并')
+    return
+  }
+  if (withNext && !nextSeg) {
+    ElMessage.warning('该段落是最后一段，无法与下一段合并')
+    return
+  }
+
+  // Record the correction
+  corrections.value.push({
+    originalSentenceIds: [seg.sentenceId],
+    action: 'splitMerge',
+    splitPosition: pos,
+    mergeFirstWithPrevious: withPrev,
+    mergeSecondWithNext: withNext
+  })
+
+  const part1Text = seg.text.slice(0, pos)
+  const part2Text = seg.text.slice(pos)
+
+  // Build new segments list
+  const newSegments: SegmentDto[] = []
+  for (let i = 0; i < segments.length; i++) {
+    if (i === idx) continue // Skip the target segment
+
+    if (withPrev && i === idx - 1) {
+      // Merge previous with first part
+      newSegments.push({
+        ...segments[i],
+        text: segments[i].text + part1Text,
+        endOffset: segments[i].endOffset + pos
+      })
+    } else if (withNext && i === idx + 1) {
+      // Merge next with second part
+      newSegments.push({
+        ...segments[i],
+        text: part2Text + segments[i].text,
+        startOffset: segments[i].startOffset - (seg.text.length - pos)
+      })
+    } else {
+      newSegments.push(segments[i])
+    }
+  }
+
+  // If not merging with prev, keep first part as independent segment
+  if (!withPrev) {
+    newSegments.splice(idx, 0, {
+      id: seg.id + '-part1',
+      sentenceId: seg.sentenceId + '-a',
+      segmentType: seg.segmentType,
+      text: part1Text,
+      startOffset: seg.startOffset,
+      endOffset: seg.startOffset + pos,
+      pageNumber: seg.pageNumber
+    })
+  }
+
+  // If not merging with next, keep second part as independent segment
+  if (!withNext) {
+    const insertIdx = newSegments.findIndex(s => s.sentenceId === (withPrev ? prevSeg!.sentenceId : seg.sentenceId + '-a'))
+    newSegments.splice(insertIdx + 1, 0, {
+      id: seg.id + '-part2',
+      sentenceId: seg.sentenceId + '-b',
+      segmentType: seg.segmentType,
+      text: part2Text,
+      startOffset: seg.startOffset + pos,
+      endOffset: seg.endOffset,
+      pageNumber: seg.pageNumber
+    })
+  }
+
+  newSegments.sort((a, b) => a.startOffset - b.startOffset)
+  segmentData.value = { ...segmentData.value, segments: newSegments, totalCount: newSegments.length }
+  showSplitMergeDialog.value = false
+  ElMessage.success(`已拆分并合并 ${seg.sentenceId}`)
 }
 
 function undoLastCorrection() {
@@ -1157,6 +1272,7 @@ async function submitRefinement() {
                   </select>
                   <span class="segment-page">P{{ seg.pageNumber }}</span>
                   <button class="btn btn-link btn-small" @click="startSplit(seg)">拆分</button>
+                  <button class="btn btn-link btn-small" @click="startSplitMerge(seg)">拆分并合并</button>
                 </div>
                 <div class="segment-text">{{ seg.text }}</div>
               </div>
@@ -1194,6 +1310,45 @@ async function submitRefinement() {
         <div class="dialog-footer">
           <button class="btn btn-secondary btn-small" @click="showSplitDialog = false">取消</button>
           <button class="btn btn-primary btn-small" @click="confirmSplit">确认拆分</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Split and Merge Dialog -->
+    <div v-if="showSplitMergeDialog" class="dialog-overlay" @click.self="showSplitMergeDialog = false">
+      <div class="dialog dialog-narrow">
+        <div class="dialog-header">拆分并合并</div>
+        <div class="dialog-body">
+          <div v-if="splitMergeTarget">
+            <div class="split-preview">{{ splitMergeTarget.text }}</div>
+            <div class="form-group">
+              <label>拆分位置（字符偏移）</label>
+              <input type="range" v-model.number="splitMergePosition" :min="1" :max="splitMergeTarget.text.length - 1" style="width: 100%" />
+              <div style="display: flex; justify-content: space-between; font-size: 12px; color: var(--text-muted)">
+                <span>0</span>
+                <span>{{ splitMergePosition }}</span>
+                <span>{{ splitMergeTarget.text.length - 1 }}</span>
+              </div>
+            </div>
+            <div class="split-result">
+              <div class="split-part"><span class="split-label">前半部分：</span>{{ splitMergeTarget.text.slice(0, splitMergePosition) }}</div>
+              <div class="split-part"><span class="split-label">后半部分：</span>{{ splitMergeTarget.text.slice(splitMergePosition) }}</div>
+            </div>
+            <div class="form-group" style="margin-top: 16px">
+              <label style="display: flex; align-items: center; gap: 8px">
+                <input type="checkbox" v-model="splitMergeWithPrev" />
+                前半部分与上一段合并
+              </label>
+              <label style="display: flex; align-items: center; gap: 8px; margin-top: 8px">
+                <input type="checkbox" v-model="splitMergeWithNext" />
+                后半部分与下一段合并
+              </label>
+            </div>
+          </div>
+        </div>
+        <div class="dialog-footer">
+          <button class="btn btn-secondary btn-small" @click="showSplitMergeDialog = false">取消</button>
+          <button class="btn btn-primary btn-small" @click="confirmSplitMerge">确认</button>
         </div>
       </div>
     </div>

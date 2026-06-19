@@ -127,6 +127,19 @@ POST /admin/documents/{id}/refine
 - `merge`：合并多条 segment 为一条
 - `split`：将一条 segment 在指定位置拆分为两条
 - `retype`：修改 segment 的类型
+- `splitMerge`：拆分一条 segment，并将两部分分别与相邻 segment 合并（一步完成复杂重组）
+
+**splitMerge 示例：**
+```json
+{
+  "originalSentenceIds": ["p1-b2-s1"],
+  "action": "splitMerge",
+  "splitPosition": 25,
+  "mergeFirstWithPrevious": true,
+  "mergeSecondWithNext": true
+}
+```
+效果：在位置 25 拆分段落 B，前半部分与上一段 A 合并，后半部分与下一段 C 合并。
 
 **响应：**
 ```json

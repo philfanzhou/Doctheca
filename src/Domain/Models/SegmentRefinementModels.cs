@@ -32,6 +32,16 @@ public record SegmentCorrection
     /// New segment type (for retype action, or override for merge/split)
     /// </summary>
     public string? NewSegmentType { get; init; }
+
+    /// <summary>
+    /// For splitMerge action: merge first part with previous segment
+    /// </summary>
+    public bool MergeFirstWithPrevious { get; init; }
+
+    /// <summary>
+    /// For splitMerge action: merge second part with next segment
+    /// </summary>
+    public bool MergeSecondWithNext { get; init; }
 }
 
 /// <summary>

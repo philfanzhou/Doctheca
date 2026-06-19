@@ -20,6 +20,9 @@
 | T-07 | 拆分 1 条 segment | 1 sentenceId + split action | 备份创建 + 2 条新 segment |
 | T-08 | 修改 segment 类型 | 1 sentenceId + retype action | segment_type 更新 |
 | T-09 | 混合修正 | merge + split + retype | 所有修正正确应用 |
+| T-09a | 拆分并双向合并 | 1 sentenceId + splitMerge + splitPosition + mergeFirstWithPrevious + mergeSecondWithNext | 前半与上一段合并，后半与下一段合并 |
+| T-09b | 拆分并单侧合并 | 1 sentenceId + splitMerge + mergeFirstWithPrevious=true, mergeSecondWithNext=false | 前半与上一段合并，后半独立 |
+| T-09c | 拆分并合并（无相邻段） | 1 sentenceId + splitMerge + 首段无前一段 | 前半独立，后半与下一段合并 |
 | T-10 | 修正数量超限 (>20) | 21 corrections | 抛出验证异常 |
 | T-11 | 文档不在 ready 状态 | processing document | 抛出验证异常 |
 | T-12 | LLM 调用失败 | LLM returns error | 回滚到备份 + 抛出异常 |

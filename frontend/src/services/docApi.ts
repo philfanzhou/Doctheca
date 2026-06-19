@@ -109,10 +109,12 @@ export interface DocumentSegmentsData {
 
 export interface CorrectionDto {
   originalSentenceIds: string[]
-  action: 'merge' | 'split' | 'retype'
+  action: 'merge' | 'split' | 'retype' | 'splitMerge'
   newText?: string
   splitPosition?: number
   newSegmentType?: string
+  mergeFirstWithPrevious?: boolean
+  mergeSecondWithNext?: boolean
 }
 
 export interface RefinementResult {

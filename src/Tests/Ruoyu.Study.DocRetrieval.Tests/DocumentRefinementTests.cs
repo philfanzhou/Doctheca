@@ -252,6 +252,109 @@ public class DocumentRefinementTests
         Assert.Contains("not configured", ex.Message);
     }
 
+    [Fact]
+    public async Task RefineSegmentsAsync_SplitMergeCorrection_Success()
+    {
+        // Arrange
+        var documentId = Guid.NewGuid();
+        var pageId = Guid.NewGuid();
+        var document = CreateReadyDocument(documentId);
+        document.LlmProfileJson = JsonSerializer.Serialize(new DocumentProfile { Subject = "English", SegmentStrategy = SegmentTypes.Sentence });
+
+        var segments = new List<DocumentSegmentModel>
+        {
+            new() { Id = Guid.NewGuid(), DocumentId = documentId, PageId = pageId, SentenceId = "p1-b1-s1", SegmentType = "sentence", Text = "First sentence.", StartOffset = 0, EndOffset = 15 },
+            new() { Id = Guid.NewGuid(), DocumentId = documentId, PageId = pageId, SentenceId = "p1-b1-s2", SegmentType = "sentence", Text = "Second part. Third part.", StartOffset = 16, EndOffset = 40 },
+            new() { Id = Guid.NewGuid(), DocumentId = documentId, PageId = pageId, SentenceId = "p1-b1-s3", SegmentType = "sentence", Text = "Fourth sentence.", StartOffset = 41, EndOffset = 56 }
+        };
+
+        SetupMocksForRefinement(documentId, document, pageId, segments);
+
+        var newProfile = new DocumentProfile { Subject = "English", SegmentStrategy = SegmentTypes.Sentence };
+        var newSegments = new List<SegmentResult>
+        {
+            new() { Text = "First sentence. Second part.", StartOffset = 0, EndOffset = 28, SegmentType = "sentence" },
+            new() { Text = "Third part. Fourth sentence.", StartOffset = 29, EndOffset = 56, SegmentType = "sentence" }
+        };
+
+        _llmSegmentationMock.Setup(s => s.RefineProfileAsync(It.IsAny<string>(), It.IsAny<DocumentProfile>(), It.IsAny<List<SegmentCorrection>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(newProfile);
+        _llmSegmentationMock.Setup(s => s.RefineSegmentTextAsync(It.IsAny<string>(), It.IsAny<DocumentProfile>(), It.IsAny<List<SegmentCorrection>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(newSegments);
+
+        var corrections = new List<SegmentCorrection>
+        {
+            new()
+            {
+                OriginalSentenceIds = ["p1-b1-s2"],
+                Action = "splitMerge",
+                SplitPosition = 13,
+                MergeFirstWithPrevious = true,
+                MergeSecondWithNext = true
+            }
+        };
+
+        // Act
+        var result = await _service.RefineSegmentsAsync(documentId, corrections);
+
+        // Assert
+        Assert.Equal(documentId, result.DocumentId);
+        Assert.Equal(1, result.CorrectionCount);
+        _segmentRepoMock.Verify(r => r.DeleteByDocumentIdAsync(documentId), Times.Once);
+        _segmentRepoMock.Verify(r => r.AddRangeAsync(It.IsAny<IEnumerable<DocumentSegmentModel>>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task RefineSegmentsAsync_SplitMergeWithPartialMerge_Success()
+    {
+        // Arrange
+        var documentId = Guid.NewGuid();
+        var pageId = Guid.NewGuid();
+        var document = CreateReadyDocument(documentId);
+        document.LlmProfileJson = JsonSerializer.Serialize(new DocumentProfile { Subject = "English", SegmentStrategy = SegmentTypes.Sentence });
+
+        var segments = new List<DocumentSegmentModel>
+        {
+            new() { Id = Guid.NewGuid(), DocumentId = documentId, PageId = pageId, SentenceId = "p1-b1-s1", SegmentType = "sentence", Text = "First.", StartOffset = 0, EndOffset = 6 },
+            new() { Id = Guid.NewGuid(), DocumentId = documentId, PageId = pageId, SentenceId = "p1-b1-s2", SegmentType = "sentence", Text = "Second part. Third part.", StartOffset = 7, EndOffset = 31 },
+            new() { Id = Guid.NewGuid(), DocumentId = documentId, PageId = pageId, SentenceId = "p1-b1-s3", SegmentType = "sentence", Text = "Fourth.", StartOffset = 32, EndOffset = 39 }
+        };
+
+        SetupMocksForRefinement(documentId, document, pageId, segments);
+
+        var newProfile = new DocumentProfile { Subject = "English", SegmentStrategy = SegmentTypes.Sentence };
+        var newSegments = new List<SegmentResult>
+        {
+            new() { Text = "First. Second part.", StartOffset = 0, EndOffset = 19, SegmentType = "sentence" },
+            new() { Text = "Third part.", StartOffset = 20, EndOffset = 31, SegmentType = "sentence" },
+            new() { Text = "Fourth.", StartOffset = 32, EndOffset = 39, SegmentType = "sentence" }
+        };
+
+        _llmSegmentationMock.Setup(s => s.RefineProfileAsync(It.IsAny<string>(), It.IsAny<DocumentProfile>(), It.IsAny<List<SegmentCorrection>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(newProfile);
+        _llmSegmentationMock.Setup(s => s.RefineSegmentTextAsync(It.IsAny<string>(), It.IsAny<DocumentProfile>(), It.IsAny<List<SegmentCorrection>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(newSegments);
+
+        var corrections = new List<SegmentCorrection>
+        {
+            new()
+            {
+                OriginalSentenceIds = ["p1-b1-s2"],
+                Action = "splitMerge",
+                SplitPosition = 13,
+                MergeFirstWithPrevious = true,
+                MergeSecondWithNext = false
+            }
+        };
+
+        // Act
+        var result = await _service.RefineSegmentsAsync(documentId, corrections);
+
+        // Assert
+        Assert.Equal(1, result.CorrectionCount);
+        _segmentRepoMock.Verify(r => r.AddRangeAsync(It.IsAny<IEnumerable<DocumentSegmentModel>>()), Times.Once);
+    }
+
     #endregion
 
     #region Helper Methods
