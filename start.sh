@@ -2,7 +2,7 @@
 set -e
 
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-IMAGE_TAG="20260613"
+IMAGE_TAG="20260619"
 IMAGE_NAME="ruoyu.docretrieval:${IMAGE_TAG}"
 CONTAINER_NAME="ruoyu-docretrieval"
 NETWORK_NAME="ruoyu-net"
