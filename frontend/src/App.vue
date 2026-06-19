@@ -535,17 +535,6 @@ async function submitRefinement() {
     refining.value = false
   }
 }
-
-function getSegmentTypeLabel(type: string): string {
-  const map: Record<string, string> = {
-    sentence: 'sentence',
-    concept: 'concept',
-    word_entry: 'word_entry',
-    knowledge_point: 'knowledge_point',
-    question: 'question'
-  }
-  return map[type] || type
-}
 </script>
 
 <template>
