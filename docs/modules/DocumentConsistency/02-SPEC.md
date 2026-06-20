@@ -29,6 +29,7 @@
 
 - [x] REQ-CONSISTENCY-03 扫描效率：DB 侧按 `file_path` 去重后检查 OSS，不逐条记录检查
 - [x] REQ-CONSISTENCY-04 扫描效率：OSS 侧检查是否有任意 document 关联即可，不逐文件查 DB
+- [x] REQ-CONSISTENCY-05 管理界面：左侧导航栏增加"一致性检查"Tab，包含扫描按钮、统计卡片、异常文档列表（带强制删除按钮）、孤儿文件列表
 
 ## 验收场景
 

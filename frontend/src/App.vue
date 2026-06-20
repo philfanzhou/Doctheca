@@ -10,7 +10,8 @@ import {
   type SearchResult,
   type DocumentSegmentsData,
   type SegmentDto,
-  type CorrectionDto
+  type CorrectionDto,
+  type ConsistencyScanResult
 } from './services/docApi'
 import { authService } from './services/authService'
 import LoginPage from './components/LoginPage.vue'
@@ -62,6 +63,12 @@ const splitMergePosition = ref(10)
 const splitMergeWithPrev = ref(true)
 const splitMergeWithNext = ref(true)
 
+// Consistency scan state
+const scanLoading = ref(false)
+const scanResult = ref<ConsistencyScanResult | null>(null)
+const deletingOrphan = ref<string | null>(null)
+const forceDeleting = ref<string | null>(null)
+
 const selectedDocument = ref<Document | null>(null)
 const selectedDocumentStatus = ref<DocumentStatus | null>(null)
 const uploadFile = ref<File | null>(null)
@@ -95,6 +102,11 @@ const navItems = [
     key: 'search',
     label: '检索测试',
     icon: '<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>'
+  },
+  {
+    key: 'consistency',
+    label: '一致性检查',
+    icon: '<path d="M9 12l2 2 4-4"/><path d="M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z"/>'
   }
 ]
 
@@ -320,6 +332,50 @@ function resetUploadForm() {
 
 function handleApiError(prefix: string, error: unknown) {
   ElMessage.error(`${prefix}: ${getDocErrorMessage(error)}`)
+}
+
+async function handleScanConsistency() {
+  scanLoading.value = true
+  scanResult.value = null
+  try {
+    const response = await client.scanConsistency()
+    scanResult.value = response.data
+    const s = response.data.summary
+    ElMessage.success(`扫描完成：${s.totalDocuments} 个文档，${s.brokenCount} 个异常，${s.orphanCount} 个孤儿文件`)
+  } catch (error) {
+    handleApiError('扫描失败', error)
+  } finally {
+    scanLoading.value = false
+  }
+}
+
+async function handleDeleteOrphan(filePath: string) {
+  deletingOrphan.value = filePath
+  try {
+    // Orphan OSS files have no DB record, so we call force-delete by constructing a temp approach
+    // Actually we need a dedicated endpoint for this. For now, just show the path.
+    ElMessage.info(`孤儿文件：${filePath}（请手动删除或使用管理员工具）`)
+  } finally {
+    deletingOrphan.value = null
+  }
+}
+
+async function handleForceDelete(docId: string, title: string) {
+  if (!confirm(`确定强制删除文档「${title}」？此操作不可恢复。`)) return
+  forceDeleting.value = docId
+  try {
+    await client.forceDeleteDocument(docId)
+    ElMessage.success(`文档「${title}」已强制删除`)
+    // Remove from scan results
+    if (scanResult.value) {
+      scanResult.value.brokenDocuments = scanResult.value.brokenDocuments.filter(d => d.id !== docId)
+      scanResult.value.summary.brokenCount = scanResult.value.brokenDocuments.length
+    }
+  } catch (error) {
+    handleApiError('强制删除失败', error)
+  } finally {
+    forceDeleting.value = null
+  }
 }
 
 async function handleSearch() {
@@ -955,6 +1011,101 @@ async function submitRefinement() {
 
             <div v-else-if="searchQuery && !searchLoading" class="empty-state">
               <div class="empty-state-text">输入查询词后点击搜索</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Consistency Scan Tab -->
+        <div v-if="activeTab === 'consistency'" class="page-header">
+          <h1 class="page-title">一致性检查</h1>
+          <p class="page-subtitle">扫描 OSS 文件与数据库记录的一致性</p>
+        </div>
+
+        <div v-if="activeTab === 'consistency'" class="card">
+          <div class="card-header">
+            <span>OSS-DB 一致性扫描</span>
+            <button class="btn btn-primary btn-small" :disabled="scanLoading" @click="handleScanConsistency">
+              {{ scanLoading ? '扫描中...' : '开始扫描' }}
+            </button>
+          </div>
+          <div class="card-body">
+            <div v-if="scanResult" class="scan-summary" style="display: flex; gap: 24px; margin-bottom: 20px">
+              <div class="stat-card">
+                <div class="stat-value">{{ scanResult.summary.totalDocuments }}</div>
+                <div class="stat-label">文档总数</div>
+              </div>
+              <div class="stat-card" :class="{ 'stat-danger': scanResult.summary.brokenCount > 0 }">
+                <div class="stat-value">{{ scanResult.summary.brokenCount }}</div>
+                <div class="stat-label">异常文档</div>
+              </div>
+              <div class="stat-card" :class="{ 'stat-warning': scanResult.summary.orphanCount > 0 }">
+                <div class="stat-value">{{ scanResult.summary.orphanCount }}</div>
+                <div class="stat-label">孤儿文件</div>
+              </div>
+            </div>
+
+            <!-- Broken Documents -->
+            <div v-if="scanResult && scanResult.brokenDocuments.length > 0" style="margin-bottom: 24px">
+              <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 12px; color: var(--danger)">
+                ⚠ 异常文档（DB 有记录但 OSS 文件缺失）
+              </h3>
+              <table style="width: 100%; border-collapse: collapse; font-size: 13px">
+                <thead>
+                  <tr style="background: var(--bg-secondary); text-align: left">
+                    <th style="padding: 8px 12px; border-bottom: 2px solid var(--border-light)">标题</th>
+                    <th style="padding: 8px 12px; border-bottom: 2px solid var(--border-light)">状态</th>
+                    <th style="padding: 8px 12px; border-bottom: 2px solid var(--border-light)">OSS 路径</th>
+                    <th style="padding: 8px 12px; border-bottom: 2px solid var(--border-light)">操作</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="doc in scanResult.brokenDocuments" :key="doc.id" style="border-bottom: 1px solid var(--border-light)">
+                    <td style="padding: 8px 12px; font-weight: 500">{{ doc.title }}</td>
+                    <td style="padding: 8px 12px"><span class="tag tag-warning">{{ doc.status }}</span></td>
+                    <td style="padding: 8px 12px; font-family: monospace; font-size: 11px; color: var(--text-muted)">{{ doc.filePath }}</td>
+                    <td style="padding: 8px 12px">
+                      <button class="btn btn-danger btn-small" :disabled="forceDeleting === doc.id" @click="handleForceDelete(doc.id, doc.title)">
+                        {{ forceDeleting === doc.id ? '删除中...' : '强制删除' }}
+                      </button>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <!-- Orphan OSS Files -->
+            <div v-if="scanResult && scanResult.orphanOssFiles.length > 0" style="margin-bottom: 24px">
+              <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 12px; color: var(--warning)">
+                ⚠ 孤儿文件（OSS 有文件但 DB 无记录）
+              </h3>
+              <table style="width: 100%; border-collapse: collapse; font-size: 13px">
+                <thead>
+                  <tr style="background: var(--bg-secondary); text-align: left">
+                    <th style="padding: 8px 12px; border-bottom: 2px solid var(--border-light)">OSS 路径</th>
+                    <th style="padding: 8px 12px; border-bottom: 2px solid var(--border-light)">操作</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="filePath in scanResult.orphanOssFiles" :key="filePath" style="border-bottom: 1px solid var(--border-light)">
+                    <td style="padding: 8px 12px; font-family: monospace; font-size: 12px">{{ filePath }}</td>
+                    <td style="padding: 8px 12px">
+                      <button class="btn btn-warning btn-small" :disabled="deletingOrphan === filePath" @click="handleDeleteOrphan(filePath)">
+                        {{ deletingOrphan === filePath ? '处理中...' : '标记处理' }}
+                      </button>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <!-- No issues -->
+            <div v-if="scanResult && scanResult.brokenDocuments.length === 0 && scanResult.orphanOssFiles.length === 0" class="empty-state">
+              <div class="empty-state-text" style="color: var(--success)">✓ 所有文件与记录一致，无异常</div>
+            </div>
+
+            <!-- Initial state -->
+            <div v-if="!scanResult && !scanLoading" class="empty-state">
+              <div class="empty-state-text">点击"开始扫描"检查 OSS 文件与数据库记录的一致性</div>
             </div>
           </div>
         </div>

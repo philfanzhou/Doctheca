@@ -1139,3 +1139,44 @@ textarea.input:focus {
   opacity: 0.5;
   cursor: not-allowed;
 }
+
+/* Stat cards for consistency scan */
+.stat-card {
+  padding: 16px 24px;
+  border-radius: 8px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-light);
+  text-align: center;
+  min-width: 120px;
+}
+
+.stat-card .stat-value {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1.2;
+}
+
+.stat-card .stat-label {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
+.stat-card.stat-danger {
+  border-color: var(--danger-color);
+  background: rgba(239, 68, 68, 0.05);
+}
+
+.stat-card.stat-danger .stat-value {
+  color: var(--danger-color);
+}
+
+.stat-card.stat-warning {
+  border-color: var(--warning-color);
+  background: rgba(245, 158, 11, 0.05);
+}
+
+.stat-card.stat-warning .stat-value {
+  color: var(--warning-color);
+}

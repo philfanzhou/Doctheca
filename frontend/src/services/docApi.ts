@@ -124,6 +124,21 @@ export interface RefinementResult {
   message: string
 }
 
+export interface ConsistencyScanResult {
+  orphanOssFiles: string[]
+  brokenDocuments: Array<{
+    id: string
+    title: string
+    filePath: string
+    status: string
+  }>
+  summary: {
+    totalDocuments: number
+    brokenCount: number
+    orphanCount: number
+  }
+}
+
 class DocApiClient {
   private client: ReturnType<typeof createAuthenticatedClient>
 
@@ -218,6 +233,16 @@ class DocApiClient {
 
   async refineDocumentSegments(documentId: string, corrections: CorrectionDto[]): Promise<ApiResponse<RefinementResult>> {
     const response = await this.client.post(`/admin/documents/${documentId}/refine`, { corrections })
+    return response.data
+  }
+
+  async scanConsistency(): Promise<ApiResponse<ConsistencyScanResult>> {
+    const response = await this.client.get('/admin/documents/scan-consistency')
+    return response.data
+  }
+
+  async forceDeleteDocument(id: string): Promise<ApiResponse<{ message: string }>> {
+    const response = await this.client.delete(`/admin/documents/${id}/force`)
     return response.data
   }
 }
