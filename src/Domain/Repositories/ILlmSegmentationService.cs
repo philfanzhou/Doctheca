@@ -14,6 +14,12 @@ public interface ILlmSegmentationService
     int ChunkSize { get; }
 
     /// <summary>
+    /// Initialize model parameters. Called at startup and lazily on first use.
+    /// Parses ContextLength config, computes ChunkSize.
+    /// </summary>
+    Task InitializeAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Analyze document to determine subject, type, and segmentation strategy.
     /// Uses the first portion of text as preview.
     /// </summary>

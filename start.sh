@@ -68,7 +68,7 @@ docker run -d \
   -e LlmSegmentation__ApiKey="${LLM_API_KEY}" \
   -e LlmSegmentation__BaseUrl="${LLM_BASE_URL}" \
   -e LlmSegmentation__Model="${LLM_MODEL}" \
-  -e LlmSegmentation__ContextLength="${LLM_CONTEXT_LENGTH:-131072}" \
+  -e LlmSegmentation__ContextLength="${LLM_CONTEXT_LENGTH:-128K}" \
   -e LlmSegmentation__MaxTokens="${LLM_MAX_TOKENS:-4096}" \
   -e LlmSegmentation__TimeoutSeconds="${LLM_TIMEOUT_SECONDS:-300}" \
   -e Logging__LogLevel__Microsoft_EntityFrameworkCore_Database_Command="Warning" \

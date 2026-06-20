@@ -47,9 +47,9 @@ public class LlmSegmentationOptions
     public double Temperature => 0.1;
 
     /// <summary>
-    /// Text chunk size in characters (dynamically calculated at startup)
+    /// Text chunk size in characters. Dynamically calculated by InitializeAsync from ContextLength.
     /// </summary>
-    public int ChunkSize { get; set; } = 1500;
+    public int ChunkSize { get; set; }
 
     /// <summary>
     /// Maximum retry attempts (fixed at 3)

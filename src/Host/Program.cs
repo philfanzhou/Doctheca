@@ -125,12 +125,37 @@ app.Logger.LogInformation("Identity: gRPC={GrpcEndpoint}, JWKS={JwksEndpoint}, R
 var llmApiKey = builder.Configuration["LlmSegmentation:ApiKey"];
 var llmBaseUrl = builder.Configuration["LlmSegmentation:BaseUrl"];
 var llmModel = builder.Configuration["LlmSegmentation:Model"];
+var llmContextLength = builder.Configuration["LlmSegmentation:ContextLength"];
+var llmMaxTokens = builder.Configuration["LlmSegmentation:MaxTokens"];
+var llmTimeout = builder.Configuration["LlmSegmentation:TimeoutSeconds"];
 var llmEnabled = !string.IsNullOrEmpty(llmApiKey);
-app.Logger.LogInformation("LLM Segmentation: Enabled={Enabled}, BaseUrl={BaseUrl}, Model={Model}, ApiKey={ApiKeyStatus}",
+app.Logger.LogInformation(
+    "LLM Segmentation: Enabled={Enabled}, BaseUrl={BaseUrl}, Model={Model}, ContextLength={ContextLength}, MaxTokens={MaxTokens}, TimeoutSeconds={Timeout}, ApiKey={ApiKeyStatus}",
     llmEnabled,
     llmBaseUrl ?? "(not configured)",
     llmModel ?? "(not configured)",
+    llmContextLength ?? "(not configured)",
+    llmMaxTokens ?? "4096 (default)",
+    llmTimeout ?? "300 (default)",
     string.IsNullOrEmpty(llmApiKey) ? "(empty - service disabled)" : "(configured)");
+
+// Initialize LLM segmentation at startup (verify config, compute ChunkSize)
+if (llmEnabled)
+{
+    using var llmScope = app.Services.CreateScope();
+    var llmService = llmScope.ServiceProvider.GetService<ILlmSegmentationService>();
+    if (llmService != null)
+    {
+        try
+        {
+            await llmService.InitializeAsync();
+        }
+        catch (Exception ex)
+        {
+            app.Logger.LogWarning(ex, "LLM segmentation initialization failed at startup");
+        }
+    }
+}
 
 using (var scope = app.Services.CreateScope())
 {
