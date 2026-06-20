@@ -103,8 +103,8 @@ public static class DocumentAdminEndpoints
             stream.Position = 0;
 
             var ext = Path.GetExtension(file.FileName) ?? ".bin";
-            var objectName = $"docretrieval/{Guid.NewGuid()}{ext}";
-            filePath = await ossService.UploadAsync(stream, objectName, file.ContentType, OssBucket.Uploads);
+            var objectName = $"{Guid.NewGuid()}{ext}";
+            filePath = await ossService.UploadAsync(stream, objectName, file.ContentType, OssBucket.Documents, "docretrieval");
         }
 
         var sourceType = file.ContentType switch
@@ -709,7 +709,7 @@ public static class DocumentAdminEndpoints
             var orphanOssFiles = new List<string>();
             try
             {
-                var ossObjects = await ossService.ListObjectsAsync("docretrieval/");
+                var ossObjects = await ossService.ListObjectsAsync("documents/docretrieval/");
                 foreach (var obj in ossObjects)
                 {
                     if (!dbFilePaths.Contains(obj.ObjectPath))

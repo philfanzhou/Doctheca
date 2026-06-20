@@ -16,7 +16,7 @@
 - [x] REQ-CONSISTENCY-01 扫描端点：`GET /admin/documents/scan-consistency`
   - 查询所有 `documents` 记录的 `file_path`（去重）
   - 逐个调用 `IOssService.ObjectExistsAsync` 检查 OSS 文件是否存在
-  - 调用 `IOssService.ListObjectsAsync("docretrieval/")` 列出所有 OSS 文件
+  - 调用 `IOssService.ListObjectsAsync("documents/docretrieval/")` 列出 Documents 桶下所有文件
   - 反向比对：OSS 文件路径不在任何 document 的 `file_path` 中 = 孤儿文件
   - 返回：`{ orphanOssFiles: string[], brokenDocuments: { id, title, filePath, status }[] }`
 

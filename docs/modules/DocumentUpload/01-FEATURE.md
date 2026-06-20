@@ -17,7 +17,7 @@
 - AC-5：相同文件哈希且状态为 `ready` 的文档已存在时返回 409（`DOCRETRIEVAL_FILE_HASH_ALREADY_EXISTS`）。
 - AC-6：学科仅支持"English"，年级必须为 K/G1~G12，不合法值返回 400（`DOCRETRIEVAL_SUBJECT_INVALID` / `DOCRETRIEVAL_GRADE_INVALID`）。
 - AC-7：文档记录和导入任务在同一 `SaveChangesAsync` 中原子写入，保证数据一致性。
-- AC-8：OSS 路径格式为 `docretrieval/{Guid}{ext}`，SHA-256 哈希计算后 `stream.Position=0` 再上传 OSS。
+- AC-8：OSS 路径格式为 `documents/docretrieval/{Guid}{ext}`，SHA-256 哈希计算后 `stream.Position=0` 再上传 OSS。
 
 ## 明确列出"范围外"（不做什么）
 

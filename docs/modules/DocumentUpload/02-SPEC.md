@@ -14,7 +14,7 @@
 - [x] REQ-UPLOAD-04 能校验文件格式：仅支持 PDF/Word/PPT 的 MIME 类型，不符返回 400（`DOCRETRIEVAL_FILE_FORMAT_UNSUPPORTED`）。
 - [x] REQ-UPLOAD-05 能检测加密 PDF：在 PDF 文件前 4096 字节中搜索 `/Encrypt` 标记，命中返回 400（`DOCRETRIEVAL_FILE_ENCRYPTED`）。
 - [x] REQ-UPLOAD-06 能计算文件 SHA-256 哈希，计算后将 `stream.Position` 重置为 0 再上传 OSS。
-- [x] REQ-UPLOAD-07 能上传文件到 OSS，路径格式为 `docretrieval/{Guid}{ext}`，使用 `OssBucket.Uploads` 桶。
+- [x] REQ-UPLOAD-07 能上传文件到 OSS，路径格式为 `documents/docretrieval/{Guid}{ext}`，使用 `OssBucket.Documents` 桶（独立于图片的 `uploads` 桶，避免被僵尸图片审计误扫）。
 - [x] REQ-UPLOAD-08 能校验元数据：`title`/`subject`/`grade` 必填，`year` 可选；缺少必填项返回 400（`DOCRETRIEVAL_METADATA_REQUIRED`）；`title` 不超过 200 字符。
 - [x] REQ-UPLOAD-08a 前端选择文件后，自动将文件名（不含扩展名）填入标题输入框；若标题字段已有内容则不覆盖。
 - [x] REQ-UPLOAD-09 能校验学科与年级：学科仅支持"英语"（`DOCRETRIEVAL_SUBJECT_INVALID`），年级必须为 K/G1~G12（`DOCRETRIEVAL_GRADE_INVALID`）。
