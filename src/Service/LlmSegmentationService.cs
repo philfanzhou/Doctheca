@@ -309,50 +309,21 @@ public class LlmSegmentationService : ILlmSegmentationService
 
     private static string BuildSegmentationPrompt(string text, DocumentProfile profile)
     {
-        var strategyDescription = profile.SegmentStrategy switch
+        var strategyHint = profile.SegmentStrategy switch
         {
-            SegmentTypes.Sentence => "按完整句子分段。每个 segment 必须是一个完整的句子或紧密相关的句子群。保持句子完整性，不要在句子中间断开。",
-            SegmentTypes.Concept => "按知识点/概念分段。每个 segment 应包含一个完整的概念或公式及其解释。公式必须保持完整，不要拆断。",
-            SegmentTypes.WordEntry => "按词条分段。每个 segment 包含一个完整的词条（单词 + 释义 + 例句）。如果一个单词有多个释义，将它们放在同一个 segment 中。",
-            SegmentTypes.Question => "按题目分段。每道题（题干 + 选项）为一个 segment。",
-            SegmentTypes.KnowledgePoint => "按知识点分段。每个知识点条目为一个 segment。",
-            _ => "按完整句子分段。"
-        };
-
-        var subjectHint = profile.Subject switch
-        {
-            "English" => "这是英语学科文档。",
-            "语文" => "这是语文学科文档，注意中文标点（。？！）。",
-            "数学" => "这是数学学科文档，注意保持公式完整。",
-            "物理" => "这是物理学科文档，注意保持公式和概念解释完整。",
-            "化学" => "这是化学学科文档，注意保持化学方程式完整。",
-            "生物" => "这是生物学科文档。",
-            _ => ""
+            SegmentTypes.WordEntry => "每个词条（单词+释义）为一个segment。",
+            SegmentTypes.Question => "每道题（题干+选项）为一个segment。",
+            SegmentTypes.Concept => "每个概念/公式为一个segment。",
+            SegmentTypes.KnowledgePoint => "每个知识点为一个segment。",
+            _ => "每个完整句子为一个segment。"
         };
 
         return $$"""
-            你是一个文档分段专家。{{subjectHint}}
+            按 {{profile.SegmentStrategy}} 策略分段。{{strategyHint}}
+            返回JSON，保留原文，offset为字符偏移量。
 
-            分段规则：
-            {{strategyDescription}}
+            {"segments":[{"text":"...","start_offset":0,"end_offset":10,"segment_type":"{{profile.SegmentStrategy}}"}]}
 
-            请将以下文本分段，返回 JSON 格式。只返回 JSON，不要有其他文字。
-
-            ```json
-            {
-              "segments": [
-                {"text": "第一段文本", "start_offset": 0, "end_offset": 50, "segment_type": "{{profile.SegmentStrategy}}"},
-                {"text": "第二段文本", "start_offset": 51, "end_offset": 100, "segment_type": "{{profile.SegmentStrategy}}"}
-              ]
-            }
-            ```
-
-            注意：
-            1. start_offset 和 end_offset 是相对于输入文本的字符偏移量
-            2. 保留原始文本，不要修改或改写
-            3. 每个 segment 必须有实际内容，不能为空
-
-            文本：
             ---
             {{text}}
             ---
@@ -492,7 +463,7 @@ public class LlmSegmentationService : ILlmSegmentationService
                     model = _options.Model,
                     messages = new[]
                     {
-                        new { role = "system", content = "你是一个专业的文档分析和分段助手。请严格按照要求返回 JSON 格式的结果。" },
+                        new { role = "system", content = "直接返回JSON，不要解释。" },
                         new { role = "user", content = prompt }
                     },
                     max_tokens = _options.MaxTokensValue,

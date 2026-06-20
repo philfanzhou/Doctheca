@@ -612,42 +612,11 @@ public partial class DocumentParserService : IDocumentParserService
         // Track segment index per page for SentenceId
         var segmentIndexPerPage = new Dictionary<int, int>();
 
-        foreach (var chunk in chunks)
+        // Process chunks in parallel for faster LLM calls
+        var chunkResults = await ProcessChunksAsync(chunks, llmAvailable, profile, cancellationToken);
+
+        foreach (var (chunk, segments) in chunkResults)
         {
-            List<SegmentWithOffset> segments;
-
-            // Try LLM segmentation, fall back to rule-based
-            if (llmAvailable && profile != null)
-            {
-                try
-                {
-                    var llmSegments = await _llmSegmentation!.SegmentTextAsync(chunk.Text, profile, cancellationToken);
-                    if (llmSegments.Count > 0)
-                    {
-                        segments = llmSegments.Select(s => new SegmentWithOffset
-                        {
-                            Text = s.Text,
-                            StartOffset = s.StartOffset,
-                            EndOffset = s.EndOffset,
-                            SegmentType = s.SegmentType
-                        }).ToList();
-                    }
-                    else
-                    {
-                        segments = FallbackSegment(chunk.Text);
-                    }
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(ex, "LLM segmentation failed for chunk, falling back to rule-based splitting");
-                    segments = FallbackSegment(chunk.Text);
-                }
-            }
-            else
-            {
-                segments = FallbackSegment(chunk.Text);
-            }
-
             // Map segments back to pages
             foreach (var seg in segments)
             {
@@ -687,6 +656,44 @@ public partial class DocumentParserService : IDocumentParserService
             EndOffset = t.Length,
             SegmentType = SegmentTypes.Sentence
         }).ToList();
+    }
+
+    /// <summary>
+    /// Process all chunks in parallel, returning segments for each chunk.
+    /// </summary>
+    private async Task<List<(TextChunk Chunk, List<SegmentWithOffset> Segments)>> ProcessChunksAsync(
+        List<TextChunk> chunks, bool llmAvailable, DocumentProfile? profile, CancellationToken cancellationToken)
+    {
+        var tasks = chunks.Select(async chunk =>
+        {
+            List<SegmentWithOffset> segments;
+            if (llmAvailable && profile != null)
+            {
+                try
+                {
+                    var llmSegments = await _llmSegmentation!.SegmentTextAsync(chunk.Text, profile, cancellationToken);
+                    segments = llmSegments.Count > 0
+                        ? llmSegments.Select(s => new SegmentWithOffset
+                        {
+                            Text = s.Text, StartOffset = s.StartOffset,
+                            EndOffset = s.EndOffset, SegmentType = s.SegmentType
+                        }).ToList()
+                        : FallbackSegment(chunk.Text);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "LLM segmentation failed for chunk, falling back");
+                    segments = FallbackSegment(chunk.Text);
+                }
+            }
+            else
+            {
+                segments = FallbackSegment(chunk.Text);
+            }
+            return (Chunk: chunk, Segments: segments);
+        });
+
+        return (await Task.WhenAll(tasks)).ToList();
     }
 
     /// <summary>
