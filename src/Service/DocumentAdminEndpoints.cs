@@ -678,22 +678,30 @@ public static class DocumentAdminEndpoints
             var docs = await documentRepository.GetAllDocumentsWithFilePathAsync();
             var dbFilePaths = docs.Select(d => d.FilePath).ToHashSet();
 
-            // 2. Check OSS existence for each unique file_path
+            // 2. Check OSS existence — dedup by file_path first
+            var filePathToDocs = docs.GroupBy(d => d.FilePath)
+                .ToDictionary(g => g.Key, g => g.ToList());
             var brokenDocuments = new List<object>();
-            foreach (var (id, title, filePath, status) in docs)
+            foreach (var (filePath, docGroup) in filePathToDocs)
             {
                 try
                 {
                     var exists = await ossService.ObjectExistsAsync(filePath);
                     if (!exists)
                     {
-                        brokenDocuments.Add(new { id = id.ToString(), title, filePath, status });
+                        foreach (var (id, title, _, status) in docGroup)
+                        {
+                            brokenDocuments.Add(new { id = id.ToString(), title, filePath, status });
+                        }
                     }
                 }
                 catch (Exception ex)
                 {
                     logger.LogWarning(ex, "Failed to check OSS file: {FilePath}", filePath);
-                    brokenDocuments.Add(new { id = id.ToString(), title, filePath, status });
+                    foreach (var (id, title, _, status) in docGroup)
+                    {
+                        brokenDocuments.Add(new { id = id.ToString(), title, filePath, status });
+                    }
                 }
             }
 

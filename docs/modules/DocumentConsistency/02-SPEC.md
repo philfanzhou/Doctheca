@@ -13,22 +13,22 @@
 
 ## 功能要求清单
 
-- [ ] REQ-CONSISTENCY-01 扫描端点：`GET /admin/documents/scan-consistency`
+- [x] REQ-CONSISTENCY-01 扫描端点：`GET /admin/documents/scan-consistency`
   - 查询所有 `documents` 记录的 `file_path`（去重）
   - 逐个调用 `IOssService.ObjectExistsAsync` 检查 OSS 文件是否存在
   - 调用 `IOssService.ListObjectsAsync("docretrieval/")` 列出所有 OSS 文件
   - 反向比对：OSS 文件路径不在任何 document 的 `file_path` 中 = 孤儿文件
   - 返回：`{ orphanOssFiles: string[], brokenDocuments: { id, title, filePath, status }[] }`
 
-- [ ] REQ-CONSISTENCY-02 强制删除端点：`DELETE /admin/documents/{id}/force`
+- [x] REQ-CONSISTENCY-02 强制删除端点：`DELETE /admin/documents/{id}/force`
   - 获取文档记录（不存在返回 404）
   - 删除 DB 记录（级联删除 pages/segments/occurrences/jobs）
   - 尝试删除 OSS 文件（失败不阻塞，仅记日志）
   - 同步删除搜索索引
   - 返回删除结果
 
-- [ ] REQ-CONSISTENCY-03 扫描效率：DB 侧按 `file_path` 去重后检查 OSS，不逐条记录检查
-- [ ] REQ-CONSISTENCY-04 扫描效率：OSS 侧检查是否有任意 document 关联即可，不逐文件查 DB
+- [x] REQ-CONSISTENCY-03 扫描效率：DB 侧按 `file_path` 去重后检查 OSS，不逐条记录检查
+- [x] REQ-CONSISTENCY-04 扫描效率：OSS 侧检查是否有任意 document 关联即可，不逐文件查 DB
 
 ## 验收场景
 

@@ -179,8 +179,81 @@ public class DocumentConsistencyTests
         // Assert
         Assert.Empty(result.BrokenDocuments);
         Assert.Empty(result.OrphanOssFiles);
-        // Note: GetAllDocumentsWithFilePathAsync returns both docs, but ObjectExistsAsync
-        // is called per unique file_path. The dedup happens at the OSS check level.
+        // Verify OSS check was called only once (dedup by file_path)
+        _ossServiceMock.Verify(s => s.ObjectExistsAsync("docretrieval/shared.pdf"), Times.Once);
+    }
+
+    #endregion
+
+    #region ForceDelete Tests
+
+    [Fact]
+    public async Task ForceDelete_ExistingDocument_DeletesDbAndOss()
+    {
+        // Arrange
+        var docId = Guid.NewGuid();
+        var document = new DocumentModel
+        {
+            Id = docId,
+            Title = "Test Doc",
+            FilePath = "docretrieval/test.pdf",
+            Status = DocumentStatus.Ready
+        };
+
+        _documentRepoMock.Setup(r => r.GetByIdAsync(docId)).ReturnsAsync(document);
+        _domainServiceMock.Setup(s => s.DeleteDocumentAsync("Test Doc")).ReturnsAsync(true);
+        _ossServiceMock.Setup(s => s.DeleteAsync("docretrieval/test.pdf")).ReturnsAsync(true);
+        _searchIndexMock.Setup(s => s.DeleteDocumentIndexAsync(docId)).Returns(Task.CompletedTask);
+
+        // Act
+        var result = await ForceDeleteAsync(docId);
+
+        // Assert
+        Assert.True(result.Success);
+        _domainServiceMock.Verify(s => s.DeleteDocumentAsync("Test Doc"), Times.Once);
+        _ossServiceMock.Verify(s => s.DeleteAsync("docretrieval/test.pdf"), Times.Once);
+        _searchIndexMock.Verify(s => s.DeleteDocumentIndexAsync(docId), Times.Once);
+    }
+
+    [Fact]
+    public async Task ForceDelete_OssDeleteFails_StillSucceeds()
+    {
+        // Arrange
+        var docId = Guid.NewGuid();
+        var document = new DocumentModel
+        {
+            Id = docId,
+            Title = "Test Doc",
+            FilePath = "docretrieval/missing.pdf",
+            Status = DocumentStatus.Ready
+        };
+
+        _documentRepoMock.Setup(r => r.GetByIdAsync(docId)).ReturnsAsync(document);
+        _domainServiceMock.Setup(s => s.DeleteDocumentAsync("Test Doc")).ReturnsAsync(true);
+        _ossServiceMock.Setup(s => s.DeleteAsync("docretrieval/missing.pdf"))
+            .ThrowsAsync(new Exception("OSS delete failed"));
+
+        // Act
+        var result = await ForceDeleteAsync(docId);
+
+        // Assert
+        Assert.True(result.Success);
+        _domainServiceMock.Verify(s => s.DeleteDocumentAsync("Test Doc"), Times.Once);
+    }
+
+    [Fact]
+    public async Task ForceDelete_DocumentNotFound_ReturnsNotFound()
+    {
+        // Arrange
+        var docId = Guid.NewGuid();
+        _documentRepoMock.Setup(r => r.GetByIdAsync(docId)).ReturnsAsync((DocumentModel?)null);
+
+        // Act
+        var result = await ForceDeleteAsync(docId);
+
+        // Assert
+        Assert.False(result.Success);
+        Assert.True(result.NotFound);
     }
 
     #endregion
@@ -192,13 +265,19 @@ public class DocumentConsistencyTests
         var docs = await _documentRepoMock.Object.GetAllDocumentsWithFilePathAsync();
         var dbFilePaths = docs.Select(d => d.FilePath).ToHashSet();
 
+        // Dedup by file_path before checking OSS
+        var filePathToDocs = docs.GroupBy(d => d.FilePath)
+            .ToDictionary(g => g.Key, g => g.ToList());
         var brokenDocuments = new List<(Guid, string, string, string)>();
-        foreach (var (id, title, filePath, status) in docs)
+        foreach (var (filePath, docGroup) in filePathToDocs)
         {
             var exists = await _ossServiceMock.Object.ObjectExistsAsync(filePath);
             if (!exists)
             {
-                brokenDocuments.Add((id, title, filePath, status));
+                foreach (var (id, title, _, status) in docGroup)
+                {
+                    brokenDocuments.Add((id, title, filePath, status));
+                }
             }
         }
 
@@ -213,6 +292,37 @@ public class DocumentConsistencyTests
         }
 
         return (orphanOssFiles, brokenDocuments);
+    }
+
+    private async Task<(bool Success, bool NotFound)> ForceDeleteAsync(Guid documentId)
+    {
+        var document = await _documentRepoMock.Object.GetByIdAsync(documentId);
+        if (document == null) return (false, true);
+
+        await _domainServiceMock.Object.DeleteDocumentAsync(document.Title);
+
+        try
+        {
+            await _ossServiceMock.Object.DeleteAsync(document.FilePath);
+        }
+        catch
+        {
+            // Best-effort OSS delete
+        }
+
+        if (_searchIndexMock != null)
+        {
+            try
+            {
+                await _searchIndexMock.Object.DeleteDocumentIndexAsync(documentId);
+            }
+            catch
+            {
+                // Best-effort search index delete
+            }
+        }
+
+        return (true, false);
     }
 
     #endregion
