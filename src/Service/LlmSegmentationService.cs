@@ -516,7 +516,7 @@ public class LlmSegmentationService : ILlmSegmentationService
                     throw new InvalidOperationException("LLM returned empty response");
                 }
 
-                _logger.LogInformation("LLM call completed in {ElapsedMs}ms, output length={Length}", sw.ElapsedMilliseconds, content.Length);
+                _logger.LogInformation("LLM call completed in {ElapsedMs}ms, output:\n{Content}", sw.ElapsedMilliseconds, content);
                 return content;
             }
             catch (Exception ex) when (attempt < _options.MaxRetries)
@@ -573,11 +573,12 @@ public class LlmSegmentationService : ILlmSegmentationService
                             }
                             result.Append(text);
 
-                            // Log streaming progress every 1000 chars
+                            // Log streaming progress with preview every 1000 chars
                             if (result.Length - lastLogLength >= 1000)
                             {
-                                _logger.LogInformation("LLM streaming: {ElapsedMs}ms, {CharCount} chars received",
-                                    sw.ElapsedMilliseconds, result.Length);
+                                var preview = result.ToString(Math.Max(0, result.Length - 100), Math.Min(100, result.Length));
+                                _logger.LogInformation("LLM streaming: {ElapsedMs}ms, {CharCount} chars | ...{Preview}",
+                                    sw.ElapsedMilliseconds, result.Length, preview);
                                 lastLogLength = result.Length;
                             }
                         }
