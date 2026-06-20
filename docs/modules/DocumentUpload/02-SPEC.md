@@ -8,7 +8,7 @@
 
 ## 功能要求清单（可独立测试）
 
-- [x] REQ-UPLOAD-01 能接收 multipart/form-data 请求，提取 `file`、`title`（可选）、`subject`（可选）、`grade`（可选）、`year`（可选）、`tags`（可选）字段。标题默认从文件名（不含扩展名）自动填充。
+- [x] REQ-UPLOAD-01 能接收 multipart/form-data 请求，前端只需提供 `file` 和 `title`。`subject`、`grade`、`year` 由 AI 自动识别填充，`tags` 可选。标题默认从文件名（不含扩展名）自动填充。
 - [x] REQ-UPLOAD-02 能校验文件存在性：`file` 为空或长度为 0 时返回 400（`DOCRETRIEVAL_FILE_REQUIRED`）。
 - [x] REQ-UPLOAD-03 能校验文件大小：超过 200MB 返回 400。
 - [x] REQ-UPLOAD-04 能校验文件格式：仅支持 PDF/Word/PPT 的 MIME 类型，不符返回 400（`DOCRETRIEVAL_FILE_FORMAT_UNSUPPORTED`）。

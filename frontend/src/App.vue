@@ -1158,42 +1158,6 @@ async function submitRefinement() {
             </div>
           </div>
           <div class="form-group">
-            <label>科目 (可选，留空由 AI 自动识别)</label>
-            <div class="select-wrap">
-              <select v-model="uploadForm.subject">
-                <option value="">AI 自动识别</option>
-                <option value="英语">英语</option>
-              </select>
-            </div>
-          </div>
-          <div class="form-group">
-            <label>年级 (可选，留空由 AI 自动识别)</label>
-            <div class="select-wrap">
-              <select v-model="uploadForm.grade">
-                <option value="">AI 自动识别</option>
-                <option value="K">幼儿园</option>
-                <option value="G1">一年级</option>
-                <option value="G2">二年级</option>
-                <option value="G3">三年级</option>
-                <option value="G4">四年级</option>
-                <option value="G5">五年级</option>
-                <option value="G6">六年级</option>
-                <option value="G7">初一</option>
-                <option value="G8">初二</option>
-                <option value="G9">初三</option>
-                <option value="G10">高一</option>
-                <option value="G11">高二</option>
-                <option value="G12">高三</option>
-              </select>
-            </div>
-          </div>
-          <div class="form-group">
-            <label>年份 (可选，留空由 AI 自动识别)</label>
-            <div class="input-wrap">
-              <input v-model="uploadForm.year" type="text" placeholder="留空由 AI 自动识别，如 2024" />
-            </div>
-          </div>
-          <div class="form-group">
             <label>标签 (逗号分隔)</label>
             <div class="input-wrap">
               <input v-model="uploadForm.tags" type="text" placeholder="可选，用逗号分隔" />
