@@ -25,6 +25,12 @@ public class LlmSegmentationOptions
     public string Model { get; set; } = string.Empty;
 
     /// <summary>
+    /// Model context length in tokens. If set, skips the /models API call.
+    /// If not set and /models API also fails, LLM segmentation is disabled.
+    /// </summary>
+    public int ContextLength { get; set; }
+
+    /// <summary>
     /// Maximum tokens for LLM response (dynamically calculated at startup)
     /// </summary>
     public int MaxTokens { get; set; } = 2048;
@@ -45,7 +51,8 @@ public class LlmSegmentationOptions
     public int MaxRetries => 3;
 
     /// <summary>
-    /// Timeout in seconds (fixed at 60)
+    /// Timeout in seconds for LLM API calls. Configurable via LlmSegmentation__TimeoutSeconds.
+    /// Default 300s. Increase for large documents or slow models.
     /// </summary>
-    public int TimeoutSeconds => 60;
+    public int TimeoutSeconds { get; set; } = 300;
 }

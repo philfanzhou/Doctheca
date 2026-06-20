@@ -598,9 +598,9 @@ public partial class DocumentParserService : IDocumentParserService
 
         if (nonEmptyPages.Count == 0) return;
 
-        // Chunk by capacity
-        var chunkSize = _llmSegmentation?.ChunkSize ?? 0;
-        if (chunkSize <= 0) chunkSize = 1500;
+        // Determine chunk size — if LLM is not available (ChunkSize <= 0), use rule-based fallback
+        var llmAvailable = _llmSegmentation != null && profile != null && _llmSegmentation.ChunkSize > 0;
+        var chunkSize = llmAvailable ? _llmSegmentation!.ChunkSize : 1500;
         var chunks = ChunkByCapacity(nonEmptyPages, chunkSize);
 
         _logger.LogInformation("Segmenting {PageCount} pages in {ChunkCount} chunks (ChunkSize={ChunkSize})",
@@ -617,11 +617,11 @@ public partial class DocumentParserService : IDocumentParserService
             List<SegmentWithOffset> segments;
 
             // Try LLM segmentation, fall back to rule-based
-            if (_llmSegmentation != null && profile != null)
+            if (llmAvailable && profile != null)
             {
                 try
                 {
-                    var llmSegments = await _llmSegmentation.SegmentTextAsync(chunk.Text, profile, cancellationToken);
+                    var llmSegments = await _llmSegmentation!.SegmentTextAsync(chunk.Text, profile, cancellationToken);
                     if (llmSegments.Count > 0)
                     {
                         segments = llmSegments.Select(s => new SegmentWithOffset

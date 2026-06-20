@@ -59,13 +59,17 @@ public class LlmSegmentationService : ILlmSegmentationService
 
         try
         {
-            // Try fetching model info from /v1/models/{model}
-            // Many OpenAI-compatible APIs don't support this endpoint, so we try multiple approaches
-            var contextLength = await TryFetchContextLengthAsync(cancellationToken);
+            var contextLength = _options.ContextLength;
+
+            // If ContextLength not configured, try fetching from API
+            if (contextLength <= 0)
+            {
+                contextLength = await TryFetchContextLengthAsync(cancellationToken);
+            }
 
             if (contextLength > 0)
             {
-                // Calculate optimal parameters from actual model capabilities
+                // Calculate optimal parameters from context length
                 _options.MaxTokens = (int)(contextLength * 0.25);
                 var availableInputTokens = contextLength - 200 - _options.MaxTokens;
                 _options.ChunkSize = (int)(availableInputTokens * 1.5);
@@ -76,27 +80,29 @@ public class LlmSegmentationService : ILlmSegmentationService
             }
             else
             {
-                // Model info not available — use reasonable defaults for modern LLMs (128K context)
-                _options.MaxTokens = 4096;
-                _options.ChunkSize = 140000;
+                // No context length available — disable LLM segmentation
+                _options.MaxTokens = 0;
+                _options.ChunkSize = 0;
 
                 _logger.LogWarning(
-                    "LLM model info not available, using 128K context defaults: Model={Model}, MaxTokens={MaxTokens}, ChunkSize={ChunkSize}",
-                    _options.Model, _options.MaxTokens, _options.ChunkSize);
+                    "LLM segmentation disabled: ContextLength not configured and model info unavailable. " +
+                    "Set LlmSegmentation__ContextLength in config to enable. Model={Model}",
+                    _options.Model);
             }
 
             _initialized = true;
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "LLM initialization failed, using safe defaults: MaxTokens={MaxTokens}, ChunkSize={ChunkSize}",
-                _options.MaxTokens, _options.ChunkSize);
+            _logger.LogWarning(ex, "LLM initialization failed, segmentation disabled");
+            _options.MaxTokens = 0;
+            _options.ChunkSize = 0;
             _initialized = true;
         }
     }
 
     /// <summary>
-    /// Try to fetch model context length. Tries multiple endpoints since not all APIs support /models/{id}.
+    /// Try to fetch model context length from API. Returns 0 if unavailable.
     /// </summary>
     private async Task<int> TryFetchContextLengthAsync(CancellationToken cancellationToken)
     {
@@ -118,38 +124,6 @@ public class LlmSegmentationService : ILlmSegmentationService
         catch (Exception ex)
         {
             _logger.LogDebug(ex, "GET /models/{Model} failed", _options.Model);
-        }
-
-        // Approach 2: GET /v1/models (list all models, find ours)
-        try
-        {
-            var response = await _httpClient.GetAsync("models", cancellationToken);
-            if (response.IsSuccessStatusCode)
-            {
-                var json = await response.Content.ReadAsStringAsync(cancellationToken);
-                // Try to parse as OpenAI-compatible model list
-                using var doc = System.Text.Json.JsonDocument.Parse(json);
-                if (doc.RootElement.TryGetProperty("data", out var data))
-                {
-                    foreach (var model in data.EnumerateArray())
-                    {
-                        var id = model.TryGetProperty("id", out var idProp) ? idProp.GetString() : null;
-                        if (id == _options.Model || id?.Contains(_options.Model) == true)
-                        {
-                            if (model.TryGetProperty("context_length", out var ctxProp) && ctxProp.GetInt32() > 0)
-                            {
-                                var ctx = ctxProp.GetInt32();
-                                _logger.LogInformation("Model info fetched from /models list: ContextLength={ContextLength}", ctx);
-                                return ctx;
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogDebug(ex, "GET /models list failed");
         }
 
         return 0;
@@ -505,7 +479,6 @@ public class LlmSegmentationService : ILlmSegmentationService
             }
         }
 
-        // This should not be reached due to the exception in the loop, but compiler needs it
         throw new InvalidOperationException("LLM call failed after all retries");
     }
 

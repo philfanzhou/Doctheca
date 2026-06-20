@@ -33,6 +33,8 @@ OSS_BUCKET="ruoyu-study"
 LLM_API_KEY=""
 LLM_BASE_URL="https://api.siliconflow.cn/v1"
 LLM_MODEL="Qwen/Qwen2.5-7B-Instruct"
+LLM_CONTEXT_LENGTH="131072"  # 128K tokens - must match the actual model's context window
+LLM_TIMEOUT_SECONDS="300"    # LLM API timeout in seconds - increase for large documents or slow models
 
 docker network inspect "$NETWORK_NAME" >/dev/null 2>&1 || docker network create "$NETWORK_NAME"
 
@@ -65,6 +67,8 @@ docker run -d \
   -e LlmSegmentation__ApiKey="${LLM_API_KEY}" \
   -e LlmSegmentation__BaseUrl="${LLM_BASE_URL}" \
   -e LlmSegmentation__Model="${LLM_MODEL}" \
+  -e LlmSegmentation__ContextLength="${LLM_CONTEXT_LENGTH:-131072}" \
+  -e LlmSegmentation__TimeoutSeconds="${LLM_TIMEOUT_SECONDS:-300}" \
   -e Logging__LogLevel__Microsoft_EntityFrameworkCore_Database_Command="Warning" \
   "$IMAGE_NAME"
 
