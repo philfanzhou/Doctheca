@@ -484,6 +484,7 @@ public class LlmSegmentationService : ILlmSegmentationService
     {
         for (var attempt = 1; attempt <= _options.MaxRetries; attempt++)
         {
+            var sw = System.Diagnostics.Stopwatch.StartNew();
             try
             {
                 var request = new
@@ -495,30 +496,92 @@ public class LlmSegmentationService : ILlmSegmentationService
                         new { role = "user", content = prompt }
                     },
                     max_tokens = _options.MaxTokensValue,
-                    temperature = _options.Temperature
+                    temperature = _options.Temperature,
+                    stream = true
                 };
 
-                var response = await _httpClient.PostAsJsonAsync("chat/completions", request, JsonOptions, cancellationToken);
+                var httpRequest = new HttpRequestMessage(HttpMethod.Post, "chat/completions")
+                {
+                    Content = JsonContent.Create(request, options: JsonOptions)
+                };
+
+                // ResponseHeadersRead: don't buffer the full response, start reading as headers arrive
+                var response = await _httpClient.SendAsync(httpRequest, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
                 response.EnsureSuccessStatusCode();
 
-                var result = await response.Content.ReadFromJsonAsync<ChatCompletionResponse>(JsonOptions, cancellationToken);
-                var content = result?.Choices?.FirstOrDefault()?.Message?.Content;
+                var content = await ReadSseStreamAsync(response.Content, sw, cancellationToken);
 
                 if (string.IsNullOrWhiteSpace(content))
                 {
                     throw new InvalidOperationException("LLM returned empty response");
                 }
 
+                _logger.LogInformation("LLM call completed in {ElapsedMs}ms, output length={Length}", sw.ElapsedMilliseconds, content.Length);
                 return content;
             }
             catch (Exception ex) when (attempt < _options.MaxRetries)
             {
-                _logger.LogWarning(ex, "LLM call attempt {Attempt}/{MaxRetries} failed, retrying", attempt, _options.MaxRetries);
+                _logger.LogWarning(ex, "LLM call attempt {Attempt}/{MaxRetries} failed after {ElapsedMs}ms, retrying",
+                    attempt, _options.MaxRetries, sw.ElapsedMilliseconds);
                 await Task.Delay(TimeSpan.FromSeconds(1 * attempt), cancellationToken);
             }
         }
 
         throw new InvalidOperationException("LLM call failed after all retries");
+    }
+
+    /// <summary>
+    /// Read OpenAI-compatible SSE stream and accumulate content.
+    /// Logs time-to-first-token for diagnostics.
+    /// </summary>
+    private async Task<string> ReadSseStreamAsync(
+        HttpContent content, System.Diagnostics.Stopwatch sw, CancellationToken cancellationToken)
+    {
+        var result = new StringBuilder();
+        var firstTokenLogged = false;
+
+        using var stream = await content.ReadAsStreamAsync(cancellationToken);
+        using var reader = new StreamReader(stream);
+
+        while (!reader.EndOfStream)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var line = await reader.ReadLineAsync(cancellationToken);
+            if (string.IsNullOrWhiteSpace(line)) continue;
+            if (!line.StartsWith("data: ")) continue;
+
+            var data = line["data: ".Length..];
+            if (data == "[DONE]") break;
+
+            try
+            {
+                using var doc = JsonDocument.Parse(data);
+                var choices = doc.RootElement.GetProperty("choices");
+                if (choices.GetArrayLength() > 0)
+                {
+                    var delta = choices[0].GetProperty("delta");
+                    if (delta.TryGetProperty("content", out var contentProp))
+                    {
+                        var text = contentProp.GetString();
+                        if (!string.IsNullOrEmpty(text))
+                        {
+                            if (!firstTokenLogged)
+                            {
+                                _logger.LogInformation("LLM first token after {ElapsedMs}ms", sw.ElapsedMilliseconds);
+                                firstTokenLogged = true;
+                            }
+                            result.Append(text);
+                        }
+                    }
+                }
+            }
+            catch (JsonException)
+            {
+                // Skip malformed SSE chunks
+            }
+        }
+
+        return result.ToString();
     }
 
     #endregion

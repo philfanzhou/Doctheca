@@ -440,24 +440,24 @@ public class LlmSegmentationServiceTests
             System.Text.Encoding.UTF8,
             "application/json");
 
-        // Mock /chat/completions endpoint
+        // Mock /chat/completions endpoint — SSE streaming format
         var chatResponse = new HttpResponseMessage(statusCode);
         if (llmResponse != null && statusCode == HttpStatusCode.OK)
         {
-            var chatCompletionResponse = new
+            var sseBuilder = new System.Text.StringBuilder();
+            var chunkSize = Math.Max(1, llmResponse.Length / 3);
+            for (var i = 0; i < llmResponse.Length; i += chunkSize)
             {
-                choices = new[]
-                {
-                    new
-                    {
-                        message = new { content = llmResponse }
-                    }
-                }
-            };
+                var chunk = llmResponse[i..Math.Min(i + chunkSize, llmResponse.Length)];
+                var sseChunk = new { choices = new[] { new { delta = new { content = chunk } } } };
+                sseBuilder.Append($"data: {JsonSerializer.Serialize(sseChunk)}\n\n");
+            }
+            sseBuilder.Append("data: [DONE]\n\n");
+
             chatResponse.Content = new StringContent(
-                JsonSerializer.Serialize(chatCompletionResponse),
+                sseBuilder.ToString(),
                 System.Text.Encoding.UTF8,
-                "application/json");
+                "text/event-stream");
         }
 
         handlerMock
