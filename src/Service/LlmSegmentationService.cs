@@ -74,10 +74,14 @@ public class LlmSegmentationService : ILlmSegmentationService
             if (contextLength > 0)
             {
                 // ChunkSize: use 80% of remaining context for input (20% safety margin)
-                // Some APIs have independent input limits or reject requests that fill the context window
                 var availableInputTokens = contextLength - 200 - _options.MaxTokensValue;
                 var safeInputTokens = (int)(availableInputTokens * 0.8);
-                _options.ChunkSize = (int)(safeInputTokens * 1.5);
+                var calculatedChunkSize = (int)(safeInputTokens * 1.5);
+
+                // Cap ChunkSize at 100K characters to keep individual LLM calls fast.
+                // More calls with smaller chunks > fewer calls that timeout.
+                const int maxChunkSize = 100_000;
+                _options.ChunkSize = Math.Min(calculatedChunkSize, maxChunkSize);
 
                 _logger.LogInformation(
                     "LLM model initialized: Model={Model}, ContextLength={ContextLength}, MaxTokens={MaxTokens}, ChunkSize={ChunkSize}",
