@@ -379,7 +379,7 @@ public class DocumentDomainService : IDocumentDomainService
             throw new DocRetrievalValidationException(string.Join("; ", errors));
     }
 
-    public async Task UpdateDocumentProfileAsync(Guid documentId, string profileJson, string? subject = null, string? grade = null)
+    public async Task UpdateDocumentProfileAsync(Guid documentId, string profileJson, string? subject = null, string? grade = null, string? year = null)
     {
         var document = await _documentRepository.GetByIdAsync(documentId);
         if (document == null) return;
@@ -387,6 +387,7 @@ public class DocumentDomainService : IDocumentDomainService
         document.LlmProfileJson = profileJson;
         if (!string.IsNullOrWhiteSpace(subject)) document.Subject = subject;
         if (!string.IsNullOrWhiteSpace(grade)) document.Grade = grade;
+        if (!string.IsNullOrWhiteSpace(year)) document.Year = year;
         document.UpdatedAt = DateTimeOffset.UtcNow;
         await _documentRepository.UpdateAsync(document);
         await _unitOfWork.SaveChangesAsync();

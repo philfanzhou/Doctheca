@@ -43,6 +43,7 @@
 {
   "subject": "English|语文|数学|物理|化学|生物|其他",
   "grade": "K|G1-G12|空字符串（无法判断时）",
+  "year": "2024|2025|空字符串（无法判断时）",
   "docType": "教材|知识点过关单|单词表|短语表|试卷|其他",
   "structure": {
     "hasChapters": true,
@@ -57,33 +58,34 @@
 **Prompt 设计**：
 
 ```
-你是一个文档分析专家。分析以下文本片段，识别文档的学科、类型和结构特征。
+你是一个文档分析专家。分析以下文本片段，识别文档的学科、年级、年份、类型和结构特征。
 
 学科类型：
-- English：英语教材、阅读材料
-- 语文：语文教材、文言文、现代文
-- 数学：数学教材、习题集
-- 物理：物理教材、实验报告
-- 化学：化学教材、实验报告
-- 生物：生物教材
-- 其他：无法明确判断
+- English、语文、数学、物理、化学、生物、其他
+
+年级（从标题或内容推断）：
+- K：幼儿园/学前
+- G1-G12：小学一年级到高三
+- 无法判断时返回空字符串
+
+年份（从标题、页眉、版权页等推断，格式为4位数字如"2024"）：
+- 无法判断时返回空字符串
 
 文档类型：
-- 教材：正式教学材料，包含章节、知识点讲解
-- 知识点过关单：知识点列表，通常有编号
-- 单词表：英文单词+中文释义的列表
-- 短语表：英文短语+中文释义的列表
-- 试卷：包含题号、选项的考试材料
-- 其他：无法明确判断
+- 教材、知识点过关单、单词表、短语表、试卷、其他
 
 分段策略：
-- sentence：按完整句子分段（适合教材、阅读材料）
-- concept：按概念/知识点分段（适合知识点过关单）
-- word_entry：按词条分段（适合单词表、短语表）
-- question：按题目分段（适合试卷）
-- knowledge_point：按知识点分段（适合理科教材）
+- sentence、concept、word_entry、question、knowledge_point
 
-请分析以下文本并返回 JSON 格式的文档画像：
+请返回 JSON：
+{
+  "subject": "学科",
+  "grade": "年级",
+  "year": "年份",
+  "doc_type": "文档类型",
+  "segment_strategy": "分段策略",
+  "structure": { "has_chapters": bool, "has_questions": bool, "has_word_list": bool, "has_formulas": bool }
+}
 
 {text_preview}
 ```
@@ -169,6 +171,8 @@ public interface ILlmSegmentationService
 public record DocumentProfile
 {
     public string Subject { get; init; }      // 学科
+    public string Grade { get; init; }        // 年级: K, G1-G12
+    public string Year { get; init; }         // 年份: 2024, 2025
     public string DocType { get; init; }      // 文档类型
     public string SegmentStrategy { get; init; } // 分段策略
     public DocumentStructure Structure { get; init; }

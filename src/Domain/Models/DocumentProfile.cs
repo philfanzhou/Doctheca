@@ -16,6 +16,11 @@ public record DocumentProfile
     public string Grade { get; init; } = string.Empty;
 
     /// <summary>
+    /// Year: e.g. "2024", "2025", or empty if undetermined
+    /// </summary>
+    public string Year { get; init; } = string.Empty;
+
+    /// <summary>
     /// Document type: 教材, 知识点过关单, 单词表, 短语表, 试卷, 其他
     /// </summary>
     public string DocType { get; init; } = "其他";

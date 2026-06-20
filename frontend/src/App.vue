@@ -1188,9 +1188,9 @@ async function submitRefinement() {
             </div>
           </div>
           <div class="form-group">
-            <label>年份 (可选)</label>
+            <label>年份 (可选，留空由 AI 自动识别)</label>
             <div class="input-wrap">
-              <input v-model="uploadForm.year" type="text" placeholder="例如: 2024" />
+              <input v-model="uploadForm.year" type="text" placeholder="留空由 AI 自动识别，如 2024" />
             </div>
           </div>
           <div class="form-group">

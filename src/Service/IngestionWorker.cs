@@ -75,9 +75,10 @@ public class IngestionWorker : BackgroundService
                         {
                             document.LlmProfileJson = JsonSerializer.Serialize(parsedDocument.Profile);
 
-                            // AI auto-fill subject/grade if not provided by user
+                            // AI auto-fill subject/grade/year if not provided by user
                             string? aiSubject = null;
                             string? aiGrade = null;
+                            string? aiYear = null;
                             if (string.IsNullOrWhiteSpace(document.Subject) && parsedDocument.Profile.Subject != "其他")
                             {
                                 aiSubject = parsedDocument.Profile.Subject;
@@ -88,10 +89,15 @@ public class IngestionWorker : BackgroundService
                                 aiGrade = parsedDocument.Profile.Grade;
                                 _logger.LogInformation("AI auto-filled grade: {DocumentId}, Grade={Grade}", document.Id, aiGrade);
                             }
+                            if (string.IsNullOrWhiteSpace(document.Year) && !string.IsNullOrWhiteSpace(parsedDocument.Profile.Year))
+                            {
+                                aiYear = parsedDocument.Profile.Year;
+                                _logger.LogInformation("AI auto-filled year: {DocumentId}, Year={Year}", document.Id, aiYear);
+                            }
 
-                            await domainService.UpdateDocumentProfileAsync(document.Id, document.LlmProfileJson, aiSubject, aiGrade);
-                            _logger.LogInformation("LLM profile saved: {DocumentId}, Subject={Subject}, Grade={Grade}, Strategy={Strategy}",
-                                document.Id, parsedDocument.Profile.Subject, parsedDocument.Profile.Grade, parsedDocument.Profile.SegmentStrategy);
+                            await domainService.UpdateDocumentProfileAsync(document.Id, document.LlmProfileJson, aiSubject, aiGrade, aiYear);
+                            _logger.LogInformation("LLM profile saved: {DocumentId}, Subject={Subject}, Grade={Grade}, Year={Year}, Strategy={Strategy}",
+                                document.Id, parsedDocument.Profile.Subject, parsedDocument.Profile.Grade, parsedDocument.Profile.Year, parsedDocument.Profile.SegmentStrategy);
                         }
 
                         // Write parsing results to database

@@ -238,10 +238,10 @@ DocumentAdminEndpoints.UploadDocument
   │     │
   │     ├─ ValidateDocumentMetadata(document)
   │     │     ├─ Title 为空或 >200 字符 → 抛异常
-  │     │     ├─ Subject 不在 ValidSubjects → 抛异常
-  │     │     ├─ Grade 不在 ValidGrades → 抛异常
-  │     │     ├─ Year 为空 → 抛异常
+  │     │     ├─ Subject 非空且不在 ValidSubjects → 抛异常
+  │     │     ├─ Grade 非空且不在 ValidGrades → 抛异常
   │     │     └─ FileHash 为空 → 抛异常
+  │     │     （Subject/Grade/Year 为空时由 AI 自动填充，不校验）
   │     │
   │     ├─ GetByTitleAsync(title) → 非空 → 抛异常 ("Document title already exists")
     │     │
