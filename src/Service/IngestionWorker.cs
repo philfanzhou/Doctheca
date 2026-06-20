@@ -74,9 +74,24 @@ public class IngestionWorker : BackgroundService
                         if (parsedDocument.Profile != null)
                         {
                             document.LlmProfileJson = JsonSerializer.Serialize(parsedDocument.Profile);
-                            await domainService.UpdateDocumentProfileAsync(document.Id, document.LlmProfileJson);
-                            _logger.LogInformation("LLM profile saved: {DocumentId}, Subject={Subject}, Strategy={Strategy}",
-                                document.Id, parsedDocument.Profile.Subject, parsedDocument.Profile.SegmentStrategy);
+
+                            // AI auto-fill subject/grade if not provided by user
+                            string? aiSubject = null;
+                            string? aiGrade = null;
+                            if (string.IsNullOrWhiteSpace(document.Subject) && parsedDocument.Profile.Subject != "其他")
+                            {
+                                aiSubject = parsedDocument.Profile.Subject;
+                                _logger.LogInformation("AI auto-filled subject: {DocumentId}, Subject={Subject}", document.Id, aiSubject);
+                            }
+                            if (string.IsNullOrWhiteSpace(document.Grade) && !string.IsNullOrWhiteSpace(parsedDocument.Profile.Grade))
+                            {
+                                aiGrade = parsedDocument.Profile.Grade;
+                                _logger.LogInformation("AI auto-filled grade: {DocumentId}, Grade={Grade}", document.Id, aiGrade);
+                            }
+
+                            await domainService.UpdateDocumentProfileAsync(document.Id, document.LlmProfileJson, aiSubject, aiGrade);
+                            _logger.LogInformation("LLM profile saved: {DocumentId}, Subject={Subject}, Grade={Grade}, Strategy={Strategy}",
+                                document.Id, parsedDocument.Profile.Subject, parsedDocument.Profile.Grade, parsedDocument.Profile.SegmentStrategy);
                         }
 
                         // Write parsing results to database

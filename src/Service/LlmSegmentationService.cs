@@ -258,7 +258,7 @@ public class LlmSegmentationService : ILlmSegmentationService
     private static string BuildAnalysisPrompt(string textPreview)
     {
         return $$"""
-            你是一个文档分析专家。分析以下文本片段，识别文档的学科、类型和结构特征。
+            你是一个文档分析专家。分析以下文本片段，识别文档的学科、年级、类型和结构特征。
 
             学科类型：
             - English：英语教材、阅读材料
@@ -268,6 +268,11 @@ public class LlmSegmentationService : ILlmSegmentationService
             - 化学：化学教材、实验报告
             - 生物：生物教材
             - 其他：无法明确判断
+
+            年级（从标题或内容推断）：
+            - K：幼儿园/学前
+            - G1-G12：小学一年级到高三
+            - 无法判断时返回空字符串
 
             文档类型：
             - 教材：正式教学材料，包含章节、知识点讲解
@@ -289,6 +294,7 @@ public class LlmSegmentationService : ILlmSegmentationService
             ```json
             {
               "subject": "学科",
+              "grade": "年级",
               "doc_type": "文档类型",
               "segment_strategy": "分段策略",
               "structure": {
@@ -526,6 +532,7 @@ public class LlmSegmentationService : ILlmSegmentationService
             return new DocumentProfile
             {
                 Subject = parsed.Subject ?? "其他",
+                Grade = parsed.Grade ?? string.Empty,
                 DocType = parsed.DocType ?? "其他",
                 SegmentStrategy = strategy,
                 Structure = new DocumentStructure
@@ -667,6 +674,9 @@ public class LlmSegmentationService : ILlmSegmentationService
     {
         [JsonPropertyName("subject")]
         public string? Subject { get; init; }
+
+        [JsonPropertyName("grade")]
+        public string? Grade { get; init; }
 
         [JsonPropertyName("doc_type")]
         public string? DocType { get; init; }

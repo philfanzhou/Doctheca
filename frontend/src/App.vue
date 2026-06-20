@@ -202,8 +202,8 @@ async function loadDocuments() {
 }
 
 async function handleUpload() {
-  if (!uploadFile.value || !uploadForm.value.title || !uploadForm.value.subject || !uploadForm.value.grade) {
-    ElMessage.warning('请填写所有必填字段并选择文件')
+  if (!uploadFile.value || !uploadForm.value.title) {
+    ElMessage.warning('请选择文件并填写标题')
     return
   }
 
@@ -1126,9 +1126,9 @@ async function submitRefinement() {
         </div>
         <div class="dialog-body">
           <div class="form-group">
-            <label>文档标题</label>
+            <label>文档标题 (选择文件后自动填充)</label>
             <div class="input-wrap">
-              <input v-model="uploadForm.title" type="text" placeholder="请输入文档标题" />
+              <input v-model="uploadForm.title" type="text" placeholder="选择文件后自动填充，可修改" />
             </div>
           </div>
           <div class="form-group">
@@ -1158,19 +1158,19 @@ async function submitRefinement() {
             </div>
           </div>
           <div class="form-group">
-            <label>科目</label>
+            <label>科目 (可选，留空由 AI 自动识别)</label>
             <div class="select-wrap">
               <select v-model="uploadForm.subject">
-                <option value="">请选择</option>
+                <option value="">AI 自动识别</option>
                 <option value="英语">英语</option>
               </select>
             </div>
           </div>
           <div class="form-group">
-            <label>年级</label>
+            <label>年级 (可选，留空由 AI 自动识别)</label>
             <div class="select-wrap">
               <select v-model="uploadForm.grade">
-                <option value="">请选择</option>
+                <option value="">AI 自动识别</option>
                 <option value="K">幼儿园</option>
                 <option value="G1">一年级</option>
                 <option value="G2">二年级</option>

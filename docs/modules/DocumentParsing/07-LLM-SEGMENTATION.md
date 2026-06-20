@@ -42,6 +42,7 @@
 ```json
 {
   "subject": "English|语文|数学|物理|化学|生物|其他",
+  "grade": "K|G1-G12|空字符串（无法判断时）",
   "docType": "教材|知识点过关单|单词表|短语表|试卷|其他",
   "structure": {
     "hasChapters": true,

@@ -8,22 +8,23 @@
 
 ## 功能要求清单（可独立测试）
 
-- [x] REQ-UPLOAD-01 能接收 multipart/form-data 请求，提取 `file`、`title`、`subject`、`grade`、`year`、`tags` 字段。
+- [x] REQ-UPLOAD-01 能接收 multipart/form-data 请求，提取 `file`、`title`（可选）、`subject`（可选）、`grade`（可选）、`year`（可选）、`tags`（可选）字段。标题默认从文件名（不含扩展名）自动填充。
 - [x] REQ-UPLOAD-02 能校验文件存在性：`file` 为空或长度为 0 时返回 400（`DOCRETRIEVAL_FILE_REQUIRED`）。
 - [x] REQ-UPLOAD-03 能校验文件大小：超过 200MB 返回 400。
 - [x] REQ-UPLOAD-04 能校验文件格式：仅支持 PDF/Word/PPT 的 MIME 类型，不符返回 400（`DOCRETRIEVAL_FILE_FORMAT_UNSUPPORTED`）。
 - [x] REQ-UPLOAD-05 能检测加密 PDF：在 PDF 文件前 4096 字节中搜索 `/Encrypt` 标记，命中返回 400（`DOCRETRIEVAL_FILE_ENCRYPTED`）。
 - [x] REQ-UPLOAD-06 能计算文件 SHA-256 哈希，计算后将 `stream.Position` 重置为 0 再上传 OSS。
 - [x] REQ-UPLOAD-07 能上传文件到 OSS，路径格式为 `documents/docretrieval/{Guid}{ext}`，使用 `OssBucket.Documents` 桶（独立于图片的 `uploads` 桶，避免被僵尸图片审计误扫）。
-- [x] REQ-UPLOAD-08 能校验元数据：`title`/`subject`/`grade` 必填，`year` 可选；缺少必填项返回 400（`DOCRETRIEVAL_METADATA_REQUIRED`）；`title` 不超过 200 字符。
+- [x] REQ-UPLOAD-08 能校验元数据：`title` 必填（不超过 200 字符），`subject`/`grade` 可选（为空时由 AI 自动填充），`year`/`tags` 可选。
 - [x] REQ-UPLOAD-08a 前端选择文件后，自动将文件名（不含扩展名）填入标题输入框；若标题字段已有内容则不覆盖。
-- [x] REQ-UPLOAD-09 能校验学科与年级：学科仅支持"英语"（`DOCRETRIEVAL_SUBJECT_INVALID`），年级必须为 K/G1~G12（`DOCRETRIEVAL_GRADE_INVALID`）。
+- [x] REQ-UPLOAD-09 能校验学科与年级（仅在非空时校验）：学科仅支持"英语"（`DOCRETRIEVAL_SUBJECT_INVALID`），年级必须为 K/G1~G12（`DOCRETRIEVAL_GRADE_INVALID`）。为空时不校验，由 AI 自动填充。
 - [x] REQ-UPLOAD-10 能检测标题重复：相同标题已存在返回 409（`DOCRETRIEVAL_TITLE_ALREADY_EXISTS`）。
 - [x] REQ-UPLOAD-11 能检测文件哈希重复：相同哈希且状态为 `ready` 的文档已存在返回 409（`DOCRETRIEVAL_FILE_HASH_ALREADY_EXISTS`）。
 - [x] REQ-UPLOAD-12 能原子创建文档记录与导入任务：在同一 `SaveChangesAsync` 中写入 `documents` 和 `document_ingestion_jobs` 表。
 - [x] REQ-UPLOAD-13 能根据 MIME 类型推导 `sourceType`：PDF→`pdf`、Word→`word`、PPT→`ppt`。
 - [x] REQ-UPLOAD-14 能返回创建结果：包含 `documentId`、`title`、`jobId`、`status`。
 - [x] REQ-UPLOAD-15 上传时从 JWT 提取用户 ID（`ClaimTypes.NameIdentifier`），写入 `documents.created_by` 字段。未登录或 claim 缺失时 `created_by` 为 null。
+- [x] REQ-UPLOAD-16 AI 自动填充学科和年级：文档解析时 LLM 分析前 2000 字符，自动识别 subject 和 grade，写入 `documents.subject` 和 `documents.grade`。用户上传时手动指定的值优先于 AI 识别结果。
 
 ## 详细的验收标准（可自动验证）
 

@@ -86,9 +86,14 @@ public static class DocumentAdminEndpoints
         var year = form["year"].ToString();
         var tags = form["tags"].ToString();
 
-        if (string.IsNullOrWhiteSpace(title) || string.IsNullOrWhiteSpace(subject)
-            || string.IsNullOrWhiteSpace(grade))
-            return Results.BadRequest(new { success = false, message = "Required metadata missing (title/subject/grade)", errorCode = "DOCRETRIEVAL_METADATA_REQUIRED" });
+        // Auto-fill title from filename if not provided
+        if (string.IsNullOrWhiteSpace(title))
+        {
+            title = Path.GetFileNameWithoutExtension(file.FileName);
+        }
+
+        if (string.IsNullOrWhiteSpace(title))
+            return Results.BadRequest(new { success = false, message = "Title is required", errorCode = "DOCRETRIEVAL_METADATA_REQUIRED" });
 
         string fileHash;
         string filePath;

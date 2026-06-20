@@ -11,6 +11,11 @@ public record DocumentProfile
     public string Subject { get; init; } = "其他";
 
     /// <summary>
+    /// Grade: K, G1-G12, or empty if undetermined
+    /// </summary>
+    public string Grade { get; init; } = string.Empty;
+
+    /// <summary>
     /// Document type: 教材, 知识点过关单, 单词表, 短语表, 试卷, 其他
     /// </summary>
     public string DocType { get; init; } = "其他";

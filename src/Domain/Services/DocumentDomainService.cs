@@ -365,14 +365,11 @@ public class DocumentDomainService : IDocumentDomainService
         if (document.Title?.Length > 200)
             errors.Add("Document title exceeds 200 characters");
 
-        if (string.IsNullOrWhiteSpace(document.Subject))
-            errors.Add("Subject cannot be empty");
-        else if (!DocRetrievalConstants.IsValidSubject(document.Subject))
+        // Subject and grade are optional (AI auto-fills if empty)
+        if (!string.IsNullOrWhiteSpace(document.Subject) && !DocRetrievalConstants.IsValidSubject(document.Subject))
             errors.Add("Subject only supports: English");
 
-        if (string.IsNullOrWhiteSpace(document.Grade))
-            errors.Add("Grade cannot be empty");
-        else if (!DocRetrievalConstants.IsValidGrade(document.Grade))
+        if (!string.IsNullOrWhiteSpace(document.Grade) && !DocRetrievalConstants.IsValidGrade(document.Grade))
             errors.Add($"Invalid grade value, valid values: {string.Join(", ", DocRetrievalConstants.ValidGrades)}");
 
         if (string.IsNullOrWhiteSpace(document.FileHash))
@@ -382,12 +379,14 @@ public class DocumentDomainService : IDocumentDomainService
             throw new DocRetrievalValidationException(string.Join("; ", errors));
     }
 
-    public async Task UpdateDocumentProfileAsync(Guid documentId, string profileJson)
+    public async Task UpdateDocumentProfileAsync(Guid documentId, string profileJson, string? subject = null, string? grade = null)
     {
         var document = await _documentRepository.GetByIdAsync(documentId);
         if (document == null) return;
 
         document.LlmProfileJson = profileJson;
+        if (!string.IsNullOrWhiteSpace(subject)) document.Subject = subject;
+        if (!string.IsNullOrWhiteSpace(grade)) document.Grade = grade;
         document.UpdatedAt = DateTimeOffset.UtcNow;
         await _documentRepository.UpdateAsync(document);
         await _unitOfWork.SaveChangesAsync();
