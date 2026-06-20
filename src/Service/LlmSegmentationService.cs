@@ -467,20 +467,14 @@ public class LlmSegmentationService : ILlmSegmentationService
                         new { role = "user", content = prompt }
                     },
                     max_tokens = _options.MaxTokensValue,
-                    temperature = _options.Temperature,
-                    stream = true
+                    temperature = _options.Temperature
                 };
 
-                var httpRequest = new HttpRequestMessage(HttpMethod.Post, "chat/completions")
-                {
-                    Content = JsonContent.Create(request, options: JsonOptions)
-                };
-
-                // ResponseHeadersRead: don't buffer the full response, start reading as headers arrive
-                var response = await _httpClient.SendAsync(httpRequest, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+                var response = await _httpClient.PostAsJsonAsync("chat/completions", request, JsonOptions, cancellationToken);
                 response.EnsureSuccessStatusCode();
 
-                var content = await ReadSseStreamAsync(response.Content, sw, cancellationToken);
+                var result = await response.Content.ReadFromJsonAsync<ChatCompletionResponse>(JsonOptions, cancellationToken);
+                var content = result?.Choices?.FirstOrDefault()?.Message?.Content;
 
                 if (string.IsNullOrWhiteSpace(content))
                 {
@@ -499,70 +493,6 @@ public class LlmSegmentationService : ILlmSegmentationService
         }
 
         throw new InvalidOperationException("LLM call failed after all retries");
-    }
-
-    /// <summary>
-    /// Read OpenAI-compatible SSE stream and accumulate content.
-    /// Logs time-to-first-token for diagnostics.
-    /// </summary>
-    private async Task<string> ReadSseStreamAsync(
-        HttpContent content, System.Diagnostics.Stopwatch sw, CancellationToken cancellationToken)
-    {
-        var result = new StringBuilder();
-        var firstTokenLogged = false;
-        var lastLogLength = 0;
-
-        using var stream = await content.ReadAsStreamAsync(cancellationToken);
-        using var reader = new StreamReader(stream);
-
-        while (!reader.EndOfStream)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            var line = await reader.ReadLineAsync(cancellationToken);
-            if (string.IsNullOrWhiteSpace(line)) continue;
-            if (!line.StartsWith("data: ")) continue;
-
-            var data = line["data: ".Length..];
-            if (data == "[DONE]") break;
-
-            try
-            {
-                using var doc = JsonDocument.Parse(data);
-                var choices = doc.RootElement.GetProperty("choices");
-                if (choices.GetArrayLength() > 0)
-                {
-                    var delta = choices[0].GetProperty("delta");
-                    if (delta.TryGetProperty("content", out var contentProp))
-                    {
-                        var text = contentProp.GetString();
-                        if (!string.IsNullOrEmpty(text))
-                        {
-                            if (!firstTokenLogged)
-                            {
-                                _logger.LogInformation("LLM first token after {ElapsedMs}ms", sw.ElapsedMilliseconds);
-                                firstTokenLogged = true;
-                            }
-                            result.Append(text);
-
-                            // Log streaming progress with preview every 1000 chars
-                            if (result.Length - lastLogLength >= 1000)
-                            {
-                                var preview = result.ToString(Math.Max(0, result.Length - 100), Math.Min(100, result.Length));
-                                _logger.LogInformation("LLM streaming: {ElapsedMs}ms, {CharCount} chars | ...{Preview}",
-                                    sw.ElapsedMilliseconds, result.Length, preview);
-                                lastLogLength = result.Length;
-                            }
-                        }
-                    }
-                }
-            }
-            catch (JsonException)
-            {
-                // Skip malformed SSE chunks
-            }
-        }
-
-        return result.ToString();
     }
 
     #endregion
