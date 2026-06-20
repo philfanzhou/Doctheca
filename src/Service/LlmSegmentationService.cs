@@ -78,9 +78,9 @@ public class LlmSegmentationService : ILlmSegmentationService
                 var safeInputTokens = (int)(availableInputTokens * 0.8);
                 var calculatedChunkSize = (int)(safeInputTokens * 1.5);
 
-                // Cap ChunkSize at 100K characters to keep individual LLM calls fast.
+                // Cap ChunkSize to keep individual LLM calls fast and avoid timeouts.
                 // More calls with smaller chunks > fewer calls that timeout.
-                const int maxChunkSize = 100_000;
+                const int maxChunkSize = 5_000;
                 _options.ChunkSize = Math.Min(calculatedChunkSize, maxChunkSize);
 
                 _logger.LogInformation(
