@@ -71,8 +71,9 @@ public class LlmSegmentationService : ILlmSegmentationService
 
             if (contextLength > 0)
             {
-                // Calculate optimal parameters from context length
-                _options.MaxTokens = (int)(contextLength * 0.25);
+                // MaxTokens: cap at 8192 (most APIs don't support more for output)
+                _options.MaxTokens = Math.Min(8192, (int)(contextLength * 0.25));
+                // ChunkSize: use remaining context for input, with 1.5 chars/token ratio
                 var availableInputTokens = contextLength - 200 - _options.MaxTokens;
                 _options.ChunkSize = (int)(availableInputTokens * 1.5);
 
