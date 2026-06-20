@@ -253,24 +253,8 @@ public class DocumentParserService : IDocumentParserService
         // 4. 构建 ParsedDocument（现有逻辑不变）
     }
 
-    private async Task<List<ParsedSegment>> SplitSentencesWithLlmAsync(
-        string blockText,
-        DocumentProfile profile,
-        CancellationToken cancellationToken)
-    {
-        var segments = await _llmSegmentation.SegmentTextAsync(blockText, profile, cancellationToken);
-
-        return segments.Select((seg, index) => new ParsedSegment
-        {
-            BlockId = $"b{index}",
-            SentenceId = $"b{index}-s{index}",
-            SegmentType = seg.SegmentType,
-            Text = seg.Text,
-            StartOffset = seg.StartOffset,
-            EndOffset = seg.EndOffset,
-            Tokens = Tokenize(seg.Text)
-        }).ToList();
-    }
+    // 按容量切块 + LLM 分段，详见 03-DESIGN.md 中的 ChunkByCapacity 设计
+    // SentenceId 格式：p{pageNumber}-s{segmentIndex}
 }
 ```
 
@@ -384,10 +368,8 @@ private async Task<List<ParsedSegment>> SplitSentencesWithFallbackAsync(
 文档上传
   │
   ▼
-提取原始文本（现有逻辑不变）
-  │
-  ▼
-合并文本块（MergeTextIntoBlocks，现有逻辑不变）
+提取页面文本（PDF 逐页 / Word 分页检测 / PPT 逐 slide）
+  │  输出：List<(PageNumber, Text)>
   │
   ▼
 阶段一：LLM 文档分析
@@ -395,12 +377,22 @@ private async Task<List<ParsedSegment>> SplitSentencesWithFallbackAsync(
   │  输出：DocumentProfile（学科+类型+分段策略）
   │
   ▼
-阶段二：LLM 智能分段
-  │  输入：文本块 + DocumentProfile
+按容量切块（ChunkByCapacity）
+  │  输入：页面文本 + ChunkSize
+  │  逻辑：拼接页面 → 按 ChunkSize 切块 → 优先在段落边界断开
+  │  输出：List<TextChunk>（含 offset→page 映射）
+  │
+  ▼
+阶段二：LLM 智能分段（每个 chunk 1 次调用）
+  │  输入：chunk.Text + DocumentProfile
   │  输出：List<SegmentResult>
   │
   ▼
-构建 ParsedSegment（现有逻辑不变）
+回映射到页码（MapOffsetToPage）
+  │  每个 segment 的 offset → 对应 PageNumber
+  │
+  ▼
+构建 ParsedSegment（SentenceId = p{N}-s{K}）
   │
   ▼
 Tokenize（现有逻辑不变）
@@ -408,6 +400,10 @@ Tokenize（现有逻辑不变）
   ▼
 写入 DB / OpenSearch（现有逻辑不变）
 ```
+
+**Refine 流程共享同一套切块 + 回映射逻辑**，区别仅在于：
+- 初始拆分调用 `SegmentTextAsync`，refine 调用 `RefineSegmentTextAsync`
+- 初始拆分从文件提取页面文本，refine 从已有 segment text 拼回
 
 ## 测试策略
 

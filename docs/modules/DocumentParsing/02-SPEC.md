@@ -118,7 +118,7 @@ Scenario: 3 页 PDF 生成 3 条 page 记录
 **Segments**:
 - 遍历所有页的所有 segment，生成 DocumentSegmentModel
 - `PageId` 通过 `pageLookup[page.PageNumber]` 获取
-- 字段映射：`BlockId`、`SentenceId`、`SegmentType`、`Text`、`StartOffset`、`EndOffset`
+- 字段映射：`SentenceId`、`SegmentType`、`Text`、`StartOffset`、`EndOffset`
 - 批量写入：`ISegmentRepository.AddRangeAsync(segmentModels)`
 - 映射构建：`segmentLookup = segmentModels.ToDictionary(s => s.SentenceId, s => s.Id)`
 
@@ -160,8 +160,8 @@ Scenario: Question 的 PageId 正确映射
 **验收场景**:
 ```gherkin
 Scenario: Segment Token 的 SegmentId 正确映射
-  Given segmentLookup["p1-b1-s1"] = Guid-S1
-  And ParsedSegment(SentenceId="p1-b1-s1") 包含 3 个 Token
+  Given segmentLookup["p1-s1"] = Guid-S1
+  And ParsedSegment(SentenceId="p1-s1") 包含 3 个 Token
   When 写入 occurrences
   Then 3 个 DocumentOccurrenceModel 的 SegmentId = Guid-S1，QuestionSegmentId = null
 
@@ -248,12 +248,13 @@ Scenario: 非 failed 状态不可重试
 
 - 两阶段处理：
   1. 阶段一：文档分析（1 次 LLM 调用）→ 识别学科、文档类型、分段策略
-  2. 阶段二：智能分段（N 次 LLM 调用，按分块处理）→ 基于文档画像分段
+  2. 阶段二：智能分段（按容量切块，每块 1 次 LLM 调用）→ 基于文档画像分段
 - 支持的学科：English、语文、数学、物理、化学、生物、其他
 - 支持的文档类型：教材、知识点过关单、单词表、短语表、试卷、其他
 - 分段策略：sentence（按句子）、concept（按概念）、word_entry（按词条）、question（按题目）、knowledge_point（按知识点）
-- 分块大小：2000-3000 字
+- 切块策略：按 ChunkSize 容量切块，优先在段落边界断开（详见 REQ-PARSE-13）
 - LLM 调用失败时回退到现有规则切割
+- 初始拆分与 refine 共享同一套切块 + LLM 调用逻辑
 
 **验收场景**:
 ```gherkin
@@ -385,6 +386,103 @@ Scenario: FailIngestionJobAsync 失败时记录日志
   And FailIngestionJobAsync 也抛出异常
   Then 记录 "标记导入任务失败时出错" 日志
   And Worker 继续运行
+```
+
+---
+
+### REQ-PARSE-12：Word 文档分页检测
+
+**优先级**: P0 | **状态**: 待实现
+
+Word 文档（.docx）的文件格式中不包含固定物理页面信息，页码是渲染时根据纸张大小、字体、边距动态计算的。当前实现将整个 Word 文档作为单页处理（`PageNumber = 1`），导致所有 segment 的页码均为 1，丢失了页码定位信息。
+
+**检测策略**：仅检测 XML 中的显式分页标记，不进行估算。检测优先级从高到低：
+
+1. **显式分页符**（`w:br type="page"`）：用户通过 Ctrl+Enter 插入的分页符，对应 OpenXml `Break` 类型 `BreakValues.Page`
+2. **段前分页**（`w:pageBreakBefore`）：段落属性中的"段前分页"设置，对应 OpenXml `PageBreakBefore` 类
+3. **样式级段前分页**：段落引用的样式中包含 `PageBreakBefore` 属性
+4. **节分隔符**（`w:sectPr`）：`SectionType` 为 `NextPage`/`EvenPage`/`OddPage` 的节分隔符（`Continuous` 不产生分页）
+
+**降级行为**：若以上 4 种信号均未检测到，文档保持为单页（`PageNumber = 1`），并记录 `LogWarning` 日志提示"未检测到分页标记"。
+
+**不处理的场景**：
+- 软分页（内容溢出自动换页）：XML 中不存在此信息，OpenXml 无法检测
+- `LastRenderedPageBreak`：仅 Word 保存时写入的布局缓存，不可靠，不作为检测信号
+
+**验收场景**:
+```gherkin
+Scenario: 含显式分页符的 Word 文档正确分页
+  Given Word 文档包含 2 个显式分页符（Ctrl+Enter）
+  When 调用 ParseAsync
+  Then 返回 ParsedDocument 包含 3 个 ParsedPage（PageNumber = 1, 2, 3）
+
+Scenario: 含节分隔符的 Word 文档正确分页
+  Given Word 文档包含 1 个 NextPage 类型的节分隔符
+  When 调用 ParseAsync
+  Then 返回 ParsedDocument 包含 2 个 ParsedPage
+
+Scenario: 无分页标记的 Word 文档降级为单页
+  Given Word 文档无任何显式分页标记
+  When 调用 ParseAsync
+  Then 返回 ParsedDocument 包含 1 个 ParsedPage（PageNumber = 1）
+  And 日志输出 LogWarning "未检测到分页标记"
+
+Scenario: Continuous 节分隔符不产生分页
+  Given Word 文档包含 1 个 Continuous 类型的节分隔符
+  When 调用 ParseAsync
+  Then 该节分隔符不被识别为分页标记
+```
+
+---
+
+### REQ-PARSE-13：按容量切块 LLM 分段
+
+**优先级**: P0 | **状态**: 待实现
+
+LLM 分段不再按物理边界（block/页）逐个调用，而是按 ChunkSize 容量切块，充分利用上下文窗口，减少 LLM 调用次数。
+
+**切块策略**：
+1. 提取所有页面文本，拼接为连续文本流，页面间用 `\n\n` 分隔
+2. 维护 `offset → pageNumber` 映射表
+3. 按 ChunkSize 切块，优先在段落边界（`\n\n`）处断开，不在句子中间切
+4. 每个块发 1 次 LLM 调用
+5. LLM 返回的 segment 按 offset 回映射到原始页码
+
+**初始拆分与 refine 共享**：
+- 两种流程使用相同的 `ChunkByCapacity` 切块逻辑
+- 两种流程使用相同的 `MapOffsetToPage` 回映射逻辑
+- 区别仅在于：初始拆分调用 `SegmentTextAsync`，refine 调用 `RefineSegmentTextAsync`
+
+**SentenceId 格式**：`p{pageNumber}-s{segmentIndex}`（移除 block 层级）
+
+**验收场景**:
+```gherkin
+Scenario: 20 页文档按容量切块
+  Given 文档有 20 页，总文本约 30000 字符
+  And ChunkSize = 147000 字符（128K 上下文）
+  When 调用 LLM 分段
+  Then LLM 调用次数为 1（全部文本在 1 个 chunk 内）
+  And 返回的 segment 按 offset 回映射到正确的 PageNumber
+
+Scenario: 超长文档分多个 chunk
+  Given 文档有 100 页，总文本约 200000 字符
+  And ChunkSize = 147000 字符
+  When 调用 LLM 分段
+  Then LLM 调用次数为 2
+  And 每个 chunk 的 segment 都映射到正确的 PageNumber
+
+Scenario: 跨页逻辑块保持完整
+  Given 一道题目从第 3 页末尾开始，选项在第 4 页开头
+  And 两页文本在同一个 chunk 内
+  When LLM 分段
+  Then 该题目被识别为 1 个完整 segment
+  And segment 的 PageNumber = 3（以题干所在页为准）
+
+Scenario: refine 与初始拆分共享切块逻辑
+  Given 文档已入库，用户提交修正
+  When 调用 refine 流程
+  Then 使用与初始拆分相同的 ChunkByCapacity 切块
+  And LLM 调用次数与初始拆分相同
 ```
 
 ---

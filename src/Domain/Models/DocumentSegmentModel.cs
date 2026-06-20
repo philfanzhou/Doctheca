@@ -7,7 +7,6 @@ public class DocumentSegmentModel
     public Guid Id { get; set; } = Guid.NewGuid();
     public Guid DocumentId { get; set; }
     public Guid PageId { get; set; }
-    public string BlockId { get; set; } = string.Empty;
     public string SentenceId { get; set; } = string.Empty;
     public string SegmentType { get; set; } = SegmentTypes.Sentence;
 

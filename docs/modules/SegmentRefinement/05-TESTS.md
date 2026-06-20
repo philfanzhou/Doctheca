@@ -25,7 +25,7 @@
 | T-09c | 拆分并合并（无相邻段） | 1 sentenceId + splitMerge + 首段无前一段 | 前半独立，后半与下一段合并 |
 | T-10 | 修正数量超限 (>20) | 21 corrections | 抛出验证异常 |
 | T-11 | 文档不在 ready 状态 | processing document | 抛出验证异常 |
-| T-12 | LLM 调用失败 | LLM returns error | 回滚到备份 + 抛出异常 |
+| T-12 | 单页 LLM 调用失败 | 某页 LLM returns error | 创建新实体复制原内容，其余页正常继续，整体不抛异常 |
 
 ### LLM Refinement 测试
 

@@ -9,8 +9,7 @@
 | `id` | `UUID` | PRIMARY KEY | | 片段唯一标识 |
 | `document_id` | `UUID` | NOT NULL, FK → documents(id) | | 所属文档 |
 | `page_id` | `UUID` | NOT NULL, FK → document_pages(id) | | 所在页面 |
-| `block_id` | `VARCHAR(50)` | NOT NULL | | 逻辑块 ID（段落级） |
-| `sentence_id` | `VARCHAR(50)` | NOT NULL | | 句子 ID |
+| `sentence_id` | `VARCHAR(50)` | NOT NULL | | 句子 ID（格式：`p{pageNumber}-s{index}`） |
 | `segment_type` | `VARCHAR(20)` | NOT NULL | `'sentence'` | 片段类型 |
 | `text` | `TEXT` | NOT NULL | | 文本内容 |
 | `start_offset` | `INT` | NOT NULL | | 起始偏移量 |

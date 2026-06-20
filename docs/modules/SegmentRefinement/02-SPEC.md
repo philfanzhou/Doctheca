@@ -65,7 +65,7 @@ GET /admin/documents/{id}/segments
     "segments": [
       {
         "id": "uuid",
-        "sentenceId": "p1-b1-s1",
+        "sentenceId": "p1-s1",
         "segmentType": "sentence",
         "text": "segment 文本内容",
         "startOffset": 0,
@@ -103,19 +103,19 @@ POST /admin/documents/{id}/refine
 {
   "corrections": [
     {
-      "originalSentenceIds": ["p1-b1-s1", "p1-b1-s2"],
+      "originalSentenceIds": ["p1-s1", "p1-s2"],
       "action": "merge",
       "newText": "合并后的文本",
       "newSegmentType": "sentence"
     },
     {
-      "originalSentenceIds": ["p1-b2-s1"],
+      "originalSentenceIds": ["p1-s3"],
       "action": "split",
       "splitPosition": 25,
       "newSegmentType": "concept"
     },
     {
-      "originalSentenceIds": ["p1-b3-s1"],
+      "originalSentenceIds": ["p1-s4"],
       "action": "retype",
       "newSegmentType": "concept"
     }
@@ -132,7 +132,7 @@ POST /admin/documents/{id}/refine
 **splitMerge 示例：**
 ```json
 {
-  "originalSentenceIds": ["p1-b2-s1"],
+  "originalSentenceIds": ["p1-s3"],
   "action": "splitMerge",
   "splitPosition": 25,
   "mergeFirstWithPrevious": true,
@@ -192,7 +192,7 @@ POST /admin/documents/{id}/refine
 
 - GIVEN 用户提交了 3 条修正，WHEN 构造 prompt，THEN prompt 包含 3 个 few-shot examples
 - GIVEN LLM 返回新的分段结果，WHEN 解析结果，THEN 返回有效的 segments 列表
-- GIVEN LLM 调用失败，WHEN 重试 3 次后仍失败，THEN 回滚到备份的旧 segments
+- GIVEN 某页 LLM 调用失败，WHEN 该页 refine 异常，THEN 创建新实体复制原有 segment 内容（不回滚），其余页正常继续
 
 ---
 
@@ -241,11 +241,11 @@ POST /admin/documents/{id}/refine
 │                                                              │
 │  Segments (共 47 条)              [全选] [合并选中] [重新拆分] │
 │  ┌────────────────────────────────────────────────────────┐  │
-│  │ ☐ p1-b1-s1  [sentence]  📄 P1                         │  │
+│  │ ☐ p1-s1  [sentence]  📄 P1                         │  │
 │  │   "My name is Li Hua, a student from China."          │  │
 │  │   [改类型]                                              │  │
 │  │                                                        │  │
-│  │ ☐ p1-b1-s2  [sentence]  📄 P1                         │  │
+│  │ ☐ p1-s2  [sentence]  📄 P1                         │  │
 │  │   "I'm writing to tell you about our school life."    │  │
 │  │   [改类型]                                              │  │
 │  └────────────────────────────────────────────────────────┘  │
@@ -262,7 +262,7 @@ POST /admin/documents/{id}/refine
 | 合并 | 选中 2+ 条 → 点击"合并选中" | 将选中的 segments 合并为一条，文本拼接 |
 | 拆分 | 点击 segment → 点击"拆分" → 输入位置 | 在指定位置拆分为两条 |
 | 改类型 | 点击 segment 的类型标签 | 弹出下拉框选择新类型 |
-| 撤销 | 点击"撤销" | 回退上一步操作 |
+| 撤销 | 点击"撤销" | 清除所有修正并从服务器重新加载 segments（逐个撤销不安全，剩余修正引用的 sentenceId 在重载后已过期） |
 | 提交 | 点击"提交修正" | 收集所有修正 → 调用 refine API |
 
 ### 验收场景
@@ -281,5 +281,5 @@ POST /admin/documents/{id}/refine
 | 性能 | 获取 segments API 响应 < 500ms |
 | 性能 | 重新拆分耗时取决于文档大小，需显示进度 |
 | 安全 | 仅管理员可访问（RequireAuthorization） |
-| 可靠性 | 重新拆分失败时自动回滚，不丢失数据 |
-| 可用性 | 操作可撤销，提交前显示预览 |
+| 可靠性 | LLM 失败的页面自动保留原有分段内容（新建实体），备份单独保存（fire-and-forget），不丢失数据 |
+| 可用性 | 所有操作可一次性撤销，提交前显示预览 |

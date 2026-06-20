@@ -36,11 +36,10 @@
 |---|---------|---------|---------|---------|
 | UT-P-01 | PDF 解析返回正确页数 | REQ-PARSE-03 | 3 页 PDF 文件流 | ParsedDocument.Pages.Count == 3 |
 | UT-P-02 | PDF 空白页生成空 ParsedPage | REQ-PARSE-03 | PDF 某页无文本 | 该页 Segments 和 Questions 为空 |
-| UT-P-03 | Word 解析视为单页 | REQ-PARSE-03 | DOCX 文件流 | ParsedDocument.Pages.Count == 1，PageNumber == 1 |
+| UT-P-03 | Word 按显式分页符分页 | REQ-PARSE-12 | 含分页符的 DOCX | ParsedDocument.Pages.Count > 1 |
 | UT-P-04 | PPT 每页幻灯片对应一个 ParsedPage | REQ-PARSE-03 | 5 页 PPTX | ParsedDocument.Pages.Count == 5 |
 | UT-P-05 | 不支持的文件类型抛出 NotSupportedException | REQ-PARSE-03 | sourceType = "xlsx" | 抛出 NotSupportedException |
-| UT-P-06 | SentenceId 格式为 {blockId}-s{index} | REQ-PARSE-03 | 解析含多句的块 | SentenceId 如 "p1-b1-s1"、"p1-b1-s2" |
-| UT-P-07 | BlockId 格式为 p{page}-b{index} | REQ-PARSE-03 | 解析含多块的页 | BlockId 如 "p1-b1"、"p1-b2" |
+| UT-P-06 | SentenceId 格式为 p{page}-s{index} | REQ-PARSE-13 | 解析含多句的页 | SentenceId 如 "p1-s1"、"p1-s2" |
 | UT-P-08 | Token 分词只保留英文单词 | REQ-PARSE-03 | 文本含数字和标点 | Tokens 仅含字母组成的单词 |
 | UT-P-09 | Porter 词干还原正确 | REQ-PARSE-03 | TokenText = "running" | TokenStem = "run" |
 | UT-P-10 | 句子边界识别排除缩写 | REQ-PARSE-03 | 文本含 "Mr. Smith" | 不在 "Mr." 后切分句子 |

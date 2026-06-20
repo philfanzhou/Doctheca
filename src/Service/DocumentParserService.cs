@@ -35,6 +35,176 @@ public partial class DocumentParserService : IDocumentParserService
     [GeneratedRegex(@"^\s*([A-Da-d])\s*[.、．)\]】]", RegexOptions.Compiled)]
     private static partial Regex OptionRegex();
 
+    #region Chunking Infrastructure
+
+    /// <summary>
+    /// A text chunk with offset-to-page mapping for LLM segmentation.
+    /// </summary>
+    internal record TextChunk
+    {
+        public string Text { get; init; } = string.Empty;
+        public int GlobalStartOffset { get; init; }
+        public List<PageRange> PageRanges { get; init; } = [];
+    }
+
+    /// <summary>
+    /// Maps a character range within a chunk to a page number.
+    /// </summary>
+    internal record PageRange
+    {
+        public int ChunkStartOffset { get; init; }
+        public int ChunkEndOffset { get; init; }
+        public int PageNumber { get; init; }
+    }
+
+    /// <summary>
+    /// Concatenate page texts and split into chunks by capacity (ChunkSize).
+    /// Prefers splitting at paragraph boundaries (\n\n) to preserve semantic coherence.
+    /// </summary>
+    internal static List<TextChunk> ChunkByCapacity(
+        List<(int PageNumber, string Text)> pages, int chunkSize)
+    {
+        if (pages.Count == 0) return [];
+
+        // Build the full text with page separator tracking
+        var fullText = new StringBuilder();
+        var pageRanges = new List<(int GlobalStart, int GlobalEnd, int PageNumber)>();
+        var separator = "\n\n";
+
+        for (var i = 0; i < pages.Count; i++)
+        {
+            var (pageNumber, text) = pages[i];
+            if (string.IsNullOrWhiteSpace(text)) continue;
+
+            var globalStart = fullText.Length;
+            if (fullText.Length > 0)
+            {
+                fullText.Append(separator);
+            }
+            fullText.Append(text);
+            var globalEnd = fullText.Length;
+
+            pageRanges.Add((globalStart, globalEnd, pageNumber));
+        }
+
+        if (fullText.Length == 0) return [];
+
+        var textStr = fullText.ToString();
+        var chunks = new List<TextChunk>();
+        var pos = 0;
+
+        while (pos < textStr.Length)
+        {
+            var remaining = textStr.Length - pos;
+            if (remaining <= chunkSize)
+            {
+                // Last chunk
+                chunks.Add(CreateChunk(textStr[pos..], pos, pageRanges));
+                break;
+            }
+
+            // Find the best split point within chunkSize
+            var splitAt = FindSplitPoint(textStr, pos, chunkSize);
+            chunks.Add(CreateChunk(textStr[pos..splitAt], pos, pageRanges));
+            pos = splitAt;
+        }
+
+        return chunks;
+    }
+
+    /// <summary>
+    /// Find the best split point within the text, preferring paragraph boundaries.
+    /// </summary>
+    private static int FindSplitPoint(string text, int start, int maxLength)
+    {
+        var end = Math.Min(start + maxLength, text.Length);
+        if (end >= text.Length) return text.Length;
+
+        // Look for paragraph boundary (\n\n) near the end, searching backward
+        var searchLen = Math.Min(maxLength / 5, end - start); // search within 20% of chunk size
+        var searchFrom = end - 1;
+
+        // Try paragraph boundary (\n\n)
+        if (searchLen >= 2)
+        {
+            var paraBreak = text.LastIndexOf("\n\n", searchFrom, searchLen);
+            if (paraBreak > start)
+            {
+                return paraBreak + 2;
+            }
+        }
+
+        // Fallback: single newline
+        var newline = text.LastIndexOf('\n', searchFrom, searchLen);
+        if (newline > start)
+        {
+            return newline + 1;
+        }
+
+        // Last fallback: space
+        var space = text.LastIndexOf(' ', searchFrom, searchLen);
+        if (space > start)
+        {
+            return space + 1;
+        }
+
+        // Hard split at max length
+        return end;
+    }
+
+    /// <summary>
+    /// Create a TextChunk from a substring with page range mapping.
+    /// </summary>
+    private static TextChunk CreateChunk(string text, int globalStart,
+        List<(int GlobalStart, int GlobalEnd, int PageNumber)> pageRanges)
+    {
+        var globalEnd = globalStart + text.Length;
+        var ranges = new List<PageRange>();
+
+        foreach (var (pStart, pEnd, pNum) in pageRanges)
+        {
+            // Check overlap between chunk range and page range
+            var overlapStart = Math.Max(globalStart, pStart);
+            var overlapEnd = Math.Min(globalEnd, pEnd);
+            if (overlapStart < overlapEnd)
+            {
+                ranges.Add(new PageRange
+                {
+                    ChunkStartOffset = overlapStart - globalStart,
+                    ChunkEndOffset = overlapEnd - globalStart,
+                    PageNumber = pNum
+                });
+            }
+        }
+
+        return new TextChunk
+        {
+            Text = text,
+            GlobalStartOffset = globalStart,
+            PageRanges = ranges
+        };
+    }
+
+    /// <summary>
+    /// Map a chunk-local offset to the corresponding page number.
+    /// If the offset spans pages, returns the page where the offset starts.
+    /// </summary>
+    internal static int MapOffsetToPage(List<PageRange> pageRanges, int chunkOffset)
+    {
+        foreach (var range in pageRanges)
+        {
+            if (chunkOffset >= range.ChunkStartOffset && chunkOffset < range.ChunkEndOffset)
+            {
+                return range.PageNumber;
+            }
+        }
+
+        // Fallback: return the last page range's number
+        return pageRanges.Count > 0 ? pageRanges[^1].PageNumber : 1;
+    }
+
+    #endregion
+
     public DocumentParserService(
         ILogger<DocumentParserService> logger,
         ILlmSegmentationService? llmSegmentation = null)
@@ -89,103 +259,12 @@ public partial class DocumentParserService : IDocumentParserService
             profile = await AnalyzeDocumentAsync(pageTexts, cancellationToken);
         }
 
-        // Store profile in result
         result.Profile = profile;
 
-        // Second pass: segment each page
-        foreach (var (pageNumber, pageText) in pageTexts)
-        {
-            var parsedPage = new ParsedPage { PageNumber = pageNumber };
-
-            if (string.IsNullOrWhiteSpace(pageText))
-            {
-                result.Pages.Add(parsedPage);
-                continue;
-            }
-
-            var blocks = MergeTextIntoBlocks(pageText);
-            var globalOffset = 0;
-
-            for (var blockIndex = 0; blockIndex < blocks.Count; blockIndex++)
-            {
-                var blockText = blocks[blockIndex];
-                var blockId = $"p{pageNumber}-b{blockIndex + 1}";
-
-                // Sentence splitting with LLM fallback
-                var segments = await SplitSentencesWithFallbackAsync(blockText, profile, cancellationToken);
-                for (var sentIndex = 0; sentIndex < segments.Count; sentIndex++)
-                {
-                    var seg = segments[sentIndex];
-                    parsedPage.Segments.Add(new ParsedSegment
-                    {
-                        BlockId = blockId,
-                        SentenceId = $"{blockId}-s{sentIndex + 1}",
-                        SegmentType = seg.SegmentType,
-                        Text = seg.Text,
-                        StartOffset = globalOffset + seg.StartOffset,
-                        EndOffset = globalOffset + seg.EndOffset,
-                        Tokens = Tokenize(seg.Text)
-                    });
-                }
-
-                // Update globalOffset based on last segment
-                if (segments.Count > 0)
-                {
-                    globalOffset += segments[^1].EndOffset;
-                }
-                else
-                {
-                    globalOffset += blockText.Length;
-                }
-
-                // Question boundary detection
-                var questions = ExtractQuestions(blockText, blockId, ref globalOffset);
-                parsedPage.Questions.AddRange(questions);
-            }
-
-            result.Pages.Add(parsedPage);
-        }
+        // Segment using capacity-based chunking
+        await SegmentPagesAsync(pageTexts, profile, result, cancellationToken);
 
         return result;
-    }
-
-    /// <summary>
-    /// Split text by newlines, merge consecutive non-empty lines into blocks (paragraphs)
-    /// </summary>
-    private List<string> MergeTextIntoBlocks(string text)
-    {
-        var blocks = new List<string>();
-        var currentBlock = new StringBuilder();
-
-        var lines = text.Split('\n');
-        foreach (var line in lines)
-        {
-            var lineText = line.Trim();
-
-            if (string.IsNullOrWhiteSpace(lineText))
-            {
-                // Empty lines treated as paragraph separators
-                if (currentBlock.Length > 0)
-                {
-                    blocks.Add(currentBlock.ToString());
-                    currentBlock.Clear();
-                }
-                continue;
-            }
-
-            if (currentBlock.Length > 0)
-            {
-                currentBlock.Append(' ');
-            }
-            currentBlock.Append(lineText);
-        }
-
-        if (currentBlock.Length > 0)
-        {
-            blocks.Add(currentBlock.ToString());
-        }
-
-        return blocks;
     }
 
     #endregion
@@ -205,14 +284,86 @@ public partial class DocumentParserService : IDocumentParserService
 
         var paragraphs = body.Elements<Paragraph>().ToList();
 
-        // Extract all blocks from paragraphs
+        // Detect page breaks from explicit markers
+        var pageBreakIndices = DetectPageBreaks(doc, paragraphs);
+        if (pageBreakIndices.Count > 0)
+        {
+            _logger.LogInformation("Word document: detected {Count} page break(s)", pageBreakIndices.Count);
+        }
+        else
+        {
+            _logger.LogWarning("Word document: no page break markers detected, treating as single page");
+        }
+
+        // Split paragraphs into pages based on page break markers
+        var pages = new List<(int PageNumber, List<Paragraph> Paragraphs)>();
+        var currentPageParagraphs = new List<Paragraph>();
+        var pageNumber = 1;
+
+        for (var i = 0; i < paragraphs.Count; i++)
+        {
+            if (pageBreakIndices.Contains(i) && currentPageParagraphs.Count > 0)
+            {
+                pages.Add((pageNumber++, currentPageParagraphs));
+                currentPageParagraphs = new List<Paragraph>();
+            }
+            currentPageParagraphs.Add(paragraphs[i]);
+        }
+
+        if (currentPageParagraphs.Count > 0)
+        {
+            pages.Add((pageNumber, currentPageParagraphs));
+        }
+
+        // LLM analysis from first page's content
+        DocumentProfile? profile = null;
+        if (_llmSegmentation != null && pages.Count > 0)
+        {
+            var previewBuilder = new StringBuilder();
+            foreach (var (_, paras) in pages)
+            {
+                foreach (var para in paras)
+                {
+                    var text = para.InnerText?.Trim();
+                    if (!string.IsNullOrWhiteSpace(text))
+                    {
+                        if (previewBuilder.Length > 0) previewBuilder.Append("\n\n");
+                        previewBuilder.Append(text);
+                    }
+                    if (previewBuilder.Length >= 2000) break;
+                }
+                if (previewBuilder.Length >= 2000) break;
+            }
+
+            if (previewBuilder.Length > 0)
+            {
+                profile = await AnalyzeDocumentAsync([(1, previewBuilder.ToString())], cancellationToken);
+            }
+        }
+
+        result.Profile = profile;
+
+        // Convert pages to text list and segment
+        var pageTexts = pages
+            .Select(p => (p.PageNumber, string.Join("\n\n",
+                MergeParagraphsIntoBlocks(p.Paragraphs).Select(b => OcrPostProcess(b)))))
+            .ToList();
+
+        await SegmentPagesAsync(pageTexts, profile, result, cancellationToken);
+
+        return result;
+    }
+
+    /// <summary>
+    /// Merge paragraphs into text blocks (consecutive non-empty paragraphs → one block).
+    /// </summary>
+    private static List<string> MergeParagraphsIntoBlocks(List<Paragraph> paragraphs)
+    {
         var blocks = new List<string>();
         var currentBlock = new StringBuilder();
 
         foreach (var para in paragraphs)
         {
-            cancellationToken.ThrowIfCancellationRequested();
-
             var paraText = para.InnerText?.Trim() ?? string.Empty;
 
             if (string.IsNullOrWhiteSpace(paraText))
@@ -237,56 +388,74 @@ public partial class DocumentParserService : IDocumentParserService
             blocks.Add(currentBlock.ToString());
         }
 
-        // LLM analysis
-        DocumentProfile? profile = null;
-        if (_llmSegmentation != null && blocks.Count > 0)
+        return blocks;
+    }
+
+    /// <summary>
+    /// Detect page breaks in a Word document by checking explicit markers.
+    /// Returns the set of paragraph indices where a new page begins.
+    /// Detection priority: explicit page break > pageBreakBefore > style-based > section break.
+    /// </summary>
+    private HashSet<int> DetectPageBreaks(WordprocessingDocument doc, List<Paragraph> paragraphs)
+    {
+        var result = new HashSet<int>();
+
+        // Build set of style IDs that have PageBreakBefore
+        var pbbStyleIds = new HashSet<string>();
+        var stylesPart = doc.MainDocumentPart?.StyleDefinitionsPart;
+        if (stylesPart?.Styles != null)
         {
-            var preview = string.Join("\n\n", blocks.Take(3));
-            profile = await AnalyzeDocumentAsync([(1, preview)], cancellationToken);
-        }
-
-        // Store profile in result
-        result.Profile = profile;
-
-        // Word document treated as single page
-        var parsedPage = new ParsedPage { PageNumber = 1 };
-        var globalOffset = 0;
-
-        for (var blockIndex = 0; blockIndex < blocks.Count; blockIndex++)
-        {
-            var blockText = OcrPostProcess(blocks[blockIndex]);
-            var blockId = $"p1-b{blockIndex + 1}";
-
-            var segments = await SplitSentencesWithFallbackAsync(blockText, profile, cancellationToken);
-            for (var sentIndex = 0; sentIndex < segments.Count; sentIndex++)
+            foreach (var style in stylesPart.Styles.Descendants<Style>())
             {
-                var seg = segments[sentIndex];
-                parsedPage.Segments.Add(new ParsedSegment
+                if (style.StyleId?.Value == null) continue;
+                var pbb = style.StyleParagraphProperties?.GetFirstChild<PageBreakBefore>();
+                if (pbb != null && (pbb.Val == null || pbb.Val.Value))
                 {
-                    BlockId = blockId,
-                    SentenceId = $"{blockId}-s{sentIndex + 1}",
-                    SegmentType = seg.SegmentType,
-                    Text = seg.Text,
-                    StartOffset = globalOffset + seg.StartOffset,
-                    EndOffset = globalOffset + seg.EndOffset,
-                    Tokens = Tokenize(seg.Text)
-                });
+                    pbbStyleIds.Add(style.StyleId.Value);
+                }
             }
-
-            if (segments.Count > 0)
-            {
-                globalOffset += segments[^1].EndOffset;
-            }
-            else
-            {
-                globalOffset += blockText.Length;
-            }
-
-            var questions = ExtractQuestions(blockText, blockId, ref globalOffset);
-            parsedPage.Questions.AddRange(questions);
         }
 
-        result.Pages.Add(parsedPage);
+        for (var i = 0; i < paragraphs.Count; i++)
+        {
+            var para = paragraphs[i];
+
+            // 1. Explicit page break in a run (w:br type="page")
+            if (para.Descendants<Break>().Any(b => b.Type?.Value == BreakValues.Page))
+            {
+                result.Add(i);
+                continue;
+            }
+
+            // 2. PageBreakBefore property on the paragraph
+            var pbb = para.ParagraphProperties?.GetFirstChild<PageBreakBefore>();
+            if (pbb != null && (pbb.Val == null || pbb.Val.Value))
+            {
+                result.Add(i);
+                continue;
+            }
+
+            // 3. Paragraph style has PageBreakBefore
+            var styleId = para.ParagraphProperties?.ParagraphStyleId?.Val?.Value;
+            if (styleId != null && pbbStyleIds.Contains(styleId))
+            {
+                result.Add(i);
+                continue;
+            }
+
+            // 4. Inline section break (NextPage / EvenPage / OddPage)
+            var sectPr = para.ParagraphProperties?.GetFirstChild<SectionProperties>();
+            if (sectPr != null)
+            {
+                var mark = sectPr.GetFirstChild<SectionType>()?.Val?.Value
+                           ?? SectionMarkValues.NextPage; // default is nextPage
+                if (mark != SectionMarkValues.Continuous)
+                {
+                    result.Add(i);
+                }
+            }
+        }
+
         return result;
     }
 
@@ -354,57 +523,15 @@ public partial class DocumentParserService : IDocumentParserService
             }
         }
 
-        // Store profile in result
         result.Profile = profile;
 
-        // Second pass: segment each slide
-        foreach (var (pageNumber, texts) in slideTexts)
-        {
-            var parsedPage = new ParsedPage { PageNumber = pageNumber };
+        // Convert slides to text list and segment
+        var pageTexts = slideTexts
+            .Select(s => (s.PageNumber, string.Join("\n\n",
+                s.Blocks.Select(b => OcrPostProcess(b)))))
+            .ToList();
 
-            if (texts.Count == 0)
-            {
-                result.Pages.Add(parsedPage);
-                continue;
-            }
-
-            var globalOffset = 0;
-            for (var blockIndex = 0; blockIndex < texts.Count; blockIndex++)
-            {
-                var blockText = OcrPostProcess(texts[blockIndex]);
-                var blockId = $"p{pageNumber}-b{blockIndex + 1}";
-
-                var segments = await SplitSentencesWithFallbackAsync(blockText, profile, cancellationToken);
-                for (var sentIndex = 0; sentIndex < segments.Count; sentIndex++)
-                {
-                    var seg = segments[sentIndex];
-                    parsedPage.Segments.Add(new ParsedSegment
-                    {
-                        BlockId = blockId,
-                        SentenceId = $"{blockId}-s{sentIndex + 1}",
-                        SegmentType = seg.SegmentType,
-                        Text = seg.Text,
-                        StartOffset = globalOffset + seg.StartOffset,
-                        EndOffset = globalOffset + seg.EndOffset,
-                        Tokens = Tokenize(seg.Text)
-                    });
-                }
-
-                if (segments.Count > 0)
-                {
-                    globalOffset += segments[^1].EndOffset;
-                }
-                else
-                {
-                    globalOffset += blockText.Length;
-                }
-
-                var questions = ExtractQuestions(blockText, blockId, ref globalOffset);
-                parsedPage.Questions.AddRange(questions);
-            }
-
-            result.Pages.Add(parsedPage);
-        }
+        await SegmentPagesAsync(pageTexts, profile, result, cancellationToken);
 
         return result;
     }
@@ -450,42 +577,114 @@ public partial class DocumentParserService : IDocumentParserService
     }
 
     /// <summary>
-    /// Split text into segments using LLM, with fallback to rule-based splitting.
+    /// Segment pages using capacity-based chunking + LLM.
+    /// Shared by all file format parsers. Chunks text by ChunkSize, calls LLM per chunk,
+    /// and maps segments back to their source pages.
     /// </summary>
-    private async Task<List<SegmentWithOffset>> SplitSentencesWithFallbackAsync(
-        string blockText,
+    private async Task SegmentPagesAsync(
+        List<(int PageNumber, string Text)> pageTexts,
         DocumentProfile? profile,
+        ParsedDocument result,
         CancellationToken cancellationToken)
     {
-        // Try LLM segmentation if available and profile is set
-        if (_llmSegmentation != null && profile != null)
+        // Filter out empty pages but track them for the result
+        var nonEmptyPages = pageTexts.Where(p => !string.IsNullOrWhiteSpace(p.Text)).ToList();
+
+        // Initialize all pages in result (including empty ones)
+        foreach (var (pageNumber, _) in pageTexts)
         {
-            try
+            result.Pages.Add(new ParsedPage { PageNumber = pageNumber });
+        }
+
+        if (nonEmptyPages.Count == 0) return;
+
+        // Chunk by capacity
+        var chunkSize = _llmSegmentation?.ChunkSize ?? 0;
+        if (chunkSize <= 0) chunkSize = 1500;
+        var chunks = ChunkByCapacity(nonEmptyPages, chunkSize);
+
+        _logger.LogInformation("Segmenting {PageCount} pages in {ChunkCount} chunks (ChunkSize={ChunkSize})",
+            nonEmptyPages.Count, chunks.Count, chunkSize);
+
+        // Build page lookup for adding segments
+        var pageLookup = result.Pages.ToDictionary(p => p.PageNumber, p => p);
+
+        // Track segment index per page for SentenceId
+        var segmentIndexPerPage = new Dictionary<int, int>();
+
+        foreach (var chunk in chunks)
+        {
+            List<SegmentWithOffset> segments;
+
+            // Try LLM segmentation, fall back to rule-based
+            if (_llmSegmentation != null && profile != null)
             {
-                var llmSegments = await _llmSegmentation.SegmentTextAsync(blockText, profile, cancellationToken);
-                if (llmSegments.Count > 0)
+                try
                 {
-                    return llmSegments.Select(s => new SegmentWithOffset
+                    var llmSegments = await _llmSegmentation.SegmentTextAsync(chunk.Text, profile, cancellationToken);
+                    if (llmSegments.Count > 0)
                     {
-                        Text = s.Text,
-                        StartOffset = s.StartOffset,
-                        EndOffset = s.EndOffset,
-                        SegmentType = s.SegmentType
-                    }).ToList();
+                        segments = llmSegments.Select(s => new SegmentWithOffset
+                        {
+                            Text = s.Text,
+                            StartOffset = s.StartOffset,
+                            EndOffset = s.EndOffset,
+                            SegmentType = s.SegmentType
+                        }).ToList();
+                    }
+                    else
+                    {
+                        segments = FallbackSegment(chunk.Text);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "LLM segmentation failed for chunk, falling back to rule-based splitting");
+                    segments = FallbackSegment(chunk.Text);
                 }
             }
-            catch (Exception ex)
+            else
             {
-                _logger.LogWarning(ex, "LLM segmentation failed, falling back to rule-based splitting");
+                segments = FallbackSegment(chunk.Text);
+            }
+
+            // Map segments back to pages
+            foreach (var seg in segments)
+            {
+                var pageNumber = MapOffsetToPage(chunk.PageRanges, seg.StartOffset);
+                if (!pageLookup.TryGetValue(pageNumber, out var parsedPage)) continue;
+
+                var segIndex = segmentIndexPerPage.GetValueOrDefault(pageNumber, 0) + 1;
+                segmentIndexPerPage[pageNumber] = segIndex;
+
+                parsedPage.Segments.Add(new ParsedSegment
+                {
+                    SentenceId = $"p{pageNumber}-s{segIndex}",
+                    SegmentType = seg.SegmentType,
+                    Text = seg.Text,
+                    StartOffset = seg.StartOffset,
+                    EndOffset = seg.EndOffset,
+                    Tokens = Tokenize(seg.Text)
+                });
             }
         }
 
-        // Fallback to rule-based splitting
-        return SplitSentences(blockText).Select((text, i) => new SegmentWithOffset
+        // Extract questions per page
+        foreach (var (pageNumber, text) in nonEmptyPages)
         {
-            Text = text,
-            StartOffset = 0, // Will be recalculated by caller
-            EndOffset = text.Length,
+            if (!pageLookup.TryGetValue(pageNumber, out var parsedPage)) continue;
+            var questions = ExtractQuestions(text, pageNumber);
+            parsedPage.Questions.AddRange(questions);
+        }
+    }
+
+    private List<SegmentWithOffset> FallbackSegment(string text)
+    {
+        return SplitSentences(text).Select(t => new SegmentWithOffset
+        {
+            Text = t,
+            StartOffset = 0,
+            EndOffset = t.Length,
             SegmentType = SegmentTypes.Sentence
         }).ToList();
     }
@@ -847,9 +1046,9 @@ public partial class DocumentParserService : IDocumentParserService
     #region Question Boundary Detection
 
     /// <summary>
-    /// Extract questions and options from text
+    /// Extract questions and options from text (page-scoped).
     /// </summary>
-    private List<ParsedQuestion> ExtractQuestions(string text, string blockId, ref int globalOffset)
+    private List<ParsedQuestion> ExtractQuestions(string text, int pageNumber)
     {
         var questions = new List<ParsedQuestion>();
         var lines = text.Split('\n');
@@ -857,7 +1056,7 @@ public partial class DocumentParserService : IDocumentParserService
         string? currentQuestionId = null;
         var stemBuilder = new StringBuilder();
         var options = new Dictionary<string, string>();
-        var questionStartOffset = globalOffset;
+        var questionStartOffset = 0;
         var lineOffset = 0;
 
         foreach (var line in lines)
@@ -877,11 +1076,11 @@ public partial class DocumentParserService : IDocumentParserService
                 }
 
                 // Start new question
-                currentQuestionId = $"q{questionMatch.Groups[1].Value}";
+                currentQuestionId = $"p{pageNumber}-q{questionMatch.Groups[1].Value}";
                 stemBuilder.Clear();
                 stemBuilder.Append(trimmedLine);
                 options.Clear();
-                questionStartOffset = globalOffset + lineOffset;
+                questionStartOffset = lineOffset;
             }
             else if (optionMatch.Success && currentQuestionId != null)
             {

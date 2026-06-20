@@ -164,6 +164,110 @@ public interface ISearchIndexService
 }
 ```
 
+## Word 文档分页检测设计
+
+### 背景
+
+Word .docx 格式与 PDF/PPT 不同：文件中只存储段落流，不包含物理页面信息。页码是渲染时根据纸张大小、字体、边距动态计算的。OpenXml SDK 无排版引擎，无法计算软分页。
+
+### 检测策略（REQ-PARSE-12）
+
+仅检测 XML 中的显式分页标记，不估算。检测按以下优先级遍历每个段落：
+
+```
+对每个 Paragraph 依次检查：
+  1. 段落内是否有 w:br type="page"（Break with BreakValues.Page）
+  2. 段落属性是否有 w:pageBreakBefore（PageBreakBefore，Val 为 null 或 true）
+  3. 段落引用的样式是否包含 PageBreakBefore
+  4. 段落属性内是否有 w:sectPr 且 SectionType != Continuous
+```
+
+检测到分页标记的段落成为新页的起始段落。未检测到任何分页标记时，整个文档作为单页处理。
+
+### 辅助方法
+
+```csharp
+/// <summary>
+/// 检测 Word 文档中的分页标记，返回每个分页标记对应的段落索引。
+/// 检测信号（按优先级）：
+///   1. 显式分页符 (w:br type="page")
+///   2. 段前分页 (w:pageBreakBefore)
+///   3. 样式级段前分页
+///   4. 节分隔符 (w:sectPr, 非 Continuous)
+/// </summary>
+private HashSet<int> DetectPageBreaks(WordprocessingDocument doc, List<Paragraph> paragraphs)
+```
+
+返回值：产生分页的段落索引集合。调用方根据此集合将段落流切分为多个 ParsedPage。
+
+### 不处理的场景
+
+| 场景 | 原因 |
+|------|------|
+| 软分页（内容溢出） | XML 中不存在，需排版引擎 |
+| `LastRenderedPageBreak` | Word 布局缓存，非 Word 编辑器不写入，可能过期 |
+| `Continuous` 节分隔符 | 不产生页面边界，仅改变版式 |
+
+## 按容量切块 LLM 分段设计（REQ-PARSE-13）
+
+### 背景
+
+原有设计按段落逐个调用 LLM，存在调用次数多、上下文不足、跨页逻辑块被切断等问题。新设计改为按 ChunkSize 容量切块，充分利用 LLM 上下文窗口。
+
+### 核心流程
+
+```
+提取页面文本 → pages: List<(PageNumber, Text)>
+  → ChunkByCapacity(pages, chunkSize) → chunks: List<TextChunk>
+    → foreach chunk:
+        LLM SegmentTextAsync(chunk.Text, profile)
+        → foreach segment:
+            MapOffsetToPage(chunk.PageRanges, segment.StartOffset) → pageNumber
+            构建 ParsedSegment { PageNumber, SentenceId = $"p{N}-s{K}" }
+```
+
+### TextChunk 结构
+
+```csharp
+private record TextChunk
+{
+    public string Text { get; init; }
+    public int GlobalStartOffset { get; init; }
+    public List<PageRange> PageRanges { get; init; }
+}
+
+private record PageRange
+{
+    public int ChunkStartOffset { get; init; }  // chunk 内起始 offset
+    public int ChunkEndOffset { get; init; }    // chunk 内结束 offset
+    public int PageNumber { get; init; }        // 对应页码
+}
+```
+
+### ChunkByCapacity 算法
+
+1. 拼接所有页面文本，页面间用 `\n\n` 分隔
+2. 维护 `globalOffset → pageNumber` 的映射区间
+3. 从 `globalOffset = 0` 开始，累积文本直到接近 `chunkSize`
+4. 在最近的 `\n\n`（段落边界）处断开
+5. 若段落边界距离 `chunkSize` 过远（> 20%），在空格处断开
+6. 每个 chunk 记录 `GlobalStartOffset` 和 `PageRanges`
+
+### MapOffsetToPage 算法
+
+给定 chunk 的 `PageRanges` 和 segment 的 `StartOffset`（chunk 内偏移），二分查找对应的 `PageNumber`。若 segment 跨页，以起始位置所在页为准。
+
+### 与 Refine 共享
+
+`ChunkByCapacity` 和 `MapOffsetToPage` 为 `internal static` 方法，`DocumentDomainService.RefineSegmentsAsync` 也调用同一套逻辑。
+
+Refine 流程：
+1. 从 DB 读取现有 segments，按 PageId 分组
+2. 用 segment text 拼回页面文本，构建 `List<(PageNumber, Text)>`
+3. 调用 `ChunkByCapacity` 切块
+4. 每个 chunk 调 `RefineSegmentTextAsync`（带 corrections）
+5. `MapOffsetToPage` 回映射到页码
+
 ## 数据模型
 
 ### ParsedDocument 结构（解析器输出）
@@ -173,8 +277,7 @@ ParsedDocument
 └── Pages: List<ParsedPage>
     ├── PageNumber: int
     ├── Segments: List<ParsedSegment>
-    │   ├── BlockId: string          // "p{pageNumber}-b{blockIndex}"
-    │   ├── SentenceId: string       // "{blockId}-s{sentIndex}"
+    │   ├── SentenceId: string       // "p{pageNumber}-s{segmentIndex}"
     │   ├── SegmentType: string      // "sentence"
     │   ├── Text: string
     │   ├── StartOffset: int
@@ -185,7 +288,7 @@ ParsedDocument
     │       ├── StartOffset: int
     │       └── EndOffset: int
     └── Questions: List<ParsedQuestion>
-        ├── QuestionId: string       // "q{number}"
+        ├── QuestionId: string       // "p{pageNumber}-q{number}"
         ├── Stem: string
         ├── OptionsJson: string?     // JSON 序列化的选项字典
         ├── AnswerArea: string?
@@ -206,7 +309,7 @@ ParsedSegment      → DocumentSegmentModel
                        Id = Guid.NewGuid()
                        DocumentId = document.Id
                        PageId = pageLookup[page.PageNumber]
-                       BlockId / SentenceId / SegmentType / Text / StartOffset / EndOffset
+                       SentenceId / SegmentType / Text / StartOffset / EndOffset
 
 ParsedQuestion     → QuestionSegmentModel
                        Id = Guid.NewGuid()
@@ -266,11 +369,11 @@ ParsedToken (q)    → DocumentOccurrenceModel
 │  │  │     parsedDocument.Pages.Count == 0 → LogWarning "解析结果为空" │  │
 │  │  │                                                              │     │
 │  │  │     注：ParseAsync 内部流程（详见 07-LLM-SEGMENTATION.md）：  │  │
-│  │  │     4a. 提取原始文本（PDF/Word/PPT）                         │  │
-│  │  │     4b. 合并文本块（MergeTextIntoBlocks）                    │  │
-│  │  │     4c. LLM 文档分析 → DocumentProfile（学科+类型+策略）     │  │
-│  │  │     4d. LLM 智能分段 → List<SegmentResult>                  │  │
-│  │  │     4e. 构建 ParsedSegment + Tokenize                       │  │
+│  │  │     4a. 提取页面文本（PDF/Word/PPT）                         │  │
+│  │  │     4b. LLM 文档分析 → DocumentProfile（学科+类型+策略）     │  │
+│  │  │     4c. 按容量切块（ChunkByCapacity）                        │  │
+│  │  │     4d. 每块 LLM 分段 → List<SegmentResult>                 │  │
+│  │  │     4e. 回映射到页码 + 构建 ParsedSegment + Tokenize        │  │
 │  │  │                                                              │     │
 │  │  │  ⑤ 写入 pages                                               │     │
 │  │  │     pageModels = parsedDocument.Pages → DocumentPageModel[]  │     │

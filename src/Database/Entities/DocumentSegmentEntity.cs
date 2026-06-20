@@ -20,11 +20,6 @@ public class DocumentSegmentEntity
     [Required]
     public Guid PageId { get; set; }
 
-    [Column("block_id")]
-    [Required]
-    [MaxLength(50)]
-    public string BlockId { get; set; } = string.Empty;
-
     [Column("sentence_id")]
     [Required]
     [MaxLength(50)]

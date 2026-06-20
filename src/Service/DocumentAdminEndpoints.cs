@@ -605,17 +605,24 @@ public static class DocumentAdminEndpoints
         {
             var result = await documentService.RefineSegmentsAsync(id, corrections);
 
-            // Save backup to database
-            var backupEntity = new DocumentSegmentBackupEntity
+            // Save backup to database (fire-and-forget — failure should not affect refinement result)
+            try
             {
-                Id = result.BackupId,
-                DocumentId = id,
-                BackupData = result.BackupDataJson,
-                CorrectionCount = result.CorrectionCount,
-                CreatedAt = DateTimeOffset.UtcNow
-            };
-            dbContext.DocumentSegmentBackups.Add(backupEntity);
-            await dbContext.SaveChangesAsync();
+                var backupEntity = new DocumentSegmentBackupEntity
+                {
+                    Id = result.BackupId,
+                    DocumentId = id,
+                    BackupData = result.BackupDataJson,
+                    CorrectionCount = result.CorrectionCount,
+                    CreatedAt = DateTimeOffset.UtcNow
+                };
+                dbContext.DocumentSegmentBackups.Add(backupEntity);
+                await dbContext.SaveChangesAsync();
+            }
+            catch (Exception backupEx)
+            {
+                logger.LogWarning(backupEx, "Failed to save refinement backup for document {DocumentId}, refinement already committed", id);
+            }
 
             logger.LogInformation("Document refinement completed: {DocumentId}, {CorrectionCount} corrections", id, corrections.Count);
 

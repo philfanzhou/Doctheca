@@ -77,9 +77,8 @@ public class SearchDomainServiceTests
             Id = Guid.NewGuid(),
             DocumentId = docId,
             PageId = pageId,
-            SentenceId = "p1-b1-s1",
+            SentenceId = "p1-s1",
             Text = "Hello world",
-            BlockId = "p1-b1",
             SegmentType = "sentence"
         };
         _segmentRepoMock.Setup(r => r.SearchByTextAsync("hello", 50, 0, DocumentStatus.Ready, null, null, null))
@@ -120,7 +119,6 @@ public class SearchDomainServiceTests
             PageId = pageId,
             SentenceId = "s1",
             Text = "Hello world",
-            BlockId = "b1",
             SegmentType = "sentence"
         };
         _segmentRepoMock.Setup(r => r.SearchByTextAsync("hello", 50, 0, DocumentStatus.Ready, null, null, null))
@@ -197,7 +195,6 @@ public class SearchDomainServiceTests
                 PageId = pageId,
                 SentenceId = $"s{i}",
                 Text = "Hello world",
-                BlockId = "b1",
                 SegmentType = "sentence"
             });
 

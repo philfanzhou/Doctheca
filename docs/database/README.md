@@ -21,9 +21,11 @@
 
 本项目不使用 EF Core Migration，而是通过 [DatabaseInitializer](../../src/Database/DatabaseInitializer.cs) 使用 SQL-based 初始化策略。表结构在应用启动时自动创建（`CREATE TABLE IF NOT EXISTS`）。
 
-## 已移除的表
+## 已移除的列
 
-（无）
+| 表 | 列 | 移除方式 | 说明 |
+|----|-----|---------|------|
+| `document_segments` | `block_id` | `EnsureColumnsAsync` 启动时自动执行 `DROP COLUMN IF EXISTS` | SentenceId 格式从 `p{N}-b{M}-s{K}` 简化为 `p{N}-s{K}`，BlockId 已无意义 |
 
 ## 数据库配置
 

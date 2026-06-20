@@ -619,13 +619,15 @@ function confirmSplitMerge() {
 
 function undoLastCorrection() {
   if (corrections.value.length === 0) return
-  corrections.value.pop()
-  // Reload segments from server
+  // Clear all corrections — individual undo is unsafe because remaining
+  // corrections reference stale sentence IDs after segment reload
+  corrections.value = []
+  // Reload segments from server to restore clean state
   if (segmentData.value) {
     const docId = segmentData.value.documentId
     client.getDocumentSegments(docId).then(r => { segmentData.value = r.data })
   }
-  ElMessage.info('已撤销上一步操作')
+  ElMessage.info('已撤销所有操作')
 }
 
 function isCorrected(sentenceId: string): boolean {

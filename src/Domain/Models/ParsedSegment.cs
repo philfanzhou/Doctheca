@@ -5,7 +5,6 @@ namespace Ruoyu.Study.DocRetrieval.Domain.Models;
 /// </summary>
 public class ParsedSegment
 {
-    public string BlockId { get; set; } = string.Empty;
     public string SentenceId { get; set; } = string.Empty;
     public string SegmentType { get; set; } = SegmentTypes.Sentence;
     public string Text { get; set; } = string.Empty;

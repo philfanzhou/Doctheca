@@ -99,7 +99,6 @@ public class IngestionWorker : BackgroundService
                                 Id = Guid.NewGuid(),
                                 DocumentId = document.Id,
                                 PageId = pageLookup.TryGetValue(p.PageNumber, out var pageId) ? pageId : Guid.Empty,
-                                BlockId = s.BlockId,
                                 SentenceId = s.SentenceId,
                                 SegmentType = s.SegmentType,
                                 Text = s.Text,

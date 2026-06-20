@@ -8,6 +8,12 @@ namespace Ruoyu.Study.DocRetrieval.Domain.Repositories;
 public interface ILlmSegmentationService
 {
     /// <summary>
+    /// Maximum text chunk size in characters for LLM calls.
+    /// Dynamically calculated from model context length at initialization.
+    /// </summary>
+    int ChunkSize { get; }
+
+    /// <summary>
     /// Analyze document to determine subject, type, and segmentation strategy.
     /// Uses the first portion of text as preview.
     /// </summary>

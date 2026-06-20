@@ -537,14 +537,13 @@ public class DocumentDomainService : IDocumentDomainService
                 {
                     var seg = newSegments[i];
                     var segmentId = Guid.NewGuid();
-                    var sentenceId = $"p{pageNumber}-b1-s{i + 1}";
+                    var sentenceId = $"p{pageNumber}-s{i + 1}";
 
                     allNewSegments.Add(new DocumentSegmentModel
                     {
                         Id = segmentId,
                         DocumentId = documentId,
                         PageId = pageId,
-                        BlockId = $"p{pageNumber}-b1",
                         SentenceId = sentenceId,
                         SegmentType = seg.SegmentType,
                         Text = seg.Text,
@@ -574,10 +573,39 @@ public class DocumentDomainService : IDocumentDomainService
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, "LLM refinement failed for page {PageNumber}, keeping original segments", pageNumber);
-                // Keep original segments for this page
+                // Create NEW instances (not tracked) to avoid EF Core conflict with deleted entities
                 foreach (var seg in pageSegments)
                 {
-                    allNewSegments.Add(seg);
+                    var newSeg = new DocumentSegmentModel
+                    {
+                        Id = Guid.NewGuid(),
+                        DocumentId = seg.DocumentId,
+                        PageId = seg.PageId,
+                        SentenceId = seg.SentenceId,
+                        SegmentType = seg.SegmentType,
+                        Text = seg.Text,
+                        StartOffset = seg.StartOffset,
+                        EndOffset = seg.EndOffset,
+                        CreatedAt = DateTimeOffset.UtcNow
+                    };
+                    allNewSegments.Add(newSeg);
+
+                    // Re-generate occurrences for the kept segment
+                    var tokens = TokenizeForRefinement(seg.Text);
+                    foreach (var token in tokens)
+                    {
+                        allNewOccurrences.Add(new DocumentOccurrenceModel
+                        {
+                            Id = Guid.NewGuid(),
+                            DocumentId = documentId,
+                            SegmentId = newSeg.Id,
+                            TokenText = token.TokenText,
+                            TokenStem = token.TokenStem,
+                            StartOffset = token.StartOffset,
+                            EndOffset = token.EndOffset,
+                            CreatedAt = DateTimeOffset.UtcNow
+                        });
+                    }
                 }
             }
         }

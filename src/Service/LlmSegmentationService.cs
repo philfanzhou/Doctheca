@@ -21,6 +21,8 @@ public class LlmSegmentationService : ILlmSegmentationService
     private readonly ILogger<LlmSegmentationService> _logger;
     private bool _initialized;
 
+    public int ChunkSize => _options.ChunkSize;
+
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,

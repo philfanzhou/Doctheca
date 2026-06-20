@@ -22,7 +22,8 @@ public static class DatabaseInitializer
         // Column migrations for legacy databases (migrations stamped but DDL not applied)
         var alterStatements = new[]
         {
-            "ALTER TABLE documents ADD COLUMN IF NOT EXISTS llm_profile_json text NULL"
+            "ALTER TABLE documents ADD COLUMN IF NOT EXISTS llm_profile_json text NULL",
+            "ALTER TABLE document_segments DROP COLUMN IF EXISTS block_id"
         };
 
         foreach (var sql in alterStatements)
@@ -102,7 +103,6 @@ public static class DatabaseInitializer
                     id uuid NOT NULL,
                     document_id uuid NOT NULL,
                     page_id uuid NOT NULL,
-                    block_id character varying(50) NOT NULL,
                     sentence_id character varying(50) NOT NULL,
                     segment_type character varying(20) NOT NULL DEFAULT 'sentence',
                     text text NOT NULL,

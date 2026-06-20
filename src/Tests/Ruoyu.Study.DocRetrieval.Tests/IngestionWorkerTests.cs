@@ -124,8 +124,7 @@ public class IngestionWorkerTests
                     {
                         new()
                         {
-                            BlockId = "p1-b1",
-                            SentenceId = "p1-b1-s1",
+                            SentenceId = "p1-s1",
                             SegmentType = SegmentTypes.Sentence,
                             Text = "Hello world",
                             StartOffset = 0,

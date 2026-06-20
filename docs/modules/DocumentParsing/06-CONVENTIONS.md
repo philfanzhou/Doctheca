@@ -47,9 +47,8 @@
 
 | 标识符类型 | 格式 | 示例 |
 |-----------|------|------|
-| BlockId | `p{pageNumber}-b{blockIndex}` | `p1-b1`、`p2-b3` |
-| SentenceId | `{blockId}-s{sentIndex}` | `p1-b1-s1`、`p1-b1-s2` |
-| QuestionId | `q{number}` | `q1`、`q12` |
+| SentenceId | `p{pageNumber}-s{sentIndex}` | `p1-s1`、`p1-s2` |
+| QuestionId | `p{pageNumber}-q{number}` | `p1-q1`、`p1-q12` |
 
 ## 日志约定
 
