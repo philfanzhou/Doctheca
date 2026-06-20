@@ -59,13 +59,15 @@ public class LlmSegmentationService : ILlmSegmentationService
 
         try
         {
-            var contextLength = _options.ContextLength;
+            var contextLength = ParseContextLength(_options.ContextLength);
 
             // If ContextLength not configured, try fetching from API
             if (contextLength <= 0)
             {
                 contextLength = await TryFetchContextLengthAsync(cancellationToken);
             }
+
+            _options.ContextLengthTokens = contextLength;
 
             if (contextLength > 0)
             {
@@ -99,6 +101,36 @@ public class LlmSegmentationService : ILlmSegmentationService
             _options.ChunkSize = 0;
             _initialized = true;
         }
+    }
+
+    /// <summary>
+    /// Parse human-friendly context length string to token count.
+    /// Supports: "128K", "1M", "256K", "131072" (raw number).
+    /// </summary>
+    internal static int ParseContextLength(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return 0;
+
+        value = value.Trim().ToUpperInvariant();
+
+        if (value.EndsWith('K'))
+        {
+            if (int.TryParse(value[..^1], out var k))
+                return k * 1024;
+            return 0;
+        }
+
+        if (value.EndsWith('M'))
+        {
+            if (int.TryParse(value[..^1], out var m))
+                return m * 1024 * 1024;
+            return 0;
+        }
+
+        if (int.TryParse(value, out var raw))
+            return raw;
+
+        return 0;
     }
 
     /// <summary>

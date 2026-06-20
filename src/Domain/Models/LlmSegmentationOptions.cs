@@ -25,10 +25,15 @@ public class LlmSegmentationOptions
     public string Model { get; set; } = string.Empty;
 
     /// <summary>
-    /// Model context length in tokens. If set, skips the /models API call.
-    /// If not set and /models API also fails, LLM segmentation is disabled.
+    /// Model context length in tokens. Supports human-friendly formats: "128K", "1M", "256K".
+    /// If set, skips the /models API call. If not set and /models API also fails, LLM segmentation is disabled.
     /// </summary>
-    public int ContextLength { get; set; }
+    public string ContextLength { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Parsed context length in tokens. Set by InitializeAsync after parsing ContextLength string.
+    /// </summary>
+    public int ContextLengthTokens { get; set; }
 
     /// <summary>
     /// Maximum tokens for LLM response (dynamically calculated at startup)

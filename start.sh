@@ -33,7 +33,7 @@ OSS_BUCKET="ruoyu-study"
 LLM_API_KEY=""
 LLM_BASE_URL="https://api.siliconflow.cn/v1"
 LLM_MODEL="Qwen/Qwen2.5-7B-Instruct"
-LLM_CONTEXT_LENGTH="131072"  # 128K tokens - must match the actual model's context window
+LLM_CONTEXT_LENGTH="128K"    # Model context window: "128K", "256K", "1M" etc. Must match the actual model.
 LLM_TIMEOUT_SECONDS="300"    # LLM API timeout in seconds - increase for large documents or slow models
 
 docker network inspect "$NETWORK_NAME" >/dev/null 2>&1 || docker network create "$NETWORK_NAME"
