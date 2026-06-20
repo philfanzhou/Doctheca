@@ -59,8 +59,10 @@ public class DocumentModel
     public string Year { get; set; } = string.Empty;
     public string? Tags { get; set; }
     public string Status { get; set; } = "pending";
+    public Guid? CreatedBy { get; set; }
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset? UpdatedAt { get; set; }
+    public string? LlmProfileJson { get; set; }
 }
 
 public class DocumentIngestionJobModel
@@ -221,8 +223,8 @@ DocumentAdminEndpoints.UploadDocument
   │     ├─ file.Length > 200MB → 400
   │     └─ file.ContentType ∉ AllowedMimeTypes → 400 (DOCRETRIEVAL_FILE_FORMAT_UNSUPPORTED)
   │
-  ├─ 3. 提取 title/subject/grade/year/tags
-  │     └─ 任一必填项为空 → 400 (DOCRETRIEVAL_METADATA_REQUIRED)
+  ├─ 3. 提取 title/subject/grade/year/tags（仅 title 必填，其余 AI 自动填充）
+  │     └─ title 为空 → 400 (DOCRETRIEVAL_METADATA_REQUIRED)
   │
   ├─ 4. 打开文件流
   │     ├─ IsEncryptedPdf(stream, contentType) → 400 (DOCRETRIEVAL_FILE_ENCRYPTED)

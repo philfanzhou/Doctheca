@@ -10,7 +10,7 @@
 
 ## 关键验收条件摘要
 
-- AC-1：必须提供 `title`/`subject`/`grade` 三项元数据，`year` 为可选字段；缺少必填项返回 400（`DOCRETRIEVAL_METADATA_REQUIRED`）。
+- AC-1：只需提供 `file` 和 `title`。`title` 从文件名自动填充。`subject`/`grade`/`year` 由 AI 在文档解析时自动识别写入。
 - AC-2：文件大小 ≤ 200MB，仅支持 PDF/Word/PPT 格式，超限或格式不符返回 400（`DOCRETRIEVAL_FILE_FORMAT_UNSUPPORTED` / `DOCRETRIEVAL_FILE_REQUIRED`）。
 - AC-3：加密 PDF 被拒绝，返回 400（`DOCRETRIEVAL_FILE_ENCRYPTED`）。
 - AC-4：相同标题已存在时返回 409（`DOCRETRIEVAL_TITLE_ALREADY_EXISTS`）。

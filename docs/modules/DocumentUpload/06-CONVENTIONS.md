@@ -27,20 +27,19 @@
 
 ## 错误消息格式
 
-### 领域服务异常消息（中文）
+### 领域服务异常消息
 
 | 场景 | 消息文本 | 对应错误码 |
 | --- | --- | --- |
-| 文档名为空 | `"文档名不能为空"` | `DOCRETRIEVAL_METADATA_REQUIRED` |
-| 文档名超长 | `"文档名超过200字符"` | `DOCRETRIEVAL_METADATA_REQUIRED` |
-| 学科为空 | `"学科不能为空"` | `DOCRETRIEVAL_METADATA_REQUIRED` |
-| 学科非法 | `"学科仅支持：英语"` | `DOCRETRIEVAL_SUBJECT_INVALID` |
-| 年级为空 | `"年级不能为空"` | `DOCRETRIEVAL_METADATA_REQUIRED` |
-| 年级非法 | `"年级取值非法，有效值：K、G1、G2、..."` | `DOCRETRIEVAL_GRADE_INVALID` |
-| 年份为空 | `"年份不能为空"` | `DOCRETRIEVAL_METADATA_REQUIRED` |
-| 文件哈希为空 | `"文件哈希不能为空"` | `DOCRETRIEVAL_METADATA_REQUIRED` |
-| 标题重复 | `"文档名已存在"` | `DOCRETRIEVAL_TITLE_ALREADY_EXISTS` |
-| 文件哈希重复 | `"该文件已被导入"` | `DOCRETRIEVAL_FILE_HASH_ALREADY_EXISTS` |
+| 文档名为空 | `"Document title cannot be empty"` | `DOCRETRIEVAL_METADATA_REQUIRED` |
+| 文档名超长 | `"Document title exceeds 200 characters"` | `DOCRETRIEVAL_METADATA_REQUIRED` |
+| 学科非法 | `"Subject only supports: English"` | `DOCRETRIEVAL_SUBJECT_INVALID` |
+| 年级非法 | `"Invalid grade value, valid values: ..."` | `DOCRETRIEVAL_GRADE_INVALID` |
+| 文件哈希为空 | `"File hash cannot be empty"` | `DOCRETRIEVAL_METADATA_REQUIRED` |
+| 标题重复 | `"Document title already exists"` | `DOCRETRIEVAL_TITLE_ALREADY_EXISTS` |
+| 文件哈希重复 | `"File already imported"` | `DOCRETRIEVAL_FILE_HASH_ALREADY_EXISTS` |
+
+> Subject/Grade/Year 为空时不校验，由 AI 自动填充。仅在非空但无效时抛出异常。
 
 ### 端点层错误消息（中文）
 
