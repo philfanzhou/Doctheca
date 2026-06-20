@@ -18,6 +18,7 @@
 | `year` | `VARCHAR(10)` | NOT NULL | | 年份 |
 | `tags` | `TEXT` | NULL | | 标签，逗号分隔 |
 | `status` | `VARCHAR(20)` | NOT NULL | `'pending'` | 文档状态：`pending` → `processing` → `ready` / `failed` |
+| `created_by` | `UUID` | NULL | | 上传者用户 ID（从 JWT 提取） |
 | `created_at` | `TIMESTAMP WITH TIME ZONE` | NOT NULL | | 创建时间 |
 | `updated_at` | `TIMESTAMP WITH TIME ZONE` | NULL | | 最后更新时间 |
 

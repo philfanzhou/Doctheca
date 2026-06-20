@@ -14,4 +14,5 @@ public interface IDocumentRepository
     Task<bool> UpdateAsync(DocumentModel model);
     Task<bool> DeleteAsync(Guid id);
     Task<(List<DocumentModel> Items, int TotalCount)> GetListAsync(int page, int size, string? status = null, string? subject = null, string? grade = null, string? keyword = null, string? year = null);
+    Task<List<(Guid Id, string Title, string FilePath, string Status)>> GetAllDocumentsWithFilePathAsync();
 }

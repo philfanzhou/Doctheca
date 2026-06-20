@@ -71,6 +71,40 @@ public class DocumentDomainServiceTests
     }
 
     [Fact]
+    public async Task CreateDocumentAsync_WithCreatedBy_PreservesValue()
+    {
+        // Arrange
+        var userId = Guid.NewGuid();
+        var document = CreateValidDocument();
+        document.CreatedBy = userId;
+        _documentRepoMock.Setup(r => r.GetByTitleAsync(document.Title)).ReturnsAsync((DocumentModel?)null);
+        _documentRepoMock.Setup(r => r.GetByFileHashAndStatusAsync(document.FileHash, DocumentStatus.Ready)).ReturnsAsync((DocumentModel?)null);
+
+        // Act
+        var result = await _service.CreateDocumentAsync(document);
+
+        // Assert
+        Assert.Equal(userId, result.CreatedBy);
+        _documentRepoMock.Verify(r => r.AddAsync(It.Is<DocumentModel>(d => d.CreatedBy == userId)), Times.Once);
+    }
+
+    [Fact]
+    public async Task CreateDocumentAsync_WithoutCreatedBy_CreatedByIsNull()
+    {
+        // Arrange
+        var document = CreateValidDocument();
+        // CreatedBy is null by default
+        _documentRepoMock.Setup(r => r.GetByTitleAsync(document.Title)).ReturnsAsync((DocumentModel?)null);
+        _documentRepoMock.Setup(r => r.GetByFileHashAndStatusAsync(document.FileHash, DocumentStatus.Ready)).ReturnsAsync((DocumentModel?)null);
+
+        // Act
+        var result = await _service.CreateDocumentAsync(document);
+
+        // Assert
+        Assert.Null(result.CreatedBy);
+    }
+
+    [Fact]
     public async Task CreateDocumentAsync_DuplicateTitle_ThrowsValidationException()
     {
         // Arrange

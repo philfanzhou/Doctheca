@@ -23,6 +23,7 @@
 - [x] REQ-UPLOAD-12 能原子创建文档记录与导入任务：在同一 `SaveChangesAsync` 中写入 `documents` 和 `document_ingestion_jobs` 表。
 - [x] REQ-UPLOAD-13 能根据 MIME 类型推导 `sourceType`：PDF→`pdf`、Word→`word`、PPT→`ppt`。
 - [x] REQ-UPLOAD-14 能返回创建结果：包含 `documentId`、`title`、`jobId`、`status`。
+- [ ] REQ-UPLOAD-15 上传时从 JWT 提取用户 ID（`ClaimTypes.NameIdentifier`），写入 `documents.created_by` 字段。未登录或 claim 缺失时 `created_by` 为 null。
 
 ## 详细的验收标准（可自动验证）
 

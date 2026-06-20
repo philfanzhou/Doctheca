@@ -63,6 +63,9 @@ public class DocumentEntity
     [MaxLength(20)]
     public string Status { get; set; } = DocumentStatus.Pending;
 
+    [Column("created_by")]
+    public Guid? CreatedBy { get; set; }
+
     [Column("created_at")]
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 

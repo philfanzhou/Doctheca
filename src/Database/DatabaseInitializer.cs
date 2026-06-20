@@ -23,7 +23,8 @@ public static class DatabaseInitializer
         var alterStatements = new[]
         {
             "ALTER TABLE documents ADD COLUMN IF NOT EXISTS llm_profile_json text NULL",
-            "ALTER TABLE document_segments DROP COLUMN IF EXISTS block_id"
+            "ALTER TABLE document_segments DROP COLUMN IF EXISTS block_id",
+            "ALTER TABLE documents ADD COLUMN IF NOT EXISTS created_by uuid NULL"
         };
 
         foreach (var sql in alterStatements)
@@ -75,6 +76,7 @@ public static class DatabaseInitializer
                     year character varying(10) NOT NULL,
                     tags text NULL,
                     status character varying(20) NOT NULL DEFAULT 'pending',
+                    created_by uuid NULL,
                     created_at timestamp with time zone NOT NULL,
                     updated_at timestamp with time zone NULL,
                     llm_profile_json text NULL,

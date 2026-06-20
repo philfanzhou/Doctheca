@@ -16,6 +16,7 @@ using Ruoyu.Study.DocRetrieval.Database;
 using Ruoyu.Study.DocRetrieval.Database.Entities;
 using Ruoyu.Study.DocRetrieval.Domain.Exceptions;
 using Ruoyu.Study.DocRetrieval.Domain.Models;
+using Ruoyu.Study.DocRetrieval.Domain.Repositories;
 using Ruoyu.Study.DocRetrieval.Domain.Services;
 
 namespace Ruoyu.Study.DocRetrieval.Service;
@@ -50,6 +51,8 @@ public static class DocumentAdminEndpoints
         group.MapPost("/{id:guid}/cancel", CancelIngestion);
         group.MapGet("/{id:guid}/segments", GetDocumentSegments);
         group.MapPost("/{id:guid}/refine", RefineDocumentSegments);
+        group.MapGet("/scan-consistency", ScanConsistency);
+        group.MapDelete("/{id:guid}/force", ForceDeleteDocument);
 
         return app;
     }
@@ -123,7 +126,8 @@ public static class DocumentAdminEndpoints
             Grade = grade,
             Subject = subject,
             Year = year,
-            Tags = string.IsNullOrWhiteSpace(tags) ? null : tags
+            Tags = string.IsNullOrWhiteSpace(tags) ? null : tags,
+            CreatedBy = Guid.TryParse(request.HttpContext.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value, out var uid) ? uid : null
         };
 
         try
@@ -183,6 +187,7 @@ public static class DocumentAdminEndpoints
                 year = d.Year,
                 tags = d.Tags != null ? JsonSerializer.Deserialize<string[]>(d.Tags) : null,
                 status = d.Status,
+                createdBy = d.CreatedBy?.ToString(),
                 createdAt = d.CreatedAt.UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'"),
                 updatedAt = d.UpdatedAt?.UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'")
             }),
@@ -657,6 +662,131 @@ public static class DocumentAdminEndpoints
         {
             logger.LogError(ex, "Document refinement failed: {DocumentId}", id);
             return Results.Json(new { success = false, message = "Refinement failed", errorCode = "DOCRETRIEVAL_LLM_REFINE_FAILED" }, statusCode: StatusCodes.Status500InternalServerError);
+        }
+    }
+
+    private static async Task<IResult> ScanConsistency(
+        IDocumentRepository documentRepository,
+        IOssService ossService,
+        [FromServices] ILoggerFactory loggerFactory)
+    {
+        var logger = loggerFactory.CreateLogger("DocumentAdminEndpoints");
+
+        try
+        {
+            // 1. Get all documents with file_path from DB
+            var docs = await documentRepository.GetAllDocumentsWithFilePathAsync();
+            var dbFilePaths = docs.Select(d => d.FilePath).ToHashSet();
+
+            // 2. Check OSS existence for each unique file_path
+            var brokenDocuments = new List<object>();
+            foreach (var (id, title, filePath, status) in docs)
+            {
+                try
+                {
+                    var exists = await ossService.ObjectExistsAsync(filePath);
+                    if (!exists)
+                    {
+                        brokenDocuments.Add(new { id = id.ToString(), title, filePath, status });
+                    }
+                }
+                catch (Exception ex)
+                {
+                    logger.LogWarning(ex, "Failed to check OSS file: {FilePath}", filePath);
+                    brokenDocuments.Add(new { id = id.ToString(), title, filePath, status });
+                }
+            }
+
+            // 3. List all OSS files under docretrieval/ prefix
+            var orphanOssFiles = new List<string>();
+            try
+            {
+                var ossObjects = await ossService.ListObjectsAsync("docretrieval/");
+                foreach (var obj in ossObjects)
+                {
+                    if (!dbFilePaths.Contains(obj.ObjectPath))
+                    {
+                        orphanOssFiles.Add(obj.ObjectPath);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Failed to list OSS objects");
+            }
+
+            return Results.Ok(new
+            {
+                success = true,
+                data = new
+                {
+                    orphanOssFiles,
+                    brokenDocuments,
+                    summary = new
+                    {
+                        totalDocuments = docs.Count,
+                        brokenCount = brokenDocuments.Count,
+                        orphanCount = orphanOssFiles.Count
+                    }
+                }
+            });
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Consistency scan failed");
+            return Results.Json(new { success = false, message = "Scan failed" }, statusCode: StatusCodes.Status500InternalServerError);
+        }
+    }
+
+    private static async Task<IResult> ForceDeleteDocument(
+        Guid id,
+        IDocumentDomainService documentService,
+        IDocumentRepository documentRepository,
+        IOssService ossService,
+        ISearchIndexService? searchIndexService,
+        [FromServices] ILoggerFactory loggerFactory)
+    {
+        var logger = loggerFactory.CreateLogger("DocumentAdminEndpoints");
+
+        try
+        {
+            var document = await documentRepository.GetByIdAsync(id);
+            if (document == null)
+                return Results.NotFound(new { success = false, message = "Document not found", errorCode = "DOCRETRIEVAL_DOCUMENT_NOT_FOUND" });
+
+            // Delete DB records (cascade)
+            await documentService.DeleteDocumentAsync(document.Title);
+
+            // Try to delete OSS file (best-effort)
+            try
+            {
+                await ossService.DeleteAsync(document.FilePath);
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Failed to delete OSS file during force delete: {FilePath}", document.FilePath);
+            }
+
+            // Try to delete search index (best-effort)
+            if (searchIndexService != null)
+            {
+                try
+                {
+                    await searchIndexService.DeleteDocumentIndexAsync(id);
+                }
+                catch (Exception ex)
+                {
+                    logger.LogWarning(ex, "Failed to delete search index during force delete: {DocumentId}", id);
+                }
+            }
+
+            logger.LogInformation("Force deleted document: {DocumentId}, Title={Title}", id, document.Title);
+            return Results.Ok(new { success = true, message = "Document force deleted" });
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Force delete failed: {DocumentId}", id);
+            return Results.Json(new { success = false, message = "Force delete failed" }, statusCode: StatusCodes.Status500InternalServerError);
         }
     }
 }

@@ -104,6 +104,14 @@ public class DocumentRepository : IDocumentRepository
         return (items.Select(MapToModel).ToList(), totalCount);
     }
 
+    public async Task<List<(Guid Id, string Title, string FilePath, string Status)>> GetAllDocumentsWithFilePathAsync()
+    {
+        return await _dbContext.Documents
+            .Where(d => d.FilePath != null && d.FilePath != "")
+            .Select(d => new ValueTuple<Guid, string, string, string>(d.Id, d.Title, d.FilePath, d.Status))
+            .ToListAsync();
+    }
+
     private static DocumentEntity MapToEntity(DocumentModel model) => new()
     {
         Id = model.Id,
@@ -118,6 +126,7 @@ public class DocumentRepository : IDocumentRepository
         Year = model.Year,
         Tags = model.Tags,
         Status = model.Status,
+        CreatedBy = model.CreatedBy,
         CreatedAt = model.CreatedAt,
         UpdatedAt = model.UpdatedAt
     };
@@ -136,6 +145,7 @@ public class DocumentRepository : IDocumentRepository
         Year = entity.Year,
         Tags = entity.Tags,
         Status = entity.Status,
+        CreatedBy = entity.CreatedBy,
         CreatedAt = entity.CreatedAt,
         UpdatedAt = entity.UpdatedAt
     };
