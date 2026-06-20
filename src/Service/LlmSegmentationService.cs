@@ -539,6 +539,7 @@ public class LlmSegmentationService : ILlmSegmentationService
     {
         var result = new StringBuilder();
         var firstTokenLogged = false;
+        var lastLogLength = 0;
 
         using var stream = await content.ReadAsStreamAsync(cancellationToken);
         using var reader = new StreamReader(stream);
@@ -571,6 +572,14 @@ public class LlmSegmentationService : ILlmSegmentationService
                                 firstTokenLogged = true;
                             }
                             result.Append(text);
+
+                            // Log streaming progress every 1000 chars
+                            if (result.Length - lastLogLength >= 1000)
+                            {
+                                _logger.LogInformation("LLM streaming: {ElapsedMs}ms, {CharCount} chars received",
+                                    sw.ElapsedMilliseconds, result.Length);
+                                lastLogLength = result.Length;
+                            }
                         }
                     }
                 }
