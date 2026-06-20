@@ -34,7 +34,7 @@ LLM_API_KEY=""
 LLM_BASE_URL="https://api.siliconflow.cn/v1"
 LLM_MODEL="Qwen/Qwen2.5-7B-Instruct"
 LLM_CONTEXT_LENGTH="128K"    # Model context window: "128K", "256K", "1M" etc. Must match the actual model.
-LLM_MAX_TOKENS="4096"        # Max output tokens per LLM call. Check model docs for actual limit.
+LLM_MAX_TOKENS="4K"          # Max output tokens: "4K", "8K", "128K" etc. Check model docs for actual limit.
 LLM_TIMEOUT_SECONDS="300"    # LLM API timeout in seconds - increase for large documents or slow models
 
 docker network inspect "$NETWORK_NAME" >/dev/null 2>&1 || docker network create "$NETWORK_NAME"

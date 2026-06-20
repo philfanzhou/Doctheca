@@ -59,7 +59,8 @@ public class LlmSegmentationService : ILlmSegmentationService
 
         try
         {
-            var contextLength = ParseContextLength(_options.ContextLength);
+            var contextLength = ParseTokenCount(_options.ContextLength);
+            var maxTokens = ParseTokenCount(_options.MaxTokens);
 
             // If ContextLength not configured, try fetching from API
             if (contextLength <= 0)
@@ -68,22 +69,22 @@ public class LlmSegmentationService : ILlmSegmentationService
             }
 
             _options.ContextLengthTokens = contextLength;
+            _options.MaxTokensValue = maxTokens > 0 ? maxTokens : 4096;
 
             if (contextLength > 0)
             {
                 // ChunkSize: use remaining context for input, with 1.5 chars/token ratio
-                // MaxTokens is configured separately (not derived from context length)
-                var availableInputTokens = contextLength - 200 - _options.MaxTokens;
+                var availableInputTokens = contextLength - 200 - _options.MaxTokensValue;
                 _options.ChunkSize = (int)(availableInputTokens * 1.5);
 
                 _logger.LogInformation(
                     "LLM model initialized: Model={Model}, ContextLength={ContextLength}, MaxTokens={MaxTokens}, ChunkSize={ChunkSize}",
-                    _options.Model, contextLength, _options.MaxTokens, _options.ChunkSize);
+                    _options.Model, contextLength, _options.MaxTokensValue, _options.ChunkSize);
             }
             else
             {
                 // No context length available — disable LLM segmentation
-                _options.MaxTokens = 0;
+                _options.MaxTokensValue = 0;
                 _options.ChunkSize = 0;
 
                 _logger.LogWarning(
@@ -97,17 +98,17 @@ public class LlmSegmentationService : ILlmSegmentationService
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "LLM initialization failed, segmentation disabled");
-            _options.MaxTokens = 0;
+            _options.MaxTokensValue = 0;
             _options.ChunkSize = 0;
             _initialized = true;
         }
     }
 
     /// <summary>
-    /// Parse human-friendly context length string to token count.
-    /// Supports: "128K", "1M", "256K", "131072" (raw number).
+    /// Parse human-friendly token count string to integer.
+    /// Supports: "128K", "1M", "256K", "4K", "131072" (raw number).
     /// </summary>
-    internal static int ParseContextLength(string? value)
+    internal static int ParseTokenCount(string? value)
     {
         if (string.IsNullOrWhiteSpace(value)) return 0;
 
@@ -487,7 +488,7 @@ public class LlmSegmentationService : ILlmSegmentationService
                         new { role = "system", content = "你是一个专业的文档分析和分段助手。请严格按照要求返回 JSON 格式的结果。" },
                         new { role = "user", content = prompt }
                     },
-                    max_tokens = _options.MaxTokens,
+                    max_tokens = _options.MaxTokensValue,
                     temperature = _options.Temperature
                 };
 

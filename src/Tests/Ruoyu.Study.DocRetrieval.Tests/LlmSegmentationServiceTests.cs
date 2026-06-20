@@ -486,7 +486,7 @@ public class LlmSegmentationServiceTests
             Model = "gpt-4o-mini",
             ApiKey = "test-key",
             BaseUrl = "https://api.openai.com/v1",
-            MaxTokens = 4096,
+            MaxTokens = "4K",
             ChunkSize = 2500
         });
 

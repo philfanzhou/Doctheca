@@ -36,10 +36,15 @@ public class LlmSegmentationOptions
     public int ContextLengthTokens { get; set; }
 
     /// <summary>
-    /// Maximum tokens for LLM response. Configurable via LlmSegmentation__MaxTokens.
-    /// Default 4096. Check your model's documentation for the actual limit.
+    /// Maximum output tokens for LLM response. Supports human-friendly formats: "4K", "128K", "1M".
+    /// Configurable via LlmSegmentation__MaxTokens. Default "4K".
     /// </summary>
-    public int MaxTokens { get; set; } = 4096;
+    public string MaxTokens { get; set; } = "4K";
+
+    /// <summary>
+    /// Parsed max output tokens. Set by InitializeAsync after parsing MaxTokens string.
+    /// </summary>
+    public int MaxTokensValue { get; set; }
 
     /// <summary>
     /// Temperature parameter (fixed at 0.1 for structured output)

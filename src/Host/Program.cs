@@ -135,7 +135,7 @@ app.Logger.LogInformation(
     llmBaseUrl ?? "(not configured)",
     llmModel ?? "(not configured)",
     llmContextLength ?? "(not configured)",
-    llmMaxTokens ?? "4096 (default)",
+    llmMaxTokens ?? "4K (default)",
     llmTimeout ?? "300 (default)",
     string.IsNullOrEmpty(llmApiKey) ? "(empty - service disabled)" : "(configured)");
 
