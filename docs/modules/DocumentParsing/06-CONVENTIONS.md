@@ -356,6 +356,7 @@ public class LlmSegmentationOptions
     public string ApiKey { get; set; } = string.Empty;
     public string BaseUrl { get; set; } = string.Empty;
     public string ContextLength { get; set; } = string.Empty;  // "128K", "1M" etc.
+    public int ContextLengthTokens { get; set; }               // parsed at startup
     public string MaxTokens { get; set; } = "4K";              // "4K", "128K" etc.
     public int MaxTokensValue { get; set; }                    // parsed at startup
     public int ChunkSize { get; set; }                         // computed at startup, capped at 5000

@@ -46,7 +46,7 @@ public class SearchDomainServiceTests
         // Arrange
         var expectedResults = new List<SearchResultModel>
         {
-            new() { DocumentName = "test.pdf", PageNumber = 1, AssociatedText = "Hello world", Score = 1.0, MatchType = "exact_phrase", SegmentId = "p1-b1-s1" }
+            new() { DocumentName = "test.pdf", PageNumber = 1, AssociatedText = "Hello world", Score = 1.0, MatchType = "exact_phrase", SegmentId = "p1-s1" }
         };
         _searchIndexServiceMock
             .Setup(s => s.ExactSearchAsync("hello", true, null, 50, null))

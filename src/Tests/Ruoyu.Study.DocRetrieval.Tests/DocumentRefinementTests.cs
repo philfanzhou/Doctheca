@@ -69,8 +69,8 @@ public class DocumentRefinementTests
         };
         var segments = new List<DocumentSegmentModel>
         {
-            new() { Id = Guid.NewGuid(), DocumentId = documentId, PageId = pageId, SentenceId = "p1-b1-s1", SegmentType = "sentence", Text = "Hello world.", StartOffset = 0, EndOffset = 12 },
-            new() { Id = Guid.NewGuid(), DocumentId = documentId, PageId = pageId, SentenceId = "p1-b1-s2", SegmentType = "sentence", Text = "How are you?", StartOffset = 13, EndOffset = 25 }
+            new() { Id = Guid.NewGuid(), DocumentId = documentId, PageId = pageId, SentenceId = "p1-s1", SegmentType = "sentence", Text = "Hello world.", StartOffset = 0, EndOffset = 12 },
+            new() { Id = Guid.NewGuid(), DocumentId = documentId, PageId = pageId, SentenceId = "p1-s2", SegmentType = "sentence", Text = "How are you?", StartOffset = 13, EndOffset = 25 }
         };
 
         _documentRepoMock.Setup(r => r.GetByIdAsync(documentId)).ReturnsAsync(document);
@@ -134,8 +134,8 @@ public class DocumentRefinementTests
 
         var segments = new List<DocumentSegmentModel>
         {
-            new() { Id = Guid.NewGuid(), DocumentId = documentId, PageId = pageId, SentenceId = "p1-b1-s1", SegmentType = "sentence", Text = "Hello", StartOffset = 0, EndOffset = 5 },
-            new() { Id = Guid.NewGuid(), DocumentId = documentId, PageId = pageId, SentenceId = "p1-b1-s2", SegmentType = "sentence", Text = "world.", StartOffset = 6, EndOffset = 12 }
+            new() { Id = Guid.NewGuid(), DocumentId = documentId, PageId = pageId, SentenceId = "p1-s1", SegmentType = "sentence", Text = "Hello", StartOffset = 0, EndOffset = 5 },
+            new() { Id = Guid.NewGuid(), DocumentId = documentId, PageId = pageId, SentenceId = "p1-s2", SegmentType = "sentence", Text = "world.", StartOffset = 6, EndOffset = 12 }
         };
 
         SetupMocksForRefinement(documentId, document, pageId, segments);
@@ -153,7 +153,7 @@ public class DocumentRefinementTests
 
         var corrections = new List<SegmentCorrection>
         {
-            new() { OriginalSentenceIds = ["p1-b1-s1", "p1-b1-s2"], Action = "merge", NewText = "Hello world.", NewSegmentType = "sentence" }
+            new() { OriginalSentenceIds = ["p1-s1", "p1-s2"], Action = "merge", NewText = "Hello world.", NewSegmentType = "sentence" }
         };
 
         // Act
@@ -263,9 +263,9 @@ public class DocumentRefinementTests
 
         var segments = new List<DocumentSegmentModel>
         {
-            new() { Id = Guid.NewGuid(), DocumentId = documentId, PageId = pageId, SentenceId = "p1-b1-s1", SegmentType = "sentence", Text = "First sentence.", StartOffset = 0, EndOffset = 15 },
-            new() { Id = Guid.NewGuid(), DocumentId = documentId, PageId = pageId, SentenceId = "p1-b1-s2", SegmentType = "sentence", Text = "Second part. Third part.", StartOffset = 16, EndOffset = 40 },
-            new() { Id = Guid.NewGuid(), DocumentId = documentId, PageId = pageId, SentenceId = "p1-b1-s3", SegmentType = "sentence", Text = "Fourth sentence.", StartOffset = 41, EndOffset = 56 }
+            new() { Id = Guid.NewGuid(), DocumentId = documentId, PageId = pageId, SentenceId = "p1-s1", SegmentType = "sentence", Text = "First sentence.", StartOffset = 0, EndOffset = 15 },
+            new() { Id = Guid.NewGuid(), DocumentId = documentId, PageId = pageId, SentenceId = "p1-s2", SegmentType = "sentence", Text = "Second part. Third part.", StartOffset = 16, EndOffset = 40 },
+            new() { Id = Guid.NewGuid(), DocumentId = documentId, PageId = pageId, SentenceId = "p1-s3", SegmentType = "sentence", Text = "Fourth sentence.", StartOffset = 41, EndOffset = 56 }
         };
 
         SetupMocksForRefinement(documentId, document, pageId, segments);
@@ -286,7 +286,7 @@ public class DocumentRefinementTests
         {
             new()
             {
-                OriginalSentenceIds = ["p1-b1-s2"],
+                OriginalSentenceIds = ["p1-s2"],
                 Action = "splitMerge",
                 SplitPosition = 13,
                 MergeFirstWithPrevious = true,
@@ -315,9 +315,9 @@ public class DocumentRefinementTests
 
         var segments = new List<DocumentSegmentModel>
         {
-            new() { Id = Guid.NewGuid(), DocumentId = documentId, PageId = pageId, SentenceId = "p1-b1-s1", SegmentType = "sentence", Text = "First.", StartOffset = 0, EndOffset = 6 },
-            new() { Id = Guid.NewGuid(), DocumentId = documentId, PageId = pageId, SentenceId = "p1-b1-s2", SegmentType = "sentence", Text = "Second part. Third part.", StartOffset = 7, EndOffset = 31 },
-            new() { Id = Guid.NewGuid(), DocumentId = documentId, PageId = pageId, SentenceId = "p1-b1-s3", SegmentType = "sentence", Text = "Fourth.", StartOffset = 32, EndOffset = 39 }
+            new() { Id = Guid.NewGuid(), DocumentId = documentId, PageId = pageId, SentenceId = "p1-s1", SegmentType = "sentence", Text = "First.", StartOffset = 0, EndOffset = 6 },
+            new() { Id = Guid.NewGuid(), DocumentId = documentId, PageId = pageId, SentenceId = "p1-s2", SegmentType = "sentence", Text = "Second part. Third part.", StartOffset = 7, EndOffset = 31 },
+            new() { Id = Guid.NewGuid(), DocumentId = documentId, PageId = pageId, SentenceId = "p1-s3", SegmentType = "sentence", Text = "Fourth.", StartOffset = 32, EndOffset = 39 }
         };
 
         SetupMocksForRefinement(documentId, document, pageId, segments);
@@ -339,7 +339,7 @@ public class DocumentRefinementTests
         {
             new()
             {
-                OriginalSentenceIds = ["p1-b1-s2"],
+                OriginalSentenceIds = ["p1-s2"],
                 Action = "splitMerge",
                 SplitPosition = 13,
                 MergeFirstWithPrevious = true,

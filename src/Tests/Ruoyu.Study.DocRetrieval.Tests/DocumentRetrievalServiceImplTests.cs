@@ -40,7 +40,7 @@ public class DocumentRetrievalServiceImplTests
                 AssociatedText = "Hello world",
                 Score = 0.95,
                 MatchType = "exact_word",
-                SegmentId = "p1-b1-s1",
+                SegmentId = "p1-s1",
                 StartOffset = 0,
                 EndOffset = 5
             }
@@ -78,7 +78,7 @@ public class DocumentRetrievalServiceImplTests
                 AssociatedText = "Students take notes in class.",
                 Score = 1.0,
                 MatchType = "exact_phrase",
-                SegmentId = "p1-b1-s1",
+                SegmentId = "p1-s1",
                 StartOffset = 9,
                 EndOffset = 19
             }

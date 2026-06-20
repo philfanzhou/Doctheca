@@ -22,16 +22,16 @@
 
 每一项均可通过单元测试独立验证。
 
-- [ ] **FR-1 仅 ready 状态可修改** — 只有 `Status == "ready"` 的文档允许修改元数据。
-- [ ] **FR-2 文档不存在抛异常** — 按标题查找文档，不存在时抛 `DocRetrievalValidationException("文档不存在")`。
-- [ ] **FR-3 未就绪抛异常** — 文档存在但 `Status != "ready"` 时抛 `DocRetrievalValidationException("文档未就绪，不允许修改元数据")`。
-- [ ] **FR-4 学科校验** — subject 非空时，仅支持"英语"（`DocRetrievalConstants.IsValidSubject`），否则抛 `DocRetrievalValidationException("学科仅支持：英语")`。
-- [ ] **FR-5 年级校验** — grade 非空时，必须为 K/G1~G12（`DocRetrievalConstants.IsValidGrade`），否则抛 `DocRetrievalValidationException` 含有效值列表。
-- [ ] **FR-6 null 参数不修改** — subject/grade/year/tags 为 null 时表示不修改，仅更新非 null 字段。
-- [ ] **FR-7 更新时间戳** — 更新后设置 `UpdatedAt = DateTimeOffset.UtcNow`。
-- [ ] **FR-8 搜索索引同步** — 更新成功后调用 `ISearchIndexService.UpdateDocumentMetadataAsync(documentId, subject, grade, year)`，失败仅记 Error 日志，不影响主流程。
-- [ ] **FR-9 Admin 端点至少一项** — 请求体中 subject/grade/year/tags 全部为 null 时返回 400 "至少提供一项元数据"。
-- [ ] **FR-10 tags 存储格式** — tags 字段从请求 JSON 中使用 `GetRawText()` 获取，存储为 JSON 数组字符串。
+- [x] **FR-1 仅 ready 状态可修改** — 只有 `Status == "ready"` 的文档允许修改元数据。
+- [x] **FR-2 文档不存在抛异常** — 按标题查找文档，不存在时抛 `DocRetrievalValidationException("文档不存在")`。
+- [x] **FR-3 未就绪抛异常** — 文档存在但 `Status != "ready"` 时抛 `DocRetrievalValidationException("文档未就绪，不允许修改元数据")`。
+- [x] **FR-4 学科校验** — subject 非空时，仅支持"英语"（`DocRetrievalConstants.IsValidSubject`），否则抛 `DocRetrievalValidationException("学科仅支持：英语")`。
+- [x] **FR-5 年级校验** — grade 非空时，必须为 K/G1~G12（`DocRetrievalConstants.IsValidGrade`），否则抛 `DocRetrievalValidationException` 含有效值列表。
+- [x] **FR-6 null 参数不修改** — subject/grade/year/tags 为 null 时表示不修改，仅更新非 null 字段。
+- [x] **FR-7 更新时间戳** — 更新后设置 `UpdatedAt = DateTimeOffset.UtcNow`。
+- [x] **FR-8 搜索索引同步** — 更新成功后调用 `ISearchIndexService.UpdateDocumentMetadataAsync(documentId, subject, grade, year)`，失败仅记 Error 日志，不影响主流程。
+- [x] **FR-9 Admin 端点至少一项** — 请求体中 subject/grade/year/tags 全部为 null 时返回 400 "至少提供一项元数据"。
+- [x] **FR-10 tags 存储格式** — tags 字段从请求 JSON 中使用 `GetRawText()` 获取，存储为 JSON 数组字符串。
 
 ---
 

@@ -16,15 +16,15 @@ DocumentDeletion 模块负责删除指定文档及其全部关联数据。其核
 
 ### 2.1 文档删除
 
-- [ ] **REQ-DEL-01**：给定有效的 `title`，删除对应的文档及全部关联数据（occurrences、questions、segments、pages）。
-- [ ] **REQ-DEL-02**：级联删除顺序为：occurrences → questions → segments → pages → document → SaveChanges。
-- [ ] **REQ-DEL-03**：文档不存在时返回 true（幂等）。
-- [ ] **REQ-DEL-04**：搜索索引清理在 SaveChanges 之后执行，失败仅记 Error 日志，不影响返回结果。
-- [ ] **REQ-DEL-05**：Admin 端点先删数据库再删 OSS 文件，OSS 删除失败仅记 Warning 日志。
-- [ ] **REQ-DEL-06**：Admin 端点返回 `{ success: true, data: { title, deleted: document != null } }`。
-- [ ] **REQ-DEL-07**：仅管理员可调用此接口（通过部署层网络隔离实现，仅内网可访问 `/admin/` 路径；应用层不做鉴权中间件）。
-- [ ] **REQ-DEL-08**：Admin 端点支持按文档 ID 删除：`DELETE /admin/documents/{id}` 返回 `{ success: true, data: { id, title, deleted: true } }`。
-- [ ] **REQ-DEL-09**：原有 `DELETE /admin/documents/{title}` 端点调整为 `DELETE /admin/documents/by-title/{title}`（保留作为备选入口）。
+- [x] **REQ-DEL-01**：给定有效的 `title`，删除对应的文档及全部关联数据（occurrences、questions、segments、pages）。
+- [x] **REQ-DEL-02**：级联删除顺序为：occurrences → questions → segments → pages → document → SaveChanges。
+- [x] **REQ-DEL-03**：文档不存在时返回 true（幂等）。
+- [x] **REQ-DEL-04**：搜索索引清理在 SaveChanges 之后执行，失败仅记 Error 日志，不影响返回结果。
+- [x] **REQ-DEL-05**：Admin 端点先删数据库再删 OSS 文件，OSS 删除失败仅记 Warning 日志。
+- [x] **REQ-DEL-06**：Admin 端点返回 `{ success: true, data: { title, deleted: document != null } }`。
+- [x] **REQ-DEL-07**：仅管理员可调用此接口（通过部署层网络隔离实现，仅内网可访问 `/admin/` 路径；应用层不做鉴权中间件）。
+- [x] **REQ-DEL-08**：Admin 端点支持按文档 ID 删除：`DELETE /admin/documents/{id}` 返回 `{ success: true, data: { id, title, deleted: true } }`。
+- [x] **REQ-DEL-09**：原有 `DELETE /admin/documents/{title}` 端点调整为 `DELETE /admin/documents/by-title/{title}`（保留作为备选入口）。
 
 ---
 

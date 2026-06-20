@@ -8,21 +8,21 @@
 
 ## 功能要求清单（可独立测试）
 
-- [ ] FR-01 查询词为空时 gRPC 返回 `RpcException(StatusCode.InvalidArgument, "DOCRETRIEVAL_QUERY_REQUIRED")`。
-- [ ] FR-02 查询词超过 200 字符时 gRPC 返回 `RpcException(StatusCode.InvalidArgument, "DOCRETRIEVAL_QUERY_TOO_LONG")`。
-- [ ] FR-03 `page_size` 超过 100 时 gRPC 返回 `RpcException(StatusCode.InvalidArgument, "DOCRETRIEVAL_PAGE_SIZE_INVALID")`。
-- [ ] FR-04 `page_size` 默认 50，最小 1，最大 100；传入 0 或负值时使用默认值 50。
-- [ ] FR-05 优先使用 OpenSearch BM25 搜索（`ISearchIndexService.ExactSearchAsync`）。
-- [ ] FR-06 OpenSearch 不可用（`_searchIndexService == null`，通过构造函数可选注入 nullable 参数）或查询异常时，回退数据库搜索并记录 LogWarning。
-- [ ] FR-07 数据库回退搜索通过 `IDocumentSegmentRepository.SearchByTextAsync` 和 `IQuestionSegmentRepository.SearchByStemAsync` 执行数据库级 `LIKE` 查询匹配。
-- [ ] FR-08 仅搜索 `status == "ready"` 的文档。
-- [ ] FR-09 短语匹配（`phrase = true`）时 `Score = 1.0`，`MatchType = "exact_phrase"`。
-- [ ] FR-10 单词匹配（`phrase = false`）时：OpenSearch 路径 `MatchType = "stemmed"`（因为 `english_custom` 分析器含词干提取）；数据库回退路径 `MatchType = "exact_word"`（因为 `LIKE` 是精确子串匹配）。
-- [ ] FR-11 结果按 `DocumentName + PageNumber + SegmentId` 三元组去重，保留首次出现的记录。
-- [ ] FR-12 游标分页：`page_token` 为 `Base64(JSON({ "skip": N }))` 编码。数据库回退搜索通过 `SearchByTextAsync` / `SearchByStemAsync` 的 `pageSize` 和 `skip` 参数实现数据库级 `OFFSET/LIMIT` 分页。
-- [ ] FR-13 `SearchFilter` 中空字符串字段视为不筛选（`MapFilter` 将空字符串转为 `null`）。
-- [ ] FR-14 返回 `SearchResponse`，包含 `results`、`total_count`、`next_page_token`。
-- [ ] FR-15 HTTP 搜索测试端点 `GET /admin/documents/search-test` 支持筛选参数：`subject`、`grade`、`year`、`documentTitle`。当提供任一筛选参数时，构造 `SearchFilterModel` 并传入 `ExactSearchAsync`。
+- [x] FR-01 查询词为空时 gRPC 返回 `RpcException(StatusCode.InvalidArgument, "DOCRETRIEVAL_QUERY_REQUIRED")`。
+- [x] FR-02 查询词超过 200 字符时 gRPC 返回 `RpcException(StatusCode.InvalidArgument, "DOCRETRIEVAL_QUERY_TOO_LONG")`。
+- [x] FR-03 `page_size` 超过 100 时 gRPC 返回 `RpcException(StatusCode.InvalidArgument, "DOCRETRIEVAL_PAGE_SIZE_INVALID")`。
+- [x] FR-04 `page_size` 默认 50，最小 1，最大 100；传入 0 或负值时使用默认值 50。
+- [x] FR-05 优先使用 OpenSearch BM25 搜索（`ISearchIndexService.ExactSearchAsync`）。
+- [x] FR-06 OpenSearch 不可用（`_searchIndexService == null`，通过构造函数可选注入 nullable 参数）或查询异常时，回退数据库搜索并记录 LogWarning。
+- [x] FR-07 数据库回退搜索通过 `IDocumentSegmentRepository.SearchByTextAsync` 和 `IQuestionSegmentRepository.SearchByStemAsync` 执行数据库级 `LIKE` 查询匹配。
+- [x] FR-08 仅搜索 `status == "ready"` 的文档。
+- [x] FR-09 短语匹配（`phrase = true`）时 `Score = 1.0`，`MatchType = "exact_phrase"`。
+- [x] FR-10 单词匹配（`phrase = false`）时：OpenSearch 路径 `MatchType = "stemmed"`（因为 `english_custom` 分析器含词干提取）；数据库回退路径 `MatchType = "exact_word"`（因为 `LIKE` 是精确子串匹配）。
+- [x] FR-11 结果按 `DocumentName + PageNumber + SegmentId` 三元组去重，保留首次出现的记录。
+- [x] FR-12 游标分页：`page_token` 为 `Base64(JSON({ "skip": N }))` 编码。数据库回退搜索通过 `SearchByTextAsync` / `SearchByStemAsync` 的 `pageSize` 和 `skip` 参数实现数据库级 `OFFSET/LIMIT` 分页。
+- [x] FR-13 `SearchFilter` 中空字符串字段视为不筛选（`MapFilter` 将空字符串转为 `null`）。
+- [x] FR-14 返回 `SearchResponse`，包含 `results`、`total_count`、`next_page_token`。
+- [x] FR-15 HTTP 搜索测试端点 `GET /admin/documents/search-test` 支持筛选参数：`subject`、`grade`、`year`、`documentTitle`。当提供任一筛选参数时，构造 `SearchFilterModel` 并传入 `ExactSearchAsync`。
 
 ## 详细的验收标准（可自动验证）
 
