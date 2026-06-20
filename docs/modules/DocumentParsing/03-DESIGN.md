@@ -219,11 +219,10 @@ private HashSet<int> DetectPageBreaks(WordprocessingDocument doc, List<Paragraph
 ```
 提取页面文本 → pages: List<(PageNumber, Text)>
   → ChunkByCapacity(pages, chunkSize) → chunks: List<TextChunk>
-    → foreach chunk:
-        LLM SegmentTextAsync(chunk.Text, profile)
-        → foreach segment:
-            MapOffsetToPage(chunk.PageRanges, segment.StartOffset) → pageNumber
-            构建 ParsedSegment { PageNumber, SentenceId = $"p{N}-s{K}" }
+  → ProcessChunksAsync: Task.WhenAll（所有 chunk 并行调用 LLM）
+    → foreach chunk result:
+        MapOffsetToPage(chunk.PageRanges, segment.StartOffset) → pageNumber
+        构建 ParsedSegment { PageNumber, SentenceId = $"p{N}-s{K}" }
 ```
 
 ### TextChunk 结构

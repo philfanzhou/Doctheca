@@ -352,15 +352,16 @@ public class LlmSegmentationOptions
 {
     public const string SectionName = "LlmSegmentation";
 
-    public string Provider { get; set; } = "openai";  // openai, anthropic, local
-    public string Model { get; set; } = "gpt-4o-mini";
+    public string Model { get; set; } = string.Empty;
     public string ApiKey { get; set; } = string.Empty;
-    public string BaseUrl { get; set; } = "https://api.openai.com/v1";
-    public int MaxTokens { get; set; } = 4096;
-    public double Temperature { get; set; } = 0.1;
-    public int ChunkSize { get; set; } = 2500;
-    public int MaxRetries { get; set; } = 3;
-    public int TimeoutSeconds { get; set; } = 60;
+    public string BaseUrl { get; set; } = string.Empty;
+    public string ContextLength { get; set; } = string.Empty;  // "128K", "1M" etc.
+    public string MaxTokens { get; set; } = "4K";              // "4K", "128K" etc.
+    public int MaxTokensValue { get; set; }                    // parsed at startup
+    public int ChunkSize { get; set; }                         // computed at startup, capped at 5000
+    public double Temperature => 0.1;
+    public int MaxRetries => 3;
+    public int TimeoutSeconds { get; set; } = 300;
 }
 
 // DI 注册

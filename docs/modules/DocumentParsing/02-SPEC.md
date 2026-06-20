@@ -298,15 +298,12 @@ Scenario: LLM 调用失败回退到规则切割
 LLM 分段服务支持配置化，可通过配置文件或环境变量调整。
 
 - 配置项：
-  - `LlmSegmentation.Provider`：LLM 提供商（openai/anthropic/local）
-  - `LlmSegmentation.Model`：模型名称（gpt-4o-mini/claude-haiku/local-model）
-  - `LlmSegmentation.ApiKey`：API 密钥
+  - `LlmSegmentation.ApiKey`：API 密钥（为空时禁用 LLM 分段）
   - `LlmSegmentation.BaseUrl`：API 基础 URL
-  - `LlmSegmentation.MaxTokens`：最大 token 数
-  - `LlmSegmentation.Temperature`：温度参数
-  - `LlmSegmentation.ChunkSize`：分块大小
-  - `LlmSegmentation.MaxRetries`：最大重试次数
-  - `LlmSegmentation.TimeoutSeconds`：超时时间
+  - `LlmSegmentation.Model`：模型 ID
+  - `LlmSegmentation.ContextLength`：上下文窗口，支持 "128K"、"1M" 格式
+  - `LlmSegmentation.MaxTokens`：最大输出 token，支持 "4K"、"128K" 格式
+  - `LlmSegmentation.TimeoutSeconds`：HTTP 超时秒数（默认 300）
 - 支持通过环境变量覆盖配置
 
 **验收场景**:
@@ -459,16 +456,16 @@ LLM 分段不再按物理边界（block/页）逐个调用，而是按 ChunkSize
 ```gherkin
 Scenario: 20 页文档按容量切块
   Given 文档有 20 页，总文本约 30000 字符
-  And ChunkSize = 147000 字符（128K 上下文）
+  And ChunkSize = 5000 字符（上限）
   When 调用 LLM 分段
-  Then LLM 调用次数为 1（全部文本在 1 个 chunk 内）
+  Then LLM 调用次数为 6（30000 / 5000），并行执行
   And 返回的 segment 按 offset 回映射到正确的 PageNumber
 
 Scenario: 超长文档分多个 chunk
   Given 文档有 100 页，总文本约 200000 字符
-  And ChunkSize = 147000 字符
+  And ChunkSize = 5000 字符
   When 调用 LLM 分段
-  Then LLM 调用次数为 2
+  Then LLM 调用次数为 40，并行执行
   And 每个 chunk 的 segment 都映射到正确的 PageNumber
 
 Scenario: 跨页逻辑块保持完整

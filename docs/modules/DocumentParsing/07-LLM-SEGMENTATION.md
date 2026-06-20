@@ -124,74 +124,28 @@
 | 生物 | 教材 | concept | 按概念解释为单位 |
 | * | 知识点过关单 | knowledge_point | 每个知识点条目为一个 segment |
 
-**Prompt 模板（以 English 教材为例）**：
+**系统 Prompt**：`直接返回JSON，不要解释。`
+
+**分段 Prompt**（精简版，按策略动态生成）：
 
 ```
-你是一个英语教材分段专家。请将以下文本按完整句子分段。
+按 {segmentStrategy} 策略分段。{strategyHint}
+返回JSON，保留原文，offset为字符偏移量。
 
-分段规则：
-1. 每个 segment 必须是一个完整的句子或紧密相关的句子群
-2. 保持句子完整性，不要在句子中间断开
-3. 如果句子过长（超过 100 词），可以在从句或连接词处适当断开
-4. 保留原始文本，不要修改或改写
+{"segments":[{"text":"...","start_offset":0,"end_offset":10,"segment_type":"..."}]}
 
-请返回 JSON 格式：
-{
-  "segments": [
-    {"text": "第一段文本", "start_offset": 0, "end_offset": 50},
-    {"text": "第二段文本", "start_offset": 51, "end_offset": 100}
-  ]
-}
-
-注意：start_offset 和 end_offset 是相对于输入文本的字符偏移量。
-
-{text_chunk}
+---
+{text}
+---
 ```
 
-**Prompt 模板（以数学教材为例）**：
+其中 `strategyHint` 根据策略不同：
+- `word_entry`：每个词条（单词+释义）为一个segment。
+- `question`：每道题（题干+选项）为一个segment。
+- `concept`：每个概念/公式为一个segment。
+- `sentence`：每个完整句子为一个segment。
 
-```
-你是一个数学教材分段专家。请将以下文本按知识点/概念分段。
-
-分段规则：
-1. 每个 segment 应包含一个完整的数学概念或公式及其解释
-2. 公式（包括 LaTeX 格式）必须保持完整，不要拆断
-3. 定义、定理、证明应作为整体，不要在中间断开
-4. 例题和解答应保持在一起
-5. 保留原始文本，不要修改或改写
-
-请返回 JSON 格式：
-{
-  "segments": [
-    {"text": "第一段文本", "start_offset": 0, "end_offset": 50},
-    {"text": "第二段文本", "start_offset": 51, "end_offset": 100}
-  ]
-}
-
-{text_chunk}
-```
-
-**Prompt 模板（以单词表为例）**：
-
-```
-你是一个单词表分段专家。请将以下文本按词条分段。
-
-分段规则：
-1. 每个 segment 包含一个完整的词条（单词 + 音标 + 释义 + 例句）
-2. 如果一个单词有多个释义，将它们放在同一个 segment 中
-3. 例句应与对应的单词放在同一个 segment 中
-4. 保留原始文本，不要修改或改写
-
-请返回 JSON 格式：
-{
-  "segments": [
-    {"text": "abandon /əˈbændən/ v. 放弃；抛弃\nHe abandoned his plan.", "start_offset": 0, "end_offset": 60},
-    {"text": "ability /əˈbɪləti/ n. 能力\nShe has the ability to solve problems.", "start_offset": 61, "end_offset": 120}
-  ]
-}
-
-{text_chunk}
-```
+> **设计原则**：prompt 越短，LLM 思考时间越少。分析阶段已确定文档类型和策略，分段阶段只需执行。
 
 ## 技术实现
 
@@ -292,44 +246,57 @@ public class LlmSegmentationService : ILlmSegmentationService
 
 ### LLM 配置
 
-用户只需配置 3 个必要参数：
+用户需配置以下参数：
 
 ```json
 {
   "LlmSegmentation": {
-    "ApiKey": "${LLM_API_KEY}",
-    "BaseUrl": "https://api.siliconflow.cn/v1",
-    "Model": "Qwen/Qwen2.5-7B-Instruct"
+    "ApiKey": "your-api-key",
+    "BaseUrl": "https://api.xiaomimimo.com/v1",
+    "Model": "mimo-v2.5-pro",
+    "ContextLength": "1M",
+    "MaxTokens": "128K",
+    "TimeoutSeconds": 300
   }
 }
 ```
 
-其余参数由系统动态计算：
+| 参数 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| ApiKey | string | 空（禁用 LLM） | API 密钥，为空时禁用 LLM 分段 |
+| BaseUrl | string | 空 | API 基础 URL |
+| Model | string | 空 | 模型 ID |
+| ContextLength | string | 空 | 上下文窗口，支持 "128K"、"1M" 格式 |
+| MaxTokens | string | "4K" | 最大输出 token，支持 "4K"、"128K" 格式 |
+| TimeoutSeconds | int | 300 | HTTP 超时秒数 |
+| Temperature | double | 0.1 | 固定值，不可配置 |
+| MaxRetries | int | 3 | 固定值，不可配置 |
 
-| 参数 | 计算方式 | 说明 |
-|------|---------|------|
-| MaxTokens | `context_length × 0.25` | 输出占上下文窗口 25% |
-| ChunkSize | `(context_length - 200 - MaxTokens) × 1.5` | 输入占剩余空间，1.5 字符/token |
-| Temperature | 写死 0.1 | 结构化输出任务的最佳实践 |
-| MaxRetries | 写死 3 | 重试 3 次 |
-| TimeoutSeconds | 写死 60 | 超时 60 秒 |
+**ChunkSize 计算**：
 
-**动态参数获取流程**：
+```
+ChunkSize = min((ContextLength - 200 - MaxTokens) × 0.8 × 1.5, 5000)
+```
 
-1. 服务启动时调用 `GET /models/{model_id}` 获取模型信息
-2. 从响应中提取 `context_length`（上下文窗口大小）
-3. 计算 MaxTokens 和 ChunkSize
-4. 打印日志到控制台
-5. 获取失败则使用安全默认值（MaxTokens=2048, ChunkSize=1500）
+- 上限 5000 字符（避免单次 LLM 调用超时）
+- 200 = 系统 prompt 预留 token
+- 0.8 = 安全系数
+- 1.5 = 字符/token 比率
+
+**初始化流程**：
+
+1. 启动时解析 ContextLength 和 MaxTokens 配置
+2. 若 ContextLength 未配置，尝试 `GET /models/{model_id}` 获取
+3. 计算 ChunkSize 并打印日志
+4. 若 ContextLength 不可用，禁用 LLM 分段（ChunkSize=0）
 
 ### 成本估算
 
-假设一篇试卷 20 页、约 10000 字：
-- 阶段一：1 次调用，约 500 token 输入 + 200 token 输出
-- 阶段二：约 10 次调用（每 2 页一次），每次约 2000 token 输入 + 500 token 输出
-- 总计：约 25000 token
-- 成本（GPT-4o-mini）：约 ¥0.02-0.05
-- 延迟：约 30-60 秒（串行）或 10-15 秒（并发）
+假设一篇试卷 20 页、约 10000 字（ChunkSize=5000）：
+- 阶段一（分析）：1 次调用，约 2000 字符输入
+- 阶段二（分段）：约 2 次调用（ChunkByCapacity 切块），并行执行
+- 总计：3 次 LLM 调用
+- 延迟：并行执行，总耗时约等于最慢的单次调用（30-60 秒）
 
 ### 错误处理
 

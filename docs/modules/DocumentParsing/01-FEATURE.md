@@ -46,7 +46,6 @@ DocumentParsing 是文档检索服务的核心后台处理模块，负责将用�
 - 文档元数据管理（由 DocumentDomainService.UpdateMetadataAsync 处理）
 - 文档删除与索引清理（由 DocumentDomainService.DeleteDocumentAsync 处理）
 - OCR 引擎集成（当前仅 OCR 后处理，不包含 OCR 识别能力）
-- 并发任务处理（当前为串行处理）
 - 任务优先级与调度策略
 
 ## 关键代码参考
