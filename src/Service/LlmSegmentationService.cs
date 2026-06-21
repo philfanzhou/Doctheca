@@ -22,6 +22,7 @@ public class LlmSegmentationService : ILlmSegmentationService
     private bool _initialized;
 
     public int ChunkSize => _options.ChunkSize;
+    public int MaxConcurrency => _options.MaxConcurrency;
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -334,9 +335,9 @@ public class LlmSegmentationService : ILlmSegmentationService
 
         return $$"""
             按 {{profile.SegmentStrategy}} 策略分段。{{strategyHint}}
-            返回JSON，保留原文，offset为字符偏移量。
+            返回JSON，segments按原文顺序排列，保留原文。不需要计算offset。
 
-            {"segments":[{"text":"...","start_offset":0,"end_offset":10,"segment_type":"{{profile.SegmentStrategy}}"}]}
+            {"segments":[{"text":"...","segment_type":"{{profile.SegmentStrategy}}"}]}
 
             ---
             {{text}}
@@ -434,12 +435,12 @@ public class LlmSegmentationService : ILlmSegmentationService
             用户修正示例（请严格按照这些示例的风格和类型选择来分段）：
             {{examplesBuilder}}
 
-            请将以下文本分段，返回 JSON 格式。只返回 JSON，不要有其他文字。
+            请将以下文本分段，返回 JSON 格式。只返回 JSON，不要有其他文字。不需要计算offset。
 
             ```json
             {
               "segments": [
-                {"text": "第一段文本", "start_offset": 0, "end_offset": 50, "segment_type": "{{profile.SegmentStrategy}}"}
+                {"text": "第一段文本", "segment_type": "{{profile.SegmentStrategy}}"}
               ]
             }
             ```
@@ -655,32 +656,29 @@ public class LlmSegmentationService : ILlmSegmentationService
                 return [];
             }
 
-            // Validate and fix offsets
+            // Compute offsets from ordered text using IndexOf.
+            // We no longer ask the LLM to calculate offsets — it's error-prone and
+            // wastes thinking time for reasoning models. Instead, we locate each
+            // segment's text in the original string sequentially.
             var results = new List<SegmentResult>();
+            var searchFrom = 0;
+
             foreach (var seg in parsed.Segments)
             {
                 if (string.IsNullOrWhiteSpace(seg.Text))
                     continue;
 
-                // If offsets are missing or invalid, try to find them in the original text
-                var startOffset = seg.StartOffset;
-                var endOffset = seg.EndOffset;
-
-                if (startOffset < 0 || endOffset <= startOffset || endOffset > originalText.Length)
+                var startOffset = originalText.IndexOf(seg.Text, searchFrom, StringComparison.Ordinal);
+                if (startOffset < 0)
                 {
-                    var idx = originalText.IndexOf(seg.Text, StringComparison.Ordinal);
-                    if (idx >= 0)
-                    {
-                        startOffset = idx;
-                        endOffset = idx + seg.Text.Length;
-                    }
-                    else
-                    {
-                        // Cannot locate text, use sequential offsets
-                        startOffset = results.Count > 0 ? results[^1].EndOffset : 0;
-                        endOffset = startOffset + seg.Text.Length;
-                    }
+                    // Text not found — skip this segment rather than producing bad offsets
+                    _logger.LogDebug("Segment text not found in original, skipping: {Text}...",
+                        seg.Text.Length > 40 ? seg.Text[..40] + "..." : seg.Text);
+                    continue;
                 }
+
+                var endOffset = startOffset + seg.Text.Length;
+                searchFrom = endOffset;
 
                 results.Add(new SegmentResult
                 {
@@ -812,6 +810,8 @@ public class LlmSegmentationService : ILlmSegmentationService
         [JsonPropertyName("text")]
         public string? Text { get; init; }
 
+        // Offset fields kept for backward compatibility: LLM may still return them,
+        // but we ignore them and compute offsets ourselves via IndexOf.
         [JsonPropertyName("start_offset")]
         public int StartOffset { get; init; }
 

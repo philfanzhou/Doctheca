@@ -241,6 +241,7 @@ public class DocumentParserChunkingTests
         // Arrange: Word doc with explicit page break (w:br type="page")
         var llmMock = new Mock<ILlmSegmentationService>();
         llmMock.Setup(l => l.ChunkSize).Returns(1500);
+        llmMock.Setup(l => l.MaxConcurrency).Returns(1);
         llmMock.Setup(l => l.AnalyzeDocumentAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new DocumentProfile { Subject = "English", SegmentStrategy = SegmentTypes.Sentence });
         llmMock.Setup(l => l.SegmentTextAsync(It.IsAny<string>(), It.IsAny<DocumentProfile>(), It.IsAny<CancellationToken>()))
@@ -270,6 +271,7 @@ public class DocumentParserChunkingTests
         // Arrange: Word doc with PageBreakBefore property
         var llmMock = new Mock<ILlmSegmentationService>();
         llmMock.Setup(l => l.ChunkSize).Returns(1500);
+        llmMock.Setup(l => l.MaxConcurrency).Returns(1);
         llmMock.Setup(l => l.AnalyzeDocumentAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new DocumentProfile { Subject = "English", SegmentStrategy = SegmentTypes.Sentence });
         llmMock.Setup(l => l.SegmentTextAsync(It.IsAny<string>(), It.IsAny<DocumentProfile>(), It.IsAny<CancellationToken>()))
@@ -297,6 +299,7 @@ public class DocumentParserChunkingTests
         // Arrange: Word doc with NextPage section break
         var llmMock = new Mock<ILlmSegmentationService>();
         llmMock.Setup(l => l.ChunkSize).Returns(1500);
+        llmMock.Setup(l => l.MaxConcurrency).Returns(1);
         llmMock.Setup(l => l.AnalyzeDocumentAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new DocumentProfile { Subject = "English", SegmentStrategy = SegmentTypes.Sentence });
         llmMock.Setup(l => l.SegmentTextAsync(It.IsAny<string>(), It.IsAny<DocumentProfile>(), It.IsAny<CancellationToken>()))
@@ -324,6 +327,7 @@ public class DocumentParserChunkingTests
         // Arrange: Word doc without any page breaks
         var llmMock = new Mock<ILlmSegmentationService>();
         llmMock.Setup(l => l.ChunkSize).Returns(1500);
+        llmMock.Setup(l => l.MaxConcurrency).Returns(1);
         llmMock.Setup(l => l.AnalyzeDocumentAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new DocumentProfile { Subject = "English", SegmentStrategy = SegmentTypes.Sentence });
         llmMock.Setup(l => l.SegmentTextAsync(It.IsAny<string>(), It.IsAny<DocumentProfile>(), It.IsAny<CancellationToken>()))
@@ -368,6 +372,7 @@ public class DocumentParserChunkingTests
 
         var llmMock = new Mock<ILlmSegmentationService>();
         llmMock.Setup(l => l.ChunkSize).Returns(1500);
+        llmMock.Setup(l => l.MaxConcurrency).Returns(1);
         llmMock.Setup(l => l.AnalyzeDocumentAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(profile);
         llmMock.Setup(l => l.SegmentTextAsync(It.IsAny<string>(), It.IsAny<DocumentProfile>(), It.IsAny<CancellationToken>()))
@@ -405,6 +410,7 @@ public class DocumentParserChunkingTests
 
         var llmMock = new Mock<ILlmSegmentationService>();
         llmMock.Setup(l => l.ChunkSize).Returns(1500);
+        llmMock.Setup(l => l.MaxConcurrency).Returns(1);
         llmMock.Setup(l => l.AnalyzeDocumentAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(profile);
         llmMock.Setup(l => l.SegmentTextAsync(It.IsAny<string>(), It.IsAny<DocumentProfile>(), It.IsAny<CancellationToken>()))

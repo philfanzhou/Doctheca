@@ -273,8 +273,9 @@ public class LlmSegmentationService : ILlmSegmentationService
 | Model | string | 空 | 模型 ID |
 | ContextLength | string | 空 | 上下文窗口，支持 "128K"、"1M" 格式 |
 | MaxTokens | string | "4K" | 最大输出 token，支持 "4K"、"128K" 格式 |
-| TimeoutSeconds | int | 1800 | 单次尝试硬总超时秒数（30 分钟），通过 CancellationToken 实现；安全网 |
-| StreamIdleTimeoutSeconds | int | 60 | SSE 流式空闲超时秒数：连续多久没收到事件就取消 |
+| TimeoutSeconds | int | 1800 | 单次尝试硬总超时秒数（30 分钟），代码内置默认值 |
+| StreamIdleTimeoutSeconds | int | 60 | SSE 流式空闲超时秒数，代码内置默认值 |
+| MaxConcurrency | int | 2 | 分段阶段最大并发 LLM 调用数，代码内置默认值 |
 | Temperature | double | 0.1 | 固定值，不可配置 |
 | MaxRetries | int | 3 | 固定值，不可配置 |
 
@@ -311,7 +312,7 @@ ChunkSize = min((ContextLength - 200 - MaxTokens) × 0.8 × 1.5, 2500)
 3. 禁用 `HttpClient.Timeout`（设为 `InfiniteTimeSpan`），改用 `CancellationTokenSource` 控制单次尝试超时
 4. 逐行读取 SSE 事件（`data: {...}`），累积 `choices[0].delta.content` 拼接完整响应
 5. 遇到 `data: [DONE]` 结束读取
-6. **Chunk 处理改为串行**：为避免 provider 端限流并保证导入进度准确，多个 chunk 按顺序调用 LLM，不再并行
+6. **Chunk 处理支持受控并行**：通过 `MaxConcurrency` 控制并发 LLM 调用数（默认 2），使用 `SemaphoreSlim` 限制。推理模型（如 mimo-v2.5-pro）"思考"阶段耗时长，并发可重叠思考时间，总耗时约降低到 `串行总耗时 / MaxConcurrency`
 
 **SSE 事件格式**：
 
@@ -338,13 +339,26 @@ data: [DONE]
 
 - `HttpClient.Timeout = InfiniteTimeSpan`（禁用 HttpClient 级绝对超时）
 
+### Offset 计算优化
+
+**LLM 不再计算 offset，由代码精确计算。**
+
+旧方案让 LLM 返回 `start_offset` 和 `end_offset`，但推理模型（如 mimo-v2.5-pro）会花大量"思考时间"计算字符偏移，且结果经常出错需要代码修正。
+
+新方案：
+1. Prompt 只要求 LLM 返回 `text` 和 `segment_type`，不要求 offset
+2. 代码通过 `IndexOf` 在原文中按顺序定位每个 segment 的精确偏移
+3. 输出 token 大幅减少（每条目减少 ~30 字符的 offset 数据）
+4. 推理模型的思考时间大幅减少（无需计算字符位置）
+5. Offset 准确率 100%（代码计算 vs LLM 猜测）
+
 ### 成本估算
 
 假设一篇试卷 20 页、约 10000 字（ChunkSize=2500）：
 - 阶段一（分析）：1 次调用，约 2000 字符输入
-- 阶段二（分段）：约 4 次调用（ChunkByCapacity 切块），串行执行
+- 阶段二（分段）：约 4 次调用（ChunkByCapacity 切块），MaxConcurrency=2 并行执行
 - 总计：5 次 LLM 调用
-- 延迟：串行执行，总耗时约等于各次调用之和（2-6 分钟）；单次调用约 30-90 秒
+- 延迟：并发执行，总耗时约等于各批次中最慢的调用之和；7 个 chunk / 2 并发 ≈ 4 批次
 
 ### 错误处理
 
@@ -428,10 +442,10 @@ private List<ParsedSegment> SplitSentencesWithFallbackAsync(
   │  输出：List<TextChunk>（含 offset→page 映射）
   │
   ▼
-阶段二：LLM 智能分段（每个 chunk 1 次调用，串行执行）
+阶段二：LLM 智能分段（每个 chunk 1 次调用，受控并行 MaxConcurrency=2）
   │  输入：chunk.Text + DocumentProfile
   │  输出：List<SegmentResult>
-  │  说明：串行调用避免 provider 限流，便于计算导入进度
+  │  说明：SemaphoreSlim 限制并发，重叠推理模型"思考"时间
   │
   ▼
 回映射到页码（MapOffsetToPage）

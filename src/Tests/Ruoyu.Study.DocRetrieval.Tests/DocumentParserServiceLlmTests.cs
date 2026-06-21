@@ -26,6 +26,7 @@ public class DocumentParserServiceLlmTests
         _loggerMock = new Mock<ILogger<DocumentParserService>>();
         _llmMock = new Mock<ILlmSegmentationService>();
         _llmMock.Setup(l => l.ChunkSize).Returns(2500);
+        _llmMock.Setup(l => l.MaxConcurrency).Returns(2);
     }
 
     #region LLM Integration Tests

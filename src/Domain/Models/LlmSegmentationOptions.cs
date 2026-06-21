@@ -78,4 +78,13 @@ public class LlmSegmentationOptions
     /// sending tokens, the call stays alive regardless of total elapsed time.
     /// </summary>
     public int StreamIdleTimeoutSeconds { get; set; } = 60;
+
+    /// <summary>
+    /// Maximum number of concurrent LLM calls during chunk segmentation.
+    /// Configurable via LlmSegmentation__MaxConcurrency. Default 2.
+    /// Value 1 = fully serial (safest for rate-limited providers).
+    /// Value 2-3 = controlled parallelism (overlaps "thinking" time of reasoning models).
+    /// Higher values risk provider-side rate limiting.
+    /// </summary>
+    public int MaxConcurrency { get; set; } = 2;
 }

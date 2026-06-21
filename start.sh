@@ -28,15 +28,13 @@ OSS_ACCESS_KEY="seaweedfs_admin"
 OSS_SECRET_KEY="seaweedfs_admin"
 OSS_BUCKET="ruoyu-study"
 
-# LLM Segmentation
+# LLM Segmentation - only parameters that vary per deployment
 # Leave LLM_API_KEY empty to disable LLM segmentation
 LLM_API_KEY=""
 LLM_BASE_URL="https://api.siliconflow.cn/v1"
 LLM_MODEL="Qwen/Qwen2.5-7B-Instruct"
-LLM_CONTEXT_LENGTH="128K"               # Model context window: "128K", "256K", "1M" etc. Must match the actual model.
-LLM_MAX_TOKENS="4K"                     # Max output tokens: "4K", "8K", "128K" etc. Check model docs for actual limit.
-LLM_TIMEOUT_SECONDS="1800"              # Hard total timeout per LLM attempt (seconds). Safety net for streaming.
-LLM_STREAM_IDLE_TIMEOUT_SECONDS="60"    # Streaming idle timeout (seconds). Cancel if no SSE event arrives within this window.
+LLM_CONTEXT_LENGTH="128K"    # Model context window: "128K", "256K", "1M" etc. Must match the actual model.
+LLM_MAX_TOKENS="4K"          # Max output tokens: "4K", "8K", "128K" etc. Check model docs for actual limit.
 
 docker network inspect "$NETWORK_NAME" >/dev/null 2>&1 || docker network create "$NETWORK_NAME"
 
@@ -71,8 +69,6 @@ docker run -d \
   -e LlmSegmentation__Model="${LLM_MODEL}" \
   -e LlmSegmentation__ContextLength="${LLM_CONTEXT_LENGTH:-128K}" \
   -e LlmSegmentation__MaxTokens="${LLM_MAX_TOKENS:-4096}" \
-  -e LlmSegmentation__TimeoutSeconds="${LLM_TIMEOUT_SECONDS:-1800}" \
-  -e LlmSegmentation__StreamIdleTimeoutSeconds="${LLM_STREAM_IDLE_TIMEOUT_SECONDS:-60}" \
   -e Logging__LogLevel__Microsoft_EntityFrameworkCore_Database_Command="Warning" \
   "$IMAGE_NAME"
 

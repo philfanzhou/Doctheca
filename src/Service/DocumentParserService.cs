@@ -705,70 +705,110 @@ public partial class DocumentParserService : IDocumentParserService
     }
 
     /// <summary>
-    /// Process all chunks sequentially, returning segments for each chunk.
+    /// Process chunks with controlled parallelism, returning segments for each chunk.
     /// Returns whether each chunk used the fallback path (LLM was configured but failed),
     /// so the caller can decide whether to fail the document.
     ///
-    /// Chunks are processed serially (not in parallel) to:
-    /// 1. Avoid provider-side rate limiting when many chunks are produced
-    /// 2. Make ingestion progress reporting accurate (each chunk completes before the next)
+    /// Concurrency is controlled by ILlmSegmentationService.MaxConcurrency:
+    /// - 1 = fully serial (safest for rate-limited providers)
+    /// - 2-3 = controlled parallelism (overlaps "thinking" time of reasoning models)
     /// </summary>
     private async Task<List<(TextChunk Chunk, List<SegmentWithOffset> Segments, bool LlmFailed)>> ProcessChunksAsync(
         List<TextChunk> chunks, bool llmAvailable, DocumentProfile? profile, CancellationToken cancellationToken)
     {
-        var results = new List<(TextChunk Chunk, List<SegmentWithOffset> Segments, bool LlmFailed)>();
+        var maxConcurrency = llmAvailable ? _llmSegmentation!.MaxConcurrency : 1;
+        var results = new (TextChunk Chunk, List<SegmentWithOffset> Segments, bool LlmFailed)[chunks.Count];
 
-        for (var i = 0; i < chunks.Count; i++)
+        if (maxConcurrency <= 1)
         {
-            var chunk = chunks[i];
-            List<SegmentWithOffset> segments;
-            var llmFailed = false;
-
-            if (llmAvailable && profile != null)
+            // Serial path — simple loop, preserves order
+            for (var i = 0; i < chunks.Count; i++)
             {
-                try
-                {
-                    _logger.LogInformation(
-                        "Processing chunk {ChunkIndex}/{ChunkCount} at offset {GlobalStartOffset}",
-                        i + 1, chunks.Count, chunk.GlobalStartOffset);
+                results[i] = await ProcessChunkAsync(chunks[i], i, chunks.Count, llmAvailable, profile, cancellationToken);
+            }
+        }
+        else
+        {
+            // Parallel path with semaphore to limit concurrency
+            using var semaphore = new SemaphoreSlim(maxConcurrency);
+            var tasks = new Task<(int Index, TextChunk Chunk, List<SegmentWithOffset> Segments, bool LlmFailed)>[chunks.Count];
 
-                    var llmSegments = await _llmSegmentation!.SegmentTextAsync(chunk.Text, profile, cancellationToken);
-                    if (llmSegments.Count > 0)
-                    {
-                        segments = llmSegments.Select(s => new SegmentWithOffset
-                        {
-                            Text = s.Text, StartOffset = s.StartOffset,
-                            EndOffset = s.EndOffset, SegmentType = s.SegmentType
-                        }).ToList();
-                    }
-                    else
-                    {
-                        _logger.LogWarning(
-                            "LLM 返回空 segments，回退到规则切割：ChunkOffset={GlobalStartOffset}",
-                            chunk.GlobalStartOffset);
-                        segments = FallbackSegment(chunk.Text, profile);
-                        llmFailed = true;
-                    }
-                }
-                catch (Exception ex)
+            for (var i = 0; i < chunks.Count; i++)
+            {
+                var index = i;
+                tasks[i] = Task.Run(async () =>
                 {
-                    _logger.LogWarning(ex,
-                        "LLM 分段失败，回退到规则切割：ChunkOffset={GlobalStartOffset}",
+                    await semaphore.WaitAsync(cancellationToken);
+                    try
+                    {
+                        var result = await ProcessChunkAsync(chunks[index], index, chunks.Count, llmAvailable, profile, cancellationToken);
+                        return (index, result.Chunk, result.Segments, result.LlmFailed);
+                    }
+                    finally
+                    {
+                        semaphore.Release();
+                    }
+                }, cancellationToken);
+            }
+
+            var taskResults = await Task.WhenAll(tasks);
+            foreach (var r in taskResults)
+            {
+                results[r.Index] = (r.Chunk, r.Segments, r.LlmFailed);
+            }
+        }
+
+        return results.ToList();
+    }
+
+    private async Task<(TextChunk Chunk, List<SegmentWithOffset> Segments, bool LlmFailed)> ProcessChunkAsync(
+        TextChunk chunk, int index, int totalChunks, bool llmAvailable, DocumentProfile? profile, CancellationToken cancellationToken)
+    {
+        List<SegmentWithOffset> segments;
+        var llmFailed = false;
+
+        if (llmAvailable && profile != null)
+        {
+            try
+            {
+                _logger.LogInformation(
+                    "Processing chunk {ChunkIndex}/{ChunkCount} at offset {GlobalStartOffset}",
+                    index + 1, totalChunks, chunk.GlobalStartOffset);
+
+                var llmSegments = await _llmSegmentation!.SegmentTextAsync(chunk.Text, profile, cancellationToken);
+                if (llmSegments.Count > 0)
+                {
+                    segments = llmSegments.Select(s => new SegmentWithOffset
+                    {
+                        Text = s.Text, StartOffset = s.StartOffset,
+                        EndOffset = s.EndOffset, SegmentType = s.SegmentType
+                    }).ToList();
+                }
+                else
+                {
+                    _logger.LogWarning(
+                        "LLM 返回空 segments，回退到规则切割：ChunkOffset={GlobalStartOffset}",
                         chunk.GlobalStartOffset);
                     segments = FallbackSegment(chunk.Text, profile);
                     llmFailed = true;
                 }
             }
-            else
+            catch (Exception ex)
             {
-                // LLM 未配置：fallback 是默认行为，不标记为失败
+                _logger.LogWarning(ex,
+                    "LLM 分段失败，回退到规则切割：ChunkOffset={GlobalStartOffset}",
+                    chunk.GlobalStartOffset);
                 segments = FallbackSegment(chunk.Text, profile);
+                llmFailed = true;
             }
-
-            results.Add((chunk, segments, llmFailed));
+        }
+        else
+        {
+            // LLM 未配置：fallback 是默认行为，不标记为失败
+            segments = FallbackSegment(chunk.Text, profile);
         }
 
-        return results;
+        return (chunk, segments, llmFailed);
     }
 
     /// <summary>

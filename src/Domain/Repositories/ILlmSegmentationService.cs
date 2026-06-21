@@ -14,6 +14,12 @@ public interface ILlmSegmentationService
     int ChunkSize { get; }
 
     /// <summary>
+    /// Maximum number of concurrent LLM calls during chunk segmentation.
+    /// Controls parallelism to balance speed vs. provider rate limits.
+    /// </summary>
+    int MaxConcurrency { get; }
+
+    /// <summary>
     /// Initialize model parameters. Called at startup and lazily on first use.
     /// Parses ContextLength config, computes ChunkSize.
     /// </summary>

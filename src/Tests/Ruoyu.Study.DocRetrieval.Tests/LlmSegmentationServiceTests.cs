@@ -261,8 +261,8 @@ public class LlmSegmentationServiceTests
         var llmResponse = """
         {
             "segments": [
-                {"text": "The quick brown fox.", "start_offset": 0, "end_offset": 20, "segment_type": "sentence"},
-                {"text": "Jumps over the lazy dog.", "start_offset": 21, "end_offset": 45, "segment_type": "sentence"}
+                {"text": "The quick brown fox.", "segment_type": "sentence"},
+                {"text": "Jumps over the lazy dog.", "segment_type": "sentence"}
             ]
         }
         """;
@@ -288,8 +288,8 @@ public class LlmSegmentationServiceTests
         var llmResponse = """
         {
             "segments": [
-                {"text": "abandon /əˈbændən/ v. 放弃", "start_offset": 0, "end_offset": 28, "segment_type": "word_entry"},
-                {"text": "ability /əˈbɪləti/ n. 能力", "start_offset": 29, "end_offset": 54, "segment_type": "word_entry"}
+                {"text": "abandon /əˈbændən/ v. 放弃", "segment_type": "word_entry"},
+                {"text": "ability /əˈbɪləti/ n. 能力", "segment_type": "word_entry"}
             ]
         }
         """;
@@ -315,8 +315,8 @@ public class LlmSegmentationServiceTests
         var llmResponse = """
         {
             "segments": [
-                {"text": "1. What is 2+2? A. 3 B. 4 C. 5 D. 6", "start_offset": 0, "end_offset": 36, "segment_type": "question"},
-                {"text": "2. What is 3+3? A. 5 B. 6 C. 7 D. 8", "start_offset": 37, "end_offset": 73, "segment_type": "question"}
+                {"text": "1. What is 2+2? A. 3 B. 4 C. 5 D. 6", "segment_type": "question"},
+                {"text": "2. What is 3+3? A. 5 B. 6 C. 7 D. 8", "segment_type": "question"}
             ]
         }
         """;
@@ -380,14 +380,14 @@ public class LlmSegmentationServiceTests
     }
 
     [Fact]
-    public async Task SegmentTextAsync_OffsetsNeedFixing_FixesFromOriginalText()
+    public async Task SegmentTextAsync_OffsetsComputedFromOriginalText()
     {
-        // Arrange - LLM returns segments with invalid offsets
+        // Arrange - LLM returns segments without offsets (new prompt format)
         var llmResponse = """
         {
             "segments": [
-                {"text": "Hello world.", "start_offset": -1, "end_offset": -1, "segment_type": "sentence"},
-                {"text": "How are you?", "start_offset": 0, "end_offset": 0, "segment_type": "sentence"}
+                {"text": "Hello world.", "segment_type": "sentence"},
+                {"text": "How are you?", "segment_type": "sentence"}
             ]
         }
         """;
@@ -401,9 +401,11 @@ public class LlmSegmentationServiceTests
 
         // Assert
         Assert.Equal(2, result.Count);
-        // Should have found the correct offsets
+        // Offsets are computed via IndexOf, not from LLM
         Assert.Equal(0, result[0].StartOffset);
         Assert.Equal(12, result[0].EndOffset);
+        Assert.Equal(13, result[1].StartOffset);
+        Assert.Equal(25, result[1].EndOffset);
     }
 
     #endregion
@@ -442,7 +444,7 @@ public class LlmSegmentationServiceTests
         ```json
         {
             "segments": [
-                {"text": "Test sentence.", "start_offset": 0, "end_offset": 14, "segment_type": "sentence"}
+                {"text": "Test sentence.", "segment_type": "sentence"}
             ]
         }
         ```
