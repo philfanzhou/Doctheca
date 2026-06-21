@@ -306,10 +306,11 @@ ChunkSize = min((ContextLength - 200 - MaxTokens) × 0.8 × 1.5, 2500)
 **实现要点**：
 
 1. 请求体增加 `stream: true`
-2. 使用 `HttpCompletionOption.ResponseHeadersRead` 立即返回响应头，开始流式读取
+2. 使用 `HttpRequestMessage` + `HttpClient.SendAsync(..., HttpCompletionOption.ResponseHeadersRead)` 开始流式读取。注意：`PostAsJsonAsync` 会缓冲完整响应，不能用于 SSE
 3. 禁用 `HttpClient.Timeout`（设为 `InfiniteTimeSpan`），改用 `CancellationTokenSource` 控制单次尝试超时
 4. 逐行读取 SSE 事件（`data: {...}`），累积 `choices[0].delta.content` 拼接完整响应
 5. 遇到 `data: [DONE]` 结束读取
+6. **Chunk 处理改为串行**：为避免 provider 端限流并保证导入进度准确，多个 chunk 按顺序调用 LLM，不再并行
 
 **SSE 事件格式**：
 
@@ -331,9 +332,9 @@ data: [DONE]
 
 假设一篇试卷 20 页、约 10000 字（ChunkSize=2500）：
 - 阶段一（分析）：1 次调用，约 2000 字符输入
-- 阶段二（分段）：约 4 次调用（ChunkByCapacity 切块），并行执行
+- 阶段二（分段）：约 4 次调用（ChunkByCapacity 切块），串行执行
 - 总计：5 次 LLM 调用
-- 延迟：并行执行，总耗时约等于最慢的单次调用（30-90 秒）
+- 延迟：串行执行，总耗时约等于各次调用之和（2-6 分钟）；单次调用约 30-90 秒
 
 ### 错误处理
 
@@ -417,9 +418,10 @@ private List<ParsedSegment> SplitSentencesWithFallbackAsync(
   │  输出：List<TextChunk>（含 offset→page 映射）
   │
   ▼
-阶段二：LLM 智能分段（每个 chunk 1 次调用）
+阶段二：LLM 智能分段（每个 chunk 1 次调用，串行执行）
   │  输入：chunk.Text + DocumentProfile
   │  输出：List<SegmentResult>
+  │  说明：串行调用避免 provider 限流，便于计算导入进度
   │
   ▼
 回映射到页码（MapOffsetToPage）

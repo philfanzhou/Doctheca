@@ -493,10 +493,17 @@ public class LlmSegmentationService : ILlmSegmentationService
                     stream = true
                 };
 
-                // ResponseHeadersRead returns as soon as headers arrive, then we read the
-                // SSE body stream incrementally.
-                using var response = await _httpClient.PostAsJsonAsync(
-                    "chat/completions", request, JsonOptions, attemptCts.Token);
+                // PostAsJsonAsync buffers the full response, which defeats streaming.
+                // Use SendAsync with ResponseHeadersRead so we can read the SSE body
+                // incrementally as tokens arrive.
+                using var requestMessage = new HttpRequestMessage(HttpMethod.Post, "chat/completions")
+                {
+                    Content = JsonContent.Create(request, options: JsonOptions),
+                };
+                using var response = await _httpClient.SendAsync(
+                    requestMessage,
+                    HttpCompletionOption.ResponseHeadersRead,
+                    attemptCts.Token);
                 response.EnsureSuccessStatusCode();
 
                 var content = await ReadSseStreamAsync(response.Content, attemptCts.Token);

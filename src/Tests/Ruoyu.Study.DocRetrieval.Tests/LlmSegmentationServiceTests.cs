@@ -490,6 +490,9 @@ public class LlmSegmentationServiceTests
         // Mock /chat/completions endpoint — SSE streaming format.
         // Factory returns a fresh HttpResponseMessage per call because the service
         // disposes responses between retries (using var response = ...).
+        // Note: HttpClient.SendAsync(..., HttpCompletionOption, CancellationToken)
+        // internally invokes the protected HttpMessageHandler.SendAsync(request, token),
+        // so we mock the 2-parameter protected method.
         handlerMock
             .Protected()
             .Setup<Task<HttpResponseMessage>>(

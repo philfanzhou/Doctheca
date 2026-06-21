@@ -705,15 +705,22 @@ public partial class DocumentParserService : IDocumentParserService
     }
 
     /// <summary>
-    /// Process all chunks in parallel, returning segments for each chunk.
+    /// Process all chunks sequentially, returning segments for each chunk.
     /// Returns whether each chunk used the fallback path (LLM was configured but failed),
     /// so the caller can decide whether to fail the document.
+    ///
+    /// Chunks are processed serially (not in parallel) to:
+    /// 1. Avoid provider-side rate limiting when many chunks are produced
+    /// 2. Make ingestion progress reporting accurate (each chunk completes before the next)
     /// </summary>
     private async Task<List<(TextChunk Chunk, List<SegmentWithOffset> Segments, bool LlmFailed)>> ProcessChunksAsync(
         List<TextChunk> chunks, bool llmAvailable, DocumentProfile? profile, CancellationToken cancellationToken)
     {
-        var tasks = chunks.Select(async chunk =>
+        var results = new List<(TextChunk Chunk, List<SegmentWithOffset> Segments, bool LlmFailed)>();
+
+        for (var i = 0; i < chunks.Count; i++)
         {
+            var chunk = chunks[i];
             List<SegmentWithOffset> segments;
             var llmFailed = false;
 
@@ -721,6 +728,10 @@ public partial class DocumentParserService : IDocumentParserService
             {
                 try
                 {
+                    _logger.LogInformation(
+                        "Processing chunk {ChunkIndex}/{ChunkCount} at offset {GlobalStartOffset}",
+                        i + 1, chunks.Count, chunk.GlobalStartOffset);
+
                     var llmSegments = await _llmSegmentation!.SegmentTextAsync(chunk.Text, profile, cancellationToken);
                     if (llmSegments.Count > 0)
                     {
@@ -754,10 +765,10 @@ public partial class DocumentParserService : IDocumentParserService
                 segments = FallbackSegment(chunk.Text, profile);
             }
 
-            return (Chunk: chunk, Segments: segments, LlmFailed: llmFailed);
-        });
+            results.Add((chunk, segments, llmFailed));
+        }
 
-        return (await Task.WhenAll(tasks)).ToList();
+        return results;
     }
 
     /// <summary>
