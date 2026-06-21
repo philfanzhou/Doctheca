@@ -531,17 +531,38 @@ public class LlmSegmentationService : ILlmSegmentationService
     /// <summary>
     /// Read an OpenAI-compatible SSE stream and accumulate delta.content into a single string.
     /// Each event line has the form "data: {json}". The stream ends with "data: [DONE]".
+    ///
+    /// Uses a per-read idle timeout: every ReadLineAsync gets its own linked token that
+    /// cancels if no SSE event arrives within StreamIdleTimeoutSeconds. As long as the
+    /// provider keeps sending tokens, the overall call can take much longer than the
+    /// hard total timeout.
     /// </summary>
     private async Task<string> ReadSseStreamAsync(HttpContent content, CancellationToken cancellationToken)
     {
         var contentBuilder = new StringBuilder();
         await using var stream = await content.ReadAsStreamAsync(cancellationToken);
         using var reader = new StreamReader(stream);
+        var idleTimeout = TimeSpan.FromSeconds(_options.StreamIdleTimeoutSeconds);
 
         while (!reader.EndOfStream)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var line = await reader.ReadLineAsync(cancellationToken);
+
+            string? line;
+            using (var lineCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken))
+            {
+                lineCts.CancelAfter(idleTimeout);
+                try
+                {
+                    line = await reader.ReadLineAsync(lineCts.Token);
+                }
+                catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+                {
+                    throw new TimeoutException(
+                        $"No SSE data received for {_options.StreamIdleTimeoutSeconds}s (idle timeout).");
+                }
+            }
+
             if (string.IsNullOrEmpty(line)) continue;
             if (!line.StartsWith("data: ", StringComparison.Ordinal)) continue;
 

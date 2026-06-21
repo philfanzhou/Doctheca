@@ -523,7 +523,9 @@ public class LlmSegmentationServiceTests
             ApiKey = "test-key",
             BaseUrl = "https://api.openai.com/v1",
             MaxTokens = "4K",
-            ChunkSize = 2500
+            ChunkSize = 2500,
+            TimeoutSeconds = 1800,
+            StreamIdleTimeoutSeconds = 60
         });
 
         return new LlmSegmentationService(httpClient, options, _loggerMock.Object);
@@ -531,7 +533,7 @@ public class LlmSegmentationServiceTests
 
     /// <summary>
     /// Build an OpenAI-compatible SSE stream from a plain content string.
-    /// Splits content into a few chunks to simulate real streaming behavior.
+    /// Splits content into a few chunks to exercise the accumulation logic.
     /// </summary>
     private static string BuildSseStream(string content)
     {

@@ -62,10 +62,20 @@ public class LlmSegmentationOptions
     public int MaxRetries => 3;
 
     /// <summary>
-    /// Timeout in seconds for a single LLM attempt (request + streaming read).
-    /// Configurable via LlmSegmentation__TimeoutSeconds. Default 600s.
+    /// Hard total timeout in seconds for a single LLM attempt (request + streaming read).
+    /// Configurable via LlmSegmentation__TimeoutSeconds. Default 1800s (30 minutes).
     /// Enforced via CancellationTokenSource per attempt; HttpClient.Timeout is disabled
     /// (InfiniteTimeSpan) so streaming responses are not prematurely canceled.
+    /// This is a safety net; the primary streaming watchdog is StreamIdleTimeoutSeconds.
     /// </summary>
-    public int TimeoutSeconds { get; set; } = 600;
+    public int TimeoutSeconds { get; set; } = 1800;
+
+    /// <summary>
+    /// Idle timeout in seconds while reading an SSE stream. If no SSE event is received
+    /// within this window, the call is canceled and retried. Configurable via
+    /// LlmSegmentation__StreamIdleTimeoutSeconds. Default 60s.
+    /// This is the primary timeout mechanism for streaming: as long as the LLM keeps
+    /// sending tokens, the call stays alive regardless of total elapsed time.
+    /// </summary>
+    public int StreamIdleTimeoutSeconds { get; set; } = 60;
 }

@@ -273,7 +273,8 @@ public class LlmSegmentationService : ILlmSegmentationService
 | Model | string | 空 | 模型 ID |
 | ContextLength | string | 空 | 上下文窗口，支持 "128K"、"1M" 格式 |
 | MaxTokens | string | "4K" | 最大输出 token，支持 "4K"、"128K" 格式 |
-| TimeoutSeconds | int | 600 | 单次尝试（含流式读取）的超时秒数，通过 CancellationToken 实现 |
+| TimeoutSeconds | int | 1800 | 单次尝试硬总超时秒数（30 分钟），通过 CancellationToken 实现；安全网 |
+| StreamIdleTimeoutSeconds | int | 60 | SSE 流式空闲超时秒数：连续多久没收到事件就取消 |
 | Temperature | double | 0.1 | 固定值，不可配置 |
 | MaxRetries | int | 3 | 固定值，不可配置 |
 
@@ -324,9 +325,18 @@ data: [DONE]
 
 **超时控制**：
 
+采用双层超时策略：
+
+1. **SSE 空闲超时（主要机制）**：每次 `ReadLineAsync` 单独创建一个 `CancellationTokenSource`，在 `StreamIdleTimeoutSeconds` 内未收到新的 SSE 事件行时取消
+   - 默认 60 秒
+   - 只要 LLM 持续发送 token（即使很慢），调用就不会被中断
+   - 真正卡死/断流时才触发，误杀率远低于总时长超时
+
+2. **硬总超时（安全网）**：每次尝试创建 `CancellationTokenSource(TimeoutSeconds)`，覆盖从请求发起到流式读取完成的整个周期
+   - 默认 1800 秒（30 分钟）
+   - 防止极端情况（如 provider 持续发送无意义 keep-alive）无限挂起
+
 - `HttpClient.Timeout = InfiniteTimeSpan`（禁用 HttpClient 级绝对超时）
-- 每次尝试创建 `CancellationTokenSource(TimeoutSeconds × 1000)`，覆盖从请求发起到流式读取完成的整个周期
-- 默认 `TimeoutSeconds = 600`（10 分钟），流式模式下足够 LLM 完成生成
 
 ### 成本估算
 

@@ -128,15 +128,17 @@ var llmModel = builder.Configuration["LlmSegmentation:Model"];
 var llmContextLength = builder.Configuration["LlmSegmentation:ContextLength"];
 var llmMaxTokens = builder.Configuration["LlmSegmentation:MaxTokens"];
 var llmTimeout = builder.Configuration["LlmSegmentation:TimeoutSeconds"];
+var llmStreamIdleTimeout = builder.Configuration["LlmSegmentation:StreamIdleTimeoutSeconds"];
 var llmEnabled = !string.IsNullOrEmpty(llmApiKey);
 app.Logger.LogInformation(
-    "LLM Segmentation: Enabled={Enabled}, BaseUrl={BaseUrl}, Model={Model}, ContextLength={ContextLength}, MaxTokens={MaxTokens}, TimeoutSeconds={Timeout}, ApiKey={ApiKeyStatus}",
+    "LLM Segmentation: Enabled={Enabled}, BaseUrl={BaseUrl}, Model={Model}, ContextLength={ContextLength}, MaxTokens={MaxTokens}, TimeoutSeconds={Timeout}, StreamIdleTimeoutSeconds={StreamIdleTimeout}, ApiKey={ApiKeyStatus}",
     llmEnabled,
     llmBaseUrl ?? "(not configured)",
     llmModel ?? "(not configured)",
     llmContextLength ?? "(not configured)",
     llmMaxTokens ?? "4K (default)",
-    llmTimeout ?? "300 (default)",
+    llmTimeout ?? "1800 (default)",
+    llmStreamIdleTimeout ?? "60 (default)",
     string.IsNullOrEmpty(llmApiKey) ? "(empty - service disabled)" : "(configured)");
 
 // Initialize LLM segmentation at startup (verify config, compute ChunkSize)
