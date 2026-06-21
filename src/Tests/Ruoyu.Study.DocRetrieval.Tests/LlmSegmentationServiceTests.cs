@@ -50,6 +50,8 @@ public class LlmSegmentationServiceTests
         var llmResponse = """
         {
             "subject": "English",
+            "grade": "G8",
+            "year": "2024",
             "doc_type": "教材",
             "segment_strategy": "sentence",
             "structure": {
@@ -69,6 +71,8 @@ public class LlmSegmentationServiceTests
 
         // Assert
         Assert.Equal("English", result.Subject);
+        Assert.Equal("G8", result.Grade);
+        Assert.Equal("2024", result.Year);
         Assert.Equal("教材", result.DocType);
         Assert.Equal(SegmentTypes.Sentence, result.SegmentStrategy);
         Assert.True(result.Structure.HasChapters);
@@ -104,6 +108,38 @@ public class LlmSegmentationServiceTests
         Assert.Equal(SegmentTypes.Question, result.SegmentStrategy);
         Assert.True(result.Structure.HasQuestions);
         Assert.True(result.Structure.HasFormulas);
+    }
+
+    [Fact]
+    public async Task AnalyzeDocumentAsync_MissingGradeAndYear_ReturnsEmptyStrings()
+    {
+        // Arrange — LLM couldn't determine grade/year
+        var llmResponse = """
+        {
+            "subject": "English",
+            "grade": "",
+            "year": "",
+            "doc_type": "教材",
+            "segment_strategy": "sentence",
+            "structure": {
+                "has_chapters": true,
+                "has_questions": false,
+                "has_word_list": false,
+                "has_formulas": false
+            }
+        }
+        """;
+
+        var service = CreateService(llmResponse);
+        var text = "Some English text.";
+
+        // Act
+        var result = await service.AnalyzeDocumentAsync(text);
+
+        // Assert
+        Assert.Equal("English", result.Subject);
+        Assert.Equal(string.Empty, result.Grade);
+        Assert.Equal(string.Empty, result.Year);
     }
 
     [Fact]

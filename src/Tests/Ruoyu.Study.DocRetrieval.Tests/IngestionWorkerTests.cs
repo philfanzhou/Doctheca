@@ -173,6 +173,133 @@ public class IngestionWorkerTests
     }
 
     [Fact]
+    public async Task ExecuteAsync_LlmAutoFillsSubjectAndGrade_WhenUserLeftEmpty()
+    {
+        // Arrange — user did not provide subject/grade/year
+        var documentId = Guid.NewGuid();
+        var jobId = Guid.NewGuid();
+        var job = new DocumentIngestionJobModel { Id = jobId, DocumentId = documentId, Status = DocumentStatus.Pending };
+        var document = new DocumentModel
+        {
+            Id = documentId,
+            Title = "test.pdf",
+            SourceType = SourceTypes.Pdf,
+            FilePath = "/test/path.pdf",
+            Subject = "",
+            Grade = "",
+            Year = ""
+        };
+
+        var parsedDoc = new ParsedDocument
+        {
+            Profile = new DocumentProfile
+            {
+                Subject = "English",
+                Grade = "G8",
+                Year = "2024",
+                DocType = "教材",
+                SegmentStrategy = SegmentTypes.Sentence
+            }
+        };
+        parsedDoc.Pages.Add(new ParsedPage
+        {
+            PageNumber = 1,
+            Segments = new List<ParsedSegment>(),
+            Questions = new List<ParsedQuestion>()
+        });
+
+        _domainServiceMock.Setup(d => d.GetPendingJobsAsync()).ReturnsAsync(new List<DocumentIngestionJobModel> { job });
+        _domainServiceMock.Setup(d => d.StartIngestionJobAsync(jobId, "v1.0", null)).Returns(Task.CompletedTask);
+        _domainServiceMock.Setup(d => d.GetDocumentAsync(documentId)).ReturnsAsync(document);
+        _domainServiceMock.Setup(d => d.CompleteIngestionJobAsync(jobId)).Returns(Task.CompletedTask);
+        _ossServiceMock.Setup(o => o.DownloadAsync(document.FilePath)).ReturnsAsync(new System.IO.MemoryStream());
+        _parserServiceMock.Setup(p => p.ParseAsync(It.IsAny<System.IO.Stream>(), document.SourceType, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(parsedDoc);
+        _pageRepoMock.Setup(r => r.AddRangeAsync(It.IsAny<List<DocumentPageModel>>())).Returns(Task.CompletedTask);
+        _segmentRepoMock.Setup(r => r.AddRangeAsync(It.IsAny<List<DocumentSegmentModel>>())).Returns(Task.CompletedTask);
+        _questionRepoMock.Setup(r => r.AddRangeAsync(It.IsAny<List<QuestionSegmentModel>>())).Returns(Task.CompletedTask);
+        _occurrenceRepoMock.Setup(r => r.AddRangeAsync(It.IsAny<List<DocumentOccurrenceModel>>())).Returns(Task.CompletedTask);
+
+        var worker = new IngestionWorker(_serviceProviderMock.Object, _loggerMock.Object, _searchIndexServiceMock.Object);
+        using var cts = new CancellationTokenSource();
+        cts.CancelAfter(TimeSpan.FromMilliseconds(500));
+
+        // Act
+        await worker.StartAsync(cts.Token);
+        await Task.Delay(600);
+
+        // Assert — UpdateDocumentProfileAsync called with AI-detected subject/grade/year
+        _domainServiceMock.Verify(d => d.UpdateDocumentProfileAsync(
+            documentId,
+            It.IsAny<string>(),
+            "English",  // AI-detected subject
+            "G8",       // AI-detected grade
+            "2024"      // AI-detected year
+        ), Times.AtLeastOnce());
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_PreservesUserProvidedSubject_WhenLlmAlsoDetects()
+    {
+        // Arrange — user provided subject/grade, LLM detected different values
+        var documentId = Guid.NewGuid();
+        var jobId = Guid.NewGuid();
+        var job = new DocumentIngestionJobModel { Id = jobId, DocumentId = documentId, Status = DocumentStatus.Pending };
+        var document = new DocumentModel
+        {
+            Id = documentId,
+            Title = "test.pdf",
+            SourceType = SourceTypes.Pdf,
+            FilePath = "/test/path.pdf",
+            Subject = "英语",
+            Grade = "G10",
+            Year = "2023"
+        };
+
+        var parsedDoc = new ParsedDocument
+        {
+            Profile = new DocumentProfile
+            {
+                Subject = "English",  // LLM detected different
+                Grade = "G8",         // LLM detected different
+                Year = "2024",        // LLM detected different
+                DocType = "教材",
+                SegmentStrategy = SegmentTypes.Sentence
+            }
+        };
+        parsedDoc.Pages.Add(new ParsedPage { PageNumber = 1, Segments = new List<ParsedSegment>(), Questions = new List<ParsedQuestion>() });
+
+        _domainServiceMock.Setup(d => d.GetPendingJobsAsync()).ReturnsAsync(new List<DocumentIngestionJobModel> { job });
+        _domainServiceMock.Setup(d => d.StartIngestionJobAsync(jobId, "v1.0", null)).Returns(Task.CompletedTask);
+        _domainServiceMock.Setup(d => d.GetDocumentAsync(documentId)).ReturnsAsync(document);
+        _domainServiceMock.Setup(d => d.CompleteIngestionJobAsync(jobId)).Returns(Task.CompletedTask);
+        _ossServiceMock.Setup(o => o.DownloadAsync(document.FilePath)).ReturnsAsync(new System.IO.MemoryStream());
+        _parserServiceMock.Setup(p => p.ParseAsync(It.IsAny<System.IO.Stream>(), document.SourceType, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(parsedDoc);
+        _pageRepoMock.Setup(r => r.AddRangeAsync(It.IsAny<List<DocumentPageModel>>())).Returns(Task.CompletedTask);
+        _segmentRepoMock.Setup(r => r.AddRangeAsync(It.IsAny<List<DocumentSegmentModel>>())).Returns(Task.CompletedTask);
+        _questionRepoMock.Setup(r => r.AddRangeAsync(It.IsAny<List<QuestionSegmentModel>>())).Returns(Task.CompletedTask);
+        _occurrenceRepoMock.Setup(r => r.AddRangeAsync(It.IsAny<List<DocumentOccurrenceModel>>())).Returns(Task.CompletedTask);
+
+        var worker = new IngestionWorker(_serviceProviderMock.Object, _loggerMock.Object, _searchIndexServiceMock.Object);
+        using var cts = new CancellationTokenSource();
+        cts.CancelAfter(TimeSpan.FromMilliseconds(500));
+
+        // Act
+        await worker.StartAsync(cts.Token);
+        await Task.Delay(600);
+
+        // Assert — user values preserved, AI values NOT passed
+        _domainServiceMock.Verify(d => d.UpdateDocumentProfileAsync(
+            documentId,
+            It.IsAny<string>(),
+            null,  // null = don't override user's subject
+            null,  // null = don't override user's grade
+            null   // null = don't override user's year
+        ), Times.AtLeastOnce());
+    }
+
+    [Fact]
     public async Task ExecuteAsync_WhenParsingFails_MarksJobAsFailed()
     {
         // Arrange
