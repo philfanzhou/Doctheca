@@ -197,8 +197,8 @@ async function loadDocuments() {
     )
     documents.value = response.data
     total.value = response.total
-    // Count from current page when no filter; approximate is acceptable for dashboard
-    if (!statusFilter.value) {
+    // Update global stats only on first page without status filter
+    if (!statusFilter.value && page.value === 1) {
       totalReady.value = documents.value.filter((d) => d.status === 'ready').length
       totalProcessing.value = documents.value.filter((d) => d.status === 'processing').length
       totalFailed.value = documents.value.filter((d) => d.status === 'failed').length
