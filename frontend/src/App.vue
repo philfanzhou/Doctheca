@@ -25,6 +25,9 @@ const deleting = ref(false)
 const viewingStatus = ref(false)
 const documents = ref<Document[]>([])
 const total = ref(0)
+const totalReady = ref(0)
+const totalProcessing = ref(0)
+const totalFailed = ref(0)
 const page = ref(1)
 const pageSize = ref(20)
 const statusFilter = ref<string>('')
@@ -66,6 +69,7 @@ const splitMergeWithNext = ref(true)
 // Consistency scan state
 const scanLoading = ref(false)
 const scanResult = ref<ConsistencyScanResult | null>(null)
+const scanTime = ref('')
 const deletingOrphan = ref<string | null>(null)
 const forceDeleting = ref<string | null>(null)
 
@@ -193,6 +197,12 @@ async function loadDocuments() {
     )
     documents.value = response.data
     total.value = response.total
+    // Count from current page when no filter; approximate is acceptable for dashboard
+    if (!statusFilter.value) {
+      totalReady.value = documents.value.filter((d) => d.status === 'ready').length
+      totalProcessing.value = documents.value.filter((d) => d.status === 'processing').length
+      totalFailed.value = documents.value.filter((d) => d.status === 'failed').length
+    }
     updateRefreshTime()
   } catch (error) {
     handleApiError('加载文档列表失败', error)
@@ -338,6 +348,7 @@ async function handleScanConsistency() {
   try {
     const response = await client.scanConsistency()
     scanResult.value = response.data
+    scanTime.value = new Date().toLocaleTimeString()
     const s = response.data.summary
     ElMessage.success(`扫描完成：${s.totalDocuments} 个文档，${s.brokenCount} 个异常，${s.orphanCount} 个孤儿文件`)
   } catch (error) {
@@ -393,6 +404,14 @@ async function handleSearch() {
   } finally {
     searchLoading.value = false
   }
+}
+
+function clearSearch() {
+  searchQuery.value = ''
+  searchPhrase.value = false
+  searchResults.value = []
+  searchTotalCount.value = 0
+  searchNextToken.value = ''
 }
 
 function handleLoginSuccess() {
@@ -790,12 +809,16 @@ async function submitRefinement() {
             <span class="stats-bar-label">文档总数</span>
           </div>
           <div class="stats-bar-item">
-            <span class="stats-bar-value">{{ documents.filter((d) => d.status === 'ready').length }}</span>
+            <span class="stats-bar-value">{{ totalReady }}</span>
             <span class="stats-bar-label">已就绪</span>
           </div>
           <div class="stats-bar-item">
-            <span class="stats-bar-value">{{ documents.filter((d) => d.status === 'processing').length }}</span>
+            <span class="stats-bar-value">{{ totalProcessing }}</span>
             <span class="stats-bar-label">处理中</span>
+          </div>
+          <div class="stats-bar-item">
+            <span class="stats-bar-value">{{ totalFailed }}</span>
+            <span class="stats-bar-label">失败</span>
           </div>
         </div>
 
@@ -979,8 +1002,9 @@ async function submitRefinement() {
               </button>
             </div>
 
-            <div v-if="searchResults.length > 0" style="margin-bottom: 12px; font-size: 13px; color: var(--text-secondary)">
-              共 {{ searchTotalCount }} 条结果
+            <div v-if="searchResults.length > 0" style="margin-bottom: 12px; font-size: 13px; color: var(--text-secondary); display: flex; align-items: center; justify-content: space-between">
+              <span>共 {{ searchTotalCount }} 条结果，关键词: <strong style="color: var(--text-primary)">{{ searchQuery }}</strong></span>
+              <button class="btn btn-link btn-small" @click="clearSearch">清空</button>
             </div>
 
             <div v-if="searchResults.length > 0" style="overflow-x: auto">
@@ -1030,7 +1054,10 @@ async function submitRefinement() {
 
         <div v-if="activeTab === 'consistency'" class="card">
           <div class="card-header">
-            <span>OSS-DB 一致性扫描</span>
+            <div style="display: flex; align-items: center; gap: 12px">
+              <span>OSS-DB 一致性扫描</span>
+              <span v-if="scanTime" style="font-size: 12px; color: var(--text-muted)">上次扫描: {{ scanTime }}</span>
+            </div>
             <button class="btn btn-primary btn-small" :disabled="scanLoading" @click="handleScanConsistency">
               {{ scanLoading ? '扫描中...' : '开始扫描' }}
             </button>
