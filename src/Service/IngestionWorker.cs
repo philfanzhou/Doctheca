@@ -20,6 +20,24 @@ public class IngestionWorker : BackgroundService
     private readonly ISearchIndexService? _searchIndexService;
     private readonly TimeSpan _pollInterval = TimeSpan.FromSeconds(5);
 
+    // Stage weights for progress calculation (must sum to 100)
+    private const int WeightStarting = 5;
+    private const int WeightDownloading = 5;
+    private const int WeightAnalyzing = 10;
+    private const int WeightParsing = 55;
+    private const int WeightWritingPages = 5;
+    private const int WeightWritingSegments = 10;
+    private const int WeightIndexing = 10;
+
+    // Cumulative base percentages for each stage boundary
+    private const int BaseStarting = 0;
+    private const int BaseDownloading = WeightStarting;                       // 5
+    private const int BaseAnalyzing = BaseDownloading + WeightDownloading;    // 10
+    private const int BaseParsing = BaseAnalyzing + WeightAnalyzing;          // 20
+    private const int BaseWritingPages = BaseParsing + WeightParsing;         // 75
+    private const int BaseWritingSegments = BaseWritingPages + WeightWritingPages; // 80
+    private const int BaseIndexing = BaseWritingSegments + WeightWritingSegments;  // 90
+
     public IngestionWorker(IServiceProvider serviceProvider, ILogger<IngestionWorker> logger, ISearchIndexService? searchIndexService = null)
     {
         _serviceProvider = serviceProvider;
@@ -54,7 +72,7 @@ public class IngestionWorker : BackgroundService
                     {
                         await domainService.StartIngestionJobAsync(job.Id, "v1.0", null);
                         _logger.LogInformation("Starting ingestion job: {JobId}, document: {DocumentId}", job.Id, job.DocumentId);
-                        await domainService.UpdateJobProgressAsync(job.Id, 5, "starting");
+                        await domainService.UpdateJobProgressAsync(job.Id, BaseStarting + WeightStarting, "starting");
 
                         // Get document info
                         var document = await domainService.GetDocumentAsync(job.DocumentId)
@@ -64,11 +82,23 @@ public class IngestionWorker : BackgroundService
                         using var fileStream = await ossService.DownloadAsync(document.FilePath);
                         if (fileStream == null)
                             throw new InvalidOperationException($"File not found in OSS: {document.FilePath}");
-                        await domainService.UpdateJobProgressAsync(job.Id, 15, "downloading");
+                        await domainService.UpdateJobProgressAsync(job.Id, BaseDownloading + WeightDownloading, "downloading");
 
-                        // Call document parsing service
-                        await domainService.UpdateJobProgressAsync(job.Id, 45, "parsing");
-                        var parsedDocument = await parserService.ParseAsync(fileStream, document.SourceType, stoppingToken);
+                        // Call document parsing service with progress callback
+                        var progress = new Progress<ParsingProgress>(p =>
+                        {
+                            var (basePct, weight, stage) = p.Stage switch
+                            {
+                                "analyzing" => (BaseAnalyzing, WeightAnalyzing, "analyzing"),
+                                "parsing" => (BaseParsing, WeightParsing, "parsing"),
+                                _ => (0, 0, p.Stage)
+                            };
+                            var stageProgress = p.TotalSteps > 0 ? (double)p.CompletedSteps / p.TotalSteps : 0;
+                            var overallPct = basePct + (int)(weight * stageProgress);
+                            domainService.UpdateJobProgressAsync(job.Id, Math.Clamp(overallPct, 0, 100), stage).GetAwaiter().GetResult();
+                        });
+
+                        var parsedDocument = await parserService.ParseAsync(fileStream, document.SourceType, progress, stoppingToken);
                         if (parsedDocument.Pages.Count == 0)
                             _logger.LogWarning("Document parsing produced zero pages: {DocumentId}, sourceType={SourceType}", job.DocumentId, document.SourceType);
                         _logger.LogInformation("Document parsing completed: {DocumentId}, {PageCount} pages", job.DocumentId, parsedDocument.Pages.Count);
@@ -116,7 +146,7 @@ public class IngestionWorker : BackgroundService
 
                         // Build PageNumber -> PageId mapping
                         var pageLookup = pageModels.ToDictionary(p => p.PageNumber, p => p.Id);
-                        await domainService.UpdateJobProgressAsync(job.Id, 60, "writing_pages");
+                        await domainService.UpdateJobProgressAsync(job.Id, BaseWritingPages + WeightWritingPages, "writing_pages");
 
                         var segmentModels = parsedDocument.Pages
                             .SelectMany(p => p.Segments.Select(s => new DocumentSegmentModel
@@ -215,13 +245,12 @@ public class IngestionWorker : BackgroundService
                             await occurrenceRepository.AddRangeAsync(occurrenceModels);
                             _logger.LogInformation("Token write completed: {DocumentId}, {TokenCount} tokens", job.DocumentId, occurrenceModels.Count);
                         }
-                        await domainService.UpdateJobProgressAsync(job.Id, 80, "writing_segments");
+                        await domainService.UpdateJobProgressAsync(job.Id, BaseWritingSegments + WeightWritingSegments, "writing_segments");
 
                         // Mark ingestion job as completed
                         await domainService.CompleteIngestionJobAsync(job.Id);
                         _logger.LogInformation("Ingestion job completed: {JobId}, {SegmentCount} segments, {QuestionCount} questions",
                             job.Id, segmentModels.Count, questionModels.Count);
-                        await domainService.UpdateJobProgressAsync(job.Id, 100, "completed");
 
                         // After ingestion, write document segments to search index
                         // NOTE: indexing is best-effort and does not affect job status
@@ -232,13 +261,16 @@ public class IngestionWorker : BackgroundService
                                 await _searchIndexService.IndexDocumentSegmentsAsync(
                                     document.Id, document.Title, document.Subject, document.Grade, document.Year);
                                 _logger.LogInformation("Document search index created: {DocumentId}", job.DocumentId);
-                                await domainService.UpdateJobProgressAsync(job.Id, 95, "indexing");
+                                await domainService.UpdateJobProgressAsync(job.Id, BaseIndexing + WeightIndexing, "indexing");
                             }
                             catch (Exception indexEx)
                             {
                                 _logger.LogError(indexEx, "Failed to create document search index: {DocumentId}", job.DocumentId);
                             }
                         }
+
+                        // Final: mark 100% completed (after indexing)
+                        await domainService.UpdateJobProgressAsync(job.Id, 100, "completed");
                     }
                     catch (Exception ex)
                     {

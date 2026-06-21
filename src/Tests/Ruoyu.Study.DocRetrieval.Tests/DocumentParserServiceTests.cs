@@ -252,7 +252,7 @@ public class DocumentParserServiceTests
         cts.Cancel();
 
         // Act & Assert
-        await Assert.ThrowsAsync<OperationCanceledException>(() => _service.ParseAsync(stream, "pdf", cts.Token));
+        await Assert.ThrowsAsync<OperationCanceledException>(() => _service.ParseAsync(stream, "pdf", cancellationToken: cts.Token));
     }
 
     #endregion

@@ -213,22 +213,22 @@ public partial class DocumentParserService : IDocumentParserService
         _llmSegmentation = llmSegmentation;
     }
 
-    public async Task<ParsedDocument> ParseAsync(Stream fileStream, string sourceType, CancellationToken cancellationToken = default)
+    public async Task<ParsedDocument> ParseAsync(Stream fileStream, string sourceType, IProgress<ParsingProgress>? progress = null, CancellationToken cancellationToken = default)
     {
         var sourceTypeLower = sourceType.ToLowerInvariant();
 
         return sourceTypeLower switch
         {
-            SourceTypes.Pdf => await ParsePdfAsync(fileStream, cancellationToken),
-            SourceTypes.Word => await ParseWordAsync(fileStream, cancellationToken),
-            SourceTypes.Ppt => await ParsePptAsync(fileStream, cancellationToken),
+            SourceTypes.Pdf => await ParsePdfAsync(fileStream, progress, cancellationToken),
+            SourceTypes.Word => await ParseWordAsync(fileStream, progress, cancellationToken),
+            SourceTypes.Ppt => await ParsePptAsync(fileStream, progress, cancellationToken),
             _ => throw new NotSupportedException($"Unsupported file type: {sourceType}")
         };
     }
 
     #region PDF Parsing
 
-    private async Task<ParsedDocument> ParsePdfAsync(Stream fileStream, CancellationToken cancellationToken)
+    private async Task<ParsedDocument> ParsePdfAsync(Stream fileStream, IProgress<ParsingProgress>? progress, CancellationToken cancellationToken)
     {
         var result = new ParsedDocument();
 
@@ -257,12 +257,13 @@ public partial class DocumentParserService : IDocumentParserService
         if (_llmSegmentation != null)
         {
             profile = await AnalyzeDocumentAsync(pageTexts, cancellationToken);
+            progress?.Report(new ParsingProgress { Stage = "analyzing", CompletedSteps = 1, TotalSteps = 1 });
         }
 
         result.Profile = profile;
 
         // Segment using capacity-based chunking
-        await SegmentPagesAsync(pageTexts, profile, result, cancellationToken);
+        await SegmentPagesAsync(pageTexts, profile, result, progress, cancellationToken);
 
         return result;
     }
@@ -271,7 +272,7 @@ public partial class DocumentParserService : IDocumentParserService
 
     #region Word Parsing
 
-    private async Task<ParsedDocument> ParseWordAsync(Stream fileStream, CancellationToken cancellationToken)
+    private async Task<ParsedDocument> ParseWordAsync(Stream fileStream, IProgress<ParsingProgress>? progress, CancellationToken cancellationToken)
     {
         var result = new ParsedDocument();
 
@@ -338,6 +339,7 @@ public partial class DocumentParserService : IDocumentParserService
             if (previewBuilder.Length > 0)
             {
                 profile = await AnalyzeDocumentAsync([(1, previewBuilder.ToString())], cancellationToken);
+                progress?.Report(new ParsingProgress { Stage = "analyzing", CompletedSteps = 1, TotalSteps = 1 });
             }
         }
 
@@ -349,7 +351,7 @@ public partial class DocumentParserService : IDocumentParserService
                 MergeParagraphsIntoBlocks(p.Paragraphs).Select(b => OcrPostProcess(b)))))
             .ToList();
 
-        await SegmentPagesAsync(pageTexts, profile, result, cancellationToken);
+        await SegmentPagesAsync(pageTexts, profile, result, progress, cancellationToken);
 
         return result;
     }
@@ -463,7 +465,7 @@ public partial class DocumentParserService : IDocumentParserService
 
     #region PPT Parsing
 
-    private async Task<ParsedDocument> ParsePptAsync(Stream fileStream, CancellationToken cancellationToken)
+    private async Task<ParsedDocument> ParsePptAsync(Stream fileStream, IProgress<ParsingProgress>? progress, CancellationToken cancellationToken)
     {
         var result = new ParsedDocument();
 
@@ -520,6 +522,7 @@ public partial class DocumentParserService : IDocumentParserService
             if (preview.Length > 0)
             {
                 profile = await AnalyzeDocumentAsync([(1, preview)], cancellationToken);
+                progress?.Report(new ParsingProgress { Stage = "analyzing", CompletedSteps = 1, TotalSteps = 1 });
             }
         }
 
@@ -531,7 +534,7 @@ public partial class DocumentParserService : IDocumentParserService
                 s.Blocks.Select(b => OcrPostProcess(b)))))
             .ToList();
 
-        await SegmentPagesAsync(pageTexts, profile, result, cancellationToken);
+        await SegmentPagesAsync(pageTexts, profile, result, progress, cancellationToken);
 
         return result;
     }
@@ -585,6 +588,7 @@ public partial class DocumentParserService : IDocumentParserService
         List<(int PageNumber, string Text)> pageTexts,
         DocumentProfile? profile,
         ParsedDocument result,
+        IProgress<ParsingProgress>? progress,
         CancellationToken cancellationToken)
     {
         // Filter out empty pages but track them for the result
@@ -622,7 +626,7 @@ public partial class DocumentParserService : IDocumentParserService
         var segmentIndexPerPage = new Dictionary<int, int>();
 
         // Process chunks in parallel for faster LLM calls
-        var chunkResults = await ProcessChunksAsync(chunks, llmAvailable, profile, cancellationToken);
+        var chunkResults = await ProcessChunksAsync(chunks, llmAvailable, profile, progress, cancellationToken);
 
         foreach (var (chunk, segments, llmFailed) in chunkResults)
         {
@@ -720,10 +724,11 @@ public partial class DocumentParserService : IDocumentParserService
     /// - 2-3 = controlled parallelism (overlaps "thinking" time of reasoning models)
     /// </summary>
     private async Task<List<(TextChunk Chunk, List<SegmentWithOffset> Segments, bool LlmFailed)>> ProcessChunksAsync(
-        List<TextChunk> chunks, bool llmAvailable, DocumentProfile? profile, CancellationToken cancellationToken)
+        List<TextChunk> chunks, bool llmAvailable, DocumentProfile? profile, IProgress<ParsingProgress>? progress, CancellationToken cancellationToken)
     {
         var maxConcurrency = llmAvailable ? _llmSegmentation!.MaxConcurrency : 1;
         var results = new (TextChunk Chunk, List<SegmentWithOffset> Segments, bool LlmFailed)[chunks.Count];
+        var completedChunks = 0;
 
         if (maxConcurrency <= 1)
         {
@@ -731,6 +736,8 @@ public partial class DocumentParserService : IDocumentParserService
             for (var i = 0; i < chunks.Count; i++)
             {
                 results[i] = await ProcessChunkAsync(chunks[i], i, chunks.Count, llmAvailable, profile, cancellationToken);
+                completedChunks++;
+                progress?.Report(new ParsingProgress { Stage = "parsing", CompletedSteps = completedChunks, TotalSteps = chunks.Count });
             }
         }
         else
@@ -748,6 +755,9 @@ public partial class DocumentParserService : IDocumentParserService
                     try
                     {
                         var result = await ProcessChunkAsync(chunks[index], index, chunks.Count, llmAvailable, profile, cancellationToken);
+                        // Thread-safe increment and progress report
+                        var completed = Interlocked.Increment(ref completedChunks);
+                        progress?.Report(new ParsingProgress { Stage = "parsing", CompletedSteps = completed, TotalSteps = chunks.Count });
                         return (index, result.Chunk, result.Segments, result.LlmFailed);
                     }
                     finally

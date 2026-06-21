@@ -14,6 +14,7 @@ public interface IDocumentParserService
     /// </summary>
     /// <param name="fileStream">File stream</param>
     /// <param name="sourceType">File type (pdf/docx/pptx)</param>
+    /// <param name="progress">Optional progress callback for reporting parsing progress</param>
     /// <param name="cancellationToken">Cancellation token</param>
-    Task<ParsedDocument> ParseAsync(Stream fileStream, string sourceType, CancellationToken cancellationToken = default);
+    Task<ParsedDocument> ParseAsync(Stream fileStream, string sourceType, IProgress<ParsingProgress>? progress = null, CancellationToken cancellationToken = default);
 }

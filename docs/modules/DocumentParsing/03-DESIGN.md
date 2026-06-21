@@ -363,37 +363,40 @@ ParsedToken (q)    → DocumentOccurrenceModel
 │  │  │                                                              │     │
 │  │  │  ③ fileStream = ossService.DownloadAsync(document.FilePath) │     │
 │  │  │     fileStream == null → 抛异常 "文件不存在于 OSS"          │     │
-│  │  │     → UpdateJobProgressAsync(15, "downloading")             │     │
+│  │  │     → UpdateJobProgressAsync(10, "downloading")              │     │
 │  │  │                                                              │     │
 │  │  │  ④ parsedDocument = parserService.ParseAsync(fileStream,    │     │
-│  │  │         document.SourceType, stoppingToken)                  │     │
+│  │  │         document.SourceType, progress, stoppingToken)        │     │
 │  │  │     parsedDocument.Pages.Count == 0 → LogWarning "解析结果为空" │  │
 │  │  │                                                              │     │
-│  │  │     注：ParseAsync 内部流程（详见 07-LLM-SEGMENTATION.md）：  │  │
-│  │  │     4b. LLM 文档分析 → DocumentProfile（学科+类型+策略）     │  │
-│  │  │     4c. 按容量切块（ChunkByCapacity）                        │  │
-│  │  │     4d. 每块 LLM 分段 → List<SegmentResult>                 │  │
-│  │  │          ├─ LLM 成功：使用 LLM 返回的 segments                │  │
-│  │  │          └─ LLM 失败/空响应：进入"策略感知回退"判定         │  │
-│  │  │              ├─ profile.SegmentStrategy == "sentence"        │  │
-│  │  │              │   → 回退到 SplitSentences（保留旧行为）        │  │
-│  │  │              └─ 其它策略（word_entry/concept/question/       │  │
-│  │  │                  knowledge_point）                            │  │
-│  │  │                  → 抛 InvalidOperationException 触发 ④ 外层  │  │
-│  │  │                    catch → 任务级失败（见 ② 路径）           │  │
-│  │  │     4e. 防御性过滤：仅当 segments.Count > 1 且            │  │
-│  │  │         text.Length >= 0.9 * chunkLength 时丢弃该        │  │
-│  │  │         segment（LLM 偶发返回的整块摘要/标题；            │  │
-│  │  │         孤立 1 个 segment 不过滤以兼容合法短文本）        │  │
-│  │  │     4f. 回映射到页码 + 构建 ParsedSegment + Tokenize        │  │
-│  │  │     ↑ UpdateJobProgressAsync(45, "parsing") 在 ④ 开头执行，   │  │
-│  │  │       确保 LLM 失败时也保留 45% 进度供前端红色显示           │  │
+│  │  │     注：ParseAsync 内部流程（详见 07-LLM-SEGMENTATION.md）：  │     │
+│  │  │     4b. LLM 文档分析 → DocumentProfile（学科+类型+策略）     │     │
+│  │  │         → progress.Report({Stage:"analyzing", 1/1})          │     │
+│  │  │         → UpdateJobProgressAsync(10~20, "analyzing")         │     │
+│  │  │     4c. 按容量切块（ChunkByCapacity）                        │     │
+│  │  │     4d. 每块 LLM 分段 → List<SegmentResult>                 │     │
+│  │  │          ├─ LLM 成功：使用 LLM 返回的 segments                │     │
+│  │  │          └─ LLM 失败/空响应：进入"策略感知回退"判定         │     │
+│  │  │              ├─ profile.SegmentStrategy == "sentence"        │     │
+│  │  │              │   → 回退到 SplitSentences（保留旧行为）        │     │
+│  │  │              └─ 其它策略（word_entry/concept/question/       │     │
+│  │  │                  knowledge_point）                            │     │
+│  │  │                  → 抛 InvalidOperationException 触发 ④ 外层  │     │
+│  │  │                    catch → 任务级失败（见 ② 路径）           │     │
+│  │  │     4e. 防御性过滤：仅当 segments.Count > 1 且            │     │
+│  │  │         text.Length >= 0.9 * chunkLength 时丢弃该        │     │
+│  │  │         segment（LLM 偶发返回的整块摘要/标题；            │     │
+│  │  │         孤立 1 个 segment 不过滤以兼容合法短文本）        │     │
+│  │  │     4f. 回映射到页码 + 构建 ParsedSegment + Tokenize        │     │
+│  │  │     每个 chunk 完成时：                                      │     │
+│  │  │         progress.Report({Stage:"parsing", completed/total})  │     │
+│  │  │         → UpdateJobProgressAsync(20~75, "parsing")           │     │
 │  │  │                                                              │     │
 │  │  │  ⑤ 写入 pages                                               │     │
 │  │  │     pageModels = parsedDocument.Pages → DocumentPageModel[]  │     │
 │  │  │     pageRepository.AddRangeAsync(pageModels)                 │     │
 │  │  │     pageLookup = pageModels.ToDictionary(...)               │     │
-│  │  │     → UpdateJobProgressAsync(60, "writing_pages")            │     │
+│  │  │     → UpdateJobProgressAsync(80, "writing_pages")            │     │
 │  │  │                                                              │     │
 │  │  │  ⑥ 写入 segments                                            │     │
 │  │  │     segmentModels = parsedDocument.Pages.SelectMany(...)     │     │
@@ -408,14 +411,16 @@ ParsedToken (q)    → DocumentOccurrenceModel
 │  │  │     遍历 segment.Tokens → SegmentId 映射                    │     │
 │  │  │     遍历 question.Tokens → QuestionSegmentId 映射           │     │
 │  │  │     occurrenceRepository.AddRangeAsync(occurrenceModels)     │     │
-│  │  │     → UpdateJobProgressAsync(80, "writing_segments")        │     │
+│  │  │     → UpdateJobProgressAsync(90, "writing_segments")        │     │
 │  │  │                                                              │     │
 │  │  │  ⑨ CompleteIngestionJobAsync(job.Id)                        │     │
 │  │  │     → job.Status = "success", document.Status = "ready"     │     │
 │  │  │                                                              │     │
 │  │  │  ⑩ 同步搜索索引（可选，失败仅记日志）                       │     │
 │  │  │     _searchIndexService?.IndexDocumentSegmentsAsync(...)     │     │
-│  │  │     → UpdateJobProgressAsync(95, "indexing")                 │     │
+│  │  │     → UpdateJobProgressAsync(100, "indexing")                │     │
+│  │  │                                                              │     │
+│  │  │  ⑪ 最终完成                                                 │     │
 │  │  │     → UpdateJobProgressAsync(100, "completed")              │     │
 │  │  │                                                              │     │
 │  │  ├── catch (Exception ex) ─────────────────────────────────────┐    │

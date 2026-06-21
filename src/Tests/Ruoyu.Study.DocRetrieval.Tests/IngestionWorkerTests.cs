@@ -141,7 +141,7 @@ public class IngestionWorkerTests
             }
         };
 
-        _parserServiceMock.Setup(p => p.ParseAsync(It.IsAny<System.IO.Stream>(), document.SourceType, It.IsAny<CancellationToken>()))
+        _parserServiceMock.Setup(p => p.ParseAsync(It.IsAny<System.IO.Stream>(), document.SourceType, It.IsAny<IProgress<ParsingProgress> >(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(parsedDoc);
 
         _pageRepoMock.Setup(r => r.AddRangeAsync(It.IsAny<List<DocumentPageModel>>())).Returns(Task.CompletedTask);
@@ -213,7 +213,7 @@ public class IngestionWorkerTests
         _domainServiceMock.Setup(d => d.GetDocumentAsync(documentId)).ReturnsAsync(document);
         _domainServiceMock.Setup(d => d.CompleteIngestionJobAsync(jobId)).Returns(Task.CompletedTask);
         _ossServiceMock.Setup(o => o.DownloadAsync(document.FilePath)).ReturnsAsync(new System.IO.MemoryStream());
-        _parserServiceMock.Setup(p => p.ParseAsync(It.IsAny<System.IO.Stream>(), document.SourceType, It.IsAny<CancellationToken>()))
+        _parserServiceMock.Setup(p => p.ParseAsync(It.IsAny<System.IO.Stream>(), document.SourceType, It.IsAny<IProgress<ParsingProgress> >(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(parsedDoc);
         _pageRepoMock.Setup(r => r.AddRangeAsync(It.IsAny<List<DocumentPageModel>>())).Returns(Task.CompletedTask);
         _segmentRepoMock.Setup(r => r.AddRangeAsync(It.IsAny<List<DocumentSegmentModel>>())).Returns(Task.CompletedTask);
@@ -274,7 +274,7 @@ public class IngestionWorkerTests
         _domainServiceMock.Setup(d => d.GetDocumentAsync(documentId)).ReturnsAsync(document);
         _domainServiceMock.Setup(d => d.CompleteIngestionJobAsync(jobId)).Returns(Task.CompletedTask);
         _ossServiceMock.Setup(o => o.DownloadAsync(document.FilePath)).ReturnsAsync(new System.IO.MemoryStream());
-        _parserServiceMock.Setup(p => p.ParseAsync(It.IsAny<System.IO.Stream>(), document.SourceType, It.IsAny<CancellationToken>()))
+        _parserServiceMock.Setup(p => p.ParseAsync(It.IsAny<System.IO.Stream>(), document.SourceType, It.IsAny<IProgress<ParsingProgress> >(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(parsedDoc);
         _pageRepoMock.Setup(r => r.AddRangeAsync(It.IsAny<List<DocumentPageModel>>())).Returns(Task.CompletedTask);
         _segmentRepoMock.Setup(r => r.AddRangeAsync(It.IsAny<List<DocumentSegmentModel>>())).Returns(Task.CompletedTask);
@@ -325,7 +325,7 @@ public class IngestionWorkerTests
         _ossServiceMock.Setup(o => o.DownloadAsync(document.FilePath))
             .ReturnsAsync(new System.IO.MemoryStream());
 
-        _parserServiceMock.Setup(p => p.ParseAsync(It.IsAny<System.IO.Stream>(), document.SourceType, It.IsAny<CancellationToken>()))
+        _parserServiceMock.Setup(p => p.ParseAsync(It.IsAny<System.IO.Stream>(), document.SourceType, It.IsAny<IProgress<ParsingProgress> >(), It.IsAny<CancellationToken>()))
             .ThrowsAsync(new InvalidOperationException("PDF parsing failed"));
 
         var worker = new IngestionWorker(
@@ -383,7 +383,7 @@ public class IngestionWorkerTests
             }
         };
 
-        _parserServiceMock.Setup(p => p.ParseAsync(It.IsAny<System.IO.Stream>(), document.SourceType, It.IsAny<CancellationToken>()))
+        _parserServiceMock.Setup(p => p.ParseAsync(It.IsAny<System.IO.Stream>(), document.SourceType, It.IsAny<IProgress<ParsingProgress> >(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(parsedDoc);
 
         _pageRepoMock.Setup(r => r.AddRangeAsync(It.IsAny<List<DocumentPageModel>>())).Returns(Task.CompletedTask);
@@ -464,7 +464,7 @@ public class IngestionWorkerTests
             }
         };
 
-        _parserServiceMock.Setup(p => p.ParseAsync(It.IsAny<System.IO.Stream>(), document.SourceType, It.IsAny<CancellationToken>()))
+        _parserServiceMock.Setup(p => p.ParseAsync(It.IsAny<System.IO.Stream>(), document.SourceType, It.IsAny<IProgress<ParsingProgress> >(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(parsedDoc);
 
         _pageRepoMock.Setup(r => r.AddRangeAsync(It.IsAny<List<DocumentPageModel>>())).Returns(Task.CompletedTask);
@@ -574,7 +574,7 @@ public class IngestionWorkerTests
         _domainServiceMock.Setup(d => d.CompleteIngestionJobAsync(jobId)).Returns(Task.CompletedTask);
         _ossServiceMock.Setup(o => o.DownloadAsync(document.FilePath))
             .ReturnsAsync(new System.IO.MemoryStream());
-        _parserServiceMock.Setup(p => p.ParseAsync(It.IsAny<System.IO.Stream>(), document.SourceType, It.IsAny<CancellationToken>()))
+        _parserServiceMock.Setup(p => p.ParseAsync(It.IsAny<System.IO.Stream>(), document.SourceType, It.IsAny<IProgress<ParsingProgress> >(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new ParsedDocument { Pages = new List<ParsedPage>() });
         _pageRepoMock.Setup(r => r.AddRangeAsync(It.IsAny<List<DocumentPageModel>>())).Returns(Task.CompletedTask);
         _segmentRepoMock.Setup(r => r.AddRangeAsync(It.IsAny<List<DocumentSegmentModel>>())).Returns(Task.CompletedTask);
@@ -596,20 +596,21 @@ public class IngestionWorkerTests
         await worker.StartAsync(cts.Token);
         await Task.Delay(600);
 
-        // Assert: 6 阶段都被调用
+        // Assert: 8 阶段都被调用（analyzing/parsing 通过 Progress<ParsingProgress> 回调报告，不直接调用 UpdateJobProgressAsync）
         _domainServiceMock.Verify(d => d.UpdateJobProgressAsync(jobId, 5, "starting"), Times.AtLeastOnce());
-        _domainServiceMock.Verify(d => d.UpdateJobProgressAsync(jobId, 15, "downloading"), Times.AtLeastOnce());
-        _domainServiceMock.Verify(d => d.UpdateJobProgressAsync(jobId, 45, "parsing"), Times.AtLeastOnce());
-        _domainServiceMock.Verify(d => d.UpdateJobProgressAsync(jobId, 60, "writing_pages"), Times.AtLeastOnce());
-        _domainServiceMock.Verify(d => d.UpdateJobProgressAsync(jobId, 80, "writing_segments"), Times.AtLeastOnce());
-        _domainServiceMock.Verify(d => d.UpdateJobProgressAsync(jobId, 95, "indexing"), Times.AtLeastOnce());
+        _domainServiceMock.Verify(d => d.UpdateJobProgressAsync(jobId, 10, "downloading"), Times.AtLeastOnce());
+        // analyzing: 10-20 range via Progress<ParsingProgress> callback
+        // parsing: 20-75 range via Progress<ParsingProgress> callback
+        _domainServiceMock.Verify(d => d.UpdateJobProgressAsync(jobId, 80, "writing_pages"), Times.AtLeastOnce());
+        _domainServiceMock.Verify(d => d.UpdateJobProgressAsync(jobId, 90, "writing_segments"), Times.AtLeastOnce());
+        _domainServiceMock.Verify(d => d.UpdateJobProgressAsync(jobId, 100, "indexing"), Times.AtLeastOnce());
         _domainServiceMock.Verify(d => d.UpdateJobProgressAsync(jobId, 100, "completed"), Times.AtLeastOnce());
     }
 
     [Fact]
     public async Task ExecuteAsync_ProgressStopsAtFailurePoint()
     {
-        // Arrange: ParseAsync 抛异常 → 进度卡在 45（parsing）后任务失败
+        // Arrange: ParseAsync 抛异常 → 进度卡在 downloading（10）后任务失败
         var documentId = Guid.NewGuid();
         var jobId = Guid.NewGuid();
         var job = new DocumentIngestionJobModel { Id = jobId, DocumentId = documentId, Status = DocumentStatus.Pending };
@@ -627,7 +628,7 @@ public class IngestionWorkerTests
         _domainServiceMock.Setup(d => d.FailIngestionJobAsync(jobId, It.IsAny<string>())).Returns(Task.CompletedTask);
         _ossServiceMock.Setup(o => o.DownloadAsync(document.FilePath))
             .ReturnsAsync(new System.IO.MemoryStream());
-        _parserServiceMock.Setup(p => p.ParseAsync(It.IsAny<System.IO.Stream>(), document.SourceType, It.IsAny<CancellationToken>()))
+        _parserServiceMock.Setup(p => p.ParseAsync(It.IsAny<System.IO.Stream>(), document.SourceType, It.IsAny<IProgress<ParsingProgress> >(), It.IsAny<CancellationToken>()))
             .ThrowsAsync(new Exception("PDF 解析失败"));
 
         var worker = new IngestionWorker(
@@ -641,19 +642,18 @@ public class IngestionWorkerTests
         await worker.StartAsync(cts.Token);
         await Task.Delay(500);
 
-        // Assert: 5/15/45 都被调用，60 之后从未调用
+        // Assert: 5/10 都被调用，80 之后从未调用（parsing 通过 Progress 回调，ParseAsync 抛异常时不会触发）
         _domainServiceMock.Verify(d => d.UpdateJobProgressAsync(jobId, 5, "starting"), Times.AtLeastOnce());
-        _domainServiceMock.Verify(d => d.UpdateJobProgressAsync(jobId, 15, "downloading"), Times.AtLeastOnce());
-        _domainServiceMock.Verify(d => d.UpdateJobProgressAsync(jobId, 45, "parsing"), Times.AtLeastOnce());
-        _domainServiceMock.Verify(d => d.UpdateJobProgressAsync(jobId, 60, "writing_pages"), Times.Never);
-        _domainServiceMock.Verify(d => d.UpdateJobProgressAsync(jobId, 80, "writing_segments"), Times.Never);
+        _domainServiceMock.Verify(d => d.UpdateJobProgressAsync(jobId, 10, "downloading"), Times.AtLeastOnce());
+        _domainServiceMock.Verify(d => d.UpdateJobProgressAsync(jobId, 80, "writing_pages"), Times.Never);
+        _domainServiceMock.Verify(d => d.UpdateJobProgressAsync(jobId, 90, "writing_segments"), Times.Never);
         _domainServiceMock.Verify(d => d.FailIngestionJobAsync(jobId, It.IsAny<string>()), Times.AtLeastOnce());
     }
 
     [Fact]
     public async Task ExecuteAsync_ProgressUpdatesAreWrappedInTryCatch()
     {
-        // Arrange: UpdateJobProgressAsync(45, "parsing") 抛异常 → 任务仍能正常失败
+        // Arrange: UpdateJobProgressAsync(10, "downloading") 抛异常 → 任务仍能正常失败
         var documentId = Guid.NewGuid();
         var jobId = Guid.NewGuid();
         var job = new DocumentIngestionJobModel { Id = jobId, DocumentId = documentId, Status = DocumentStatus.Pending };
@@ -670,11 +670,11 @@ public class IngestionWorkerTests
         _domainServiceMock.Setup(d => d.GetDocumentAsync(documentId)).ReturnsAsync(document);
         _domainServiceMock.Setup(d => d.CompleteIngestionJobAsync(jobId)).Returns(Task.CompletedTask);
         _domainServiceMock.Setup(d => d.FailIngestionJobAsync(jobId, It.IsAny<string>())).Returns(Task.CompletedTask);
-        _domainServiceMock.Setup(d => d.UpdateJobProgressAsync(jobId, 45, "parsing"))
+        _domainServiceMock.Setup(d => d.UpdateJobProgressAsync(jobId, 10, "downloading"))
             .ThrowsAsync(new Exception("Progress update failed"));
         _ossServiceMock.Setup(o => o.DownloadAsync(document.FilePath))
             .ReturnsAsync(new System.IO.MemoryStream());
-        _parserServiceMock.Setup(p => p.ParseAsync(It.IsAny<System.IO.Stream>(), document.SourceType, It.IsAny<CancellationToken>()))
+        _parserServiceMock.Setup(p => p.ParseAsync(It.IsAny<System.IO.Stream>(), document.SourceType, It.IsAny<IProgress<ParsingProgress> >(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new ParsedDocument { Pages = new List<ParsedPage>() });
         _pageRepoMock.Setup(r => r.AddRangeAsync(It.IsAny<List<DocumentPageModel>>())).Returns(Task.CompletedTask);
         _segmentRepoMock.Setup(r => r.AddRangeAsync(It.IsAny<List<DocumentSegmentModel>>())).Returns(Task.CompletedTask);

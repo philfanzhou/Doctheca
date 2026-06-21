@@ -479,6 +479,54 @@ Tokenize（现有逻辑不变）
 - 初始拆分调用 `SegmentTextAsync`，refine 调用 `RefineSegmentTextAsync`
 - 初始拆分从文件提取页面文本，refine 从已有 segment text 拼回
 
+### 导入进度计算
+
+#### 旧方案问题
+
+旧方案使用固定阶段百分比，存在以下问题：
+
+1. **parsing 阶段占 90%+ 时间但无中间进度**：从 45% 直接跳到 60%，用户看到长时间卡在 45%
+2. **indexing 在 completed 之后执行**：进度从 100% 回退到 95%，不合理
+3. **并行 chunk 处理时进度无法反映实际完成比例**：7 个 chunk 并行处理，但进度不更新
+4. **不同文档大小差异大**：固定百分比无法适配
+
+#### 新方案：基于阶段权重的动态进度
+
+```
+总进度 = Σ(各阶段权重 × 阶段内进度)
+```
+
+| 阶段 | 权重 | 阶段内进度 | 说明 |
+|------|------|-----------|------|
+| starting | 5% | 0→100% | 任务启动 |
+| downloading | 5% | 0→100% | 下载文件 |
+| analyzing | 10% | 0→100% | LLM 文档分析（1次调用） |
+| parsing | 55% | 0→100% | LLM 分段（N个chunk），每完成1个chunk推进 1/N |
+| writing_pages | 5% | 0→100% | 写入页面记录 |
+| writing_segments | 10% | 0→100% | 写入分段+token |
+| indexing | 10% | 0→100% | 写入搜索索引 |
+| completed | — | 100% | 完成 |
+
+**关键改进**：
+- parsing 阶段（55%权重）按 chunk 完成数动态推进，不再卡住
+- indexing 在 completed 之前执行，进度单调递增
+- `ParseAsync` 接受 `IProgress<ParsingProgress>` 回调，`DocumentParserService` 在分析完成和每个 chunk 完成时报告进度
+- `IngestionWorker` 通过回调将进度映射到 `UpdateJobProgressAsync`
+
+**进度回调模型**：
+
+```csharp
+public record ParsingProgress
+{
+    public string Stage { get; init; }  // "analyzing" | "parsing"
+    public int CurrentStep { get; init; }  // 当前步骤（0-based）
+    public int TotalSteps { get; init; }   // 总步骤数
+}
+```
+
+- analyzing 阶段：`CurrentStep=0, TotalSteps=1`，完成时 `CurrentStep=1`
+- parsing 阶段：`TotalSteps=chunkCount`，每完成一个 chunk `CurrentStep++`
+
 ## 测试策略
 
 ### 单元测试

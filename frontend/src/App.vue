@@ -82,6 +82,7 @@ const stageLabels: Record<string, string> = {
   pending: '等待处理',
   starting: '启动中',
   downloading: '下载文件',
+  analyzing: '文档分析',
   parsing: '解析内容',
   writing_pages: '写入页面',
   writing_segments: '写入分段',
