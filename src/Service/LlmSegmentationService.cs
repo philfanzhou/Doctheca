@@ -41,7 +41,9 @@ public class LlmSegmentationService : ILlmSegmentationService
         // Configure HttpClient - BaseUrl must end with / for relative path resolution
         var baseUrl = _options.BaseUrl.TrimEnd('/');
         _httpClient.BaseAddress = new Uri(baseUrl + "/");
-        _httpClient.Timeout = TimeSpan.FromSeconds(_options.TimeoutSeconds);
+        // Disable HttpClient.Timeout so streaming responses are not prematurely canceled.
+        // Per-attempt timeout is enforced via CancellationTokenSource in CallLlmAsync.
+        _httpClient.Timeout = Timeout.InfiniteTimeSpan;
         if (!string.IsNullOrEmpty(_options.ApiKey))
         {
             _httpClient.DefaultRequestHeaders.Authorization =
@@ -80,7 +82,9 @@ public class LlmSegmentationService : ILlmSegmentationService
 
                 // Cap ChunkSize to keep individual LLM calls fast and avoid timeouts.
                 // More calls with smaller chunks > fewer calls that timeout.
-                const int maxChunkSize = 5_000;
+                // 2500 cap controls output volume for high-output strategies (e.g. word_entry
+                // produces ~80 chars JSON per entry → ~70 entries per 2500-char chunk).
+                const int maxChunkSize = 2_500;
                 _options.ChunkSize = Math.Min(calculatedChunkSize, maxChunkSize);
 
                 _logger.LogInformation(
@@ -466,6 +470,12 @@ public class LlmSegmentationService : ILlmSegmentationService
         for (var attempt = 1; attempt <= _options.MaxRetries; attempt++)
         {
             var sw = System.Diagnostics.Stopwatch.StartNew();
+            // Per-attempt timeout: covers request send + streaming read. HttpClient.Timeout
+            // is disabled (InfiniteTimeSpan) so streaming tokens don't trigger an absolute
+            // timeout. Link with caller's token so external cancellation still works.
+            using var attemptCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            attemptCts.CancelAfter(TimeSpan.FromSeconds(_options.TimeoutSeconds));
+
             try
             {
                 var request = new
@@ -477,24 +487,30 @@ public class LlmSegmentationService : ILlmSegmentationService
                         new { role = "user", content = prompt }
                     },
                     max_tokens = _options.MaxTokensValue,
-                    temperature = _options.Temperature
+                    temperature = _options.Temperature,
+                    // Enable SSE streaming so tokens flow as they're generated, keeping the
+                    // connection active and avoiding idle-timeout on long LLM generations.
+                    stream = true
                 };
 
-                var response = await _httpClient.PostAsJsonAsync("chat/completions", request, JsonOptions, cancellationToken);
+                // ResponseHeadersRead returns as soon as headers arrive, then we read the
+                // SSE body stream incrementally.
+                using var response = await _httpClient.PostAsJsonAsync(
+                    "chat/completions", request, JsonOptions, attemptCts.Token);
                 response.EnsureSuccessStatusCode();
 
-                var result = await response.Content.ReadFromJsonAsync<ChatCompletionResponse>(JsonOptions, cancellationToken);
-                var content = result?.Choices?.FirstOrDefault()?.Message?.Content;
+                var content = await ReadSseStreamAsync(response.Content, attemptCts.Token);
 
                 if (string.IsNullOrWhiteSpace(content))
                 {
                     throw new InvalidOperationException("LLM returned empty response");
                 }
 
-                _logger.LogInformation("LLM call completed in {ElapsedMs}ms, output:\n{Content}", sw.ElapsedMilliseconds, content);
+                _logger.LogInformation("LLM call completed in {ElapsedMs}ms (streaming), output length={Length}",
+                    sw.ElapsedMilliseconds, content.Length);
                 return content;
             }
-            catch (Exception ex) when (attempt < _options.MaxRetries)
+            catch (Exception ex) when (attempt < _options.MaxRetries && !cancellationToken.IsCancellationRequested)
             {
                 _logger.LogWarning(ex, "LLM call attempt {Attempt}/{MaxRetries} failed after {ElapsedMs}ms, retrying",
                     attempt, _options.MaxRetries, sw.ElapsedMilliseconds);
@@ -503,6 +519,48 @@ public class LlmSegmentationService : ILlmSegmentationService
         }
 
         throw new InvalidOperationException("LLM call failed after all retries");
+    }
+
+    /// <summary>
+    /// Read an OpenAI-compatible SSE stream and accumulate delta.content into a single string.
+    /// Each event line has the form "data: {json}". The stream ends with "data: [DONE]".
+    /// </summary>
+    private async Task<string> ReadSseStreamAsync(HttpContent content, CancellationToken cancellationToken)
+    {
+        var contentBuilder = new StringBuilder();
+        await using var stream = await content.ReadAsStreamAsync(cancellationToken);
+        using var reader = new StreamReader(stream);
+
+        while (!reader.EndOfStream)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var line = await reader.ReadLineAsync(cancellationToken);
+            if (string.IsNullOrEmpty(line)) continue;
+            if (!line.StartsWith("data: ", StringComparison.Ordinal)) continue;
+
+            var data = line["data: ".Length..];
+            if (data == "[DONE]") break;
+
+            StreamChunk? chunk;
+            try
+            {
+                chunk = JsonSerializer.Deserialize<StreamChunk>(data, JsonOptions);
+            }
+            catch (JsonException ex)
+            {
+                // Skip malformed chunks (e.g. keep-alive comments) but log for diagnostics
+                _logger.LogDebug(ex, "Skipping malformed SSE chunk: {Data}", data);
+                continue;
+            }
+
+            var delta = chunk?.Choices?.FirstOrDefault()?.Delta?.Content;
+            if (!string.IsNullOrEmpty(delta))
+            {
+                contentBuilder.Append(delta);
+            }
+        }
+
+        return contentBuilder.ToString();
     }
 
     #endregion
@@ -657,19 +715,23 @@ public class LlmSegmentationService : ILlmSegmentationService
         public int ContextLength { get; init; }
     }
 
-    private record ChatCompletionResponse
+    /// <summary>
+    /// SSE stream chunk. Each "data: {...}" line deserializes to this shape.
+    /// Only delta.content is accumulated; other fields (finish_reason, usage) are ignored.
+    /// </summary>
+    private record StreamChunk
     {
         [JsonPropertyName("choices")]
-        public List<Choice>? Choices { get; init; }
+        public List<StreamChoice>? Choices { get; init; }
     }
 
-    private record Choice
+    private record StreamChoice
     {
-        [JsonPropertyName("message")]
-        public Message? Message { get; init; }
+        [JsonPropertyName("delta")]
+        public StreamDelta? Delta { get; init; }
     }
 
-    private record Message
+    private record StreamDelta
     {
         [JsonPropertyName("content")]
         public string? Content { get; init; }

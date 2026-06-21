@@ -62,8 +62,10 @@ public class LlmSegmentationOptions
     public int MaxRetries => 3;
 
     /// <summary>
-    /// Timeout in seconds for LLM API calls. Configurable via LlmSegmentation__TimeoutSeconds.
-    /// Default 300s. Increase for large documents or slow models.
+    /// Timeout in seconds for a single LLM attempt (request + streaming read).
+    /// Configurable via LlmSegmentation__TimeoutSeconds. Default 600s.
+    /// Enforced via CancellationTokenSource per attempt; HttpClient.Timeout is disabled
+    /// (InfiniteTimeSpan) so streaming responses are not prematurely canceled.
     /// </summary>
-    public int TimeoutSeconds { get; set; } = 300;
+    public int TimeoutSeconds { get; set; } = 600;
 }

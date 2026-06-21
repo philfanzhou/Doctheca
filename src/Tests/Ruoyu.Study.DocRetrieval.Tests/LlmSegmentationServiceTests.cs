@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Net;
 using System.Net.Http;
+using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -469,48 +470,44 @@ public class LlmSegmentationServiceTests
         var handlerMock = new Mock<HttpMessageHandler>();
 
         // Mock /models endpoint for initialization
-        var modelResponse = new HttpResponseMessage(HttpStatusCode.OK);
         var modelInfo = new { id = "gpt-4o-mini", context_length = 32768 };
-        modelResponse.Content = new StringContent(
-            JsonSerializer.Serialize(modelInfo),
-            System.Text.Encoding.UTF8,
-            "application/json");
-
-        // Mock /chat/completions endpoint
-        var chatResponse = new HttpResponseMessage(statusCode);
-        if (llmResponse != null && statusCode == HttpStatusCode.OK)
-        {
-            var chatCompletionResponse = new
-            {
-                choices = new[]
-                {
-                    new
-                    {
-                        message = new { content = llmResponse }
-                    }
-                }
-            };
-            chatResponse.Content = new StringContent(
-                JsonSerializer.Serialize(chatCompletionResponse),
-                System.Text.Encoding.UTF8,
-                "application/json");
-        }
-
         handlerMock
             .Protected()
             .Setup<Task<HttpResponseMessage>>(
                 "SendAsync",
                 ItExpr.Is<HttpRequestMessage>(r => r.RequestUri!.PathAndQuery.Contains("/models/")),
                 ItExpr.IsAny<CancellationToken>())
-            .ReturnsAsync(modelResponse);
+            .ReturnsAsync(() =>
+            {
+                var resp = new HttpResponseMessage(HttpStatusCode.OK);
+                resp.Content = new StringContent(
+                    JsonSerializer.Serialize(modelInfo),
+                    System.Text.Encoding.UTF8,
+                    "application/json");
+                return resp;
+            });
 
+        // Mock /chat/completions endpoint — SSE streaming format.
+        // Factory returns a fresh HttpResponseMessage per call because the service
+        // disposes responses between retries (using var response = ...).
         handlerMock
             .Protected()
             .Setup<Task<HttpResponseMessage>>(
                 "SendAsync",
                 ItExpr.Is<HttpRequestMessage>(r => r.RequestUri!.PathAndQuery.Contains("/chat/completions")),
                 ItExpr.IsAny<CancellationToken>())
-            .ReturnsAsync(chatResponse);
+            .ReturnsAsync(() =>
+            {
+                var resp = new HttpResponseMessage(statusCode);
+                if (llmResponse != null && statusCode == HttpStatusCode.OK)
+                {
+                    resp.Content = new StringContent(
+                        BuildSseStream(llmResponse),
+                        System.Text.Encoding.UTF8,
+                        "text/event-stream");
+                }
+                return resp;
+            });
 
         var httpClient = new HttpClient(handlerMock.Object)
         {
@@ -527,6 +524,28 @@ public class LlmSegmentationServiceTests
         });
 
         return new LlmSegmentationService(httpClient, options, _loggerMock.Object);
+    }
+
+    /// <summary>
+    /// Build an OpenAI-compatible SSE stream from a plain content string.
+    /// Splits content into a few chunks to simulate real streaming behavior.
+    /// </summary>
+    private static string BuildSseStream(string content)
+    {
+        var sb = new StringBuilder();
+        // Split into ~20-char chunks to exercise the accumulation logic
+        for (var i = 0; i < content.Length; i += 20)
+        {
+            var chunkLen = Math.Min(20, content.Length - i);
+            var piece = content.Substring(i, chunkLen);
+            var escaped = JsonSerializer.Serialize(piece); // includes surrounding quotes
+            var inner = escaped[1..^1]; // strip surrounding quotes for embedding
+            sb.Append("data: {\"choices\":[{\"delta\":{\"content\":\"");
+            sb.Append(inner);
+            sb.Append("\"}}]}\n\n");
+        }
+        sb.Append("data: [DONE]\n\n");
+        return sb.ToString();
     }
 
     #endregion

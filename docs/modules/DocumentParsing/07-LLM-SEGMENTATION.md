@@ -261,7 +261,7 @@ public class LlmSegmentationService : ILlmSegmentationService
     "Model": "mimo-v2.5-pro",
     "ContextLength": "1M",
     "MaxTokens": "128K",
-    "TimeoutSeconds": 300
+    "TimeoutSeconds": 600
   }
 }
 ```
@@ -273,20 +273,22 @@ public class LlmSegmentationService : ILlmSegmentationService
 | Model | string | 空 | 模型 ID |
 | ContextLength | string | 空 | 上下文窗口，支持 "128K"、"1M" 格式 |
 | MaxTokens | string | "4K" | 最大输出 token，支持 "4K"、"128K" 格式 |
-| TimeoutSeconds | int | 300 | HTTP 超时秒数 |
+| TimeoutSeconds | int | 600 | 单次尝试（含流式读取）的超时秒数，通过 CancellationToken 实现 |
 | Temperature | double | 0.1 | 固定值，不可配置 |
 | MaxRetries | int | 3 | 固定值，不可配置 |
 
 **ChunkSize 计算**：
 
 ```
-ChunkSize = min((ContextLength - 200 - MaxTokens) × 0.8 × 1.5, 5000)
+ChunkSize = min((ContextLength - 200 - MaxTokens) × 0.8 × 1.5, 2500)
 ```
 
-- 上限 5000 字符（避免单次 LLM 调用超时）
+- 上限 2500 字符（控制单次 LLM 输出量，避免 word_entry 等高输出策略单次生成时间过长）
 - 200 = 系统 prompt 预留 token
 - 0.8 = 安全系数
 - 1.5 = 字符/token 比率
+
+> **上限从 5000 调整为 2500 的原因**：word_entry 策略下每个词条约产生 80 字符 JSON 输出，5000 字符 chunk 可达 ~145 条目 ≈ 11600 字符输出，LLM 生成耗时过长。2500 字符 chunk 约 70 条目 ≈ 5600 字符输出，单次调用更快，且更多 chunk 可并行执行。
 
 **初始化流程**：
 
@@ -295,19 +297,50 @@ ChunkSize = min((ContextLength - 200 - MaxTokens) × 0.8 × 1.5, 5000)
 3. 计算 ChunkSize 并打印日志
 4. 若 ContextLength 不可用，禁用 LLM 分段（ChunkSize=0）
 
+### 流式响应（SSE）优化
+
+**背景问题**：非流式调用下，LLM 在生成完整响应前不返回任何数据，HttpClient 在 300s 内未收到响应即超时。mimo-v2.5-pro 对 word_entry 等高输出策略单次生成可达 3-6 分钟，频繁触发 300s 超时。
+
+**解决方案**：启用 OpenAI 兼容的 SSE 流式响应（`stream: true`），LLM 边生成边推送 token，客户端持续读取，连接保持活跃，避免空闲超时。
+
+**实现要点**：
+
+1. 请求体增加 `stream: true`
+2. 使用 `HttpCompletionOption.ResponseHeadersRead` 立即返回响应头，开始流式读取
+3. 禁用 `HttpClient.Timeout`（设为 `InfiniteTimeSpan`），改用 `CancellationTokenSource` 控制单次尝试超时
+4. 逐行读取 SSE 事件（`data: {...}`），累积 `choices[0].delta.content` 拼接完整响应
+5. 遇到 `data: [DONE]` 结束读取
+
+**SSE 事件格式**：
+
+```
+data: {"choices":[{"delta":{"content":"{"}}]}
+
+data: {"choices":[{"delta":{"content":"\"segments\":"}}]}
+
+data: [DONE]
+```
+
+**超时控制**：
+
+- `HttpClient.Timeout = InfiniteTimeSpan`（禁用 HttpClient 级绝对超时）
+- 每次尝试创建 `CancellationTokenSource(TimeoutSeconds × 1000)`，覆盖从请求发起到流式读取完成的整个周期
+- 默认 `TimeoutSeconds = 600`（10 分钟），流式模式下足够 LLM 完成生成
+
 ### 成本估算
 
-假设一篇试卷 20 页、约 10000 字（ChunkSize=5000）：
+假设一篇试卷 20 页、约 10000 字（ChunkSize=2500）：
 - 阶段一（分析）：1 次调用，约 2000 字符输入
-- 阶段二（分段）：约 2 次调用（ChunkByCapacity 切块），并行执行
-- 总计：3 次 LLM 调用
-- 延迟：并行执行，总耗时约等于最慢的单次调用（30-60 秒）
+- 阶段二（分段）：约 4 次调用（ChunkByCapacity 切块），并行执行
+- 总计：5 次 LLM 调用
+- 延迟：并行执行，总耗时约等于最慢的单次调用（30-90 秒）
 
 ### 错误处理
 
 | 错误类型 | 处理策略 |
 |---------|---------|
-| LLM API 超时 | 重试 3 次，仍失败则进入"策略感知回退"判定 |
+| LLM API 超时（CancellationToken 触发） | 重试 3 次，仍失败则进入"策略感知回退"判定 |
+| SSE 流读取中断 | 重试 3 次，仍失败则进入"策略感知回退"判定 |
 | LLM 返回格式异常 | 解析失败后重试，仍失败则进入"策略感知回退"判定 |
 | LLM 返回空结果 | 直接进入"策略感知回退"判定 |
 | 网络连接失败 | 重试 3 次，仍失败则进入"策略感知回退"判定 |
@@ -454,7 +487,8 @@ POST /admin/documents/{id}/retry
 | 指标 | 说明 | 告警阈值 |
 |------|------|---------|
 | LLM 调用成功率 | 成功调用次数 / 总调用次数 | < 95% |
-| LLM 调用延迟 | 单次调用耗时 | > 30s |
+| LLM 调用延迟 | 单次调用耗时（含流式读取） | > 120s |
+| SSE 流中断率 | 流式读取中途断开的比例 | > 5% |
 | 回退率 | 回退到规则切割的比例 | > 10% |
 | 分段质量 | 人工抽样评估 | - |
 
@@ -463,7 +497,9 @@ POST /admin/documents/{id}/retry
 ```
 [INFO] 文档分析完成：DocumentId={id}, Subject={subject}, DocType={docType}, Strategy={strategy}
 [INFO] LLM 分段完成：DocumentId={id}, ChunkCount={count}, SegmentCount={segmentCount}
+[INFO] LLM call completed in {ElapsedMs}ms (streaming), output length={Length}
 [WARN] LLM 分段失败，回退到规则切割：DocumentId={id}, Error={error}
+[WARN] LLM call attempt {Attempt}/{MaxRetries} failed after {ElapsedMs}ms, retrying
 [ERROR] LLM 调用失败：DocumentId={id}, RetryCount={retryCount}, Error={error}
 ```
 
