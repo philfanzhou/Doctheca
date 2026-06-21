@@ -307,30 +307,59 @@ ChunkSize = min((ContextLength - 200 - MaxTokens) × 0.8 × 1.5, 5000)
 
 | 错误类型 | 处理策略 |
 |---------|---------|
-| LLM API 超时 | 重试 3 次，失败后回退到规则切割 |
-| LLM 返回格式异常 | 解析失败后重试，失败后回退到规则切割 |
-| LLM 返回空结果 | 回退到规则切割 |
-| 网络连接失败 | 回退到规则切割 |
+| LLM API 超时 | 重试 3 次，仍失败则进入"策略感知回退"判定 |
+| LLM 返回格式异常 | 解析失败后重试，仍失败则进入"策略感知回退"判定 |
+| LLM 返回空结果 | 直接进入"策略感知回退"判定 |
+| 网络连接失败 | 重试 3 次，仍失败则进入"策略感知回退"判定 |
+
+#### 策略感知回退
+
+回退到 `SplitSentences` 规则切割**仅适用于 sentence 策略**（英语/语文教材、阅读材料等含句末标点的文档）。对于其它策略，规则切割会把整段文本当成一个 segment 入库，污染搜索结果，因此**不静默回退**，而是抛异常触发任务级失败（`FailIngestionJobAsync`），由管理员或自动重试机制处理。
+
+| 策略 | 错误处理行为 |
+|------|-------------|
+| `sentence` | 回退到 `SplitSentences`（仅取包含 `.!? + 空格` 边界的句子） |
+| `word_entry` | 不回退，记录 `LogError` 并抛 `InvalidOperationException` 触发任务失败 |
+| `concept` | 不回退，记录 `LogError` 并抛 `InvalidOperationException` 触发任务失败 |
+| `question` | 不回退，记录 `LogError` 并抛 `InvalidOperationException` 触发任务失败 |
+| `knowledge_point` | 不回退，记录 `LogError` 并抛 `InvalidOperationException` 触发任务失败 |
+
+> **设计理由**：单词表、短语表、试卷、知识点过关单等结构化文档只能由 LLM 正确切分。规则切割产生的"整段单条记录"比"无记录"更糟，因为它会污染搜索索引和精确检索结果。触发任务级失败后，管理员可以通过 `POST /admin/documents/{id}/retry` 重试，或检查 LLM 服务健康状态。
+
+#### 防御性过滤
+
+LLM 在 prompt 含糊时偶尔会输出"摘要/标题"型整块 segment（`text.Length` 接近 `originalText.Length`），与正常 word_entry 混在一起被一起入库。`DocumentParserService` 在回映射 segment 到页面时丢弃这类可疑 segment：
+
+- 触发条件：`segments.Count > 1`（必须有多个 segment 才过滤，孤立 1 个 segment 可能是合法短文本输出）且 `seg.Text.Length >= chunk.Text.Length * 0.9`
+- 处理动作：`LogWarning` 后跳过该 segment
+- 阈值取 `0.9` 而非 `1.0` 是为了容忍 LLM 偶尔追加空格/换行的边界情况
 
 ### 回退机制
 
-当 LLM 调用失败时，回退到现有的 `SplitSentences` 规则切割：
+当 LLM 调用失败时，根据 `DocumentProfile.SegmentStrategy` 决定回退行为：
 
 ```csharp
-private async Task<List<ParsedSegment>> SplitSentencesWithFallbackAsync(
+private List<ParsedSegment> SplitSentencesWithFallbackAsync(
     string blockText,
-    DocumentProfile profile,
+    DocumentProfile? profile,
     CancellationToken cancellationToken)
 {
-    try
+    var strategy = profile?.SegmentStrategy ?? SegmentTypes.Sentence;
+
+    // 仅 sentence 策略可回退到规则切割
+    if (strategy == SegmentTypes.Sentence)
     {
-        return await SplitSentencesWithLlmAsync(blockText, profile, cancellationToken);
+        return SplitSentences(blockText);
     }
-    catch (Exception ex)
-    {
-        _logger.LogWarning(ex, "LLM 分段失败，回退到规则切割");
-        return SplitSentences(blockText); // 现有规则切割
-    }
+
+    // 其它策略不回退，抛异常触发任务级失败
+    _logger.LogError(
+        "LLM 分段失败且策略 {Strategy} 不支持规则回退，将触发任务失败",
+        strategy);
+    throw new InvalidOperationException(
+        $"LLM segmentation failed for strategy '{strategy}', " +
+        "rule-based fallback would produce a single oversized segment. " +
+        "Please retry the document or check LLM service health.");
 }
 ```
 

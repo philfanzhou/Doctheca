@@ -80,9 +80,9 @@
 | UT-LLM-06 | 智能分段 - 数学公式 | REQ-PARSE-10 | 数学教材文本 + concept 策略 | 公式保持完整，不被拆断 |
 | UT-LLM-07 | 智能分段 - 单词表词条 | REQ-PARSE-10 | 单词表文本 + word_entry 策略 | 每个词条（单词+释义+例句）为一个 segment |
 | UT-LLM-08 | 智能分段 - 试卷题目 | REQ-PARSE-10 | 试卷文本 + question 策略 | 每道题（题干+选项）为一个 segment |
-| UT-LLM-09 | LLM 调用超时回退 | REQ-PARSE-10 | LLM API 超时 | 回退到规则切割，记录 LogWarning |
-| UT-LLM-10 | LLM 返回格式异常回退 | REQ-PARSE-10 | LLM 返回非 JSON 格式 | 重试后回退到规则切割 |
-| UT-LLM-11 | LLM 返回空结果回退 | REQ-PARSE-10 | LLM 返回空 segments | 回退到规则切割 |
+| UT-LLM-09 | LLM 调用超时返回空 segments | REQ-PARSE-10 | LLM API 超时（重试 3 次后） | SegmentTextAsync 返回空 list，由 DocumentParserService 判定是否触发"策略感知回退" |
+| UT-LLM-10 | LLM 返回格式异常返回空 segments | REQ-PARSE-10 | LLM 返回非 JSON 格式（重试后仍失败） | 同上 |
+| UT-LLM-11 | LLM 返回空结果 | REQ-PARSE-10 | LLM 返回空 segments 数组 | 同上 |
 | UT-LLM-12 | 配置读取 - Provider | REQ-PARSE-11 | 配置 Provider=openai | 使用 openai 提供商 |
 | UT-LLM-13 | 配置读取 - 环境变量覆盖 | REQ-PARSE-11 | 环境变量覆盖 Provider | 使用环境变量的值 |
 | UT-LLM-14 | 配置读取 - 默认值 | REQ-PARSE-11 | 未配置 Provider | 使用默认值 |
@@ -92,8 +92,12 @@
 | # | 测试用例 | 覆盖需求 | 前置条件 | 预期结果 |
 |---|---------|---------|---------|---------|
 | UT-P-L-01 | ParseAsync 调用 LLM 分段 | REQ-PARSE-10 | LLM 服务可用 | 调用 AnalyzeDocumentAsync 和 SegmentTextAsync |
-| UT-P-L-02 | ParseAsync LLM 失败回退 | REQ-PARSE-10 | LLM 服务不可用 | 回退到 SplitSentences，结果与现有逻辑一致 |
+| UT-P-L-02 | ParseAsync sentence 策略 LLM 失败回退 | REQ-PARSE-10 | LLM 服务不可用 + sentence 策略 | 回退到 SplitSentences，结果与现有逻辑一致 |
 | UT-P-L-03 | ParseAsync 结果包含正确 SegmentType | REQ-PARSE-10 | LLM 返回 segment_type | ParsedSegment.SegmentType 正确设置 |
+| UT-P-L-04 | ParseAsync word_entry 策略 LLM 失败抛异常不写脏数据 | AC-9 | LLM mock 抛异常 + word_entry profile | ParseAsync 抛 InvalidOperationException；不调用任何 segmentRepository.AddRangeAsync；异常消息含"word_entry"或"fallback"关键字 |
+| UT-P-L-05 | ParseAsync concept 策略 LLM 失败抛异常 | AC-9 | LLM mock 抛异常 + concept profile | ParseAsync 抛 InvalidOperationException（回归保护非 sentence 策略失败行为） |
+| UT-P-L-06 | ParseAsync LLM 返回覆盖整 chunk 的 segment 被丢弃 | AC-9 | LLM mock 返回 text.Length == chunkText.Length 的 segment | 该 segment 不出现在 result.Pages[*].Segments 中，其他正常 segment 保留 |
+| UT-P-L-07 | ParseAsync 无 LLM 服务时不静默回退非 sentence 策略 | AC-9 | llmService = null + word_entry profile | ParseAsync 抛 InvalidOperationException（sentence 策略的旧 fallback 行为保留） |
 
 ## 骨架代码
 

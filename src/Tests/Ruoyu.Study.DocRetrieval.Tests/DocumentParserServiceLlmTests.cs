@@ -287,6 +287,152 @@ public class DocumentParserServiceLlmTests
         _llmMock.Verify(l => l.AnalyzeDocumentAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Once);
     }
 
+    [Fact]
+    public async Task ParseAsync_WordEntryLlmFails_ThrowsAndDoesNotCreateBigRecord()
+    {
+        // Arrange: word_entry profile, LLM throws
+        var profile = new DocumentProfile
+        {
+            Subject = "English",
+            DocType = "单词表",
+            SegmentStrategy = SegmentTypes.WordEntry
+        };
+
+        _llmMock.Setup(l => l.AnalyzeDocumentAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(profile);
+        _llmMock.Setup(l => l.SegmentTextAsync(It.IsAny<string>(), It.IsAny<DocumentProfile>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new Exception("LLM 服务不可用"));
+
+        var service = CreateService(_llmMock.Object);
+        var docxBytes = CreateMinimalDocx("abandon v. 放弃\nability n. 能力\nacademy n. 学院");
+        using var stream = new MemoryStream(docxBytes);
+
+        // Act & Assert: 必须抛 InvalidOperationException，异常消息说明 word_entry 策略不支持回退
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => service.ParseAsync(stream, "word"));
+        Assert.Contains("word_entry", ex.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task ParseAsync_ConceptLlmFails_ThrowsAndDoesNotCreateBigRecord()
+    {
+        // Arrange: concept profile, LLM throws
+        var profile = new DocumentProfile
+        {
+            Subject = "数学",
+            DocType = "教材",
+            SegmentStrategy = SegmentTypes.Concept
+        };
+
+        _llmMock.Setup(l => l.AnalyzeDocumentAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(profile);
+        _llmMock.Setup(l => l.SegmentTextAsync(It.IsAny<string>(), It.IsAny<DocumentProfile>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new Exception("LLM 服务不可用"));
+
+        var service = CreateService(_llmMock.Object);
+        var pdfBytes = CreateMinimalPdf("牛顿第二定律 F=ma。");
+        using var stream = new MemoryStream(pdfBytes);
+
+        // Act & Assert
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => service.ParseAsync(stream, "pdf"));
+        Assert.Contains("concept", ex.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task ParseAsync_SentenceLlmFails_FallsBackToRuleBased()
+    {
+        // Arrange: sentence profile, LLM 抛异常 —— 必须保留旧行为回退到 SplitSentences
+        var profile = new DocumentProfile
+        {
+            Subject = "English",
+            DocType = "教材",
+            SegmentStrategy = SegmentTypes.Sentence
+        };
+
+        _llmMock.Setup(l => l.AnalyzeDocumentAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(profile);
+        _llmMock.Setup(l => l.SegmentTextAsync(It.IsAny<string>(), It.IsAny<DocumentProfile>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new Exception("LLM 服务不可用"));
+
+        var service = CreateService(_llmMock.Object);
+        var pdfBytes = CreateMinimalPdf("Hello world. This is a test.");
+        using var stream = new MemoryStream(pdfBytes);
+
+        // Act: 不应抛异常
+        var result = await service.ParseAsync(stream, "pdf");
+
+        // Assert: 至少应该有 1 个 segment（来自 SplitSentences 回退）
+        Assert.NotNull(result);
+        var totalSegments = result.Pages.SelectMany(p => p.Segments).Count();
+        Assert.True(totalSegments > 0, "sentence 策略下 LLM 失败仍应回退到规则切割产生 segments");
+    }
+
+    [Fact]
+    public async Task ParseAsync_LlmReturnsCoverAllSegment_DiscardsIt()
+    {
+        // Arrange: LLM 返回一个 text == chunkText 的"摘要"型 segment
+        var profile = new DocumentProfile
+        {
+            Subject = "English",
+            DocType = "教材",
+            SegmentStrategy = SegmentTypes.Sentence
+        };
+
+        var chunkText = "abandon v. 放弃\nability n. 能力";
+        var segments = new List<SegmentResult>
+        {
+            // 正常的 word_entry segment
+            new() { Text = "abandon v. 放弃", StartOffset = 0, EndOffset = 15, SegmentType = SegmentTypes.WordEntry },
+            // 异常：覆盖整个 chunk 的"摘要"型 segment
+            new() { Text = chunkText, StartOffset = 0, EndOffset = chunkText.Length, SegmentType = SegmentTypes.Sentence },
+            new() { Text = "ability n. 能力", StartOffset = 16, EndOffset = 31, SegmentType = SegmentTypes.WordEntry }
+        };
+
+        _llmMock.Setup(l => l.AnalyzeDocumentAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(profile);
+        _llmMock.Setup(l => l.SegmentTextAsync(It.IsAny<string>(), It.IsAny<DocumentProfile>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(segments);
+
+        var service = CreateService(_llmMock.Object);
+        var docxBytes = CreateMinimalDocx(chunkText);
+        using var stream = new MemoryStream(docxBytes);
+
+        // Act
+        var result = await service.ParseAsync(stream, "word");
+
+        // Assert: 整块 segment 已被丢弃，剩下 2 个正常 segment
+        var allSegments = result.Pages.SelectMany(p => p.Segments).ToList();
+        Assert.Equal(2, allSegments.Count);
+        Assert.DoesNotContain(allSegments, s => s.Text == chunkText);
+    }
+
+    [Fact]
+    public async Task ParseAsync_WithoutLlm_WordEntryProfile_Throws()
+    {
+        // Arrange: 无 LLM 服务 + word_entry profile（模拟"用户上传单词表但没配 LLM"）
+        // 这里通过 mock 一个 LLM 但 ChunkSize=0 模拟"LLM 配了但不可用"
+        var profile = new DocumentProfile
+        {
+            Subject = "English",
+            DocType = "单词表",
+            SegmentStrategy = SegmentTypes.WordEntry
+        };
+
+        _llmMock.Setup(l => l.ChunkSize).Returns(0); // LLM 不可用
+        _llmMock.Setup(l => l.AnalyzeDocumentAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(profile);
+
+        var service = CreateService(_llmMock.Object);
+        var docxBytes = CreateMinimalDocx("abandon v. 放弃");
+        using var stream = new MemoryStream(docxBytes);
+
+        // Act & Assert: 应在早检查阶段抛异常
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => service.ParseAsync(stream, "word"));
+        Assert.Contains("word_entry", ex.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
     #endregion
 
     #region Token Generation Tests

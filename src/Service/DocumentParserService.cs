@@ -601,6 +601,15 @@ public partial class DocumentParserService : IDocumentParserService
         // Determine chunk size — if LLM is not available (ChunkSize <= 0), use rule-based fallback
         var llmAvailable = _llmSegmentation != null && profile != null && _llmSegmentation.ChunkSize > 0;
         var chunkSize = llmAvailable ? _llmSegmentation!.ChunkSize : 1500;
+
+        // 早检查：非 sentence 策略必须由 LLM 切分，规则切割会产生整段单条记录污染搜索结果
+        if (profile != null && profile.SegmentStrategy != SegmentTypes.Sentence && !llmAvailable)
+        {
+            throw new InvalidOperationException(
+                $"Cannot segment document with strategy '{profile.SegmentStrategy}' " +
+                "without LLM service. Please configure LLM segmentation in appsettings.json.");
+        }
+
         var chunks = ChunkByCapacity(nonEmptyPages, chunkSize);
 
         _logger.LogInformation("Segmenting {PageCount} pages in {ChunkCount} chunks (ChunkSize={ChunkSize})",
@@ -615,11 +624,35 @@ public partial class DocumentParserService : IDocumentParserService
         // Process chunks in parallel for faster LLM calls
         var chunkResults = await ProcessChunksAsync(chunks, llmAvailable, profile, cancellationToken);
 
-        foreach (var (chunk, segments) in chunkResults)
+        foreach (var (chunk, segments, llmFailed) in chunkResults)
         {
+            // LLM 配过但本 chunk 失败，且当前策略不允许规则回退：
+            // 抛异常让 IngestionWorker 走 FailIngestionJobAsync 路径，
+            // 避免产生整段单条记录污染搜索结果
+            if (llmFailed && profile != null && profile.SegmentStrategy != SegmentTypes.Sentence)
+            {
+                throw new InvalidOperationException(
+                    $"LLM segmentation failed for chunk at global offset {chunk.GlobalStartOffset} " +
+                    $"with strategy '{profile.SegmentStrategy}', and rule-based fallback is unsuitable. " +
+                    "Please retry the document or check LLM service health.");
+            }
+
             // Map segments back to pages
             foreach (var seg in segments)
             {
+                // 防御性过滤：LLM 偶发返回"摘要/标题"型整块 segment（text 接近 chunk.Text 长度），
+                // 与正常词条混在一起入库会污染搜索结果。直接丢弃。
+                // 关键条件：必须同时有多个 segment（孤立的 1 个 segment 可能是合法输出，比如短文本）。
+                // 阈值用 0.9 而非 1.0 是为了容忍 LLM 偶尔追加空格/换行的边界情况。
+                if (segments.Count > 1 && seg.Text.Length >= chunk.Text.Length * 0.9)
+                {
+                    _logger.LogWarning(
+                        "Discarding suspiciously large segment ({Len} chars vs chunk {ChunkLen}), " +
+                        "likely a LLM summary/header artifact. ChunkOffset={GlobalStartOffset}",
+                        seg.Text.Length, chunk.Text.Length, chunk.GlobalStartOffset);
+                    continue;
+                }
+
                 var pageNumber = MapOffsetToPage(chunk.PageRanges, seg.StartOffset);
                 if (!pageLookup.TryGetValue(pageNumber, out var parsedPage)) continue;
 
@@ -647,50 +680,81 @@ public partial class DocumentParserService : IDocumentParserService
         }
     }
 
-    private List<SegmentWithOffset> FallbackSegment(string text)
+    private List<SegmentWithOffset> FallbackSegment(string text, DocumentProfile? profile)
     {
-        return SplitSentences(text).Select(t => new SegmentWithOffset
+        var strategy = profile?.SegmentStrategy ?? SegmentTypes.Sentence;
+
+        // 仅 sentence 策略允许回退到 SplitSentences：教材/阅读材料含句末标点，
+        // 规则切割能产出有效分段。其它策略（word_entry/concept/question/knowledge_point）
+        // 强制走规则切割会产生整段单条记录，污染搜索结果。
+        if (strategy == SegmentTypes.Sentence)
         {
-            Text = t,
-            StartOffset = 0,
-            EndOffset = t.Length,
-            SegmentType = SegmentTypes.Sentence
-        }).ToList();
+            return SplitSentences(text).Select(t => new SegmentWithOffset
+            {
+                Text = t,
+                StartOffset = 0,
+                EndOffset = t.Length,
+                SegmentType = SegmentTypes.Sentence
+            }).ToList();
+        }
+
+        _logger.LogError(
+            "LLM 分段失败且策略 {Strategy} 不支持规则回退，将触发任务级失败",
+            strategy);
+        return new List<SegmentWithOffset>();
     }
 
     /// <summary>
     /// Process all chunks in parallel, returning segments for each chunk.
+    /// Returns whether each chunk used the fallback path (LLM was configured but failed),
+    /// so the caller can decide whether to fail the document.
     /// </summary>
-    private async Task<List<(TextChunk Chunk, List<SegmentWithOffset> Segments)>> ProcessChunksAsync(
+    private async Task<List<(TextChunk Chunk, List<SegmentWithOffset> Segments, bool LlmFailed)>> ProcessChunksAsync(
         List<TextChunk> chunks, bool llmAvailable, DocumentProfile? profile, CancellationToken cancellationToken)
     {
         var tasks = chunks.Select(async chunk =>
         {
             List<SegmentWithOffset> segments;
+            var llmFailed = false;
+
             if (llmAvailable && profile != null)
             {
                 try
                 {
                     var llmSegments = await _llmSegmentation!.SegmentTextAsync(chunk.Text, profile, cancellationToken);
-                    segments = llmSegments.Count > 0
-                        ? llmSegments.Select(s => new SegmentWithOffset
+                    if (llmSegments.Count > 0)
+                    {
+                        segments = llmSegments.Select(s => new SegmentWithOffset
                         {
                             Text = s.Text, StartOffset = s.StartOffset,
                             EndOffset = s.EndOffset, SegmentType = s.SegmentType
-                        }).ToList()
-                        : FallbackSegment(chunk.Text);
+                        }).ToList();
+                    }
+                    else
+                    {
+                        _logger.LogWarning(
+                            "LLM 返回空 segments，回退到规则切割：ChunkOffset={GlobalStartOffset}",
+                            chunk.GlobalStartOffset);
+                        segments = FallbackSegment(chunk.Text, profile);
+                        llmFailed = true;
+                    }
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogWarning(ex, "LLM segmentation failed for chunk, falling back");
-                    segments = FallbackSegment(chunk.Text);
+                    _logger.LogWarning(ex,
+                        "LLM 分段失败，回退到规则切割：ChunkOffset={GlobalStartOffset}",
+                        chunk.GlobalStartOffset);
+                    segments = FallbackSegment(chunk.Text, profile);
+                    llmFailed = true;
                 }
             }
             else
             {
-                segments = FallbackSegment(chunk.Text);
+                // LLM 未配置：fallback 是默认行为，不标记为失败
+                segments = FallbackSegment(chunk.Text, profile);
             }
-            return (Chunk: chunk, Segments: segments);
+
+            return (Chunk: chunk, Segments: segments, LlmFailed: llmFailed);
         });
 
         return (await Task.WhenAll(tasks)).ToList();

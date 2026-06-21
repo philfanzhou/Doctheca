@@ -372,7 +372,19 @@ ParsedToken (q)    → DocumentOccurrenceModel
 │  │  │     4b. LLM 文档分析 → DocumentProfile（学科+类型+策略）     │  │
 │  │  │     4c. 按容量切块（ChunkByCapacity）                        │  │
 │  │  │     4d. 每块 LLM 分段 → List<SegmentResult>                 │  │
-│  │  │     4e. 回映射到页码 + 构建 ParsedSegment + Tokenize        │  │
+│  │  │          ├─ LLM 成功：使用 LLM 返回的 segments                │  │
+│  │  │          └─ LLM 失败/空响应：进入"策略感知回退"判定         │  │
+│  │  │              ├─ profile.SegmentStrategy == "sentence"        │  │
+│  │  │              │   → 回退到 SplitSentences（保留旧行为）        │  │
+│  │  │              └─ 其它策略（word_entry/concept/question/       │  │
+│  │  │                  knowledge_point）                            │  │
+│  │  │                  → 抛 InvalidOperationException 触发 ④ 外层  │  │
+│  │  │                    catch → 任务级失败（见 ② 路径）           │  │
+│  │  │     4e. 防御性过滤：仅当 segments.Count > 1 且            │  │
+│  │  │         text.Length >= 0.9 * chunkLength 时丢弃该        │  │
+│  │  │         segment（LLM 偶发返回的整块摘要/标题；            │  │
+│  │  │         孤立 1 个 segment 不过滤以兼容合法短文本）        │  │
+│  │  │     4f. 回映射到页码 + 构建 ParsedSegment + Tokenize        │  │
 │  │  │                                                              │     │
 │  │  │  ⑤ 写入 pages                                               │     │
 │  │  │     pageModels = parsedDocument.Pages → DocumentPageModel[]  │     │

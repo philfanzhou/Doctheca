@@ -282,11 +282,27 @@ Scenario: 试卷按题目分段
   Then 分段策略 = "question"
   And 每个 segment 包含一道完整的题目（题干+选项）
 
-Scenario: LLM 调用失败回退到规则切割
-  Given LLM API 调用超时或返回格式异常
+Scenario: LLM 调用失败时按策略决定回退行为
+  Given LLM 服务调用失败或返回格式异常
   When 分段流程执行
+  And 文档画像策略 = "sentence"
   Then 回退到现有 SplitSentences 规则切割
   And 记录 LogWarning 日志
+
+Scenario: 单词表 LLM 失败触发任务级失败
+  Given LLM 服务调用失败
+  And 文档画像策略 = "word_entry"
+  When 分段流程执行
+  Then 记录 LogError 日志
+  And 抛出 InvalidOperationException 触发任务级失败（job.Status = "failed"）
+  And 数据库不写入任何 document_segments 记录（避免整段单条记录污染搜索结果）
+  And 管理员可通过 POST /admin/documents/{id}/retry 重试
+
+Scenario: 其它非 sentence 策略 LLM 失败触发任务级失败
+  Given LLM 服务调用失败
+  And 文档画像策略 ∈ {concept, question, knowledge_point}
+  When 分段流程执行
+  Then 同上 scenario "单词表 LLM 失败触发任务级失败"
 ```
 
 ---
