@@ -226,8 +226,6 @@ async function handleUpload() {
     showUploadDialog.value = false
     resetUploadForm()
     await loadDocuments()
-  } catch (error) {
-    handleApiError('上传文档失败', error)
   } finally {
     uploading.value = false
   }
@@ -786,7 +784,7 @@ async function submitRefinement() {
       </header>
 
       <main class="content-area">
-        <div class="stats-bar">
+        <div v-if="activeTab === 'documents'" class="stats-bar">
           <div class="stats-bar-item">
             <span class="stats-bar-value">{{ total }}</span>
             <span class="stats-bar-label">文档总数</span>
@@ -877,9 +875,18 @@ async function submitRefinement() {
               <tbody>
                 <tr v-for="doc in documents" :key="doc.id">
                   <td>{{ doc.title }}</td>
-                  <td>{{ doc.subject }}</td>
-                  <td>{{ doc.grade }}</td>
-                  <td>{{ doc.year }}</td>
+                  <td>
+                    <span v-if="doc.subject">{{ doc.subject }}</span>
+                    <span v-else class="tag tag-info" style="font-size: 11px">AI 识别中</span>
+                  </td>
+                  <td>
+                    <span v-if="doc.grade">{{ doc.grade }}</span>
+                    <span v-else class="tag tag-info" style="font-size: 11px">AI 识别中</span>
+                  </td>
+                  <td>
+                    <span v-if="doc.year">{{ doc.year }}</span>
+                    <span v-else class="tag tag-info" style="font-size: 11px">AI 识别中</span>
+                  </td>
                   <td>
                     <span class="tag" :class="getStatusTagClass(doc.status)">
                       {{ getStatusLabel(doc.status) }}
