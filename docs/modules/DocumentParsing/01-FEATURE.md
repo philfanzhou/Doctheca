@@ -29,6 +29,7 @@ DocumentParsing 是文档检索服务的核心后台处理模块，负责将用�
 | AC-7 | 解析失败时标记任务 failed + 文档 failed + 记录 ErrorMessage | 单元测试模拟 ParseAsync 抛异常，验证 FailIngestionJobAsync 被调用 |
 | AC-8 | Worker 使用 IServiceProvider.CreateScope 获取 Scoped 服务，避免生命周期问题 | 代码审查验证 `scope.ServiceProvider.GetRequiredService<T>()` 模式 |
 | AC-9 | LLM 失败时不产生覆盖整 chunk 的单条 segment；非 sentence 策略的 LLM 失败触发任务级失败 | 单元测试 `ParseAsync_WordEntryLlmFails_ThrowsAndDoesNotCreateBigRecord`、`ParseAsync_SentenceLlmFails_FallsBackToRuleBased` |
+| AC-10 | IngestionWorker 在 8 个关键阶段持久化 progress 到 job 实体，弹窗每 2 秒轮询展示 | 单元测试 `ExecuteAsync_ProgressTransitionsThroughAllStages`；端到端上传大文件时弹窗进度条按 5→15→45→60→80→95→100 顺序推进 |
 
 ## 范围内
 

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { ElMessage, type UploadUserFile } from 'element-plus'
 import { Upload } from '@element-plus/icons-vue'
 import {
@@ -75,6 +75,43 @@ const forceDeleting = ref<string | null>(null)
 
 const selectedDocument = ref<Document | null>(null)
 const selectedDocumentStatus = ref<DocumentStatus | null>(null)
+
+// 任务进度轮询：弹窗打开且 job 处于 processing 状态时启动
+const statusPollTimer = ref<number | null>(null)
+const stageLabels: Record<string, string> = {
+  pending: '等待处理',
+  starting: '启动中',
+  downloading: '下载文件',
+  parsing: '解析内容',
+  writing_pages: '写入页面',
+  writing_segments: '写入分段',
+  indexing: '建立索引',
+  completed: '已完成',
+}
+
+function startStatusPolling(documentId: string) {
+  if (statusPollTimer.value !== null) return
+  statusPollTimer.value = window.setInterval(async () => {
+    try {
+      const response = await client.getDocumentStatus(documentId)
+      selectedDocumentStatus.value = response.data
+      const latestJob = response.data.jobs?.[0]
+      if (latestJob && latestJob.status !== 'processing') {
+        stopStatusPolling()
+      }
+    } catch (e) {
+      // 网络错误保持轮询，下次重试
+      console.warn('状态轮询失败', e)
+    }
+  }, 2000)
+}
+
+function stopStatusPolling() {
+  if (statusPollTimer.value !== null) {
+    window.clearInterval(statusPollTimer.value)
+    statusPollTimer.value = null
+  }
+}
 const uploadFile = ref<File | null>(null)
 const uploadForm = ref({
   title: '',
@@ -248,6 +285,11 @@ async function handleViewStatus(doc: Document) {
     const response = await client.getDocumentStatus(doc.id)
     selectedDocumentStatus.value = response.data
     showStatusDialog.value = true
+    // 如果最新 job 仍在 processing，启动 2 秒轮询
+    const latestJob = response.data.jobs?.[0]
+    if (latestJob && latestJob.status === 'processing') {
+      startStatusPolling(doc.id)
+    }
   } catch (error) {
     handleApiError('获取状态失败', error)
   } finally {
@@ -437,6 +479,15 @@ onMounted(async () => {
     }
   }
 })
+
+onUnmounted(() => {
+  stopStatusPolling()
+})
+
+function closeStatusDialog() {
+  showStatusDialog.value = false
+  stopStatusPolling()
+}
 
 // ========== Segment Refinement ==========
 
@@ -1215,7 +1266,7 @@ async function submitRefinement() {
       </div>
     </div>
 
-    <div v-if="showStatusDialog" class="dialog-overlay" @click.self="showStatusDialog = false">
+    <div v-if="showStatusDialog" class="dialog-overlay" @click.self="closeStatusDialog">
       <div class="dialog">
         <div class="dialog-header">
           导入任务状态 - {{ selectedDocument?.title }}
@@ -1245,7 +1296,23 @@ async function submitRefinement() {
                   </span>
                   <span style="font-size: 12px; color: var(--text-muted)">{{ formatDate(job.startedAt) || '-' }}</span>
                 </div>
-                <div style="font-size: 12px; color: var(--text-secondary)">
+                <el-progress
+                  v-if="job.status === 'processing'"
+                  :percentage="job.progress || 0"
+                  :stroke-width="14"
+                  :text-inside="true"
+                />
+                <el-progress
+                  v-else-if="job.status === 'failed' && job.progress != null"
+                  :percentage="job.progress"
+                  status="exception"
+                  :stroke-width="14"
+                  :text-inside="true"
+                />
+                <div v-if="job.progressStage" style="font-size: 12px; color: var(--text-muted); margin-top: 4px">
+                  {{ stageLabels[job.progressStage] || job.progressStage }}
+                </div>
+                <div style="font-size: 12px; color: var(--text-secondary); margin-top: 4px">
                   解析器版本: {{ job.parserVersion || '-' }} | OCR 版本: {{ job.ocrVersion || '-' }}
                 </div>
                 <div v-if="job.errorMessage" style="font-size: 12px; color: var(--danger-color); margin-top: 4px">
@@ -1256,10 +1323,10 @@ async function submitRefinement() {
           </div>
         </div>
         <div class="dialog-footer">
-          <button class="btn btn-secondary btn-small" @click="showStatusDialog = false">
+          <button class="btn btn-secondary btn-small" @click="closeStatusDialog">
             关闭
           </button>
-          <button class="btn btn-primary btn-small" @click="loadDocuments; showStatusDialog = false">
+          <button class="btn btn-primary btn-small" @click="loadDocuments; closeStatusDialog">
             刷新并关闭
           </button>
         </div>

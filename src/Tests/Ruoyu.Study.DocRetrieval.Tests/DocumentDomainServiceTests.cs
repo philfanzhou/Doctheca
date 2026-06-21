@@ -503,6 +503,46 @@ public class DocumentDomainServiceTests
 
     #endregion
 
+    #region UpdateJobProgressAsync Tests
+
+    [Fact]
+    public async Task UpdateJobProgressAsync_UpdatesJobAndPersists()
+    {
+        // Arrange
+        var jobId = Guid.NewGuid();
+        var job = new DocumentIngestionJobModel
+        {
+            Id = jobId,
+            DocumentId = Guid.NewGuid(),
+            Status = DocumentStatus.Processing,
+            Progress = 0,
+            ProgressStage = null
+        };
+        _jobRepoMock.Setup(r => r.GetByIdAsync(jobId)).ReturnsAsync(job);
+
+        // Act
+        await _service.UpdateJobProgressAsync(jobId, 45, "parsing");
+
+        // Assert
+        Assert.Equal(45, job.Progress);
+        Assert.Equal("parsing", job.ProgressStage);
+        _jobRepoMock.Verify(r => r.UpdateAsync(It.Is<DocumentIngestionJobModel>(j => j.Id == jobId && j.Progress == 45 && j.ProgressStage == "parsing")), Times.Once);
+        _unitOfWorkMock.Verify(u => u.SaveChangesAsync(), Times.Once);
+    }
+
+    [Fact]
+    public async Task UpdateJobProgressAsync_DbFailure_DoesNotThrow()
+    {
+        // Arrange
+        var jobId = Guid.NewGuid();
+        _jobRepoMock.Setup(r => r.GetByIdAsync(jobId)).ThrowsAsync(new Exception("DB 不可用"));
+
+        // Act & Assert: 不抛异常
+        await _service.UpdateJobProgressAsync(jobId, 45, "parsing");
+    }
+
+    #endregion
+
     #region Helpers
 
     private static DocumentModel CreateValidDocument() => new()

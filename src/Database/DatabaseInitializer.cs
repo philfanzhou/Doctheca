@@ -24,7 +24,9 @@ public static class DatabaseInitializer
         {
             "ALTER TABLE documents ADD COLUMN IF NOT EXISTS llm_profile_json text NULL",
             "ALTER TABLE document_segments DROP COLUMN IF EXISTS block_id",
-            "ALTER TABLE documents ADD COLUMN IF NOT EXISTS created_by uuid NULL"
+            "ALTER TABLE documents ADD COLUMN IF NOT EXISTS created_by uuid NULL",
+            "ALTER TABLE document_ingestion_jobs ADD COLUMN IF NOT EXISTS progress integer NOT NULL DEFAULT 0",
+            "ALTER TABLE document_ingestion_jobs ADD COLUMN IF NOT EXISTS progress_stage character varying(50) NULL"
         };
 
         foreach (var sql in alterStatements)
@@ -169,6 +171,8 @@ public static class DatabaseInitializer
                     parser_version character varying(20) NULL,
                     ocr_version character varying(20) NULL,
                     error_message text NULL,
+                    progress integer NOT NULL DEFAULT 0,
+                    progress_stage character varying(50) NULL,
                     started_at timestamp with time zone NULL,
                     finished_at timestamp with time zone NULL,
                     created_at timestamp with time zone NOT NULL,

@@ -99,6 +99,16 @@
 | UT-P-L-06 | ParseAsync LLM 返回覆盖整 chunk 的 segment 被丢弃 | AC-9 | LLM mock 返回 text.Length == chunkText.Length 的 segment | 该 segment 不出现在 result.Pages[*].Segments 中，其他正常 segment 保留 |
 | UT-P-L-07 | ParseAsync 无 LLM 服务时不静默回退非 sentence 策略 | AC-9 | llmService = null + word_entry profile | ParseAsync 抛 InvalidOperationException（sentence 策略的旧 fallback 行为保留） |
 
+### 导入任务进度跟踪测试
+
+| # | 测试用例 | 覆盖需求 | 前置条件 | 预期结果 |
+|---|---------|---------|---------|---------|
+| UT-PROG-01 | UpdateJobProgressAsync 持久化到 job 实体 | REQ-PARSE-14 | 创建 pending job，调用 UpdateJobProgressAsync(45, "parsing") | GetByIdAsync 返回的 job.Progress=45、job.ProgressStage="parsing" |
+| UT-PROG-02 | UpdateJobProgressAsync DB 写失败不抛异常 | REQ-PARSE-14 | 注入失败的 _jobRepository | 不抛异常（best-effort 行为），任务继续 |
+| UT-PROG-03 | ExecuteAsync 完整成功任务进度序列正确 | REQ-PARSE-14 | 完整 mock 成功的 IngestionWorker 流程 | 记录的 progress 序列 = [5, 15, 45, 60, 80, 95, 100] |
+| UT-PROG-04 | ExecuteAsync 失败时保留最后成功阶段 | REQ-PARSE-14 | ParseAsync 抛异常 | job.Progress = 45、job.ProgressStage = "parsing"、job.ErrorMessage 不为空 |
+| UT-PROG-05 | ExecuteAsync 进度更新失败不影响任务 | REQ-PARSE-14 | UpdateJobProgressAsync 内部抛异常 | 任务仍能 FailIngestionJobAsync，progress 异常被吞掉 |
+
 ## 骨架代码
 
 ### IngestionWorkerTests.cs [当前无测试覆盖]

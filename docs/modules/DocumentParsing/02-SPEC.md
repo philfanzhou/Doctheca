@@ -500,6 +500,66 @@ Scenario: refine 与初始拆分共享切块逻辑
 
 ---
 
+### REQ-PARSE-14：导入任务进度跟踪
+
+**优先级**: P1 | **状态**: 已实现
+
+IngestionWorker 在 8 个关键阶段持久化 `progress` 和 `progress_stage` 到 job 实体，admin portal 的"查看状态"弹窗通过 2 秒轮询展示给用户，让用户知道"正在下载"、"正在解析"等步骤，缓解长任务焦虑。
+
+- **5 段粗糙粒度**（不引入 LLM chunk-level 子进度）：
+
+| 进度 | 阶段 key | 中文 | 对应代码位置 |
+|------|----------|------|------------|
+| 5% | `starting` | 启动中 | `StartIngestionJobAsync` 后 |
+| 15% | `downloading` | 下载文件 | `ossService.DownloadAsync` 后 |
+| 45% | `parsing` | 解析内容 | `parserService.ParseAsync` **前**（必须先于 ParseAsync 设置，确保 LLM 失败时也保留 45% 进度供前端红色显示） |
+| 60% | `writing_pages` | 写入页面 | `pageRepository.AddRangeAsync` 后 |
+| 80% | `writing_segments` | 写入分段 | segment+question+occurrence AddRange 后 |
+| 95% | `indexing` | 索引中 | `IndexDocumentSegmentsAsync` 后 |
+| 100% | `completed` | 已完成 | `CompleteIngestionJobAsync` 后 |
+
+- **数据库 schema**：`document_ingestion_jobs` 加 2 列
+  - `progress integer NOT NULL DEFAULT 0`：0-100 整数
+  - `progress_stage varchar(50) NULL`：当前阶段 key
+- **API 响应**：`GET /admin/documents/{id}/status` 每个 job 追加 `progress` / `progressStage` 字段
+- **前端轮询**：弹窗打开且 job 状态为 `processing` 时启动 2 秒 `setInterval`，job 离开 processing 后停止
+- **失败时进度**：保留最后成功阶段 + 红色 `el-progress status="exception"`，配合 `errorMessage` 显示
+- **best-effort 行为**：`UpdateJobProgressAsync` 内部 try/catch，**进度更新失败不影响任务本身**
+
+**验收场景**:
+```gherkin
+Scenario: 完整成功任务的进度序列
+  Given 用户上传一个 50 页 PDF
+  When IngestionWorker 处理该任务
+  Then 进度依次为 5 → 15 → 45 → 60 → 80 → 95 → 100
+  And 每个阶段调用 UpdateJobProgressAsync 持久化到 job 实体
+
+Scenario: 失败任务的进度保留
+  Given 任务在 parsing 阶段（45%）抛异常
+  When 任务被标记为 failed
+  Then job.progress = 45（保留最后成功阶段）
+  And job.progressStage = "parsing"
+  And job.errorMessage 记录异常消息
+  And 前端弹窗显示红色进度条停在 45% 处
+
+Scenario: 进度更新失败不影响任务
+  Given UpdateJobProgressAsync 内部 DB 写失败
+  When IngestionWorker 处理任务
+  Then 不抛异常（被 try/catch 吞掉）
+  And 任务继续按原流程执行或失败
+
+Scenario: 弹窗轮询自动启停
+  Given 用户打开"查看状态"弹窗
+  And 文档状态为 processing
+  When 弹窗打开
+  Then 启动 2 秒 setInterval 轮询
+  When 文档状态变为 success/failed/cancelled
+  Then 停止轮询
+  And 用户关闭弹窗后立即停止轮询
+```
+
+---
+
 ## 非功能需求
 
 | 类别 | 需求 | 指标 |

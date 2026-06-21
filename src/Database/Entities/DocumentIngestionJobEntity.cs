@@ -32,6 +32,13 @@ public class DocumentIngestionJobEntity
     [Column("error_message")]
     public string? ErrorMessage { get; set; }
 
+    [Column("progress")]
+    public int Progress { get; set; } = 0;
+
+    [Column("progress_stage")]
+    [MaxLength(50)]
+    public string? ProgressStage { get; set; }
+
     [Column("started_at")]
     public DateTimeOffset? StartedAt { get; set; }
 

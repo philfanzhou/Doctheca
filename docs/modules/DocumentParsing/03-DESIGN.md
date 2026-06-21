@@ -357,18 +357,19 @@ ParsedToken (q)    → DocumentOccurrenceModel
 │  │  │                                                              │     │
 │  │  │  ① StartIngestionJobAsync(job.Id, "v1.0", null)             │     │
 │  │  │     → job.Status = "processing", document.Status = "processing" │  │
+│  │  │     → UpdateJobProgressAsync(5, "starting")                  │     │
 │  │  │                                                              │     │
 │  │  │  ② document = domainService.GetDocumentAsync(job.DocumentId) │     │
 │  │  │                                                              │     │
 │  │  │  ③ fileStream = ossService.DownloadAsync(document.FilePath) │     │
 │  │  │     fileStream == null → 抛异常 "文件不存在于 OSS"          │     │
+│  │  │     → UpdateJobProgressAsync(15, "downloading")             │     │
 │  │  │                                                              │     │
 │  │  │  ④ parsedDocument = parserService.ParseAsync(fileStream,    │     │
 │  │  │         document.SourceType, stoppingToken)                  │     │
 │  │  │     parsedDocument.Pages.Count == 0 → LogWarning "解析结果为空" │  │
 │  │  │                                                              │     │
 │  │  │     注：ParseAsync 内部流程（详见 07-LLM-SEGMENTATION.md）：  │  │
-│  │  │     4a. 提取页面文本（PDF/Word/PPT）                         │  │
 │  │  │     4b. LLM 文档分析 → DocumentProfile（学科+类型+策略）     │  │
 │  │  │     4c. 按容量切块（ChunkByCapacity）                        │  │
 │  │  │     4d. 每块 LLM 分段 → List<SegmentResult>                 │  │
@@ -385,11 +386,14 @@ ParsedToken (q)    → DocumentOccurrenceModel
 │  │  │         segment（LLM 偶发返回的整块摘要/标题；            │  │
 │  │  │         孤立 1 个 segment 不过滤以兼容合法短文本）        │  │
 │  │  │     4f. 回映射到页码 + 构建 ParsedSegment + Tokenize        │  │
+│  │  │     ↑ UpdateJobProgressAsync(45, "parsing") 在 ④ 开头执行，   │  │
+│  │  │       确保 LLM 失败时也保留 45% 进度供前端红色显示           │  │
 │  │  │                                                              │     │
 │  │  │  ⑤ 写入 pages                                               │     │
 │  │  │     pageModels = parsedDocument.Pages → DocumentPageModel[]  │     │
 │  │  │     pageRepository.AddRangeAsync(pageModels)                 │     │
 │  │  │     pageLookup = pageModels.ToDictionary(...)               │     │
+│  │  │     → UpdateJobProgressAsync(60, "writing_pages")            │     │
 │  │  │                                                              │     │
 │  │  │  ⑥ 写入 segments                                            │     │
 │  │  │     segmentModels = parsedDocument.Pages.SelectMany(...)     │     │
@@ -404,12 +408,15 @@ ParsedToken (q)    → DocumentOccurrenceModel
 │  │  │     遍历 segment.Tokens → SegmentId 映射                    │     │
 │  │  │     遍历 question.Tokens → QuestionSegmentId 映射           │     │
 │  │  │     occurrenceRepository.AddRangeAsync(occurrenceModels)     │     │
+│  │  │     → UpdateJobProgressAsync(80, "writing_segments")        │     │
 │  │  │                                                              │     │
 │  │  │  ⑨ CompleteIngestionJobAsync(job.Id)                        │     │
 │  │  │     → job.Status = "success", document.Status = "ready"     │     │
 │  │  │                                                              │     │
 │  │  │  ⑩ 同步搜索索引（可选，失败仅记日志）                       │     │
 │  │  │     _searchIndexService?.IndexDocumentSegmentsAsync(...)     │     │
+│  │  │     → UpdateJobProgressAsync(95, "indexing")                 │     │
+│  │  │     → UpdateJobProgressAsync(100, "completed")              │     │
 │  │  │                                                              │     │
 │  │  ├── catch (Exception ex) ─────────────────────────────────────┐    │
 │  │  │  domainService.FailIngestionJobAsync(job.Id, ex.Message)     │    │

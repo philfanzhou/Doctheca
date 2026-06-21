@@ -54,6 +54,8 @@ public class DocumentIngestionJobRepository : IDocumentIngestionJobRepository
         entity.ParserVersion = model.ParserVersion;
         entity.OcrVersion = model.OcrVersion;
         entity.ErrorMessage = model.ErrorMessage;
+        entity.Progress = model.Progress;
+        entity.ProgressStage = model.ProgressStage;
         entity.StartedAt = model.StartedAt;
         entity.FinishedAt = model.FinishedAt;
 
@@ -77,6 +79,8 @@ public class DocumentIngestionJobRepository : IDocumentIngestionJobRepository
         ParserVersion = model.ParserVersion,
         OcrVersion = model.OcrVersion,
         ErrorMessage = model.ErrorMessage,
+        Progress = model.Progress,
+        ProgressStage = model.ProgressStage,
         StartedAt = model.StartedAt,
         FinishedAt = model.FinishedAt,
         CreatedAt = model.CreatedAt
@@ -90,6 +94,8 @@ public class DocumentIngestionJobRepository : IDocumentIngestionJobRepository
         ParserVersion = entity.ParserVersion,
         OcrVersion = entity.OcrVersion,
         ErrorMessage = entity.ErrorMessage,
+        Progress = entity.Progress,
+        ProgressStage = entity.ProgressStage,
         StartedAt = entity.StartedAt,
         FinishedAt = entity.FinishedAt,
         CreatedAt = entity.CreatedAt

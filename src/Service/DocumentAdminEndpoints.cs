@@ -225,6 +225,8 @@ public static class DocumentAdminEndpoints
                 {
                     jobId = j.Id.ToString(),
                     status = j.Status,
+                    progress = j.Progress,
+                    progressStage = j.ProgressStage,
                     parserVersion = j.ParserVersion,
                     ocrVersion = j.OcrVersion,
                     errorMessage = j.ErrorMessage,

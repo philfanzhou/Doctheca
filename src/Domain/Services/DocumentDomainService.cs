@@ -230,6 +230,29 @@ public class DocumentDomainService : IDocumentDomainService
         _logger.LogInformation("Document ingestion completed: {DocumentId}", job.DocumentId);
     }
 
+    /// <summary>
+    /// 更新任务进度（best-effort：失败不影响任务本身）
+    /// </summary>
+    public async Task UpdateJobProgressAsync(Guid jobId, int progress, string stage)
+    {
+        try
+        {
+            var job = await _jobRepository.GetByIdAsync(jobId);
+            if (job == null) return;
+
+            job.Progress = Math.Clamp(progress, 0, 100);
+            job.ProgressStage = stage;
+
+            await _jobRepository.UpdateAsync(job);
+            await _unitOfWork.SaveChangesAsync();
+        }
+        catch (Exception ex)
+        {
+            // 进度更新失败不能影响任务
+            _logger.LogDebug(ex, "更新任务进度失败：{JobId}", jobId);
+        }
+    }
+
     public async Task FailIngestionJobAsync(Guid jobId, string errorMessage)
     {
         try

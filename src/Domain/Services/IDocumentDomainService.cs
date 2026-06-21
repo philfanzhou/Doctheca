@@ -15,6 +15,7 @@ public interface IDocumentDomainService
     Task<DocumentIngestionJobModel?> GetIngestionJobAsync(Guid documentId);
     Task<List<DocumentIngestionJobModel>> GetPendingJobsAsync();
     Task StartIngestionJobAsync(Guid jobId, string parserVersion, string? ocrVersion);
+    Task UpdateJobProgressAsync(Guid jobId, int progress, string stage);
     Task CompleteIngestionJobAsync(Guid jobId);
     Task FailIngestionJobAsync(Guid jobId, string errorMessage);
     Task CancelIngestionJobAsync(Guid documentId);

@@ -51,6 +51,8 @@ export interface DocumentStatus {
 export interface Job {
   jobId: string
   status: string
+  progress: number
+  progressStage: string | null
   parserVersion: string | null
   ocrVersion: string | null
   errorMessage: string | null
