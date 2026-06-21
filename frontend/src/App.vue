@@ -900,15 +900,18 @@ async function submitRefinement() {
                   <td>{{ doc.title }}</td>
                   <td>
                     <span v-if="doc.subject">{{ doc.subject }}</span>
-                    <span v-else class="tag tag-info" style="font-size: 11px">AI 识别中</span>
+                    <span v-else-if="doc.status === 'pending' || doc.status === 'processing'" class="tag tag-info" style="font-size: 11px">识别中</span>
+                    <span v-else style="color: var(--text-muted)">-</span>
                   </td>
                   <td>
                     <span v-if="doc.grade">{{ doc.grade }}</span>
-                    <span v-else class="tag tag-info" style="font-size: 11px">AI 识别中</span>
+                    <span v-else-if="doc.status === 'pending' || doc.status === 'processing'" class="tag tag-info" style="font-size: 11px">识别中</span>
+                    <span v-else style="color: var(--text-muted)">-</span>
                   </td>
                   <td>
                     <span v-if="doc.year">{{ doc.year }}</span>
-                    <span v-else class="tag tag-info" style="font-size: 11px">AI 识别中</span>
+                    <span v-else-if="doc.status === 'pending' || doc.status === 'processing'" class="tag tag-info" style="font-size: 11px">识别中</span>
+                    <span v-else style="color: var(--text-muted)">-</span>
                   </td>
                   <td>
                     <span class="tag" :class="getStatusTagClass(doc.status)">
