@@ -56,6 +56,7 @@ message SearchResult {
   string segment_id = 6;
   int32 start_offset = 7;
   int32 end_offset = 8;
+  int64 created_at_unix_seconds = 9;
 }
 
 message Empty {}

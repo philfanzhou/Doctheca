@@ -464,7 +464,8 @@ public static class DocumentAdminEndpoints
                 matchType = r.MatchType,
                 segmentId = r.SegmentId,
                 startOffset = r.StartOffset,
-                endOffset = r.EndOffset
+                endOffset = r.EndOffset,
+                createdAt = r.CreatedAt?.ToString("o")
             }),
             totalCount,
             nextPageToken = nextToken ?? string.Empty

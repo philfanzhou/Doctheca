@@ -10,4 +10,5 @@ public class SearchResultModel
     public string SegmentId { get; set; } = string.Empty;
     public int StartOffset { get; set; }
     public int EndOffset { get; set; }
+    public DateTimeOffset? CreatedAt { get; set; }
 }

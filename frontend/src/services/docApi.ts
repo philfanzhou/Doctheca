@@ -74,6 +74,7 @@ export interface SearchResult {
   segmentId: string
   startOffset: number
   endOffset: number
+  createdAt: string | null
 }
 
 // ========== Segment Refinement Types ==========

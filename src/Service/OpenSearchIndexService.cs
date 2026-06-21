@@ -410,7 +410,8 @@ public class OpenSearchIndexService : ISearchIndexService
                     MatchType = phrase ? SearchMatchType.ExactPhrase : SearchMatchType.Stemmed,
                     SegmentId = segmentId,
                     StartOffset = source.TryGetProperty("start_offset", out var soEl) ? soEl.GetInt32() : 0,
-                    EndOffset = source.TryGetProperty("end_offset", out var eoEl) ? eoEl.GetInt32() : 0
+                    EndOffset = source.TryGetProperty("end_offset", out var eoEl) ? eoEl.GetInt32() : 0,
+                    CreatedAt = source.TryGetProperty("created_at", out var caEl) && DateTimeOffset.TryParse(caEl.GetString(), out var ca) ? ca : null
                 });
 
                 if (hit.TryGetProperty("sort", out var sortEl))

@@ -118,7 +118,8 @@ public class SearchDomainService : ISearchDomainService
                 MatchType = phrase ? SearchMatchType.ExactPhrase : SearchMatchType.ExactWord,
                 SegmentId = seg.SentenceId,
                 StartOffset = seg.StartOffset,
-                EndOffset = seg.EndOffset
+                EndOffset = seg.EndOffset,
+                CreatedAt = seg.CreatedAt
             });
         }
 
@@ -136,7 +137,8 @@ public class SearchDomainService : ISearchDomainService
                 MatchType = phrase ? SearchMatchType.ExactPhrase : SearchMatchType.ExactWord,
                 SegmentId = q.QuestionId,
                 StartOffset = q.StartOffset,
-                EndOffset = q.EndOffset
+                EndOffset = q.EndOffset,
+                CreatedAt = q.CreatedAt
             });
         }
 

@@ -81,6 +81,7 @@ public class DocumentRetrievalServiceImpl : DocumentRetrievalService.DocumentRet
         MatchType = result.MatchType,
         SegmentId = result.SegmentId,
         StartOffset = result.StartOffset,
-        EndOffset = result.EndOffset
+        EndOffset = result.EndOffset,
+        CreatedAtUnixSeconds = result.CreatedAt?.ToUnixTimeSeconds() ?? 0
     };
 }

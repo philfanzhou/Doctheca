@@ -1073,6 +1073,7 @@ async function submitRefinement() {
                     <th style="padding: 8px 12px; border-bottom: 2px solid var(--border-light)">匹配文本</th>
                     <th style="padding: 8px 12px; border-bottom: 2px solid var(--border-light); white-space: nowrap">Segment ID</th>
                     <th style="padding: 8px 12px; border-bottom: 2px solid var(--border-light); white-space: nowrap">偏移量</th>
+                    <th style="padding: 8px 12px; border-bottom: 2px solid var(--border-light); white-space: nowrap">创建时间</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1089,6 +1090,7 @@ async function submitRefinement() {
                     <td style="padding: 8px 12px; max-width: 400px; line-height: 1.5; color: var(--text-secondary); white-space: pre-wrap; word-break: break-word">{{ result.associatedText }}</td>
                     <td style="padding: 8px 12px; font-family: monospace; font-size: 11px; color: var(--text-muted); max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap" :title="result.segmentId">{{ result.segmentId }}</td>
                     <td style="padding: 8px 12px; font-family: monospace; font-size: 11px; color: var(--text-muted); white-space: nowrap">{{ result.startOffset }}–{{ result.endOffset }}</td>
+                    <td style="padding: 8px 12px; font-size: 12px; color: var(--text-muted); white-space: nowrap">{{ result.createdAt ? formatDate(result.createdAt) : '-' }}</td>
                   </tr>
                 </tbody>
               </table>

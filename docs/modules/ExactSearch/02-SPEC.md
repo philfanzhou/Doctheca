@@ -23,6 +23,7 @@
 - [x] FR-13 `SearchFilter` 中空字符串字段视为不筛选（`MapFilter` 将空字符串转为 `null`）。
 - [x] FR-14 返回 `SearchResponse`，包含 `results`、`total_count`、`next_page_token`。
 - [x] FR-15 HTTP 搜索测试端点 `GET /admin/documents/search-test` 支持筛选参数：`subject`、`grade`、`year`、`documentTitle`。当提供任一筛选参数时，构造 `SearchFilterModel` 并传入 `ExactSearchAsync`。
+- [x] FR-16 搜索结果包含 `createdAt` 字段（`DateTimeOffset`），取自 segment/question 记录的 `CreatedAt`，用于定位记录属于哪次导入。前端检索测试页面显示该时间。
 
 ## 详细的验收标准（可自动验证）
 

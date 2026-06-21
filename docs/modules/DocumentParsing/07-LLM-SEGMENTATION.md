@@ -392,6 +392,20 @@ LLM 在 prompt 含糊时偶尔会输出"摘要/标题"型整块 segment（`text.
 - 处理动作：`LogWarning` 后跳过该 segment
 - 阈值取 `0.9` 而非 `1.0` 是为了容忍 LLM 偶尔追加空格/换行的边界情况
 
+#### Question 检测策略限制
+
+`ExtractQuestions` 使用 `QuestionNumberRegex`（`^\s*(\d+)\s*[.、．)\]】]`）识别题号，但该正则也会匹配单词表/短语表中的编号词条（如 `1. shake /ʃeɪk/ ...`），导致整页内容被误聚合为一条 question segment。
+
+**策略限制**：`ExtractQuestions` 仅在 `SegmentStrategy == SegmentTypes.Question` 时执行。对于 `word_entry`、`concept`、`knowledge_point`、`sentence` 等非 question 策略，跳过 Question 检测，不写入 `question_segments` 表。
+
+| 策略 | Question 检测 | 原因 |
+|------|--------------|------|
+| `question` | 执行 | 试卷/练习册，编号行是真正的题目 |
+| `sentence` | 不执行 | 教材/阅读材料，编号行是段落序号 |
+| `word_entry` | 不执行 | 单词表/短语表，编号行是词条序号 |
+| `concept` | 不执行 | 知识点文档，编号行是概念序号 |
+| `knowledge_point` | 不执行 | 知识点过关单，编号行是条目序号 |
+
 ### 回退机制
 
 当 LLM 调用失败时，根据 `DocumentProfile.SegmentStrategy` 决定回退行为：

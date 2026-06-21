@@ -671,12 +671,18 @@ public partial class DocumentParserService : IDocumentParserService
             }
         }
 
-        // Extract questions per page
-        foreach (var (pageNumber, text) in nonEmptyPages)
+        // Extract questions per page — only for question strategy
+        // Other strategies (word_entry/concept/knowledge_point/sentence) have numbered items
+        // that are not exam questions; running ExtractQuestions would misidentify them and
+        // produce oversized question_segments records that pollute search results.
+        if (profile?.SegmentStrategy == SegmentTypes.Question)
         {
-            if (!pageLookup.TryGetValue(pageNumber, out var parsedPage)) continue;
-            var questions = ExtractQuestions(text, pageNumber);
-            parsedPage.Questions.AddRange(questions);
+            foreach (var (pageNumber, text) in nonEmptyPages)
+            {
+                if (!pageLookup.TryGetValue(pageNumber, out var parsedPage)) continue;
+                var questions = ExtractQuestions(text, pageNumber);
+                parsedPage.Questions.AddRange(questions);
+            }
         }
     }
 
