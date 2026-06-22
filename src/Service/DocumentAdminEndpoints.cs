@@ -852,7 +852,7 @@ public static class DocumentAdminEndpoints
 
             logger.LogInformation("MinerU Precision parse submitted: {FileName} -> TaskId={TaskId}", file.FileName, taskId);
 
-            return Results.Ok(new { success = true, task_id = taskId, file_name = file.FileName });
+            return Results.Ok(new { success = true, data = new { task_id = taskId, file_name = file.FileName } });
         }
         catch (InvalidOperationException ex)
         {
@@ -879,10 +879,13 @@ public static class DocumentAdminEndpoints
             return Results.Ok(new
             {
                 success = true,
-                task_id = taskId,
-                state,
-                full_zip_url = fullZipUrl,
-                err_msg = errMsg,
+                data = new
+                {
+                    task_id = taskId,
+                    state,
+                    full_zip_url = fullZipUrl,
+                    err_msg = errMsg,
+                }
             });
         }
         catch (Exception ex)
@@ -895,6 +898,7 @@ public static class DocumentAdminEndpoints
     private static async Task<IResult> MinerUDownloadResult(
         string taskId,
         MinerUPrecisionClient minerUClient,
+        IOssService ossService,
         [FromServices] ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger("DocumentAdminEndpoints");
@@ -909,15 +913,18 @@ public static class DocumentAdminEndpoints
             if (string.IsNullOrEmpty(fullZipUrl))
                 return Results.Json(new { success = false, message = "No full_zip_url in response" }, statusCode: StatusCodes.Status502BadGateway);
 
-            var (markdown, imageCount) = await minerUClient.DownloadAndProcessZipAsync(fullZipUrl, taskId);
+            var (markdown, imageCount) = await minerUClient.DownloadAndProcessZipAsync(fullZipUrl, taskId, ossService);
 
             return Results.Ok(new
             {
                 success = true,
-                task_id = taskId,
-                markdown,
-                markdown_length = markdown.Length,
-                image_count = imageCount,
+                data = new
+                {
+                    task_id = taskId,
+                    markdown,
+                    markdown_length = markdown.Length,
+                    image_count = imageCount,
+                }
             });
         }
         catch (Exception ex)

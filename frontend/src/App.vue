@@ -620,6 +620,7 @@ onMounted(async () => {
 
 onUnmounted(() => {
   stopStatusPolling()
+  stopMineruPolling()
 })
 
 function closeStatusDialog() {

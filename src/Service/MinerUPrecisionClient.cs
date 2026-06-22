@@ -1,7 +1,6 @@
 using System.IO.Compression;
 using System.Text;
 using System.Text.Json;
-using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Ruoyu.Study.Common.Oss;
@@ -26,16 +25,13 @@ public class MinerUPrecisionClient
     private readonly HttpClient _httpClient;
     private readonly ILogger<MinerUPrecisionClient> _logger;
     private readonly MinerUOptions _options;
-    private readonly IOssService? _ossService;
 
     public MinerUPrecisionClient(
         ILogger<MinerUPrecisionClient> logger,
-        IOptions<MinerUOptions> options,
-        IOssService? ossService = null)
+        IOptions<MinerUOptions> options)
     {
         _logger = logger;
         _options = options.Value;
-        _ossService = ossService;
 
         var handler = new HttpClientHandler
         {
@@ -153,7 +149,7 @@ public class MinerUPrecisionClient
     /// Returns the processed Markdown content and image count.
     /// </summary>
     public async Task<(string Markdown, int ImageCount)> DownloadAndProcessZipAsync(
-        string zipUrl, string taskId, CancellationToken ct = default)
+        string zipUrl, string taskId, IOssService ossService, CancellationToken ct = default)
     {
         _logger.LogInformation("Downloading ZIP from MinerU: {Url}", zipUrl);
 
@@ -185,10 +181,9 @@ public class MinerUPrecisionClient
 
         _logger.LogInformation("ZIP contains {ImageCount} images", imageEntries.Count);
 
-        if (imageEntries.Count == 0 || _ossService == null)
+        if (imageEntries.Count == 0)
         {
-            // No images or no OSS — return Markdown as-is
-            return (markdown, imageEntries.Count);
+            return (markdown, 0);
         }
 
         // Upload images to OSS and build replacement map
@@ -209,10 +204,9 @@ public class MinerUPrecisionClient
                 ? "image/png"
                 : "image/jpeg";
 
-            await _ossService.UploadAsync(imgBytes, imgName, contentType, OssBucket.Documents, $"mineru/{taskId}");
+            var ossPath = await ossService.UploadAsync(imgBytes, imgName, contentType, OssBucket.Documents, $"mineru/{taskId}");
 
-            var presignedUrl = await _ossService.GetPresignedUrlAsync(
-                $"documents/mineru/{taskId}/{imgName}", 3600);
+            var presignedUrl = await ossService.GetPresignedUrlAsync(ossPath, 3600);
 
             // Map relative path to presigned URL
             replacementMap[$"images/{imgName}"] = presignedUrl;
