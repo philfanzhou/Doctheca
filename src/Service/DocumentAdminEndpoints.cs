@@ -55,7 +55,8 @@ public static class DocumentAdminEndpoints
         group.MapDelete("/{id:guid}/force", ForceDeleteDocument);
 
         // MinerU Agent parsing endpoints
-        group.MapPost("/mineru/parse", MinerUParseDocument);
+        group.MapPost("/mineru/parse", MinerUParseDocument)
+            .WithMetadata(new RequestSizeLimitAttribute(200 * 1024 * 1024));
         group.MapGet("/mineru/status/{taskId}", MinerUCheckStatus);
         group.MapGet("/mineru/download/{taskId}", MinerUDownloadResult);
 

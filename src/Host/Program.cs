@@ -35,6 +35,11 @@ builder.Services.AddGrpc(options =>
     options.MaxSendMessageSize = 200 * 1024 * 1024;
 });
 
+builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(options =>
+{
+    options.MultipartBodyLengthLimit = 200 * 1024 * 1024;
+});
+
 var connectionString = builder.Configuration.GetConnectionString("Default");
 var isPostgreSql = !string.IsNullOrWhiteSpace(connectionString)
     && (connectionString.Contains("Host=", StringComparison.OrdinalIgnoreCase)
