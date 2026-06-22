@@ -28,20 +28,15 @@ OSS_ACCESS_KEY="seaweedfs_admin"
 OSS_SECRET_KEY="seaweedfs_admin"
 OSS_BUCKET="ruoyu-study"
 
-# LLM Segmentation - only parameters that vary per deployment
-# Leave LLM_API_KEY empty to disable LLM segmentation
 LLM_API_KEY=""
 LLM_BASE_URL="https://api.siliconflow.cn/v1"
 LLM_MODEL="Qwen/Qwen2.5-7B-Instruct"
-LLM_CONTEXT_LENGTH="128K"    # Model context window: "128K", "256K", "1M" etc. Must match the actual model.
-LLM_MAX_TOKENS="4K"          # Max output tokens: "4K", "8K", "128K" etc. Check model docs for actual limit.
+LLM_CONTEXT_LENGTH="128K"
+LLM_MAX_TOKENS="4K"
 
-# MinerU Precision API - Token required, free 1000 pages/day
-# Register at https://mineru.net to get your token
 MINERU_API_TOKEN=""
 
 docker network inspect "$NETWORK_NAME" >/dev/null 2>&1 || docker network create "$NETWORK_NAME"
-
 if [ -n "$(docker ps -q --filter "name=^/${CONTAINER_NAME}$")" ]; then
     echo "Container is already running, stopping it..."
     docker stop "$CONTAINER_NAME"
