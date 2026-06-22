@@ -16,6 +16,8 @@
 │  IngestionWorker.cs: 后台导入任务                │
 │  OpenSearchIndexService.cs: 搜索索引            │
 │  DocumentParserService.cs: 文档解析             │
+│  MinerUAgentClient.cs: MinerU Agent API 客户端（降级）  │
+│  MinerUPrecisionClient.cs: MinerU Precision API 客户端  │
 └───────────────┬─────────────────────────────────┘
                 │
 ┌───────────────▼─────────────────────────────────┐
@@ -119,6 +121,7 @@ DocRetrieval 的 Admin API 通过 JWT Bearer Token 进行认证，Token 由 Quan
 | 原生 SQL 建表（非 Migration） | 简化部署，避免 Migration 版本冲突 |
 | OSS 支持 LocalFile / S3 切换 | 环境变量 `USE_LOCAL_OSS` 控制 |
 | JWT Bearer 认证（Identity 签发） | 统一认证中心，微服务间标准方案 |
+| MinerU Precision API 在线解析 | 含图片输出，Token 认证，每日 1000 页免费额度 |
 
 ##### 关键源文件
 
@@ -132,4 +135,6 @@ DocRetrieval 的 Admin API 通过 JWT Bearer Token 进行认证，Token 由 Quan
 | [DocumentRetrievalServiceImpl.cs](../../src/Service/DocumentRetrievalServiceImpl.cs) | gRPC 实现 |
 | [IngestionWorker.cs](../../src/Service/IngestionWorker.cs) | 后台导入 |
 | [DocumentAdminEndpoints.cs](../../src/Service/DocumentAdminEndpoints.cs) | HTTP API |
+| [MinerUAgentClient.cs](../../src/Service/MinerUAgentClient.cs) | MinerU Agent API 客户端（降级方案，无图片） |
+| [MinerUPrecisionClient.cs](../../src/Service/MinerUPrecisionClient.cs) | MinerU Precision API 客户端（含图片） |
 | [DatabaseInitializer.cs](../../src/Database/DatabaseInitializer.cs) | 表初始化 |

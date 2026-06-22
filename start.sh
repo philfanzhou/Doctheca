@@ -36,6 +36,10 @@ LLM_MODEL="Qwen/Qwen2.5-7B-Instruct"
 LLM_CONTEXT_LENGTH="128K"    # Model context window: "128K", "256K", "1M" etc. Must match the actual model.
 LLM_MAX_TOKENS="4K"          # Max output tokens: "4K", "8K", "128K" etc. Check model docs for actual limit.
 
+# MinerU Precision API - Token required, free 1000 pages/day
+# Register at https://mineru.net to get your token
+MINERU_API_TOKEN=""
+
 docker network inspect "$NETWORK_NAME" >/dev/null 2>&1 || docker network create "$NETWORK_NAME"
 
 if [ -n "$(docker ps -q --filter "name=^/${CONTAINER_NAME}$")" ]; then
@@ -69,6 +73,7 @@ docker run -d \
   -e LlmSegmentation__Model="${LLM_MODEL}" \
   -e LlmSegmentation__ContextLength="${LLM_CONTEXT_LENGTH:-128K}" \
   -e LlmSegmentation__MaxTokens="${LLM_MAX_TOKENS:-4096}" \
+  -e MinerU__ApiToken="${MINERU_API_TOKEN}" \
   -e Logging__LogLevel__Microsoft_EntityFrameworkCore_Database_Command="Warning" \
   "$IMAGE_NAME"
 

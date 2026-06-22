@@ -248,6 +248,45 @@ class DocApiClient {
     const response = await this.client.delete(`/admin/documents/${id}/force`)
     return response.data
   }
+
+  // MinerU Precision Parsing
+  async mineruParse(
+    file: File,
+    enableOcr = false,
+    enableFormula = true,
+    enableTable = true
+  ): Promise<ApiResponse<{ task_id: string; file_name: string }>> {
+    const formData = new FormData()
+    formData.append('file', file)
+    formData.append('enable_ocr', String(enableOcr))
+    formData.append('enable_formula', String(enableFormula))
+    formData.append('enable_table', String(enableTable))
+
+    const response = await this.client.post('/admin/documents/mineru/parse', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    })
+    return response.data
+  }
+
+  async mineruCheckStatus(taskId: string): Promise<ApiResponse<{
+    task_id: string
+    state: string
+    full_zip_url: string | null
+    err_msg: string | null
+  }>> {
+    const response = await this.client.get(`/admin/documents/mineru/status/${taskId}`)
+    return response.data
+  }
+
+  async mineruDownloadResult(taskId: string): Promise<ApiResponse<{
+    task_id: string
+    markdown: string
+    markdown_length: number
+    image_count: number
+  }>> {
+    const response = await this.client.get(`/admin/documents/mineru/download/${taskId}`)
+    return response.data
+  }
 }
 
 export function createDocApiClient(): DocApiClient {

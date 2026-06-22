@@ -2,6 +2,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { ElMessage, type UploadUserFile } from 'element-plus'
 import { Upload } from '@element-plus/icons-vue'
+import { marked } from 'marked'
 import {
   createDocApiClient,
   getDocErrorMessage,
@@ -72,6 +73,28 @@ const scanResult = ref<ConsistencyScanResult | null>(null)
 const scanTime = ref('')
 const deletingOrphan = ref<string | null>(null)
 const forceDeleting = ref<string | null>(null)
+
+// MinerU Precision Parsing state
+const mineruFile = ref<File | null>(null)
+const mineruFileName = ref('')
+const mineruEnableOcr = ref(false)
+const mineruEnableFormula = ref(true)
+const mineruEnableTable = ref(true)
+const mineruSubmitting = ref(false)
+const mineruTaskId = ref('')
+const mineruPolling = ref(false)
+const mineruState = ref('')
+const mineruImageCount = ref(0)
+const mineruMarkdown = ref('')
+const mineruViewMode = ref<'preview' | 'source'>('preview')
+const mineruDownloading = ref(false)
+const mineruError = ref('')
+let mineruPollTimer: number | null = null
+
+const mineruRenderedHtml = computed(() => {
+  if (!mineruMarkdown.value) return ''
+  return marked.parse(mineruMarkdown.value, { async: false }) as string
+})
 
 const selectedDocument = ref<Document | null>(null)
 const selectedDocumentStatus = ref<DocumentStatus | null>(null)
@@ -149,6 +172,11 @@ const navItems = [
     key: 'consistency',
     label: '一致性检查',
     icon: '<path d="M9 12l2 2 4-4"/><path d="M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z"/>'
+  },
+  {
+    key: 'mineru',
+    label: 'MinerU 解析',
+    icon: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>'
   }
 ]
 
@@ -399,6 +427,123 @@ async function handleScanConsistency() {
   } finally {
     scanLoading.value = false
   }
+}
+
+// ===== MinerU Agent Parsing =====
+
+function handleMineruFileChange(event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file) return
+  if (file.size > 200 * 1024 * 1024) {
+    ElMessage.warning('File size exceeds 200MB limit for MinerU Precision API')
+    input.value = ''
+    return
+  }
+  mineruFile.value = file
+  mineruFileName.value = file.name
+  mineruError.value = ''
+  mineruMarkdown.value = ''
+  mineruState.value = ''
+}
+
+async function handleMineruParse() {
+  if (!mineruFile.value) return
+  mineruSubmitting.value = true
+  mineruError.value = ''
+  mineruMarkdown.value = ''
+  mineruState.value = ''
+  mineruTaskId.value = ''
+
+  try {
+    const response = await client.mineruParse(
+      mineruFile.value,
+      mineruEnableOcr.value,
+      mineruEnableFormula.value,
+      mineruEnableTable.value
+    )
+    mineruTaskId.value = response.data.task_id
+    mineruState.value = 'submitted'
+    ElMessage.success(`Submitted: task_id=${response.data.task_id}`)
+    startMineruPolling()
+  } catch (error) {
+    mineruError.value = getDocErrorMessage(error)
+    handleApiError('MinerU parse failed', error)
+  } finally {
+    mineruSubmitting.value = false
+  }
+}
+
+function startMineruPolling() {
+  stopMineruPolling()
+  mineruPolling.value = true
+  mineruPollTimer = window.setInterval(async () => {
+    try {
+      const response = await client.mineruCheckStatus(mineruTaskId.value)
+      const { state, err_msg } = response.data
+      mineruState.value = state
+
+      if (state === 'done') {
+        stopMineruPolling()
+        // Auto-download markdown
+        await handleMineruDownload()
+      } else if (state === 'failed') {
+        stopMineruPolling()
+        mineruError.value = err_msg || 'Parsing failed on server side'
+      }
+    } catch (error) {
+      // Don't stop polling on transient errors
+      console.warn('MinerU poll error:', error)
+    }
+  }, 3000)
+}
+
+function stopMineruPolling() {
+  if (mineruPollTimer !== null) {
+    clearInterval(mineruPollTimer)
+    mineruPollTimer = null
+  }
+  mineruPolling.value = false
+}
+
+async function handleMineruDownload() {
+  if (!mineruTaskId.value) return
+  mineruDownloading.value = true
+  try {
+    const response = await client.mineruDownloadResult(mineruTaskId.value)
+    mineruMarkdown.value = response.data.markdown
+    mineruImageCount.value = response.data.image_count
+    mineruState.value = 'done'
+    ElMessage.success(`Markdown downloaded: ${response.data.markdown_length} chars`)
+  } catch (error) {
+    mineruError.value = getDocErrorMessage(error)
+    handleApiError('Download failed', error)
+  } finally {
+    mineruDownloading.value = false
+  }
+}
+
+function handleMineruSave() {
+  if (!mineruMarkdown.value) return
+  const blob = new Blob([mineruMarkdown.value], { type: 'text/markdown' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = mineruFileName.value.replace(/\.[^.]+$/, '') + '.md'
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+function handleMineruReset() {
+  stopMineruPolling()
+  mineruFile.value = null
+  mineruFileName.value = ''
+  mineruTaskId.value = ''
+  mineruState.value = ''
+  mineruMarkdown.value = ''
+  mineruViewMode.value = 'preview'
+  mineruError.value = ''
+  mineruImageCount.value = 0
 }
 
 async function handleDeleteOrphan(filePath: string) {
@@ -1197,6 +1342,94 @@ async function submitRefinement() {
             <!-- Initial state -->
             <div v-if="!scanResult && !scanLoading" class="empty-state">
               <div class="empty-state-text">点击"开始扫描"检查 OSS 文件与数据库记录的一致性</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- MinerU Precision Parsing Tab -->
+        <div v-if="activeTab === 'mineru'" class="page-header">
+          <h1 class="page-title">MinerU 解析</h1>
+          <p class="page-subtitle">上传文档调用 MinerU Precision API 解析为 Markdown（含图片，≤200MB/≤200页）</p>
+        </div>
+
+        <div v-if="activeTab === 'mineru'" class="card">
+          <div class="card-header">
+            <span>文档解析</span>
+            <button v-if="mineruTaskId" class="btn btn-secondary btn-small" @click="handleMineruReset">重新开始</button>
+          </div>
+          <div class="card-body">
+            <!-- Upload Section -->
+            <div v-if="!mineruTaskId" style="margin-bottom: 20px">
+              <div style="margin-bottom: 16px">
+                <label style="display: block; font-size: 13px; font-weight: 600; margin-bottom: 8px; color: var(--text-secondary)">选择文件</label>
+                <input type="file" accept=".pdf,.doc,.docx,.ppt,.pptx,.png,.jpg,.jpeg" @change="handleMineruFileChange"
+                  style="font-size: 13px; padding: 8px; border: 1px solid var(--border-light); border-radius: 6px; width: 100%; max-width: 500px" />
+                <div v-if="mineruFileName" style="margin-top: 6px; font-size: 12px; color: var(--text-muted)">已选择: {{ mineruFileName }}</div>
+              </div>
+
+              <div style="display: flex; gap: 24px; margin-bottom: 16px; flex-wrap: wrap">
+                <label style="display: flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer">
+                  <input type="checkbox" v-model="mineruEnableOcr" /> 启用 OCR
+                </label>
+                <label style="display: flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer">
+                  <input type="checkbox" v-model="mineruEnableFormula" /> 公式识别
+                </label>
+                <label style="display: flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer">
+                  <input type="checkbox" v-model="mineruEnableTable" /> 表格识别
+                </label>
+              </div>
+
+              <button class="btn btn-primary" :disabled="!mineruFile || mineruSubmitting" @click="handleMineruParse">
+                {{ mineruSubmitting ? '提交中...' : '开始解析' }}
+              </button>
+            </div>
+
+            <!-- Status Section -->
+            <div v-if="mineruTaskId" style="margin-bottom: 20px">
+              <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px">
+                <span style="font-size: 13px; color: var(--text-secondary)">Task ID:</span>
+                <code style="font-size: 12px; background: var(--bg-secondary); padding: 4px 8px; border-radius: 4px">{{ mineruTaskId }}</code>
+              </div>
+
+              <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px">
+                <span style="font-size: 13px; color: var(--text-secondary)">状态:</span>
+                <span v-if="mineruPolling" style="font-size: 13px; color: var(--primary)">
+                  {{ mineruState === 'processing' ? '解析中...' :
+                     mineruState === 'pending' ? '排队中...' :
+                     mineruState === 'submitted' ? '已提交...' : mineruState }}
+                </span>
+                <span v-else-if="mineruState === 'done'" style="font-size: 13px; color: var(--success)">✓ 解析完成{{ mineruImageCount > 0 ? ` (${mineruImageCount} 张图片)` : '' }}</span>
+                <span v-else-if="mineruError" style="font-size: 13px; color: var(--danger)">✗ {{ mineruError }}</span>
+                <span v-else style="font-size: 13px">{{ mineruState }}</span>
+              </div>
+
+              <div v-if="mineruPolling" style="margin-bottom: 12px">
+                <div style="height: 4px; background: var(--bg-secondary); border-radius: 2px; overflow: hidden; max-width: 400px">
+                  <div style="height: 100%; background: var(--primary); border-radius: 2px; transition: width 0.3s; animation: pulse 2s ease-in-out infinite"
+                    :style="{ width: mineruState === 'processing' ? '60%' : '30%' }"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Markdown Result -->
+            <div v-if="mineruMarkdown" style="margin-top: 16px">
+              <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px">
+                <h3 style="font-size: 14px; font-weight: 600">解析结果 ({{ mineruMarkdown.length }} 字符)</h3>
+                <div style="display: flex; gap: 8px; align-items: center">
+                  <div style="display: flex; border: 1px solid var(--border-light); border-radius: 6px; overflow: hidden">
+                    <button class="btn btn-small" :class="mineruViewMode === 'preview' ? 'btn-primary' : 'btn-secondary'" @click="mineruViewMode = 'preview'" style="border: none; border-radius: 0">预览</button>
+                    <button class="btn btn-small" :class="mineruViewMode === 'source' ? 'btn-primary' : 'btn-secondary'" @click="mineruViewMode = 'source'" style="border: none; border-radius: 0">源码</button>
+                  </div>
+                  <button class="btn btn-secondary btn-small" @click="handleMineruSave">下载 Markdown</button>
+                </div>
+              </div>
+              <div v-if="mineruViewMode === 'preview'" class="markdown-preview" v-html="mineruRenderedHtml"></div>
+              <pre v-else style="background: var(--bg-secondary); padding: 16px; border-radius: 8px; font-size: 12px; line-height: 1.6; max-height: 600px; overflow: auto; white-space: pre-wrap; word-break: break-word">{{ mineruMarkdown }}</pre>
+            </div>
+
+            <!-- Error -->
+            <div v-if="mineruError && !mineruPolling" style="margin-top: 16px; padding: 12px; background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; color: var(--danger); font-size: 13px">
+              {{ mineruError }}
             </div>
           </div>
         </div>

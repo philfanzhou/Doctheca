@@ -95,6 +95,10 @@ builder.Services.AddScoped<IDocumentParserService>(sp =>
     return new DocumentParserService(logger, llmSegmentation);
 });
 
+// MinerU Precision API Client
+builder.Services.Configure<MinerUOptions>(builder.Configuration.GetSection(MinerUOptions.SectionName));
+builder.Services.AddSingleton<MinerUPrecisionClient>();
+
 // Background Workers
 builder.Services.AddHostedService<IngestionWorker>();
 

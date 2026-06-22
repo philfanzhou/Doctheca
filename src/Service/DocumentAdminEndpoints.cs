@@ -54,6 +54,11 @@ public static class DocumentAdminEndpoints
         group.MapGet("/scan-consistency", ScanConsistency);
         group.MapDelete("/{id:guid}/force", ForceDeleteDocument);
 
+        // MinerU Agent parsing endpoints
+        group.MapPost("/mineru/parse", MinerUParseDocument);
+        group.MapGet("/mineru/status/{taskId}", MinerUCheckStatus);
+        group.MapGet("/mineru/download/{taskId}", MinerUDownloadResult);
+
         return app;
     }
 
@@ -803,6 +808,124 @@ public static class DocumentAdminEndpoints
         {
             logger.LogError(ex, "Force delete failed: {DocumentId}", id);
             return Results.Json(new { success = false, message = "Force delete failed" }, statusCode: StatusCodes.Status500InternalServerError);
+        }
+    }
+
+    // ===== MinerU Precision Parsing Endpoints =====
+
+    private const long MinerUMaxFileSize = 200 * 1024 * 1024; // 200MB Precision API limit
+
+    private static async Task<IResult> MinerUParseDocument(
+        HttpRequest request,
+        MinerUPrecisionClient minerUClient,
+        IOssService ossService,
+        ILogger logger)
+    {
+        try
+        {
+            var form = await request.ReadFormAsync();
+
+            var file = form.Files.GetFile("file");
+            if (file is null || file.Length == 0)
+                return Results.BadRequest(new { success = false, message = "No file uploaded" });
+
+            if (file.Length > MinerUMaxFileSize)
+                return Results.BadRequest(new { success = false, message = $"File size exceeds 200MB limit (current: {file.Length / 1024.0 / 1024.0:F1}MB)" });
+
+            var enableOcr = form.TryGetValue("enable_ocr", out var ocrVal) && ocrVal.ToString() == "true";
+            var enableFormula = !form.TryGetValue("enable_formula", out var formulaVal) || formulaVal.ToString() != "false";
+            var enableTable = !form.TryGetValue("enable_table", out var tableVal) || tableVal.ToString() != "false";
+
+            // Step 1: Upload file to our OSS to get a presigned URL
+            string presignedUrl;
+            using (var stream = file.OpenReadStream())
+            {
+                var ext = Path.GetExtension(file.FileName) ?? ".bin";
+                var objectName = $"mineru-upload/{Guid.NewGuid()}{ext}";
+                var contentType = file.ContentType ?? "application/octet-stream";
+                var ossPath = await ossService.UploadAsync(stream, objectName, contentType, OssBucket.Documents, "mineru-upload");
+                presignedUrl = await ossService.GetPresignedUrlAsync(ossPath, 3600);
+            }
+
+            logger.LogInformation("File uploaded to OSS, presigned URL generated for {FileName}", file.FileName);
+
+            // Step 2: Submit to MinerU Precision API with the presigned URL
+            var dataId = Guid.NewGuid().ToString("N")[..16];
+            var taskId = await minerUClient.SubmitUrlAsync(
+                presignedUrl, dataId, enableOcr, enableFormula, enableTable);
+
+            logger.LogInformation("MinerU Precision parse submitted: {FileName} -> TaskId={TaskId}", file.FileName, taskId);
+
+            return Results.Ok(new { success = true, task_id = taskId, file_name = file.FileName });
+        }
+        catch (InvalidOperationException ex)
+        {
+            logger.LogWarning(ex, "MinerU parse submit failed");
+            return Results.Json(new { success = false, message = ex.Message }, statusCode: StatusCodes.Status502BadGateway);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "MinerU parse submit error");
+            return Results.Json(new { success = false, message = "Internal error" }, statusCode: StatusCodes.Status500InternalServerError);
+        }
+    }
+
+    private static async Task<IResult> MinerUCheckStatus(
+        string taskId,
+        MinerUPrecisionClient minerUClient,
+        ILogger logger)
+    {
+        try
+        {
+            var (state, fullZipUrl, errMsg) = await minerUClient.PollStatusAsync(taskId);
+
+            return Results.Ok(new
+            {
+                success = true,
+                task_id = taskId,
+                state,
+                full_zip_url = fullZipUrl,
+                err_msg = errMsg,
+            });
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "MinerU status check failed for task {TaskId}", taskId);
+            return Results.Json(new { success = false, message = ex.Message }, statusCode: StatusCodes.Status502BadGateway);
+        }
+    }
+
+    private static async Task<IResult> MinerUDownloadResult(
+        string taskId,
+        MinerUPrecisionClient minerUClient,
+        ILogger logger)
+    {
+        try
+        {
+            // First check status to get full_zip_url
+            var (state, fullZipUrl, errMsg) = await minerUClient.PollStatusAsync(taskId);
+
+            if (state != "done")
+                return Results.BadRequest(new { success = false, message = $"Task not done yet, current state: {state}" });
+
+            if (string.IsNullOrEmpty(fullZipUrl))
+                return Results.Json(new { success = false, message = "No full_zip_url in response" }, statusCode: StatusCodes.Status502BadGateway);
+
+            var (markdown, imageCount) = await minerUClient.DownloadAndProcessZipAsync(fullZipUrl, taskId);
+
+            return Results.Ok(new
+            {
+                success = true,
+                task_id = taskId,
+                markdown,
+                markdown_length = markdown.Length,
+                image_count = imageCount,
+            });
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "MinerU download failed for task {TaskId}", taskId);
+            return Results.Json(new { success = false, message = ex.Message }, statusCode: StatusCodes.Status502BadGateway);
         }
     }
 }
