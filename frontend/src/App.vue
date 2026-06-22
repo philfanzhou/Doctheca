@@ -77,9 +77,6 @@ const forceDeleting = ref<string | null>(null)
 // MinerU Precision Parsing state
 const mineruFile = ref<File | null>(null)
 const mineruFileName = ref('')
-const mineruEnableOcr = ref(false)
-const mineruEnableFormula = ref(true)
-const mineruEnableTable = ref(true)
 const mineruSubmitting = ref(false)
 const mineruTaskId = ref('')
 const mineruPolling = ref(false)
@@ -456,12 +453,7 @@ async function handleMineruParse() {
   mineruTaskId.value = ''
 
   try {
-    const response = await client.mineruParse(
-      mineruFile.value,
-      mineruEnableOcr.value,
-      mineruEnableFormula.value,
-      mineruEnableTable.value
-    )
+    const response = await client.mineruParse(mineruFile.value)
     mineruTaskId.value = response.data.task_id
     mineruState.value = 'submitted'
     ElMessage.success(`Submitted: task_id=${response.data.task_id}`)
@@ -1365,18 +1357,6 @@ async function submitRefinement() {
                 <input type="file" accept=".pdf,.doc,.docx,.ppt,.pptx,.png,.jpg,.jpeg" @change="handleMineruFileChange"
                   style="font-size: 13px; padding: 8px; border: 1px solid var(--border-light); border-radius: 6px; width: 100%; max-width: 500px" />
                 <div v-if="mineruFileName" style="margin-top: 6px; font-size: 12px; color: var(--text-muted)">已选择: {{ mineruFileName }}</div>
-              </div>
-
-              <div style="display: flex; gap: 24px; margin-bottom: 16px; flex-wrap: wrap">
-                <label style="display: flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer">
-                  <input type="checkbox" v-model="mineruEnableOcr" /> 启用 OCR
-                </label>
-                <label style="display: flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer">
-                  <input type="checkbox" v-model="mineruEnableFormula" /> 公式识别
-                </label>
-                <label style="display: flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer">
-                  <input type="checkbox" v-model="mineruEnableTable" /> 表格识别
-                </label>
               </div>
 
               <button class="btn btn-primary" :disabled="!mineruFile || mineruSubmitting" @click="handleMineruParse">

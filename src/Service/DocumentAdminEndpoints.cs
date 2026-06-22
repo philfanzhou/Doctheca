@@ -832,10 +832,6 @@ public static class DocumentAdminEndpoints
             if (file.Length > MinerUMaxFileSize)
                 return Results.BadRequest(new { success = false, message = $"File size exceeds 200MB limit (current: {file.Length / 1024.0 / 1024.0:F1}MB)" });
 
-            var enableOcr = form.TryGetValue("enable_ocr", out var ocrVal) && ocrVal.ToString() == "true";
-            var enableFormula = !form.TryGetValue("enable_formula", out var formulaVal) || formulaVal.ToString() != "false";
-            var enableTable = !form.TryGetValue("enable_table", out var tableVal) || tableVal.ToString() != "false";
-
             // Step 1: Upload file to our OSS to get a presigned URL
             string presignedUrl;
             using (var stream = file.OpenReadStream())
@@ -851,8 +847,7 @@ public static class DocumentAdminEndpoints
 
             // Step 2: Submit to MinerU Precision API with the presigned URL
             var dataId = Guid.NewGuid().ToString("N")[..16];
-            var taskId = await minerUClient.SubmitUrlAsync(
-                presignedUrl, dataId, enableOcr, enableFormula, enableTable);
+            var taskId = await minerUClient.SubmitUrlAsync(presignedUrl, dataId);
 
             logger.LogInformation("MinerU Precision parse submitted: {FileName} -> TaskId={TaskId}", file.FileName, taskId);
 

@@ -251,16 +251,10 @@ class DocApiClient {
 
   // MinerU Precision Parsing
   async mineruParse(
-    file: File,
-    enableOcr = false,
-    enableFormula = true,
-    enableTable = true
+    file: File
   ): Promise<ApiResponse<{ task_id: string; file_name: string }>> {
     const formData = new FormData()
     formData.append('file', file)
-    formData.append('enable_ocr', String(enableOcr))
-    formData.append('enable_formula', String(enableFormula))
-    formData.append('enable_table', String(enableTable))
 
     const response = await this.client.post('/admin/documents/mineru/parse', formData, {
       headers: { 'Content-Type': 'multipart/form-data' }

@@ -64,9 +64,6 @@ public class MinerUPrecisionClient
     public async Task<string> SubmitUrlAsync(
         string fileUrl,
         string? dataId = null,
-        bool enableOcr = false,
-        bool enableFormula = true,
-        bool enableTable = true,
         CancellationToken ct = default)
     {
         if (string.IsNullOrEmpty(_options.ApiToken))
@@ -78,9 +75,9 @@ public class MinerUPrecisionClient
         {
             ["url"] = fileUrl,
             ["model_version"] = "vlm",
-            ["is_ocr"] = enableOcr,
-            ["enable_formula"] = enableFormula,
-            ["enable_table"] = enableTable,
+            ["is_ocr"] = true,
+            ["enable_formula"] = true,
+            ["enable_table"] = true,
         };
 
         if (!string.IsNullOrEmpty(dataId))
