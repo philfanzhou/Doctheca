@@ -819,7 +819,7 @@ public static class DocumentAdminEndpoints
         HttpRequest request,
         MinerUPrecisionClient minerUClient,
         IOssService ossService,
-        ILogger logger)
+        [FromServices] ILogger logger)
     {
         try
         {
@@ -873,7 +873,7 @@ public static class DocumentAdminEndpoints
     private static async Task<IResult> MinerUCheckStatus(
         string taskId,
         MinerUPrecisionClient minerUClient,
-        ILogger logger)
+        [FromServices] ILogger logger)
     {
         try
         {
@@ -898,7 +898,7 @@ public static class DocumentAdminEndpoints
     private static async Task<IResult> MinerUDownloadResult(
         string taskId,
         MinerUPrecisionClient minerUClient,
-        ILogger logger)
+        [FromServices] ILogger logger)
     {
         try
         {
