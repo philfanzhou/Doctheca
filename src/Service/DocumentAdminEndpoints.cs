@@ -819,8 +819,9 @@ public static class DocumentAdminEndpoints
         HttpRequest request,
         MinerUPrecisionClient minerUClient,
         IOssService ossService,
-        [FromServices] ILogger logger)
+        [FromServices] ILoggerFactory loggerFactory)
     {
+        var logger = loggerFactory.CreateLogger("DocumentAdminEndpoints");
         try
         {
             var form = await request.ReadFormAsync();
@@ -868,8 +869,9 @@ public static class DocumentAdminEndpoints
     private static async Task<IResult> MinerUCheckStatus(
         string taskId,
         MinerUPrecisionClient minerUClient,
-        [FromServices] ILogger logger)
+        [FromServices] ILoggerFactory loggerFactory)
     {
+        var logger = loggerFactory.CreateLogger("DocumentAdminEndpoints");
         try
         {
             var (state, fullZipUrl, errMsg) = await minerUClient.PollStatusAsync(taskId);
@@ -893,8 +895,9 @@ public static class DocumentAdminEndpoints
     private static async Task<IResult> MinerUDownloadResult(
         string taskId,
         MinerUPrecisionClient minerUClient,
-        [FromServices] ILogger logger)
+        [FromServices] ILoggerFactory loggerFactory)
     {
+        var logger = loggerFactory.CreateLogger("DocumentAdminEndpoints");
         try
         {
             // First check status to get full_zip_url
