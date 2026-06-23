@@ -1242,8 +1242,8 @@ public static class DocumentAdminEndpoints
             markdownContent = markdownContent.Replace($"src=\"{img.ImagePath}\"", $"src=\"images/{img.ImageName}\"");
         }
 
-        // Build ZIP in memory
-        using var ms = new MemoryStream();
+        // Build ZIP in memory (no 'using' — Results.Stream reads lazily after method returns)
+        var ms = new MemoryStream();
         using (var archive = new System.IO.Compression.ZipArchive(ms, System.IO.Compression.ZipArchiveMode.Create, true))
         {
             // Add markdown file
