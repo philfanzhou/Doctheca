@@ -143,15 +143,6 @@ namespace Ruoyu.Study.DocRetrieval.Database.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("created_by");
 
-                    b.Property<string>("ErrorMessage")
-                        .HasColumnType("text")
-                        .HasColumnName("error_message");
-
-                    b.Property<string>("ExternalTaskId")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)")
-                        .HasColumnName("external_task_id");
-
                     b.Property<string>("FileName")
                         .IsRequired()
                         .HasMaxLength(500)
@@ -164,24 +155,6 @@ namespace Ruoyu.Study.DocRetrieval.Database.Migrations
                         .HasColumnType("character varying(500)")
                         .HasColumnName("file_path");
 
-                    b.Property<long>("FileSize")
-                        .HasColumnType("bigint")
-                        .HasColumnName("file_size");
-
-                    b.Property<string>("MarkdownContent")
-                        .HasColumnType("text")
-                        .HasColumnName("markdown_content");
-
-                    b.Property<DateTimeOffset?>("ParsedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("parsed_at");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasMaxLength(30)
-                        .HasColumnType("character varying(30)")
-                        .HasColumnName("status");
-
                     b.Property<DateTimeOffset?>("UpdatedAt")
                         .IsConcurrencyToken()
                         .HasColumnType("timestamp with time zone")
@@ -189,53 +162,7 @@ namespace Ruoyu.Study.DocRetrieval.Database.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("Status");
-
                     b.ToTable("document_files");
-                });
-
-            modelBuilder.Entity("Ruoyu.Study.DocRetrieval.Database.Entities.DocumentFileImageEntity", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
-
-                    b.Property<string>("ContentType")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)")
-                        .HasColumnName("content_type");
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("created_at");
-
-                    b.Property<Guid>("DocumentFileId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("document_file_id");
-
-                    b.Property<long>("FileSize")
-                        .HasColumnType("bigint")
-                        .HasColumnName("file_size");
-
-                    b.Property<string>("ImageName")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)")
-                        .HasColumnName("image_name");
-
-                    b.Property<string>("ImagePath")
-                        .IsRequired()
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)")
-                        .HasColumnName("image_path");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("DocumentFileId");
-
-                    b.ToTable("document_file_images");
                 });
 
             modelBuilder.Entity("Ruoyu.Study.DocRetrieval.Database.Entities.DocumentIngestionJobEntity", b =>
@@ -387,6 +314,85 @@ namespace Ruoyu.Study.DocRetrieval.Database.Migrations
                     b.ToTable("document_pages");
                 });
 
+            modelBuilder.Entity("Ruoyu.Study.DocRetrieval.Database.Entities.DocumentParseEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("DocumentFileId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("document_file_id");
+
+                    b.Property<string>("ErrorMessage")
+                        .HasColumnType("text")
+                        .HasColumnName("error_message");
+
+                    b.Property<string>("ExternalTaskId")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("external_task_id");
+
+                    b.Property<string>("MarkdownContent")
+                        .HasColumnType("text")
+                        .HasColumnName("markdown_content");
+
+                    b.Property<DateTimeOffset?>("ParsedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("parsed_at");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("status");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DocumentFileId");
+
+                    b.HasIndex("Status");
+
+                    b.ToTable("document_parses");
+                });
+
+            modelBuilder.Entity("Ruoyu.Study.DocRetrieval.Database.Entities.DocumentParseImageEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("content_type");
+
+                    b.Property<string>("ImageName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("image_name");
+
+                    b.Property<string>("ImagePath")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("image_path");
+
+                    b.Property<Guid>("ParseId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("parse_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ParseId");
+
+                    b.ToTable("document_parse_images");
+                });
+
             modelBuilder.Entity("Ruoyu.Study.DocRetrieval.Database.Entities.DocumentSegmentBackupEntity", b =>
                 {
                     b.Property<Guid>("Id")
@@ -528,17 +534,6 @@ namespace Ruoyu.Study.DocRetrieval.Database.Migrations
                     b.ToTable("question_segments");
                 });
 
-            modelBuilder.Entity("Ruoyu.Study.DocRetrieval.Database.Entities.DocumentFileImageEntity", b =>
-                {
-                    b.HasOne("Ruoyu.Study.DocRetrieval.Database.Entities.DocumentFileEntity", "DocumentFile")
-                        .WithMany()
-                        .HasForeignKey("DocumentFileId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("DocumentFile");
-                });
-
             modelBuilder.Entity("Ruoyu.Study.DocRetrieval.Database.Entities.DocumentIngestionJobEntity", b =>
                 {
                     b.HasOne("Ruoyu.Study.DocRetrieval.Database.Entities.DocumentEntity", "Document")
@@ -584,6 +579,28 @@ namespace Ruoyu.Study.DocRetrieval.Database.Migrations
                         .IsRequired();
 
                     b.Navigation("Document");
+                });
+
+            modelBuilder.Entity("Ruoyu.Study.DocRetrieval.Database.Entities.DocumentParseEntity", b =>
+                {
+                    b.HasOne("Ruoyu.Study.DocRetrieval.Database.Entities.DocumentFileEntity", "DocumentFile")
+                        .WithMany()
+                        .HasForeignKey("DocumentFileId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("DocumentFile");
+                });
+
+            modelBuilder.Entity("Ruoyu.Study.DocRetrieval.Database.Entities.DocumentParseImageEntity", b =>
+                {
+                    b.HasOne("Ruoyu.Study.DocRetrieval.Database.Entities.DocumentParseEntity", "Parse")
+                        .WithMany()
+                        .HasForeignKey("ParseId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Parse");
                 });
 
             modelBuilder.Entity("Ruoyu.Study.DocRetrieval.Database.Entities.DocumentSegmentBackupEntity", b =>

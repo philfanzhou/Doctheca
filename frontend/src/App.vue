@@ -196,11 +196,21 @@ async function handleDeleteFile(id: string) {
   }
 }
 
+function handleExportMarkdown(id: string) {
+  const url = client.getExportMarkdownUrl(id)
+  window.open(url, '_blank')
+}
+
+function handleExportHtml(id: string) {
+  const url = client.getExportHtmlUrl(id)
+  window.open(url, '_blank')
+}
+
 function startFilePolling() {
   if (filePollTimer.value !== null) return
   filePollTimer.value = window.setInterval(async () => {
     await loadFileList()
-    const hasActive = fileList.value.some(f => f.status === 'pending_parse' || f.status === 'parsing')
+    const hasActive = fileList.value.some(f => f.parseStatus === 'pending' || f.parseStatus === 'parsing')
     if (!hasActive) {
       stopFilePolling()
     }
@@ -214,29 +224,24 @@ function stopFilePolling() {
   }
 }
 
-function getFileStatusLabel(status: string): string {
+function getFileStatusLabel(status: string | null): string {
   const labels: Record<string, string> = {
-    uploaded: '已上传',
-    pending_parse: '等待解析',
+    pending: '等待解析',
     parsing: '解析中',
     parsed: '已解析',
-    parse_failed: '解析失败',
+    failed: '解析失败',
   }
+  if (status === null) return '未解析'
   return labels[status] || status
 }
 
-function getFileStatusClass(status: string): string {
+function getFileStatusClass(status: string | null): string {
   if (status === 'parsed') return 'status-success'
-  if (status === 'parse_failed') return 'status-error'
-  if (status === 'parsing' || status === 'pending_parse') return 'status-processing'
+  if (status === 'failed') return 'status-error'
+  if (status === 'parsing' || status === 'pending') return 'status-processing'
   return 'status-pending'
 }
 
-function formatFileSize(bytes: number): string {
-  if (bytes < 1024) return bytes + ' B'
-  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB'
-  return (bytes / 1024 / 1024).toFixed(1) + ' MB'
-}
 
 function formatTime(iso: string): string {
   return new Date(iso).toLocaleString('zh-CN')
@@ -250,7 +255,7 @@ function renderMarkdown(content: string): string {
 watch(activeTab, (tab) => {
   if (tab === 'files') {
     loadFileList()
-    const hasActive = fileList.value.some(f => f.status === 'pending_parse' || f.status === 'parsing')
+    const hasActive = fileList.value.some(f => f.parseStatus === 'pending' || f.parseStatus === 'parsing')
     if (hasActive) startFilePolling()
   } else {
     stopFilePolling()
@@ -1620,7 +1625,6 @@ async function submitRefinement() {
               <thead>
                 <tr>
                   <th>文件名</th>
-                  <th>大小</th>
                   <th>状态</th>
                   <th>上传时间</th>
                   <th>操作</th>
@@ -1629,14 +1633,15 @@ async function submitRefinement() {
               <tbody>
                 <tr v-for="f in fileList" :key="f.id">
                   <td>{{ f.fileName }}</td>
-                  <td>{{ formatFileSize(f.fileSize) }}</td>
                   <td>
-                    <span class="status-badge" :class="getFileStatusClass(f.status)">{{ getFileStatusLabel(f.status) }}</span>
+                    <span class="status-badge" :class="getFileStatusClass(f.parseStatus)">{{ getFileStatusLabel(f.parseStatus) }}</span>
                   </td>
                   <td>{{ formatTime(f.createdAt) }}</td>
                   <td style="display: flex; gap: 6px">
-                    <button v-if="f.status === 'uploaded' || f.status === 'parse_failed'" class="btn btn-primary btn-small" @click="handleParseFile(f.id)" :disabled="fileParsing">解析</button>
-                    <button v-if="f.status === 'parsed'" class="btn btn-secondary btn-small" @click="handleViewFile(f.id)">查看</button>
+                    <button v-if="f.parseStatus === null || f.parseStatus === 'failed'" class="btn btn-primary btn-small" @click="handleParseFile(f.id)" :disabled="fileParsing">解析</button>
+                    <button v-if="f.parseStatus === 'parsed'" class="btn btn-secondary btn-small" @click="handleViewFile(f.id)">查看</button>
+                    <button v-if="f.parseStatus === 'parsed'" class="btn btn-secondary btn-small" @click="handleExportMarkdown(f.id)">导出MD</button>
+                    <button v-if="f.parseStatus === 'parsed'" class="btn btn-secondary btn-small" @click="handleExportHtml(f.id)">导出HTML</button>
                     <button class="btn btn-secondary btn-small" style="color: var(--danger)" @click="handleDeleteFile(f.id)">删除</button>
                   </td>
                 </tr>
@@ -1665,7 +1670,18 @@ async function submitRefinement() {
             <button class="btn btn-secondary btn-small" @click="selectedFileDetail = null">关闭</button>
           </div>
           <div class="card-body">
-            <div v-if="selectedFileDetail.markdownContent" class="markdown-preview" v-html="renderMarkdown(selectedFileDetail.markdownContent)"></div>
+            <div v-if="selectedFileDetail.parse?.errorMessage" style="margin-bottom: 12px; padding: 12px; background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; color: var(--danger); font-size: 13px">
+              {{ selectedFileDetail.parse.errorMessage }}
+            </div>
+            <div v-if="selectedFileDetail.parse?.markdownContent" class="markdown-preview" v-html="renderMarkdown(selectedFileDetail.parse.markdownContent)"></div>
+            <div v-else-if="selectedFileDetail.parse?.images && selectedFileDetail.parse.images.length > 0">
+              <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px">
+                <div v-for="img in selectedFileDetail.parse.images" :key="img.id" style="border: 1px solid var(--border-light); border-radius: 8px; overflow: hidden">
+                  <img :src="img.imageUrl" :alt="img.imageName" style="width: 100%; display: block" />
+                  <div style="padding: 6px 8px; font-size: 11px; color: var(--text-muted)">{{ img.imageName }}</div>
+                </div>
+              </div>
+            </div>
             <div v-else style="text-align: center; padding: 40px; color: var(--text-muted)">暂无 Markdown 内容</div>
           </div>
         </div>

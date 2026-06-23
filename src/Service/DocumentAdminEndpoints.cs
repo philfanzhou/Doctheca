@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -71,6 +72,8 @@ public static class DocumentAdminEndpoints
         fileGroup.MapGet("/{id:guid}", GetDocumentFile);
         fileGroup.MapPost("/{id:guid}/parse", ParseDocumentFile);
         fileGroup.MapDelete("/{id:guid}", DeleteDocumentFile);
+        fileGroup.MapGet("/{id:guid}/export/markdown", ExportMarkdown);
+        fileGroup.MapGet("/{id:guid}/export/html", ExportHtml);
 
         return app;
     }
@@ -996,7 +999,6 @@ public static class DocumentAdminEndpoints
         {
             FileName = file.FileName,
             FilePath = filePath,
-            FileSize = file.Length,
             ContentType = file.ContentType,
             CreatedBy = createdBy,
         };
@@ -1012,35 +1014,41 @@ public static class DocumentAdminEndpoints
             {
                 id = created.Id.ToString(),
                 fileName = created.FileName,
-                fileSize = created.FileSize,
-                status = created.Status,
+                contentType = created.ContentType,
             }
         });
     }
 
     private static async Task<IResult> ListDocumentFiles(
         IDocumentFileService fileService,
+        IDocumentParseService parseService,
         [FromQuery] int page = 1,
-        [FromQuery] int pageSize = 20,
-        [FromQuery] string? status = null)
+        [FromQuery] int pageSize = 20)
     {
-        var (items, totalCount) = await fileService.GetListAsync(page, pageSize, status);
+        var (items, totalCount) = await fileService.GetListAsync(page, pageSize);
+
+        // Enrich with parse status
+        var enrichedItems = new List<object>();
+        foreach (var f in items)
+        {
+            var parse = await parseService.GetLatestByFileIdAsync(f.Id);
+            enrichedItems.Add(new
+            {
+                id = f.Id.ToString(),
+                fileName = f.FileName,
+                contentType = f.ContentType,
+                parseStatus = parse?.Status,
+                errorMessage = parse?.ErrorMessage,
+                createdBy = f.CreatedBy?.ToString(),
+                createdAt = f.CreatedAt.UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'"),
+                parsedAt = parse?.ParsedAt?.UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'"),
+            });
+        }
 
         return Results.Ok(new
         {
             success = true,
-            data = items.Select(f => new
-            {
-                id = f.Id.ToString(),
-                fileName = f.FileName,
-                fileSize = f.FileSize,
-                contentType = f.ContentType,
-                status = f.Status,
-                errorMessage = f.ErrorMessage,
-                createdBy = f.CreatedBy?.ToString(),
-                createdAt = f.CreatedAt.UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'"),
-                parsedAt = f.ParsedAt?.UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'"),
-            }),
+            data = enrichedItems,
             total = totalCount,
             page,
             pageSize,
@@ -1051,6 +1059,7 @@ public static class DocumentAdminEndpoints
     private static async Task<IResult> GetDocumentFile(
         Guid id,
         IDocumentFileService fileService,
+        IDocumentParseService parseService,
         IOssService ossService,
         [FromServices] ILoggerFactory loggerFactory)
     {
@@ -1060,11 +1069,16 @@ public static class DocumentAdminEndpoints
         if (file == null)
             return Results.NotFound(new { success = false, message = "File not found", errorCode = "DOCRETRIEVAL_FILE_NOT_FOUND" });
 
+        // Get latest parse record
+        var parse = await parseService.GetLatestByFileIdAsync(id);
+
         // Get associated images
-        var images = await fileService.GetImagesByFileIdAsync(id);
+        var images = parse != null
+            ? await parseService.GetImagesByParseIdAsync(parse.Id)
+            : new List<DocumentParseImageModel>();
 
         // Replace markdown image paths with presigned URLs
-        var markdownContent = file.MarkdownContent;
+        var markdownContent = parse?.MarkdownContent;
         if (!string.IsNullOrEmpty(markdownContent))
         {
             foreach (var img in images)
@@ -1108,14 +1122,17 @@ public static class DocumentAdminEndpoints
             {
                 id = file.Id.ToString(),
                 fileName = file.FileName,
-                fileSize = file.FileSize,
                 contentType = file.ContentType,
-                status = file.Status,
-                markdownContent,
-                errorMessage = file.ErrorMessage,
+                parse = parse != null ? new
+                {
+                    id = parse.Id.ToString(),
+                    status = parse.Status,
+                    markdownContent,
+                    errorMessage = parse.ErrorMessage,
+                    parsedAt = parse.ParsedAt?.UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'"),
+                } : null,
                 images = imageList,
                 createdAt = file.CreatedAt.UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'"),
-                parsedAt = file.ParsedAt?.UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'"),
             }
         });
     }
@@ -1123,6 +1140,7 @@ public static class DocumentAdminEndpoints
     private static async Task<IResult> ParseDocumentFile(
         Guid id,
         IDocumentFileService fileService,
+        IDocumentParseService parseService,
         [FromServices] IOptions<MinerUOptions> minerUOptions,
         [FromServices] ILoggerFactory loggerFactory)
     {
@@ -1132,25 +1150,28 @@ public static class DocumentAdminEndpoints
         if (file == null)
             return Results.NotFound(new { success = false, message = "File not found", errorCode = "DOCRETRIEVAL_FILE_NOT_FOUND" });
 
-        if (file.Status != DocumentFileStatus.Uploaded && file.Status != DocumentFileStatus.ParseFailed)
+        // Check if there's an active parse (pending or parsing)
+        var latestParse = await parseService.GetLatestByFileIdAsync(id);
+        if (latestParse != null && (latestParse.Status == DocumentParseStatus.Pending || latestParse.Status == DocumentParseStatus.Parsing))
             return Results.Json(new { success = false, message = "File is not in a parseable state", errorCode = "DOCRETRIEVAL_FILE_NOT_PARSEABLE" }, statusCode: StatusCodes.Status422UnprocessableEntity);
 
         if (string.IsNullOrEmpty(minerUOptions.Value.ApiToken))
             return Results.Json(new { success = false, message = "MinerU API Token not configured", errorCode = "DOCRETRIEVAL_MINERU_NOT_CONFIGURED" }, statusCode: StatusCodes.Status503ServiceUnavailable);
 
-        await fileService.UpdateStatusAsync(id, DocumentFileStatus.PendingParse);
-        logger.LogInformation("Document file parse requested: {Id}", id);
+        var parse = await parseService.CreateAsync(id);
+        logger.LogInformation("Document file parse requested: {Id}, ParseId={ParseId}", id, parse.Id);
 
         return Results.Ok(new
         {
             success = true,
-            data = new { id = id.ToString(), status = DocumentFileStatus.PendingParse }
+            data = new { id = id.ToString(), parseId = parse.Id.ToString(), status = parse.Status }
         });
     }
 
     private static async Task<IResult> DeleteDocumentFile(
         Guid id,
         IDocumentFileService fileService,
+        IDocumentParseService parseService,
         IOssService ossService,
         [FromServices] ILoggerFactory loggerFactory)
     {
@@ -1161,7 +1182,7 @@ public static class DocumentAdminEndpoints
             return Results.NotFound(new { success = false, message = "File not found", errorCode = "DOCRETRIEVAL_FILE_NOT_FOUND" });
 
         // Delete associated images from S3
-        var images = await fileService.GetImagesByFileIdAsync(id);
+        var images = await parseService.GetImagesByFileIdAsync(id);
         foreach (var img in images)
         {
             try
@@ -1184,7 +1205,7 @@ public static class DocumentAdminEndpoints
             logger.LogWarning(ex, "Failed to delete file from OSS: {FilePath}", file.FilePath);
         }
 
-        // Delete database records (cascade: images first, then file)
+        // Delete database records (cascade: images and parses via FK, then file)
         await fileService.DeleteAsync(id);
 
         return Results.Ok(new
@@ -1192,5 +1213,142 @@ public static class DocumentAdminEndpoints
             success = true,
             data = new { id = id.ToString(), deleted = true }
         });
+    }
+
+    private static async Task<IResult> ExportMarkdown(
+        Guid id,
+        IDocumentFileService fileService,
+        IDocumentParseService parseService,
+        IOssService ossService,
+        [FromServices] ILoggerFactory loggerFactory)
+    {
+        var logger = loggerFactory.CreateLogger("DocumentAdminEndpoints");
+
+        var file = await fileService.GetByIdAsync(id);
+        if (file == null)
+            return Results.NotFound(new { success = false, message = "File not found", errorCode = "DOCRETRIEVAL_FILE_NOT_FOUND" });
+
+        var parse = await parseService.GetLatestByFileIdAsync(id);
+        if (parse == null || parse.Status != DocumentParseStatus.Parsed)
+            return Results.Json(new { success = false, message = "File is not parsed yet", errorCode = "DOCRETRIEVAL_FILE_NOT_PARSED" }, statusCode: StatusCodes.Status422UnprocessableEntity);
+
+        var images = await parseService.GetImagesByParseIdAsync(parse.Id);
+        var markdownContent = parse.MarkdownContent ?? string.Empty;
+
+        // Replace S3 paths in markdown with relative image paths
+        foreach (var img in images)
+        {
+            markdownContent = markdownContent.Replace($"({img.ImagePath})", $"(images/{img.ImageName})");
+            markdownContent = markdownContent.Replace($"src=\"{img.ImagePath}\"", $"src=\"images/{img.ImageName}\"");
+        }
+
+        // Build ZIP in memory
+        using var ms = new MemoryStream();
+        using (var archive = new System.IO.Compression.ZipArchive(ms, System.IO.Compression.ZipArchiveMode.Create, true))
+        {
+            // Add markdown file
+            var mdEntry = archive.CreateEntry(Path.GetFileNameWithoutExtension(file.FileName) + ".md", System.IO.Compression.CompressionLevel.Optimal);
+            using (var mdStream = mdEntry.Open())
+            using (var writer = new StreamWriter(mdStream))
+            {
+                await writer.WriteAsync(markdownContent);
+            }
+
+            // Add images
+            foreach (var img in images)
+            {
+                try
+                {
+                    using var imgStream = await ossService.DownloadAsync(img.ImagePath);
+                    var imgEntry = archive.CreateEntry($"images/{img.ImageName}", System.IO.Compression.CompressionLevel.Fastest);
+                    using var entryStream = imgEntry.Open();
+                    await imgStream.CopyToAsync(entryStream);
+                }
+                catch (Exception ex)
+                {
+                    logger.LogWarning(ex, "Failed to download image for export: {ImagePath}", img.ImagePath);
+                }
+            }
+        }
+
+        ms.Position = 0;
+        var zipFileName = $"{Path.GetFileNameWithoutExtension(file.FileName)}_markdown.zip";
+        return Results.Stream(ms, "application/zip", zipFileName);
+    }
+
+    private static async Task<IResult> ExportHtml(
+        Guid id,
+        IDocumentFileService fileService,
+        IDocumentParseService parseService,
+        IOssService ossService,
+        [FromServices] ILoggerFactory loggerFactory)
+    {
+        var logger = loggerFactory.CreateLogger("DocumentAdminEndpoints");
+
+        var file = await fileService.GetByIdAsync(id);
+        if (file == null)
+            return Results.NotFound(new { success = false, message = "File not found", errorCode = "DOCRETRIEVAL_FILE_NOT_FOUND" });
+
+        var parse = await parseService.GetLatestByFileIdAsync(id);
+        if (parse == null || parse.Status != DocumentParseStatus.Parsed)
+            return Results.Json(new { success = false, message = "File is not parsed yet", errorCode = "DOCRETRIEVAL_FILE_NOT_PARSED" }, statusCode: StatusCodes.Status422UnprocessableEntity);
+
+        var images = await parseService.GetImagesByParseIdAsync(parse.Id);
+        var markdownContent = parse.MarkdownContent ?? string.Empty;
+
+        // Replace S3 paths with base64 data URIs
+        foreach (var img in images)
+        {
+            try
+            {
+                using var imgStream = await ossService.DownloadAsync(img.ImagePath);
+                using var imgMs = new MemoryStream();
+                await imgStream.CopyToAsync(imgMs);
+                var base64 = Convert.ToBase64String(imgMs.ToArray());
+                var dataUri = $"data:{img.ContentType};base64,{base64}";
+
+                markdownContent = markdownContent.Replace($"({img.ImagePath})", $"({dataUri})");
+                markdownContent = markdownContent.Replace($"src=\"{img.ImagePath}\"", $"src=\"{dataUri}\"");
+                // Also replace relative paths if any remain
+                markdownContent = markdownContent.Replace($"(images/{img.ImageName})", $"({dataUri})");
+                markdownContent = markdownContent.Replace($"src=\"images/{img.ImageName}\"", $"src=\"{dataUri}\"");
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Failed to download image for HTML export: {ImagePath}", img.ImagePath);
+            }
+        }
+
+        // Convert markdown to HTML using Markdig
+        var htmlBody = Markdig.Markdown.ToHtml(markdownContent);
+
+        // Wrap in full HTML document with inline CSS
+        var html = new StringBuilder();
+        html.AppendLine("<!DOCTYPE html>");
+        html.AppendLine("<html lang=\"zh-CN\">");
+        html.AppendLine("<head>");
+        html.AppendLine("  <meta charset=\"UTF-8\">");
+        html.AppendLine("  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">");
+        html.AppendLine($"  <title>{System.Net.WebUtility.HtmlEncode(file.FileName)}</title>");
+        html.AppendLine("  <style>");
+        html.AppendLine("    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;");
+        html.AppendLine("           max-width: 800px; margin: 0 auto; padding: 20px; line-height: 1.6; color: #333; }");
+        html.AppendLine("    img { max-width: 100%; height: auto; }");
+        html.AppendLine("    table { border-collapse: collapse; width: 100%; }");
+        html.AppendLine("    th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }");
+        html.AppendLine("    blockquote { border-left: 4px solid #ddd; margin: 0; padding-left: 16px; color: #666; }");
+        html.AppendLine("    code { background: #f4f4f4; padding: 2px 6px; border-radius: 3px; }");
+        html.AppendLine("    pre { background: #f4f4f4; padding: 16px; overflow-x: auto; border-radius: 6px; }");
+        html.AppendLine("  </style>");
+        html.AppendLine("</head>");
+        html.AppendLine("<body>");
+        html.AppendLine(htmlBody);
+        html.AppendLine("</body>");
+        html.AppendLine("</html>");
+
+        var htmlFileName = $"{Path.GetFileNameWithoutExtension(file.FileName)}.html";
+        var htmlBytes = System.Text.Encoding.UTF8.GetBytes(html.ToString());
+        var htmlStream = new MemoryStream(htmlBytes);
+        return Results.Stream(htmlStream, "text/html", htmlFileName);
     }
 }

@@ -28,11 +28,9 @@ public class DocumentFileRepository : IDocumentFileRepository
         return entity != null ? MapToModel(entity) : null;
     }
 
-    public async Task<(List<DocumentFileModel> Items, int TotalCount)> GetListAsync(int page, int size, string? status = null)
+    public async Task<(List<DocumentFileModel> Items, int TotalCount)> GetListAsync(int page, int size)
     {
         var query = _context.DocumentFiles.AsQueryable();
-        if (!string.IsNullOrWhiteSpace(status))
-            query = query.Where(e => e.Status == status);
 
         var total = await query.CountAsync();
         var items = await query
@@ -52,13 +50,7 @@ public class DocumentFileRepository : IDocumentFileRepository
 
         entity.FileName = model.FileName;
         entity.FilePath = model.FilePath;
-        entity.FileSize = model.FileSize;
         entity.ContentType = model.ContentType;
-        entity.Status = model.Status;
-        entity.ExternalTaskId = model.ExternalTaskId;
-        entity.MarkdownContent = model.MarkdownContent;
-        entity.ErrorMessage = model.ErrorMessage;
-        entity.ParsedAt = model.ParsedAt;
         entity.UpdatedAt = DateTimeOffset.UtcNow;
 
         await _context.SaveChangesAsync();
@@ -74,26 +66,12 @@ public class DocumentFileRepository : IDocumentFileRepository
         return true;
     }
 
-    public async Task<List<DocumentFileModel>> GetByStatusAsync(string status)
-    {
-        return await _context.DocumentFiles
-            .Where(e => e.Status == status)
-            .Select(e => MapToModel(e))
-            .ToListAsync();
-    }
-
     private static DocumentFileEntity MapToEntity(DocumentFileModel model) => new()
     {
         Id = model.Id,
         FileName = model.FileName,
         FilePath = model.FilePath,
-        FileSize = model.FileSize,
         ContentType = model.ContentType,
-        Status = model.Status,
-        ExternalTaskId = model.ExternalTaskId,
-        MarkdownContent = model.MarkdownContent,
-        ErrorMessage = model.ErrorMessage,
-        ParsedAt = model.ParsedAt,
         CreatedBy = model.CreatedBy,
         CreatedAt = model.CreatedAt,
         UpdatedAt = model.UpdatedAt,
@@ -104,13 +82,7 @@ public class DocumentFileRepository : IDocumentFileRepository
         Id = entity.Id,
         FileName = entity.FileName,
         FilePath = entity.FilePath,
-        FileSize = entity.FileSize,
         ContentType = entity.ContentType,
-        Status = entity.Status,
-        ExternalTaskId = entity.ExternalTaskId,
-        MarkdownContent = entity.MarkdownContent,
-        ErrorMessage = entity.ErrorMessage,
-        ParsedAt = entity.ParsedAt,
         CreatedBy = entity.CreatedBy,
         CreatedAt = entity.CreatedAt,
         UpdatedAt = entity.UpdatedAt,

@@ -31,10 +31,11 @@ public class MinerUFileParseWorker : BackgroundService
             {
                 using var scope = _serviceProvider.CreateScope();
                 var fileService = scope.ServiceProvider.GetRequiredService<IDocumentFileService>();
+                var parseService = scope.ServiceProvider.GetRequiredService<IDocumentParseService>();
                 var minerUClient = scope.ServiceProvider.GetRequiredService<MinerUPrecisionClient>();
                 var ossService = scope.ServiceProvider.GetRequiredService<IOssService>();
 
-                var pendingJobs = await fileService.GetPendingParseJobsAsync();
+                var pendingJobs = await parseService.GetPendingJobsAsync();
 
                 foreach (var job in pendingJobs)
                 {
@@ -42,7 +43,7 @@ public class MinerUFileParseWorker : BackgroundService
 
                     try
                     {
-                        await ProcessFileAsync(job, fileService, minerUClient, ossService, stoppingToken);
+                        await ProcessFileAsync(job, fileService, parseService, minerUClient, ossService, stoppingToken);
                     }
                     catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
                     {
@@ -50,14 +51,14 @@ public class MinerUFileParseWorker : BackgroundService
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogError(ex, "MinerU parse failed for file {FileId}", job.Id);
+                        _logger.LogError(ex, "MinerU parse failed for parse {ParseId}", job.Id);
                         try
                         {
-                            await fileService.UpdateStatusAsync(job.Id, DocumentFileStatus.ParseFailed, ex.Message);
+                            await parseService.UpdateStatusAsync(job.Id, DocumentParseStatus.Failed, ex.Message);
                         }
                         catch (Exception failEx)
                         {
-                            _logger.LogError(failEx, "Error marking file as failed: {FileId}", job.Id);
+                            _logger.LogError(failEx, "Error marking parse as failed: {ParseId}", job.Id);
                         }
                     }
                 }
@@ -77,26 +78,29 @@ public class MinerUFileParseWorker : BackgroundService
     }
 
     private async Task ProcessFileAsync(
-        DocumentFileModel file,
+        DocumentParseModel parse,
         IDocumentFileService fileService,
+        IDocumentParseService parseService,
         MinerUPrecisionClient minerUClient,
         IOssService ossService,
         CancellationToken ct)
     {
         // Step 1: Update status to parsing
-        await fileService.UpdateStatusAsync(file.Id, DocumentFileStatus.Parsing);
+        await parseService.UpdateStatusAsync(parse.Id, DocumentParseStatus.Parsing);
 
-        // Step 2: Generate presigned URL for the file
+        // Step 2: Get file info and generate presigned URL
+        var file = await fileService.GetByIdAsync(parse.DocumentFileId)
+            ?? throw new InvalidOperationException($"Document file not found: {parse.DocumentFileId}");
         var presignedUrl = await ossService.GetPresignedUrlAsync(file.FilePath, 3600);
         _logger.LogInformation("Generated presigned URL for file {FileId}", file.Id);
 
         // Step 3: Submit to MinerU API
-        var dataId = file.Id.ToString("N")[..16];
+        var dataId = parse.DocumentFileId.ToString("N")[..16];
         var taskId = await minerUClient.SubmitUrlAsync(presignedUrl, dataId, ct);
         _logger.LogInformation("MinerU task submitted: FileId={FileId}, TaskId={TaskId}", file.Id, taskId);
 
         // Step 4: Save external task ID
-        await fileService.UpdateStatusAsync(file.Id, DocumentFileStatus.Parsing, externalTaskId: taskId);
+        await parseService.UpdateStatusAsync(parse.Id, DocumentParseStatus.Parsing, externalTaskId: taskId);
 
         // Step 5: Poll MinerU status
         var deadline = DateTimeOffset.UtcNow + _mineruTimeout;
@@ -129,21 +133,20 @@ public class MinerUFileParseWorker : BackgroundService
         var (markdown, imageMetadataList) = await minerUClient.DownloadAndProcessZipAsync(fullZipUrl, taskId, ossService, ct);
         _logger.LogInformation("MinerU ZIP processed: FileId={FileId}, Images={ImageCount}", file.Id, imageMetadataList.Count);
 
-        // Step 7: Save image metadata to document_file_images table
+        // Step 7: Save image metadata to document_parse_images table
         foreach (var img in imageMetadataList)
         {
-            await fileService.AddImageAsync(new DocumentFileImageModel
+            await parseService.AddImageAsync(new DocumentParseImageModel
             {
-                DocumentFileId = file.Id,
+                ParseId = parse.Id,
                 ImageName = img.ImageName,
                 ImagePath = img.S3Path,
                 ContentType = img.ContentType,
-                FileSize = img.FileSize,
             });
         }
 
         // Step 8: Save markdown content and update status
-        await fileService.UpdateStatusAsync(file.Id, DocumentFileStatus.Parsed, markdownContent: markdown);
-        _logger.LogInformation("MinerU parse completed: FileId={FileId}", file.Id);
+        await parseService.UpdateStatusAsync(parse.Id, DocumentParseStatus.Parsed, markdownContent: markdown);
+        _logger.LogInformation("MinerU parse completed: ParseId={ParseId}, FileId={FileId}", parse.Id, file.Id);
     }
 }

@@ -145,30 +145,30 @@ export interface ConsistencyScanResult {
 export interface DocumentFile {
   id: string
   fileName: string
-  fileSize: number
   contentType: string
-  status: string
-  errorMessage: string | null
-  createdBy: string | null
   createdAt: string
+  createdBy: string | null
+  parseStatus: string | null
   parsedAt: string | null
 }
 
 export interface DocumentFileDetail {
   id: string
   fileName: string
-  fileSize: number
   contentType: string
-  status: string
-  markdownContent: string | null
-  errorMessage: string | null
-  images: Array<{
-    id: string
-    imageName: string
-    imageUrl: string
-  }>
   createdAt: string
-  parsedAt: string | null
+  parse: {
+    id: string
+    status: string
+    markdownContent: string | null
+    errorMessage: string | null
+    parsedAt: string | null
+    images: Array<{
+      id: string
+      imageName: string
+      imageUrl: string
+    }>
+  } | null
 }
 
 class DocApiClient {
@@ -316,7 +316,7 @@ class DocApiClient {
   async uploadDocumentFile(
     file: File,
     onUploadProgress?: (progressEvent: { loaded: number; total?: number }) => void
-  ): Promise<ApiResponse<{ id: string; fileName: string; fileSize: number; status: string }>> {
+  ): Promise<ApiResponse<{ id: string; fileName: string }>> {
     const formData = new FormData()
     formData.append('file', file)
     const response = await this.client.post('/admin/document-files/upload', formData, {
@@ -350,6 +350,14 @@ class DocApiClient {
   async deleteDocumentFile(id: string): Promise<ApiResponse<{ id: string; deleted: boolean }>> {
     const response = await this.client.delete(`/admin/document-files/${id}`)
     return response.data
+  }
+
+  getExportMarkdownUrl(id: string): string {
+    return `/admin/document-files/${id}/export/markdown`
+  }
+
+  getExportHtmlUrl(id: string): string {
+    return `/admin/document-files/${id}/export/html`
   }
 }
 

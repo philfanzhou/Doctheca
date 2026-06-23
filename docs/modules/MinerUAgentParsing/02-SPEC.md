@@ -2,7 +2,43 @@
 
 ## 功能概述
 
-本模块实现三阶段文档管理流程：文件上传 → MinerU 解析 → Markdown 查看。所有状态持久化在数据库中，前端无状态，刷新安全。
+本模块实现文件管理与文档解析两个独立业务：文件上传存储 → 触发 MinerU 解析 → Markdown 查看/导出。文件与解析解耦，文件可独立存在，解析为可选操作。所有状态持久化在数据库中，前端无状态，刷新安全。
+
+## 数据模型
+
+### document_files — 文件基础信息
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| id | uuid | 主键 |
+| file_name | varchar(500) | 原始文件名 |
+| file_path | varchar(500) | S3 源文件路径 |
+| content_type | varchar(100) | MIME 类型 |
+| created_by | uuid | 上传人 |
+| created_at | timestamptz | 创建时间（数据库自动维护） |
+| updated_at | timestamptz | 更新时间（数据库自动维护） |
+
+### document_parses — 解析记录
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| id | uuid | 主键 |
+| document_file_id | uuid | FK → document_files（级联删除） |
+| status | varchar(30) | pending / parsing / parsed / failed |
+| external_task_id | varchar(100) | MinerU 任务 ID |
+| markdown_content | text | 解析后的 MD（图片路径为 S3 路径） |
+| error_message | text | 失败原因 |
+| parsed_at | timestamptz | 解析完成时间 |
+
+### document_parse_images — 解析产出的图片
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| id | uuid | 主键 |
+| parse_id | uuid | FK → document_parses（级联删除） |
+| image_name | varchar(200) | 图片文件名 |
+| image_path | varchar(500) | S3 图片路径 |
+| content_type | varchar(50) | MIME 类型 |
 
 ## API 规格
 
@@ -11,38 +47,61 @@
 `POST /admin/document-files/upload` (multipart/form-data)
 
 - 请求字段：`file`（必填，PDF/DOCX/PPTX，≤200MB）
-- 响应：`{ success, data: { id, fileName, fileSize, status } }`
+- 响应：`{ success, data: { id, fileName, contentType } }`
 - 错误码：`DOCRETRIEVAL_FILE_REQUIRED`、`DOCRETRIEVAL_FILE_FORMAT_UNSUPPORTED`
 
 ### API-2：文件列表
 
-`GET /admin/document-files?page=1&pageSize=20&status=`
+`GET /admin/document-files?page=1&pageSize=20`
 
 - 响应：`{ success, data: [...], total, page, pageSize, totalPages }`
-- 每项包含：`id, fileName, fileSize, contentType, status, errorMessage, createdAt, createdBy, parsedAt`
+- 每项包含：`id, fileName, contentType, createdAt, createdBy, parseStatus, parsedAt`
+- `parseStatus` 取自该文件最新 parse 记录的 status，无 parse 记录时为 null
 
 ### API-3：触发解析
 
 `POST /admin/document-files/{id}/parse`
 
-- 前置条件：`status == uploaded || status == parse_failed`
-- 响应：`{ success, data: { id, status } }`
-- 错误码：`DOCRETRIEVAL_FILE_NOT_FOUND`、`DOCRETRIEVAL_FILE_NOT_PARSEABLE`、`DOCRETRIEVAL_MINERU_NOT_CONFIGURED`
+- 前置条件：文件存在，且无进行中的解析（最新 parse status 不为 pending/parsing）
+- 响应：`{ success, data: { id, parseId, status } }`
+- 错误码：`DOCRETRIEVAL_FILE_NOT_FOUND`、`DOCRETRIEVAL_PARSE_IN_PROGRESS`、`DOCRETRIEVAL_MINERU_NOT_CONFIGURED`
 
 ### API-4：获取文件详情（含 MD）
 
 `GET /admin/document-files/{id}`
 
-- 响应：`{ success, data: { id, fileName, fileSize, contentType, status, markdownContent, errorMessage, images: [...], createdAt, parsedAt } }`
+- 响应：`{ success, data: { id, fileName, contentType, createdAt, parse: { id, status, markdownContent, errorMessage, parsedAt, images: [...] } } }`
 - `markdownContent` 中的图片路径已替换为 S3 presigned URL
 - `images` 数组包含每张图片的 `id, imageName, imageUrl`（presigned URL）
+- 无解析记录时 `parse` 为 null
 
 ### API-5：删除文件
 
 `DELETE /admin/document-files/{id}`
 
-- 同时删除 S3 上的源文件和关联图片
+- 同时删除 S3 上的源文件和所有关联解析的图片
+- 级联删除 document_parses 和 document_parse_images 记录
 - 响应：`{ success, data: { id, deleted } }`
+
+### API-6：导出为 MD+图片 ZIP
+
+`GET /admin/document-files/{id}/export/markdown`
+
+- 前置条件：文件存在且最新 parse status=parsed
+- 响应：`application/zip` 二进制流，文件名 `{fileName}_markdown.zip`
+- ZIP 内包含：
+  - `{fileName}.md` — Markdown 文件，图片引用为相对路径 `images/{imageName}`
+  - `images/` 目录 — 所有引用的图片文件
+- 错误码：`DOCRETRIEVAL_FILE_NOT_FOUND`、`DOCRETRIEVAL_FILE_NOT_PARSED`
+
+### API-7：导出为 HTML
+
+`GET /admin/document-files/{id}/export/html`
+
+- 前置条件：文件存在且最新 parse status=parsed
+- 响应：`text/html` 二进制流，文件名 `{fileName}.html`
+- HTML 为自包含文件：图片以 base64 data URI 内嵌，CSS 内联
+- 错误码：`DOCRETRIEVAL_FILE_NOT_FOUND`、`DOCRETRIEVAL_FILE_NOT_PARSED`
 
 ## 详细验收标准
 
@@ -50,7 +109,7 @@
 
 - **Given** 合法 PDF 文件（≤200MB）
 - **When** 调用 `POST /admin/document-files/upload`
-- **Then** 返回 200，`status=="uploaded"`，S3 中存在文件，数据库存在记录
+- **Then** 返回 200，S3 中存在文件，document_files 有记录，无 parse 记录
 
 ### AC-UPLOAD-02：文件校验
 
@@ -66,33 +125,33 @@
 
 ### AC-PARSE-01：正常解析
 
-- **Given** 文件 status=uploaded，MinerU Token 已配置
+- **Given** 文件存在，无进行中的解析，MinerU Token 已配置
 - **When** 调用 `POST /admin/document-files/{id}/parse`
-- **Then** status 变为 `pending_parse`，IngestionWorker 接管后续流程
+- **Then** 新建 document_parses 记录，status=pending，Worker 接管后续流程
 
 ### AC-PARSE-02：解析完成
 
 - **Given** MinerU 解析成功
 - **When** Worker 完成 ZIP 下载、图片上传、MD 替换
-- **Then** status=`parsed`，`markdown_content` 非空，`document_file_images` 有记录
+- **Then** parse status=parsed，markdown_content 非空，document_parse_images 有记录
 
 ### AC-PARSE-03：解析失败
 
 - **Given** MinerU 解析失败
 - **When** Worker 捕获错误
-- **Then** status=`parse_failed`，`error_message` 非空
+- **Then** parse status=failed，error_message 非空
 
 ### AC-PARSE-04：重复解析
 
-- **Given** 文件 status=parse_failed
+- **Given** 文件最新 parse status=failed
 - **When** 调用解析 API
-- **Then** 允许重试，status 变为 pending_parse
+- **Then** 新建 parse 记录，status=pending（保留历史记录）
 
-### AC-PARSE-05：不可解析状态
+### AC-PARSE-05：解析进行中
 
-- **Given** 文件 status=parsing 或 parsed
+- **Given** 文件最新 parse status=pending 或 parsing
 - **When** 调用解析 API
-- **Then** 返回 422，`DOCRETRIEVAL_FILE_NOT_PARSEABLE`
+- **Then** 返回 422，`DOCRETRIEVAL_PARSE_IN_PROGRESS`
 
 ### AC-PARSE-06：Token 未配置
 
@@ -102,42 +161,66 @@
 
 ### AC-VIEW-01：查看已解析文件
 
-- **Given** 文件 status=parsed
+- **Given** 文件存在，有 parsed 的 parse 记录
 - **When** 调用 `GET /admin/document-files/{id}`
 - **Then** 返回 markdown_content，图片路径为 presigned URL
 
 ### AC-VIEW-02：查看未解析文件
 
-- **Given** 文件 status=uploaded
+- **Given** 文件存在，无 parse 记录
 - **When** 调用 `GET /admin/document-files/{id}`
-- **Then** markdown_content 为 null，images 为空数组
+- **Then** parse 为 null
 
 ### AC-DELETE-01：删除文件
 
 - **Given** 文件存在
 - **When** 调用 `DELETE /admin/document-files/{id}`
-- **Then** 数据库记录删除，S3 源文件和关联图片删除
+- **Then** 数据库记录级联删除，S3 源文件和关联图片删除
 
 ### AC-CONCURRENT-01：并发解析
 
 - **Given** 多个文件同时触发解析
-- **When** IngestionWorker 处理
+- **When** Worker 处理
 - **Then** 每个文件独立处理，互不影响
 
-## 状态流转
+### AC-EXPORT-01：导出 MD+图片 ZIP
+
+- **Given** 文件最新 parse status=parsed
+- **When** 调用 `GET /admin/document-files/{id}/export/markdown`
+- **Then** 返回 ZIP 文件，包含 `.md` 文件和 `images/` 目录
+
+### AC-EXPORT-02：导出 HTML
+
+- **Given** 文件最新 parse status=parsed
+- **When** 调用 `GET /admin/document-files/{id}/export/html`
+- **Then** 返回自包含 HTML 文件，图片以 base64 data URI 内嵌
+
+### AC-EXPORT-03：导出未解析文件
+
+- **Given** 文件无 parsed 的 parse 记录
+- **When** 调用导出 API
+- **Then** 返回 422，`DOCRETRIEVAL_FILE_NOT_PARSED`
+
+### AC-EXPORT-04：导出不存在的文件
+
+- **Given** 文件 ID 不存在
+- **When** 调用导出 API
+- **Then** 返回 404，`DOCRETRIEVAL_FILE_NOT_FOUND`
+
+## 解析状态流转
 
 ```
-uploaded ──触发解析──▶ pending_parse ──Worker开始──▶ parsing ──成功──▶ parsed
-   │                                                    │
-   │                                                    │ 失败
-   │                                                    ▼
-   └────────────────────────────────────────────── parse_failed
-                                                      (可重试)
+触发解析 ──▶ pending ──Worker开始──▶ parsing ──成功──▶ parsed
+                                      │
+                                      │ 失败
+                                      ▼
+                                    failed (可重试，新建记录)
 ```
 
 ## 非功能需求
 
 - **刷新安全**：所有状态在数据库，前端刷新不影响
 - **并发安全**：多个文件可同时解析
+- **文件与解析解耦**：文件可独立存在，解析为可选操作；未来可支持其他解析方式
 - **图片管理**：图片上传到 S3 的 `documents/mineru/{taskId}/{imageName}` 路径，MD 中存储 S3 路径，查看时替换为 presigned URL
 - **Presigned URL 有效期**：1 小时

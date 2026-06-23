@@ -11,27 +11,24 @@ namespace Ruoyu.Study.DocRetrieval.Tests;
 public class DocumentFileServiceTests
 {
     private readonly Mock<IDocumentFileRepository> _fileRepoMock;
-    private readonly Mock<IDocumentFileImageRepository> _imageRepoMock;
     private readonly Mock<ILogger<DocumentFileService>> _loggerMock;
     private readonly DocumentFileService _service;
 
     public DocumentFileServiceTests()
     {
         _fileRepoMock = new Mock<IDocumentFileRepository>();
-        _imageRepoMock = new Mock<IDocumentFileImageRepository>();
         _loggerMock = new Mock<ILogger<DocumentFileService>>();
-        _service = new DocumentFileService(_fileRepoMock.Object, _imageRepoMock.Object, _loggerMock.Object);
+        _service = new DocumentFileService(_fileRepoMock.Object, _loggerMock.Object);
     }
 
     [Fact]
-    public async Task CreateAsync_SetsStatusToUploadedAndReturnsModel()
+    public async Task CreateAsync_SetsCreatedAtAndReturnsModel()
     {
         // Arrange
         var model = new DocumentFileModel
         {
             FileName = "test.pdf",
             FilePath = "docretrieval-files/abc.pdf",
-            FileSize = 1024,
             ContentType = "application/pdf",
         };
 
@@ -43,10 +40,9 @@ public class DocumentFileServiceTests
         var result = await _service.CreateAsync(model);
 
         // Assert
-        result.Status.Should().Be(DocumentFileStatus.Uploaded);
         result.CreatedAt.Should().BeCloseTo(DateTimeOffset.UtcNow, TimeSpan.FromSeconds(5));
         _fileRepoMock.Verify(r => r.AddAsync(It.Is<DocumentFileModel>(m =>
-            m.Status == DocumentFileStatus.Uploaded && m.FileName == "test.pdf")), Times.Once);
+            m.FileName == "test.pdf")), Times.Once);
     }
 
     [Fact]
@@ -88,7 +84,7 @@ public class DocumentFileServiceTests
             new() { Id = Guid.NewGuid(), FileName = "a.pdf" },
             new() { Id = Guid.NewGuid(), FileName = "b.pdf" },
         };
-        _fileRepoMock.Setup(r => r.GetListAsync(1, 20, null))
+        _fileRepoMock.Setup(r => r.GetListAsync(1, 20))
             .ReturnsAsync((items, 2));
 
         // Act
@@ -100,22 +96,86 @@ public class DocumentFileServiceTests
     }
 
     [Fact]
-    public async Task GetListAsync_FiltersByStatus()
+    public async Task DeleteAsync_DelegatesToRepository()
     {
         // Arrange
-        var items = new List<DocumentFileModel>
-        {
-            new() { Id = Guid.NewGuid(), FileName = "a.pdf", Status = DocumentFileStatus.Uploaded },
-        };
-        _fileRepoMock.Setup(r => r.GetListAsync(1, 20, DocumentFileStatus.Uploaded))
-            .ReturnsAsync((items, 1));
+        var id = Guid.NewGuid();
+        _fileRepoMock.Setup(r => r.DeleteAsync(id)).ReturnsAsync(true);
 
         // Act
-        var (resultItems, totalCount) = await _service.GetListAsync(1, 20, DocumentFileStatus.Uploaded);
+        var result = await _service.DeleteAsync(id);
 
         // Assert
-        resultItems.Should().HaveCount(1);
-        totalCount.Should().Be(1);
+        result.Should().BeTrue();
+        _fileRepoMock.Verify(r => r.DeleteAsync(id), Times.Once);
+    }
+}
+
+public class DocumentParseServiceTests
+{
+    private readonly Mock<IDocumentParseRepository> _parseRepoMock;
+    private readonly Mock<IDocumentParseImageRepository> _imageRepoMock;
+    private readonly Mock<ILogger<DocumentParseService>> _loggerMock;
+    private readonly DocumentParseService _service;
+
+    public DocumentParseServiceTests()
+    {
+        _parseRepoMock = new Mock<IDocumentParseRepository>();
+        _imageRepoMock = new Mock<IDocumentParseImageRepository>();
+        _loggerMock = new Mock<ILogger<DocumentParseService>>();
+        _service = new DocumentParseService(_parseRepoMock.Object, _imageRepoMock.Object, _loggerMock.Object);
+    }
+
+    [Fact]
+    public async Task CreateAsync_SetsStatusToPendingAndReturnsModel()
+    {
+        // Arrange
+        var fileId = Guid.NewGuid();
+        var model = new DocumentParseModel { DocumentFileId = fileId, Status = DocumentParseStatus.Pending };
+        _parseRepoMock.Setup(r => r.AddAsync(It.IsAny<DocumentParseModel>()))
+            .Callback<DocumentParseModel>(m => m.Id = Guid.NewGuid())
+            .ReturnsAsync(model);
+
+        // Act
+        var result = await _service.CreateAsync(fileId);
+
+        // Assert
+        result.Status.Should().Be(DocumentParseStatus.Pending);
+        result.DocumentFileId.Should().Be(fileId);
+        _parseRepoMock.Verify(r => r.AddAsync(It.Is<DocumentParseModel>(m =>
+            m.Status == DocumentParseStatus.Pending && m.DocumentFileId == fileId)), Times.Once);
+    }
+
+    [Fact]
+    public async Task GetByIdAsync_ReturnsModel_WhenExists()
+    {
+        // Arrange
+        var id = Guid.NewGuid();
+        var model = new DocumentParseModel { Id = id };
+        _parseRepoMock.Setup(r => r.GetByIdAsync(id)).ReturnsAsync(model);
+
+        // Act
+        var result = await _service.GetByIdAsync(id);
+
+        // Assert
+        result.Should().NotBeNull();
+        result!.Id.Should().Be(id);
+    }
+
+    [Fact]
+    public async Task GetLatestByFileIdAsync_ReturnsLatestParse()
+    {
+        // Arrange
+        var fileId = Guid.NewGuid();
+        var model = new DocumentParseModel { Id = Guid.NewGuid(), DocumentFileId = fileId };
+        _parseRepoMock.Setup(r => r.GetLatestByFileIdAsync(fileId)).ReturnsAsync(model);
+
+        // Act
+        var result = await _service.GetLatestByFileIdAsync(fileId);
+
+        // Assert
+        result.Should().NotBeNull();
+        result!.DocumentFileId.Should().Be(fileId);
     }
 
     [Fact]
@@ -123,19 +183,18 @@ public class DocumentFileServiceTests
     {
         // Arrange
         var id = Guid.NewGuid();
-        var model = new DocumentFileModel { Id = id, Status = DocumentFileStatus.Uploaded };
-        _fileRepoMock.Setup(r => r.GetByIdAsync(id)).ReturnsAsync(model);
-        _fileRepoMock.Setup(r => r.UpdateAsync(It.IsAny<DocumentFileModel>())).ReturnsAsync(true);
+        var model = new DocumentParseModel { Id = id, Status = DocumentParseStatus.Pending };
+        _parseRepoMock.Setup(r => r.GetByIdAsync(id)).ReturnsAsync(model);
+        _parseRepoMock.Setup(r => r.UpdateAsync(It.IsAny<DocumentParseModel>())).ReturnsAsync(model);
 
         // Act
-        var result = await _service.UpdateStatusAsync(id, DocumentFileStatus.Parsing, externalTaskId: "task-123");
+        var result = await _service.UpdateStatusAsync(id, DocumentParseStatus.Parsing, externalTaskId: "task-123");
 
         // Assert
-        result.Status.Should().Be(DocumentFileStatus.Parsing);
+        result.Status.Should().Be(DocumentParseStatus.Parsing);
         result.ExternalTaskId.Should().Be("task-123");
-        result.UpdatedAt.Should().BeCloseTo(DateTimeOffset.UtcNow, TimeSpan.FromSeconds(5));
-        _fileRepoMock.Verify(r => r.UpdateAsync(It.Is<DocumentFileModel>(m =>
-            m.Status == DocumentFileStatus.Parsing && m.ExternalTaskId == "task-123")), Times.Once);
+        _parseRepoMock.Verify(r => r.UpdateAsync(It.Is<DocumentParseModel>(m =>
+            m.Status == DocumentParseStatus.Parsing && m.ExternalTaskId == "task-123")), Times.Once);
     }
 
     [Fact]
@@ -143,12 +202,12 @@ public class DocumentFileServiceTests
     {
         // Arrange
         var id = Guid.NewGuid();
-        var model = new DocumentFileModel { Id = id, Status = DocumentFileStatus.Parsing };
-        _fileRepoMock.Setup(r => r.GetByIdAsync(id)).ReturnsAsync(model);
-        _fileRepoMock.Setup(r => r.UpdateAsync(It.IsAny<DocumentFileModel>())).ReturnsAsync(true);
+        var model = new DocumentParseModel { Id = id, Status = DocumentParseStatus.Parsing };
+        _parseRepoMock.Setup(r => r.GetByIdAsync(id)).ReturnsAsync(model);
+        _parseRepoMock.Setup(r => r.UpdateAsync(It.IsAny<DocumentParseModel>())).ReturnsAsync(model);
 
         // Act
-        var result = await _service.UpdateStatusAsync(id, DocumentFileStatus.Parsed, markdownContent: "# Hello");
+        var result = await _service.UpdateStatusAsync(id, DocumentParseStatus.Parsed, markdownContent: "# Hello");
 
         // Assert
         result.ParsedAt.Should().BeCloseTo(DateTimeOffset.UtcNow, TimeSpan.FromSeconds(5));
@@ -160,10 +219,10 @@ public class DocumentFileServiceTests
     {
         // Arrange
         var id = Guid.NewGuid();
-        _fileRepoMock.Setup(r => r.GetByIdAsync(id)).ReturnsAsync((DocumentFileModel?)null);
+        _parseRepoMock.Setup(r => r.GetByIdAsync(id)).ReturnsAsync((DocumentParseModel?)null);
 
         // Act
-        var act = () => _service.UpdateStatusAsync(id, DocumentFileStatus.Parsing);
+        var act = () => _service.UpdateStatusAsync(id, DocumentParseStatus.Parsing);
 
         // Assert
         await act.Should().ThrowAsync<KeyNotFoundException>().WithMessage($"*{id}*");
@@ -174,64 +233,47 @@ public class DocumentFileServiceTests
     {
         // Arrange
         var id = Guid.NewGuid();
-        var model = new DocumentFileModel { Id = id, Status = DocumentFileStatus.Parsing };
-        _fileRepoMock.Setup(r => r.GetByIdAsync(id)).ReturnsAsync(model);
-        _fileRepoMock.Setup(r => r.UpdateAsync(It.IsAny<DocumentFileModel>())).ReturnsAsync(true);
+        var model = new DocumentParseModel { Id = id, Status = DocumentParseStatus.Parsing };
+        _parseRepoMock.Setup(r => r.GetByIdAsync(id)).ReturnsAsync(model);
+        _parseRepoMock.Setup(r => r.UpdateAsync(It.IsAny<DocumentParseModel>())).ReturnsAsync(model);
 
         // Act
-        var result = await _service.UpdateStatusAsync(id, DocumentFileStatus.ParseFailed, errorMessage: "Parse error");
+        var result = await _service.UpdateStatusAsync(id, DocumentParseStatus.Failed, errorMessage: "Parse error");
 
         // Assert
         result.ErrorMessage.Should().Be("Parse error");
     }
 
     [Fact]
-    public async Task DeleteAsync_DeletesImagesFirstThenFile()
+    public async Task GetPendingJobsAsync_ReturnsOnlyPendingJobs()
     {
         // Arrange
-        var id = Guid.NewGuid();
-        _imageRepoMock.Setup(r => r.DeleteByDocumentFileIdAsync(id)).Returns(Task.CompletedTask);
-        _fileRepoMock.Setup(r => r.DeleteAsync(id)).ReturnsAsync(true);
-
-        // Act
-        var result = await _service.DeleteAsync(id);
-
-        // Assert
-        result.Should().BeTrue();
-        _imageRepoMock.Verify(r => r.DeleteByDocumentFileIdAsync(id), Times.Once);
-        _fileRepoMock.Verify(r => r.DeleteAsync(id), Times.Once);
-    }
-
-    [Fact]
-    public async Task GetPendingParseJobsAsync_ReturnsOnlyPendingParseJobs()
-    {
-        // Arrange
-        var items = new List<DocumentFileModel>
+        var items = new List<DocumentParseModel>
         {
-            new() { Id = Guid.NewGuid(), Status = DocumentFileStatus.PendingParse },
+            new() { Id = Guid.NewGuid(), Status = DocumentParseStatus.Pending },
         };
-        _fileRepoMock.Setup(r => r.GetByStatusAsync(DocumentFileStatus.PendingParse))
+        _parseRepoMock.Setup(r => r.GetByStatusAsync(DocumentParseStatus.Pending))
             .ReturnsAsync(items);
 
         // Act
-        var result = await _service.GetPendingParseJobsAsync();
+        var result = await _service.GetPendingJobsAsync();
 
         // Assert
         result.Should().HaveCount(1);
-        result[0].Status.Should().Be(DocumentFileStatus.PendingParse);
+        result[0].Status.Should().Be(DocumentParseStatus.Pending);
     }
 
     [Fact]
     public async Task AddImageAsync_CallsRepository()
     {
         // Arrange
-        var image = new DocumentFileImageModel
+        var image = new DocumentParseImageModel
         {
-            DocumentFileId = Guid.NewGuid(),
+            ParseId = Guid.NewGuid(),
             ImageName = "img1.jpg",
             ImagePath = "docretrieval-images/abc/img1.jpg",
         };
-        _imageRepoMock.Setup(r => r.AddAsync(image)).Returns(Task.CompletedTask);
+        _imageRepoMock.Setup(r => r.AddAsync(image)).ReturnsAsync(image);
 
         // Act
         await _service.AddImageAsync(image);
@@ -241,21 +283,39 @@ public class DocumentFileServiceTests
     }
 
     [Fact]
+    public async Task GetImagesByParseIdAsync_ReturnsImages()
+    {
+        // Arrange
+        var parseId = Guid.NewGuid();
+        var images = new List<DocumentParseImageModel>
+        {
+            new() { Id = Guid.NewGuid(), ParseId = parseId, ImageName = "img1.jpg" },
+            new() { Id = Guid.NewGuid(), ParseId = parseId, ImageName = "img2.png" },
+        };
+        _imageRepoMock.Setup(r => r.GetByParseIdAsync(parseId)).ReturnsAsync(images);
+
+        // Act
+        var result = await _service.GetImagesByParseIdAsync(parseId);
+
+        // Assert
+        result.Should().HaveCount(2);
+    }
+
+    [Fact]
     public async Task GetImagesByFileIdAsync_ReturnsImages()
     {
         // Arrange
         var fileId = Guid.NewGuid();
-        var images = new List<DocumentFileImageModel>
+        var images = new List<DocumentParseImageModel>
         {
-            new() { Id = Guid.NewGuid(), DocumentFileId = fileId, ImageName = "img1.jpg" },
-            new() { Id = Guid.NewGuid(), DocumentFileId = fileId, ImageName = "img2.png" },
+            new() { Id = Guid.NewGuid(), ParseId = Guid.NewGuid(), ImageName = "img1.jpg" },
         };
-        _imageRepoMock.Setup(r => r.GetByDocumentFileIdAsync(fileId)).ReturnsAsync(images);
+        _imageRepoMock.Setup(r => r.GetByFileIdAsync(fileId)).ReturnsAsync(images);
 
         // Act
         var result = await _service.GetImagesByFileIdAsync(fileId);
 
         // Assert
-        result.Should().HaveCount(2);
+        result.Should().HaveCount(1);
     }
 }

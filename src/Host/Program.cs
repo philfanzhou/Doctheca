@@ -89,13 +89,15 @@ builder.Services.AddScoped<IQuestionSegmentRepository, QuestionSegmentRepository
 builder.Services.AddScoped<IDocumentOccurrenceRepository, DocumentOccurrenceRepository>();
 builder.Services.AddScoped<IDocumentIngestionJobRepository, DocumentIngestionJobRepository>();
 builder.Services.AddScoped<IDocumentFileRepository, DocumentFileRepository>();
-builder.Services.AddScoped<IDocumentFileImageRepository, DocumentFileImageRepository>();
+builder.Services.AddScoped<IDocumentParseRepository, DocumentParseRepository>();
+builder.Services.AddScoped<IDocumentParseImageRepository, DocumentParseImageRepository>();
 builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
 
 // Domain Services
 builder.Services.AddScoped<IDocumentDomainService, DocumentDomainService>();
 builder.Services.AddScoped<ISearchDomainService, SearchDomainService>();
 builder.Services.AddScoped<IDocumentFileService, DocumentFileService>();
+builder.Services.AddScoped<IDocumentParseService, DocumentParseService>();
 builder.Services.AddScoped<IDocumentParserService>(sp =>
 {
     var logger = sp.GetRequiredService<ILogger<DocumentParserService>>();
