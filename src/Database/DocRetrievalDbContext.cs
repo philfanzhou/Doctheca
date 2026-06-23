@@ -16,6 +16,8 @@ public class DocRetrievalDbContext : DbContext
     public DbSet<DocumentOccurrenceEntity> DocumentOccurrences { get; set; } = null!;
     public DbSet<DocumentIngestionJobEntity> DocumentIngestionJobs { get; set; } = null!;
     public DbSet<DocumentSegmentBackupEntity> DocumentSegmentBackups { get; set; } = null!;
+    public DbSet<DocumentFileEntity> DocumentFiles { get; set; } = null!;
+    public DbSet<DocumentFileImageEntity> DocumentFileImages { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -107,6 +109,21 @@ public class DocRetrievalDbContext : DbContext
             entity.HasOne(e => e.Document)
                 .WithMany()
                 .HasForeignKey(e => e.DocumentId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<DocumentFileEntity>(entity =>
+        {
+            entity.HasIndex(e => e.Status);
+        });
+
+        modelBuilder.Entity<DocumentFileImageEntity>(entity =>
+        {
+            entity.HasIndex(e => e.DocumentFileId);
+
+            entity.HasOne(e => e.DocumentFile)
+                .WithMany()
+                .HasForeignKey(e => e.DocumentFileId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
     }

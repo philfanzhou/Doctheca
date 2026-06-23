@@ -142,6 +142,35 @@ export interface ConsistencyScanResult {
   }
 }
 
+export interface DocumentFile {
+  id: string
+  fileName: string
+  fileSize: number
+  contentType: string
+  status: string
+  errorMessage: string | null
+  createdBy: string | null
+  createdAt: string
+  parsedAt: string | null
+}
+
+export interface DocumentFileDetail {
+  id: string
+  fileName: string
+  fileSize: number
+  contentType: string
+  status: string
+  markdownContent: string | null
+  errorMessage: string | null
+  images: Array<{
+    id: string
+    imageName: string
+    imageUrl: string
+  }>
+  createdAt: string
+  parsedAt: string | null
+}
+
 class DocApiClient {
   private client: ReturnType<typeof createAuthenticatedClient>
 
@@ -279,6 +308,47 @@ class DocApiClient {
     image_count: number
   }>> {
     const response = await this.client.get(`/admin/documents/mineru/download/${taskId}`)
+    return response.data
+  }
+
+  // ========== Document Files (Persistent MinerU Flow) ==========
+
+  async uploadDocumentFile(
+    file: File,
+    onUploadProgress?: (progressEvent: { loaded: number; total?: number }) => void
+  ): Promise<ApiResponse<{ id: string; fileName: string; fileSize: number; status: string }>> {
+    const formData = new FormData()
+    formData.append('file', file)
+    const response = await this.client.post('/admin/document-files/upload', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      onUploadProgress
+    })
+    return response.data
+  }
+
+  async listDocumentFiles(
+    page: number = 1,
+    pageSize: number = 20,
+    status?: string
+  ): Promise<DocPagedResponse<DocumentFile>> {
+    const params: Record<string, unknown> = { page, pageSize }
+    if (status) params.status = status
+    const response = await this.client.get('/admin/document-files', { params })
+    return response.data
+  }
+
+  async getDocumentFile(id: string): Promise<ApiResponse<DocumentFileDetail>> {
+    const response = await this.client.get(`/admin/document-files/${id}`)
+    return response.data
+  }
+
+  async parseDocumentFile(id: string): Promise<ApiResponse<{ id: string; status: string }>> {
+    const response = await this.client.post(`/admin/document-files/${id}/parse`)
+    return response.data
+  }
+
+  async deleteDocumentFile(id: string): Promise<ApiResponse<{ id: string; deleted: boolean }>> {
+    const response = await this.client.delete(`/admin/document-files/${id}`)
     return response.data
   }
 }

@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using Ruoyu.Study.DocRetrieval.Database;
@@ -11,9 +12,11 @@ using Ruoyu.Study.DocRetrieval.Database;
 namespace Ruoyu.Study.DocRetrieval.Database.Migrations
 {
     [DbContext(typeof(DocRetrievalDbContext))]
-    partial class DocRetrievalDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260623034527_AddDocumentFiles")]
+    partial class AddDocumentFiles
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

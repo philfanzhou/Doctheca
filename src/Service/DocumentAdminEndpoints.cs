@@ -11,6 +11,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Ruoyu.Study.Common.Oss;
 using Ruoyu.Study.DocRetrieval.Database;
 using Ruoyu.Study.DocRetrieval.Database.Entities;
@@ -59,6 +60,17 @@ public static class DocumentAdminEndpoints
             .WithMetadata(new RequestSizeLimitAttribute(200 * 1024 * 1024));
         group.MapGet("/mineru/status/{taskId}", MinerUCheckStatus);
         group.MapGet("/mineru/download/{taskId}", MinerUDownloadResult);
+
+        // Document Files endpoints (persistent MinerU flow)
+        var fileGroup = app.MapGroup("/admin/document-files")
+            .RequireAuthorization();
+
+        fileGroup.MapPost("/upload", UploadDocumentFile)
+            .WithMetadata(new RequestSizeLimitAttribute(200 * 1024 * 1024));
+        fileGroup.MapGet("/", ListDocumentFiles);
+        fileGroup.MapGet("/{id:guid}", GetDocumentFile);
+        fileGroup.MapPost("/{id:guid}/parse", ParseDocumentFile);
+        fileGroup.MapDelete("/{id:guid}", DeleteDocumentFile);
 
         return app;
     }
@@ -914,7 +926,7 @@ public static class DocumentAdminEndpoints
             if (string.IsNullOrEmpty(fullZipUrl))
                 return Results.Json(new { success = false, message = "No full_zip_url in response" }, statusCode: StatusCodes.Status502BadGateway);
 
-            var (markdown, imageCount) = await minerUClient.DownloadAndProcessZipAsync(fullZipUrl, taskId, ossService);
+            var (markdown, imageMetadataList) = await minerUClient.DownloadAndProcessZipAsync(fullZipUrl, taskId, ossService);
 
             return Results.Ok(new
             {
@@ -924,7 +936,7 @@ public static class DocumentAdminEndpoints
                     task_id = taskId,
                     markdown,
                     markdown_length = markdown.Length,
-                    image_count = imageCount,
+                    image_count = imageMetadataList.Count,
                 }
             });
         }
@@ -933,5 +945,252 @@ public static class DocumentAdminEndpoints
             logger.LogWarning(ex, "MinerU download failed for task {TaskId}", taskId);
             return Results.Json(new { success = false, message = ex.Message }, statusCode: StatusCodes.Status502BadGateway);
         }
+    }
+
+    // ===== Document Files (Persistent MinerU Flow) =====
+
+    private static readonly string[] DocumentFileMimeTypes =
+    [
+        "application/pdf",
+        "application/msword",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "application/vnd.ms-powerpoint",
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+    ];
+
+    private static async Task<IResult> UploadDocumentFile(
+        HttpRequest request,
+        IDocumentFileService fileService,
+        IOssService ossService,
+        [FromServices] ILoggerFactory loggerFactory)
+    {
+        var logger = loggerFactory.CreateLogger("DocumentAdminEndpoints");
+
+        if (!request.HasFormContentType)
+            return Results.BadRequest(new { success = false, message = "Request must be multipart/form-data" });
+
+        var form = await request.ReadFormAsync();
+        var file = form.Files.GetFile("file");
+        if (file == null || file.Length == 0)
+            return Results.BadRequest(new { success = false, message = "File cannot be empty", errorCode = "DOCRETRIEVAL_FILE_REQUIRED" });
+
+        if (file.Length > MaxFileSize)
+            return Results.BadRequest(new { success = false, message = "File size exceeds 200MB limit" });
+
+        if (!DocumentFileMimeTypes.Contains(file.ContentType))
+            return Results.BadRequest(new { success = false, message = "Unsupported file format", errorCode = "DOCRETRIEVAL_FILE_FORMAT_UNSUPPORTED" });
+
+        string filePath;
+        using (var stream = file.OpenReadStream())
+        {
+            var ext = Path.GetExtension(file.FileName) ?? ".bin";
+            var objectName = $"docretrieval-files/{Guid.NewGuid()}{ext}";
+            filePath = await ossService.UploadAsync(stream, objectName, file.ContentType, OssBucket.Documents, "docretrieval-files");
+        }
+
+        var createdBy = Guid.TryParse(
+            request.HttpContext.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value,
+            out var uid) ? uid : (Guid?)null;
+
+        var model = new DocumentFileModel
+        {
+            FileName = file.FileName,
+            FilePath = filePath,
+            FileSize = file.Length,
+            ContentType = file.ContentType,
+            CreatedBy = createdBy,
+        };
+
+        var created = await fileService.CreateAsync(model);
+
+        logger.LogInformation("Document file uploaded: {Id}, FileName={FileName}", created.Id, created.FileName);
+
+        return Results.Ok(new
+        {
+            success = true,
+            data = new
+            {
+                id = created.Id.ToString(),
+                fileName = created.FileName,
+                fileSize = created.FileSize,
+                status = created.Status,
+            }
+        });
+    }
+
+    private static async Task<IResult> ListDocumentFiles(
+        IDocumentFileService fileService,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20,
+        [FromQuery] string? status = null)
+    {
+        var (items, totalCount) = await fileService.GetListAsync(page, pageSize, status);
+
+        return Results.Ok(new
+        {
+            success = true,
+            data = items.Select(f => new
+            {
+                id = f.Id.ToString(),
+                fileName = f.FileName,
+                fileSize = f.FileSize,
+                contentType = f.ContentType,
+                status = f.Status,
+                errorMessage = f.ErrorMessage,
+                createdBy = f.CreatedBy?.ToString(),
+                createdAt = f.CreatedAt.UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'"),
+                parsedAt = f.ParsedAt?.UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'"),
+            }),
+            total = totalCount,
+            page,
+            pageSize,
+            totalPages = (totalCount + pageSize - 1) / pageSize
+        });
+    }
+
+    private static async Task<IResult> GetDocumentFile(
+        Guid id,
+        IDocumentFileService fileService,
+        IOssService ossService,
+        [FromServices] ILoggerFactory loggerFactory)
+    {
+        var logger = loggerFactory.CreateLogger("DocumentAdminEndpoints");
+
+        var file = await fileService.GetByIdAsync(id);
+        if (file == null)
+            return Results.NotFound(new { success = false, message = "File not found", errorCode = "DOCRETRIEVAL_FILE_NOT_FOUND" });
+
+        // Get associated images
+        var images = await fileService.GetImagesByFileIdAsync(id);
+
+        // Replace markdown image paths with presigned URLs
+        var markdownContent = file.MarkdownContent;
+        if (!string.IsNullOrEmpty(markdownContent))
+        {
+            foreach (var img in images)
+            {
+                try
+                {
+                    var presignedUrl = await ossService.GetPresignedUrlAsync(img.ImagePath, 3600);
+                    markdownContent = markdownContent.Replace($"({img.ImagePath})", $"({presignedUrl})");
+                    // Also try replacing by image name for relative paths
+                    markdownContent = markdownContent.Replace($"(images/{img.ImageName})", $"({presignedUrl})");
+                    markdownContent = markdownContent.Replace($"src=\"{img.ImagePath}\"", $"src=\"{presignedUrl}\"");
+                    markdownContent = markdownContent.Replace($"src=\"images/{img.ImageName}\"", $"src=\"{presignedUrl}\"");
+                }
+                catch (Exception ex)
+                {
+                    logger.LogWarning(ex, "Failed to generate presigned URL for image: {ImagePath}", img.ImagePath);
+                }
+            }
+        }
+
+        // Build image list with presigned URLs
+        var imageList = new List<object>();
+        foreach (var img in images)
+        {
+            try
+            {
+                var presignedUrl = await ossService.GetPresignedUrlAsync(img.ImagePath, 3600);
+                imageList.Add(new { id = img.Id.ToString(), imageName = img.ImageName, imageUrl = presignedUrl });
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Failed to generate presigned URL for image: {ImagePath}", img.ImagePath);
+                imageList.Add(new { id = img.Id.ToString(), imageName = img.ImageName, imageUrl = img.ImagePath });
+            }
+        }
+
+        return Results.Ok(new
+        {
+            success = true,
+            data = new
+            {
+                id = file.Id.ToString(),
+                fileName = file.FileName,
+                fileSize = file.FileSize,
+                contentType = file.ContentType,
+                status = file.Status,
+                markdownContent,
+                errorMessage = file.ErrorMessage,
+                images = imageList,
+                createdAt = file.CreatedAt.UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'"),
+                parsedAt = file.ParsedAt?.UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'"),
+            }
+        });
+    }
+
+    private static async Task<IResult> ParseDocumentFile(
+        Guid id,
+        IDocumentFileService fileService,
+        [FromServices] IOptions<MinerUOptions> minerUOptions,
+        [FromServices] ILoggerFactory loggerFactory)
+    {
+        var logger = loggerFactory.CreateLogger("DocumentAdminEndpoints");
+
+        var file = await fileService.GetByIdAsync(id);
+        if (file == null)
+            return Results.NotFound(new { success = false, message = "File not found", errorCode = "DOCRETRIEVAL_FILE_NOT_FOUND" });
+
+        if (file.Status != DocumentFileStatus.Uploaded && file.Status != DocumentFileStatus.ParseFailed)
+            return Results.Json(new { success = false, message = "File is not in a parseable state", errorCode = "DOCRETRIEVAL_FILE_NOT_PARSEABLE" }, statusCode: StatusCodes.Status422UnprocessableEntity);
+
+        if (string.IsNullOrEmpty(minerUOptions.Value.ApiToken))
+            return Results.Json(new { success = false, message = "MinerU API Token not configured", errorCode = "DOCRETRIEVAL_MINERU_NOT_CONFIGURED" }, statusCode: StatusCodes.Status503ServiceUnavailable);
+
+        await fileService.UpdateStatusAsync(id, DocumentFileStatus.PendingParse);
+        logger.LogInformation("Document file parse requested: {Id}", id);
+
+        return Results.Ok(new
+        {
+            success = true,
+            data = new { id = id.ToString(), status = DocumentFileStatus.PendingParse }
+        });
+    }
+
+    private static async Task<IResult> DeleteDocumentFile(
+        Guid id,
+        IDocumentFileService fileService,
+        IOssService ossService,
+        [FromServices] ILoggerFactory loggerFactory)
+    {
+        var logger = loggerFactory.CreateLogger("DocumentAdminEndpoints");
+
+        var file = await fileService.GetByIdAsync(id);
+        if (file == null)
+            return Results.NotFound(new { success = false, message = "File not found", errorCode = "DOCRETRIEVAL_FILE_NOT_FOUND" });
+
+        // Delete associated images from S3
+        var images = await fileService.GetImagesByFileIdAsync(id);
+        foreach (var img in images)
+        {
+            try
+            {
+                await ossService.DeleteAsync(img.ImagePath);
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Failed to delete image from OSS: {ImagePath}", img.ImagePath);
+            }
+        }
+
+        // Delete source file from S3
+        try
+        {
+            await ossService.DeleteAsync(file.FilePath);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Failed to delete file from OSS: {FilePath}", file.FilePath);
+        }
+
+        // Delete database records (cascade: images first, then file)
+        await fileService.DeleteAsync(id);
+
+        return Results.Ok(new
+        {
+            success = true,
+            data = new { id = id.ToString(), deleted = true }
+        });
     }
 }

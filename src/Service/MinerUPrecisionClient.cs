@@ -145,10 +145,10 @@ public class MinerUPrecisionClient
 
     /// <summary>
     /// Download ZIP, extract Markdown and images, upload images to OSS,
-    /// replace relative image paths in Markdown with OSS presigned URLs.
-    /// Returns the processed Markdown content and image count.
+    /// replace relative image paths in Markdown with S3 paths.
+    /// Returns the processed Markdown content and image metadata list.
     /// </summary>
-    public async Task<(string Markdown, int ImageCount)> DownloadAndProcessZipAsync(
+    public async Task<(string Markdown, List<ImageMetadata> Images)> DownloadAndProcessZipAsync(
         string zipUrl, string taskId, IOssService ossService, CancellationToken ct = default)
     {
         _logger.LogInformation("Downloading ZIP from MinerU: {Url}", zipUrl);
@@ -183,17 +183,17 @@ public class MinerUPrecisionClient
 
         if (imageEntries.Count == 0)
         {
-            return (markdown, 0);
+            return (markdown, []);
         }
 
-        // Upload images to OSS and build replacement map
+        // Upload images to OSS and build replacement map (relative path -> S3 path)
         var imageFolder = $"mineru/{taskId}";
         var replacementMap = new Dictionary<string, string>();
+        var imageMetadataList = new List<ImageMetadata>();
 
         foreach (var imgEntry in imageEntries)
         {
             var imgName = imgEntry.Name; // e.g., "abc123.jpg"
-            var ossKey = $"{imageFolder}/{imgName}";
 
             using var imgStream = imgEntry.Open();
             using var ms = new MemoryStream();
@@ -206,25 +206,25 @@ public class MinerUPrecisionClient
 
             var ossPath = await ossService.UploadAsync(imgBytes, imgName, contentType, OssBucket.Documents, $"mineru/{taskId}");
 
-            var presignedUrl = await ossService.GetPresignedUrlAsync(ossPath, 3600);
+            // Map relative path to S3 path (not presigned URL)
+            replacementMap[$"images/{imgName}"] = ossPath;
 
-            // Map relative path to presigned URL
-            replacementMap[$"images/{imgName}"] = presignedUrl;
+            imageMetadataList.Add(new ImageMetadata(imgName, ossPath, contentType, imgBytes.Length));
 
-            _logger.LogDebug("Image uploaded: {Name} -> {Url}", imgName, presignedUrl);
+            _logger.LogDebug("Image uploaded: {Name} -> {Path}", imgName, ossPath);
         }
 
-        // Replace relative image paths in Markdown
-        foreach (var (relativePath, ossUrl) in replacementMap)
+        // Replace relative image paths in Markdown with S3 paths
+        foreach (var (relativePath, s3Path) in replacementMap)
         {
             // Match: ![alt](images/xxx.jpg) or <img src="images/xxx.jpg"/>
-            markdown = markdown.Replace($"({relativePath})", $"({ossUrl})");
-            markdown = markdown.Replace($"src=\"{relativePath}\"", $"src=\"{ossUrl}\"");
+            markdown = markdown.Replace($"({relativePath})", $"({s3Path})");
+            markdown = markdown.Replace($"src=\"{relativePath}\"", $"src=\"{s3Path}\"");
         }
 
-        _logger.LogInformation("Markdown processed: {ImageCount} images replaced with OSS URLs", replacementMap.Count);
+        _logger.LogInformation("Markdown processed: {ImageCount} images replaced with S3 paths", replacementMap.Count);
 
-        return (markdown, replacementMap.Count);
+        return (markdown, imageMetadataList);
     }
 }
 

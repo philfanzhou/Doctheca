@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { ElMessage, type UploadUserFile } from 'element-plus'
 import { Upload } from '@element-plus/icons-vue'
 import { marked } from 'marked'
@@ -12,7 +12,9 @@ import {
   type DocumentSegmentsData,
   type SegmentDto,
   type CorrectionDto,
-  type ConsistencyScanResult
+  type ConsistencyScanResult,
+  type DocumentFile,
+  type DocumentFileDetail
 } from './services/docApi'
 import { authService } from './services/authService'
 import LoginPage from './components/LoginPage.vue'
@@ -91,6 +93,172 @@ let mineruPollTimer: number | null = null
 const mineruRenderedHtml = computed(() => {
   if (!mineruMarkdown.value) return ''
   return marked.parse(mineruMarkdown.value, { async: false }) as string
+})
+
+// ===== File Management =====
+const fileList = ref<DocumentFile[]>([])
+const fileTotal = ref(0)
+const filePage = ref(1)
+const filePageSize = ref(20)
+const selectedFileDetail = ref<DocumentFileDetail | null>(null)
+const fileUploadInput = ref<HTMLInputElement | null>(null)
+const fileParsing = ref(false)
+const fileUploading = ref(false)
+const fileUploadProgress = ref(0)
+const filePollTimer = ref<number | null>(null)
+
+async function loadFileList() {
+  try {
+    const response = await client.listDocumentFiles(filePage.value, filePageSize.value)
+    fileList.value = response.data as DocumentFile[]
+    fileTotal.value = response.total
+  } catch (e) {
+    console.error('Failed to load file list', e)
+  }
+}
+
+function handleFilePageChange(newPage: number) {
+  filePage.value = newPage
+  loadFileList()
+}
+
+const fileTotalPages = computed(() => Math.ceil(fileTotal.value / filePageSize.value))
+
+function triggerFileUpload() {
+  fileUploadInput.value?.click()
+}
+
+async function handleFileUploadChange(event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file) return
+
+  fileUploading.value = true
+  fileUploadProgress.value = 0
+
+  try {
+    await client.uploadDocumentFile(file, (progressEvent) => {
+      if (progressEvent.total) {
+        fileUploadProgress.value = Math.round((progressEvent.loaded / progressEvent.total) * 100)
+      }
+    })
+
+    filePage.value = 1
+    await loadFileList()
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : 'Upload failed'
+    alert(msg)
+  } finally {
+    fileUploading.value = false
+    fileUploadProgress.value = 0
+  }
+
+  input.value = ''
+}
+
+async function handleParseFile(id: string) {
+  fileParsing.value = true
+  try {
+    await client.parseDocumentFile(id)
+    await loadFileList()
+    startFilePolling()
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : 'Parse request failed'
+    alert(msg)
+  } finally {
+    fileParsing.value = false
+  }
+}
+
+async function handleViewFile(id: string) {
+  try {
+    const response = await client.getDocumentFile(id)
+    selectedFileDetail.value = response.data as DocumentFileDetail
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : 'Failed to load file'
+    alert(msg)
+  }
+}
+
+async function handleDeleteFile(id: string) {
+  if (!confirm('确定删除此文件？')) return
+  try {
+    await client.deleteDocumentFile(id)
+    if (selectedFileDetail.value?.id === id) selectedFileDetail.value = null
+    // If last item on page deleted, go to previous page
+    if (fileList.value.length <= 1 && filePage.value > 1) {
+      filePage.value--
+    }
+    await loadFileList()
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : 'Delete failed'
+    alert(msg)
+  }
+}
+
+function startFilePolling() {
+  if (filePollTimer.value !== null) return
+  filePollTimer.value = window.setInterval(async () => {
+    await loadFileList()
+    const hasActive = fileList.value.some(f => f.status === 'pending_parse' || f.status === 'parsing')
+    if (!hasActive) {
+      stopFilePolling()
+    }
+  }, 5000)
+}
+
+function stopFilePolling() {
+  if (filePollTimer.value !== null) {
+    clearInterval(filePollTimer.value)
+    filePollTimer.value = null
+  }
+}
+
+function getFileStatusLabel(status: string): string {
+  const labels: Record<string, string> = {
+    uploaded: '已上传',
+    pending_parse: '等待解析',
+    parsing: '解析中',
+    parsed: '已解析',
+    parse_failed: '解析失败',
+  }
+  return labels[status] || status
+}
+
+function getFileStatusClass(status: string): string {
+  if (status === 'parsed') return 'status-success'
+  if (status === 'parse_failed') return 'status-error'
+  if (status === 'parsing' || status === 'pending_parse') return 'status-processing'
+  return 'status-pending'
+}
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return bytes + ' B'
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB'
+  return (bytes / 1024 / 1024).toFixed(1) + ' MB'
+}
+
+function formatTime(iso: string): string {
+  return new Date(iso).toLocaleString('zh-CN')
+}
+
+function renderMarkdown(content: string): string {
+  return marked.parse(content, { async: false }) as string
+}
+
+// Load file list when switching to files tab
+watch(activeTab, (tab) => {
+  if (tab === 'files') {
+    loadFileList()
+    const hasActive = fileList.value.some(f => f.status === 'pending_parse' || f.status === 'parsing')
+    if (hasActive) startFilePolling()
+  } else {
+    stopFilePolling()
+  }
+})
+
+onUnmounted(() => {
+  stopFilePolling()
 })
 
 const selectedDocument = ref<Document | null>(null)
@@ -174,6 +342,11 @@ const navItems = [
     key: 'mineru',
     label: 'MinerU 解析',
     icon: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>'
+  },
+  {
+    key: 'files',
+    label: '文件管理',
+    icon: '<path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/>'
   }
 ]
 
@@ -1412,6 +1585,88 @@ async function submitRefinement() {
             <div v-if="mineruError && !mineruPolling" style="margin-top: 16px; padding: 12px; background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; color: var(--danger); font-size: 13px">
               {{ mineruError }}
             </div>
+          </div>
+        </div>
+
+        <!-- Files Tab -->
+        <div v-if="activeTab === 'files'" class="page-header">
+          <h1 class="page-title">文件管理</h1>
+          <p class="page-subtitle">上传文件到 S3，触发 MinerU 解析，查看 Markdown 结果</p>
+        </div>
+
+        <div v-if="activeTab === 'files'" class="card">
+          <div class="card-header">
+            <span>文件列表</span>
+            <div style="display: flex; align-items: center; gap: 12px">
+              <button class="btn btn-primary btn-small" :disabled="fileUploading" @click="triggerFileUpload">
+                {{ fileUploading ? '上传中...' : '上传文件' }}
+              </button>
+              <input ref="fileUploadInput" type="file" accept=".pdf,.docx,.doc,.pptx,.ppt" style="display: none" @change="handleFileUploadChange" />
+            </div>
+          </div>
+          <div class="card-body">
+            <!-- Upload Progress -->
+            <div v-if="fileUploading" style="margin-bottom: 16px">
+              <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px">
+                <span style="font-size: 12px; color: var(--text-secondary)">上传中...</span>
+                <span style="font-size: 12px; color: var(--primary)">{{ fileUploadProgress }}%</span>
+              </div>
+              <div style="height: 6px; background: var(--bg-secondary); border-radius: 3px; overflow: hidden">
+                <div style="height: 100%; background: var(--primary); border-radius: 3px; transition: width 0.3s" :style="{ width: fileUploadProgress + '%' }"></div>
+              </div>
+            </div>
+
+            <table v-if="fileList.length > 0" class="data-table">
+              <thead>
+                <tr>
+                  <th>文件名</th>
+                  <th>大小</th>
+                  <th>状态</th>
+                  <th>上传时间</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="f in fileList" :key="f.id">
+                  <td>{{ f.fileName }}</td>
+                  <td>{{ formatFileSize(f.fileSize) }}</td>
+                  <td>
+                    <span class="status-badge" :class="getFileStatusClass(f.status)">{{ getFileStatusLabel(f.status) }}</span>
+                  </td>
+                  <td>{{ formatTime(f.createdAt) }}</td>
+                  <td style="display: flex; gap: 6px">
+                    <button v-if="f.status === 'uploaded' || f.status === 'parse_failed'" class="btn btn-primary btn-small" @click="handleParseFile(f.id)" :disabled="fileParsing">解析</button>
+                    <button v-if="f.status === 'parsed'" class="btn btn-secondary btn-small" @click="handleViewFile(f.id)">查看</button>
+                    <button class="btn btn-secondary btn-small" style="color: var(--danger)" @click="handleDeleteFile(f.id)">删除</button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+            <div v-else style="text-align: center; padding: 40px; color: var(--text-muted)">暂无文件，点击上方按钮上传</div>
+
+            <!-- Pagination -->
+            <div v-if="fileTotal > filePageSize" class="pagination-bar">
+              <span class="pagination-info">共 {{ fileTotal }} 条</span>
+              <button class="page-btn" :disabled="filePage <= 1" @click="handleFilePageChange(filePage - 1)">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6" /></svg>
+              </button>
+              <button v-for="p in fileTotalPages" :key="p" class="page-btn" :class="{ active: filePage === p }" @click="handleFilePageChange(p)">{{ p }}</button>
+              <button class="page-btn" :disabled="filePage >= fileTotalPages" @click="handleFilePageChange(filePage + 1)">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6" /></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- File Detail Dialog -->
+        <div v-if="selectedFileDetail" class="card" style="margin-top: 16px">
+          <div class="card-header">
+            <span>{{ selectedFileDetail.fileName }} — Markdown 预览</span>
+            <button class="btn btn-secondary btn-small" @click="selectedFileDetail = null">关闭</button>
+          </div>
+          <div class="card-body">
+            <div v-if="selectedFileDetail.markdownContent" class="markdown-preview" v-html="renderMarkdown(selectedFileDetail.markdownContent)"></div>
+            <div v-else style="text-align: center; padding: 40px; color: var(--text-muted)">暂无 Markdown 内容</div>
           </div>
         </div>
       </main>
