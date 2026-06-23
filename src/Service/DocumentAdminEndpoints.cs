@@ -1153,7 +1153,7 @@ public static class DocumentAdminEndpoints
         // Check if there's an active parse (pending or parsing)
         var latestParse = await parseService.GetLatestByFileIdAsync(id);
         if (latestParse != null && (latestParse.Status == DocumentParseStatus.Pending || latestParse.Status == DocumentParseStatus.Parsing))
-            return Results.Json(new { success = false, message = "File is not in a parseable state", errorCode = "DOCRETRIEVAL_FILE_NOT_PARSEABLE" }, statusCode: StatusCodes.Status422UnprocessableEntity);
+            return Results.Json(new { success = false, message = "File is not in a parseable state", errorCode = "DOCRETRIEVAL_PARSE_IN_PROGRESS" }, statusCode: StatusCodes.Status422UnprocessableEntity);
 
         if (string.IsNullOrEmpty(minerUOptions.Value.ApiToken))
             return Results.Json(new { success = false, message = "MinerU API Token not configured", errorCode = "DOCRETRIEVAL_MINERU_NOT_CONFIGURED" }, statusCode: StatusCodes.Status503ServiceUnavailable);

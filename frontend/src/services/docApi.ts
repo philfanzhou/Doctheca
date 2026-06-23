@@ -359,6 +359,33 @@ class DocApiClient {
   getExportHtmlUrl(id: string): string {
     return `/admin/document-files/${id}/export/html`
   }
+
+  async exportMarkdown(id: string): Promise<{ blob: Blob; fileName: string }> {
+    const response = await this.client.get(`/admin/document-files/${id}/export/markdown`, {
+      responseType: 'blob'
+    })
+    const fileName = extractFileName(response, 'document_markdown.zip')
+    return { blob: response.data as Blob, fileName }
+  }
+
+  async exportHtml(id: string): Promise<{ blob: Blob; fileName: string }> {
+    const response = await this.client.get(`/admin/document-files/${id}/export/html`, {
+      responseType: 'blob'
+    })
+    const fileName = extractFileName(response, 'document.html')
+    return { blob: response.data as Blob, fileName }
+  }
+}
+
+function extractFileName(response: { headers: Record<string, unknown> }, fallback: string): string {
+  const disposition = response.headers['content-disposition'] as string | undefined
+  if (disposition) {
+    const match = disposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/)
+    if (match && match[1]) {
+      return match[1].replace(/['"]/g, '')
+    }
+  }
+  return fallback
 }
 
 export function createDocApiClient(): DocApiClient {

@@ -196,14 +196,38 @@ async function handleDeleteFile(id: string) {
   }
 }
 
-function handleExportMarkdown(id: string) {
-  const url = client.getExportMarkdownUrl(id)
-  window.open(url, '_blank')
+async function handleExportMarkdown(id: string) {
+  try {
+    const { blob, fileName } = await client.exportMarkdown(id)
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = fileName
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : 'Export failed'
+    alert(msg)
+  }
 }
 
-function handleExportHtml(id: string) {
-  const url = client.getExportHtmlUrl(id)
-  window.open(url, '_blank')
+async function handleExportHtml(id: string) {
+  try {
+    const { blob, fileName } = await client.exportHtml(id)
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = fileName
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : 'Export failed'
+    alert(msg)
+  }
 }
 
 function startFilePolling() {
