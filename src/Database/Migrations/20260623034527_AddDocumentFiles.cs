@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
@@ -11,26 +11,6 @@ namespace Ruoyu.Study.DocRetrieval.Database.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.AddColumn<Guid>(
-                name: "created_by",
-                table: "documents",
-                type: "uuid",
-                nullable: true);
-
-            migrationBuilder.AddColumn<int>(
-                name: "progress",
-                table: "document_ingestion_jobs",
-                type: "integer",
-                nullable: false,
-                defaultValue: 0);
-
-            migrationBuilder.AddColumn<string>(
-                name: "progress_stage",
-                table: "document_ingestion_jobs",
-                type: "character varying(50)",
-                maxLength: 50,
-                nullable: true);
-
             migrationBuilder.CreateTable(
                 name: "document_files",
                 columns: table => new
@@ -96,18 +76,6 @@ namespace Ruoyu.Study.DocRetrieval.Database.Migrations
 
             migrationBuilder.DropTable(
                 name: "document_files");
-
-            migrationBuilder.DropColumn(
-                name: "created_by",
-                table: "documents");
-
-            migrationBuilder.DropColumn(
-                name: "progress",
-                table: "document_ingestion_jobs");
-
-            migrationBuilder.DropColumn(
-                name: "progress_stage",
-                table: "document_ingestion_jobs");
         }
     }
 }
