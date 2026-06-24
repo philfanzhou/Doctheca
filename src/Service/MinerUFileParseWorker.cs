@@ -39,6 +39,7 @@ public class MinerUFileParseWorker : BackgroundService
                 var pendingJobs = await parseService.GetPendingJobsAsync();
 
                 var pdfSplitService = scope.ServiceProvider.GetRequiredService<IPdfSplitService>();
+                var fileConversionService = scope.ServiceProvider.GetRequiredService<IFileConversionService>();
 
                 foreach (var job in pendingJobs)
                 {
@@ -46,7 +47,7 @@ public class MinerUFileParseWorker : BackgroundService
 
                     try
                     {
-                        await ProcessFileAsync(job, fileService, parseService, minerUClient, ossService, pdfSplitService, stoppingToken);
+                        await ProcessFileAsync(job, fileService, parseService, minerUClient, ossService, pdfSplitService, fileConversionService, stoppingToken);
                     }
                     catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
                     {
@@ -87,6 +88,7 @@ public class MinerUFileParseWorker : BackgroundService
         MinerUPrecisionClient minerUClient,
         IOssService ossService,
         IPdfSplitService pdfSplitService,
+        IFileConversionService fileConversionService,
         CancellationToken ct)
     {
         // Step 1: Update status to parsing
@@ -96,20 +98,65 @@ public class MinerUFileParseWorker : BackgroundService
         var file = await fileService.GetByIdAsync(parse.DocumentFileId)
             ?? throw new InvalidOperationException($"Document file not found: {parse.DocumentFileId}");
 
-        // Step 3: Download source file to check page count
-        using var sourceStream = await ossService.DownloadAsync(file.FilePath);
-        var pageCount = pdfSplitService.GetPageCount(sourceStream);
-        _logger.LogInformation("File {FileId} has {PageCount} pages", file.Id, pageCount);
+        // Step 3: Download source file
+        var sourceStream = await ossService.DownloadAsync(file.FilePath);
 
-        if (pageCount <= MaxPagesPerChunk)
+        // Step 4: Convert non-PDF files to PDF first
+        Stream pdfStream;
+        bool isConverted = false;
+
+        if (!file.ContentType.Equals("application/pdf", StringComparison.OrdinalIgnoreCase)
+            && !file.FileName.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase))
         {
-            // Small file: process directly (original flow)
-            await ProcessSingleFileAsync(parse, file, ossService, minerUClient, parseService, ct);
+            _logger.LogInformation("Non-PDF file detected: {FileName} ({ContentType}), converting to PDF", file.FileName, file.ContentType);
+
+            if (!fileConversionService.IsAvailable)
+            {
+                sourceStream.Dispose();
+                await parseService.UpdateStatusAsync(parse.Id, DocumentParseStatus.Failed,
+                    errorMessage: "LibreOffice is not installed. Cannot convert non-PDF files to PDF for parsing. Please install LibreOffice or upload PDF files only.");
+                return;
+            }
+
+            var convertedStream = await fileConversionService.ConvertToPdfAsync(sourceStream, file.FileName, ct);
+            sourceStream.Dispose();
+
+            if (convertedStream == null)
+            {
+                await parseService.UpdateStatusAsync(parse.Id, DocumentParseStatus.Failed,
+                    errorMessage: $"Failed to convert {file.FileName} to PDF. The file may be corrupted or in an unsupported format.");
+                return;
+            }
+
+            pdfStream = convertedStream;
+            isConverted = true;
+            _logger.LogInformation("Successfully converted {FileName} to PDF", file.FileName);
         }
         else
         {
-            // Large file: split, parse each chunk, merge results
-            await ProcessSplitFileAsync(parse, file, sourceStream, pageCount, pdfSplitService, ossService, minerUClient, parseService, ct);
+            pdfStream = sourceStream;
+        }
+
+        try
+        {
+            // Step 5: Check PDF page count
+            var pageCount = pdfSplitService.GetPageCount(pdfStream);
+            _logger.LogInformation("File {FileId} has {PageCount} pages (converted: {IsConverted})", file.Id, pageCount, isConverted);
+
+            if (pageCount <= MaxPagesPerChunk)
+            {
+                // Small file: process directly
+                await ProcessSingleFileAsync(parse, file, ossService, minerUClient, parseService, ct);
+            }
+            else
+            {
+                // Large file: split, parse each chunk, merge results
+                await ProcessSplitFileAsync(parse, file, pdfStream, pageCount, pdfSplitService, ossService, minerUClient, parseService, ct);
+            }
+        }
+        finally
+        {
+            pdfStream.Dispose();
         }
     }
 

@@ -338,29 +338,77 @@ MinerUFileParseWorker (BackgroundService, 每 5 秒轮询)
   │     ├─ 更新 status=parsing
   │     ├─ 查询关联的 document_file 获取 S3 路径
   │     ├─ 下载源文件到临时流
+  │     │
+  │     ├─ [非 PDF 文件]：格式转换
+  │     │   ├─ 调用 IFileConversionService.ConvertToPdfAsync
+  │     │   ├─ 使用 LibreOffice headless 转换为 PDF
+  │     │   └─ 转换失败 → 标记 failed，跳过后续步骤
+  │     │
   │     ├─ 检测 PDF 页数
   │     │
-  │     ├─ [页数 ≤ 200]：直接提交（原有流程）
-  │     │   ├─ 生成 S3 presigned URL
-  │     │   ├─ 调用 MinerUPrecisionClient.SubmitUrlAsync → 获取 task_id
-  │     │   ├─ 轮询 MinerU 状态
-  │     │   ├─ 下载 ZIP → 处理 Markdown + 图片
+  │     ├─ [页数 ≤ 200]：直接提交
+  │     │   ├─ 上传 PDF（转换后的或原始的）到 S3
+  │     │   ├─ 生成 presigned URL
+  │     │   ├─ 提交 MinerU → 轮询 → 下载 ZIP → 处理结果
   │     │   └─ 保存结果
   │     │
-  │     └─ [页数 > 200]：拆分解析（新流程）
+  │     └─ [页数 > 200]：拆分解析
   │         ├─ 将 PDF 按每 200 页拆分为 N 个子 PDF
   │         ├─ 上传每个子 PDF 到 S3（临时路径 mineru/splits/{parseId}/chunk_{i}.pdf）
-  │         ├─ 对每个子 PDF：
-  │         │   ├─ 生成 presigned URL
-  │         │   ├─ 提交 MinerU → 获取 task_id
-  │         │   ├─ 轮询直到完成/失败
-  │         │   └─ 下载 ZIP → 处理 Markdown + 图片
-  │         ├─ 合并所有子文档的 Markdown（按顺序拼接）
-  │         ├─ 合并所有子文档的图片元数据
+  │         ├─ 逐个提交 MinerU → 轮询 → 下载 ZIP → 处理结果
+  │         ├─ 合并所有子文档的 Markdown + 图片
   │         ├─ 删除 S3 上的临时子 PDF 文件
   │         └─ 保存合并结果为一条 parse 记录
   │
   └─ 3. 继续下一个 pending 任务
+```
+
+### 格式转换设计（IFileConversionService）
+
+非 PDF 文件（DOCX/PPTX）在解析前先转换为 PDF，统一后续处理流程。
+
+```csharp
+public interface IFileConversionService
+{
+    /// <summary>
+    /// Check if LibreOffice is available for conversion.
+    /// </summary>
+    bool IsAvailable { get; }
+
+    /// <summary>
+    /// Convert a non-PDF file stream to PDF.
+    /// Returns the converted PDF stream, or null if conversion fails.
+    /// </summary>
+    Task<Stream?> ConvertToPdfAsync(Stream sourceStream, string fileName, CancellationToken ct = default);
+}
+```
+
+#### LibreOffice headless 转换实现
+
+```csharp
+public class LibreOfficeConversionService : IFileConversionService
+{
+    // 调用: libreoffice --headless --convert-to pdf --outdir /tmp /tmp/source.docx
+    // 1. 将源文件写入临时文件
+    // 2. 启动 libreoffice --headless --convert-to pdf
+    // 3. 读取转换后的 PDF 文件
+    // 4. 清理临时文件
+    // 5. 返回 PDF 流
+}
+```
+
+#### 转换流程
+
+```
+非 PDF 文件 → IFileConversionService.ConvertToPdfAsync
+  │
+  ├─ 1. 检查 IsAvailable → 不可用则抛异常
+  ├─ 2. 将源文件写入 /tmp/{guid}/{fileName}
+  ├─ 3. 执行: libreoffice --headless --convert-to pdf --outdir /tmp/{guid} /tmp/{guid}/{fileName}
+  ├─ 4. 等待进程完成（超时 60 秒）
+  ├─ 5. 读取 /tmp/{guid}/{fileName_without_ext}.pdf
+  ├─ 6. 清理 /tmp/{guid}/ 目录
+  └─ 7. 返回 PDF 流
 ```
 
 ### 大文档拆分详细设计
@@ -484,6 +532,7 @@ GET /admin/document-parses/{parseId}/export/html
 | `IDocumentParseService` | 解析 CRUD、状态更新、列表、删除 | `Ruoyu.Study.DocRetrieval.Domain.Services` |
 | `MinerUPrecisionClient` | MinerU API 提交/轮询/下载 | `Ruoyu.Study.DocRetrieval.Service` |
 | `IPdfSplitService` | PDF 页数检测、拆分 | `Ruoyu.Study.DocRetrieval.Service` |
+| `IFileConversionService` | 非 PDF 转 PDF（LibreOffice） | `Ruoyu.Study.DocRetrieval.Service` |
 | `IOssService` | S3 上传/下载/删除/presigned URL | `Ruoyu.Study.Common.Oss` |
 
 ## DI 注册
@@ -497,5 +546,6 @@ builder.Services.AddScoped<IDocumentFileService, DocumentFileService>();
 builder.Services.AddScoped<IDocumentParseService, DocumentParseService>();
 builder.Services.AddSingleton<MinerUPrecisionClient>();
 builder.Services.AddSingleton<IPdfSplitService, PdfSplitService>();
+builder.Services.AddSingleton<IFileConversionService, LibreOfficeConversionService>();
 builder.Services.AddHostedService<MinerUFileParseWorker>();
 ```

@@ -109,6 +109,7 @@ builder.Services.AddScoped<IDocumentParserService>(sp =>
 builder.Services.Configure<MinerUOptions>(builder.Configuration.GetSection(MinerUOptions.SectionName));
 builder.Services.AddSingleton<MinerUPrecisionClient>();
 builder.Services.AddSingleton<IPdfSplitService, PdfSplitService>();
+builder.Services.AddSingleton<IFileConversionService, LibreOfficeConversionService>();
 
 // Background Workers
 builder.Services.AddHostedService<IngestionWorker>();

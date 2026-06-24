@@ -346,6 +346,30 @@
 - **When** Worker 处理该文件的解析任务
 - **Then** 不拆分，直接提交 MinerU 解析（与现有流程一致）
 
+### AC-CONVERT-01：非 PDF 文件自动转 PDF
+
+- **Given** 上传的文件为 DOCX/PPTX 格式
+- **When** Worker 处理该文件的解析任务
+- **Then** 先通过 LibreOffice headless 将文件转换为 PDF，再按 PDF 流程处理（检测页数→拆分→提交解析）
+
+### AC-CONVERT-02：PDF 文件不转换
+
+- **Given** 上传的文件为 PDF 格式
+- **When** Worker 处理该文件的解析任务
+- **Then** 直接进入页数检测流程，不做格式转换
+
+### AC-CONVERT-03：转换失败
+
+- **Given** 上传的 DOCX 文件损坏或格式不支持
+- **When** LibreOffice 转换失败
+- **Then** parse 标记为 failed，error_message 包含转换失败原因
+
+### AC-CONVERT-04：LibreOffice 未安装
+
+- **Given** 服务器未安装 LibreOffice
+- **When** Worker 尝试转换非 PDF 文件
+- **Then** parse 标记为 failed，error_message 提示 LibreOffice 未配置
+
 ## 解析状态流转
 
 ```
