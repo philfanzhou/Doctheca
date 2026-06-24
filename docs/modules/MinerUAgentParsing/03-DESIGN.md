@@ -209,6 +209,17 @@ public interface IDocumentParseRepository
     Task<List<DocumentParseModel>> GetByStatusAsync(string status);
     // 新增：分页列表（含搜索）
     Task<(List<DocumentParseModel> Items, int TotalCount)> GetListAsync(int page, int size, string? search = null);
+    Task DeleteAsync(Guid id);
+}
+```
+
+### IPdfSplitService
+
+```csharp
+public interface IPdfSplitService
+{
+    int GetPageCount(Stream pdfStream);
+    List<(int ChunkIndex, Stream ChunkStream)> SplitPdf(Stream pdfStream, int maxPagesPerChunk = 200);
 }
 ```
 
@@ -326,20 +337,104 @@ MinerUFileParseWorker (BackgroundService, 每 5 秒轮询)
   ├─ 2. 对每个 pending 任务：
   │     ├─ 更新 status=parsing
   │     ├─ 查询关联的 document_file 获取 S3 路径
-  │     ├─ 生成 S3 presigned URL
-  │     ├─ 调用 MinerUPrecisionClient.SubmitUrlAsync → 获取 task_id
-  │     ├─ 更新 external_task_id
-  │     ├─ 轮询 MinerU 状态（每 5 秒，最长 30 分钟）
-  │     ├─ 完成后：
-  │     │   ├─ 调用 MinerUPrecisionClient.DownloadAndProcessZipAsync
-  │     │   ├─ 写入 markdown_content
-  │     │   ├─ 写入 document_parse_images 记录
-  │     │   └─ 更新 status=parsed, parsed_at=now
-  │     └─ 失败时：
-  │         └─ 更新 status=failed, error_message
+  │     ├─ 下载源文件到临时流
+  │     ├─ 检测 PDF 页数
+  │     │
+  │     ├─ [页数 ≤ 200]：直接提交（原有流程）
+  │     │   ├─ 生成 S3 presigned URL
+  │     │   ├─ 调用 MinerUPrecisionClient.SubmitUrlAsync → 获取 task_id
+  │     │   ├─ 轮询 MinerU 状态
+  │     │   ├─ 下载 ZIP → 处理 Markdown + 图片
+  │     │   └─ 保存结果
+  │     │
+  │     └─ [页数 > 200]：拆分解析（新流程）
+  │         ├─ 将 PDF 按每 200 页拆分为 N 个子 PDF
+  │         ├─ 上传每个子 PDF 到 S3（临时路径 mineru/splits/{parseId}/chunk_{i}.pdf）
+  │         ├─ 对每个子 PDF：
+  │         │   ├─ 生成 presigned URL
+  │         │   ├─ 提交 MinerU → 获取 task_id
+  │         │   ├─ 轮询直到完成/失败
+  │         │   └─ 下载 ZIP → 处理 Markdown + 图片
+  │         ├─ 合并所有子文档的 Markdown（按顺序拼接）
+  │         ├─ 合并所有子文档的图片元数据
+  │         ├─ 删除 S3 上的临时子 PDF 文件
+  │         └─ 保存合并结果为一条 parse 记录
   │
   └─ 3. 继续下一个 pending 任务
 ```
+
+### 大文档拆分详细设计
+
+#### PDF 页数检测
+
+使用 `PdfSharpCore` 或 `iText7` 读取 PDF 页数。仅读取元数据，不加载全部内容。
+
+```csharp
+// 使用 PdfSharpCore（轻量、免费）
+using PdfSharpCore.Pdf;
+using var doc = PdfReader.Open(pdfStream, PdfDocumentOpenMode.Information);
+var pageCount = doc.PageCount;
+```
+
+#### PDF 拆分
+
+使用 `PdfSharpCore` 将 PDF 按页数拆分：
+
+```csharp
+List<Stream> SplitPdf(Stream sourcePdf, int maxPagesPerChunk)
+{
+    using var doc = PdfReader.Open(sourcePdf, PdfDocumentOpenMode.Import);
+    var chunks = new List<Stream>();
+    var totalPages = doc.PageCount;
+    
+    for (int startPage = 0; startPage < totalPages; startPage += maxPagesPerChunk)
+    {
+        var chunk = new PdfDocument();
+        int endPage = Math.Min(startPage + maxPagesPerChunk, totalPages);
+        for (int i = startPage; i < endPage; i++)
+        {
+            chunk.AddPage(doc.Pages[i]);
+        }
+        var ms = new MemoryStream();
+        chunk.Save(ms, false);
+        ms.Position = 0;
+        chunks.Add(ms);
+    }
+    return chunks;
+}
+```
+
+#### Markdown 合并
+
+多个子文档的 Markdown 按顺序拼接，用分隔符标记原始页码范围：
+
+```csharp
+string MergeMarkdown(List<string> markdownParts, List<int> startPages)
+{
+    var sb = new StringBuilder();
+    for (int i = 0; i < markdownParts.Count; i++)
+    {
+        if (i > 0) sb.AppendLine("\n\n---\n\n");  // 分页分隔
+        sb.Append(markdownParts[i]);
+    }
+    return sb.ToString();
+}
+```
+
+#### 图片合并
+
+所有子文档的图片统一收集，图片名可能重复（不同子文档可能有同名图片如 `images/abc.jpg`）。
+解决方案：为每个子文档的图片添加 chunk 前缀避免冲突。
+
+```
+子文档 0 的图片: mineru/{taskId}_chunk0/abc.jpg → 重命名为 chunk0_abc.jpg
+子文档 1 的图片: mineru/{taskId}_chunk1/abc.jpg → 重命名为 chunk1_abc.jpg
+```
+
+#### 临时文件清理
+
+拆分产生的子 PDF 上传到 S3 的临时路径 `mineru/splits/{parseId}/chunk_{i}.pdf`，
+在解析完成（无论成功或失败）后删除。
 
 ## 图片管理策略
 
@@ -388,6 +483,7 @@ GET /admin/document-parses/{parseId}/export/html
 | `IDocumentFileService` | 文件 CRUD | `Ruoyu.Study.DocRetrieval.Domain.Services` |
 | `IDocumentParseService` | 解析 CRUD、状态更新、列表、删除 | `Ruoyu.Study.DocRetrieval.Domain.Services` |
 | `MinerUPrecisionClient` | MinerU API 提交/轮询/下载 | `Ruoyu.Study.DocRetrieval.Service` |
+| `IPdfSplitService` | PDF 页数检测、拆分 | `Ruoyu.Study.DocRetrieval.Service` |
 | `IOssService` | S3 上传/下载/删除/presigned URL | `Ruoyu.Study.Common.Oss` |
 
 ## DI 注册
@@ -400,5 +496,6 @@ builder.Services.AddScoped<IDocumentParseImageRepository, DocumentParseImageRepo
 builder.Services.AddScoped<IDocumentFileService, DocumentFileService>();
 builder.Services.AddScoped<IDocumentParseService, DocumentParseService>();
 builder.Services.AddSingleton<MinerUPrecisionClient>();
+builder.Services.AddSingleton<IPdfSplitService, PdfSplitService>();
 builder.Services.AddHostedService<MinerUFileParseWorker>();
 ```

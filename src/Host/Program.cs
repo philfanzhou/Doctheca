@@ -108,6 +108,7 @@ builder.Services.AddScoped<IDocumentParserService>(sp =>
 // MinerU Precision API Client
 builder.Services.Configure<MinerUOptions>(builder.Configuration.GetSection(MinerUOptions.SectionName));
 builder.Services.AddSingleton<MinerUPrecisionClient>();
+builder.Services.AddSingleton<IPdfSplitService, PdfSplitService>();
 
 // Background Workers
 builder.Services.AddHostedService<IngestionWorker>();

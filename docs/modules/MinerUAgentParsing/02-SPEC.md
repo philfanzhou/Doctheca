@@ -322,6 +322,30 @@
 - **When** 调用 `GET /admin/document-parses?search=英语`
 - **Then** 仅返回 "英语三年级.pdf" 的解析记录
 
+### AC-SPLIT-01：大文档自动拆分解析
+
+- **Given** 上传的 PDF 超过 200 页
+- **When** Worker 处理该文件的解析任务
+- **Then** 自动将 PDF 按每 200 页拆分为多个子文档，分别提交 MinerU 解析
+
+### AC-SPLIT-02：拆分后合并结果
+
+- **Given** 大文档被拆分为 N 个子文档，全部解析完成
+- **When** Worker 合并结果
+- **Then** 所有子文档的 Markdown 按顺序拼接为一份完整 Markdown，图片统一管理，存为一条 parse 记录
+
+### AC-SPLIT-03：拆分后部分失败
+
+- **Given** 大文档被拆分为 3 个子文档，其中 1 个解析失败
+- **When** Worker 检测到失败
+- **Then** 整个 parse 标记为 failed，error_message 包含失败的子任务信息；已成功的子任务图片保留在 S3
+
+### AC-SPLIT-04：200 页以内的文档
+
+- **Given** 上传的 PDF 为 150 页
+- **When** Worker 处理该文件的解析任务
+- **Then** 不拆分，直接提交 MinerU 解析（与现有流程一致）
+
 ## 解析状态流转
 
 ```
