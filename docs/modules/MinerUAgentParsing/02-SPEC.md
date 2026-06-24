@@ -10,7 +10,8 @@
 |------|-----|------|
 | 文件管理 | files | 上传文件到 S3、查看所有文档、删除文件（含关联解析和图片） |
 | MinerU 解析 | parses | 查看未解析文档（默认）、触发解析、查看解析状态、强制重新解析 |
-| Markdown 数据 | markdown | 查看所有解析记录、按文档名搜索、删除解析记录（仅删解析和图片，不删原始文件）、导出 HTML/MD |
+| Markdown 数据 | markdown | 查看所有解析记录、按文档名搜索、删除解析记录（仅删解析和图片，不删原始文件）、导出 HTML/MD、在线预览 |
+| 文档管理 | documents | 老版大模型拆段文档管理：上传文档、查看/删除文档、元数据管理、分段精炼 |
 | 检索测试 | search | 保留现有功能 |
 | 一致性检查 | consistency | 保留现有功能 |
 
@@ -290,6 +291,18 @@
 - **Given** 解析记录 status 不为 parsed
 - **When** 调用按解析 ID 的导出 API
 - **Then** 返回 422，`DOCRETRIEVAL_PARSE_NOT_PARSED`
+
+### AC-PREVIEW-01：在线预览解析记录
+
+- **Given** 解析记录存在且 status=parsed
+- **When** 点击"预览"按钮
+- **Then** 在新浏览器 tab 中打开自包含 HTML 页面，展示解析后的文档内容
+
+### AC-PREVIEW-02：预览未解析记录
+
+- **Given** 解析记录 status 不为 parsed
+- **When** 点击"预览"按钮
+- **Then** 按钮不可用（disabled）
 
 ### AC-LIST-01：文件列表过滤
 
