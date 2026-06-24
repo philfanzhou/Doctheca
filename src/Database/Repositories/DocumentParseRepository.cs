@@ -61,6 +61,40 @@ public class DocumentParseRepository : IDocumentParseRepository
             .ToListAsync();
     }
 
+    public async Task<(List<DocumentParseModel> Items, int TotalCount)> GetListAsync(int page, int size, string? search = null)
+    {
+        var query = _context.DocumentParses
+            .Include(e => e.DocumentFile)
+            .AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            query = query.Where(e => e.DocumentFile != null && e.DocumentFile.FileName.Contains(search));
+        }
+
+        var totalCount = await query.CountAsync();
+
+        var items = await query
+            .OrderByDescending(e => e.ParsedAt)
+            .ThenByDescending(e => e.Id)
+            .Skip((page - 1) * size)
+            .Take(size)
+            .Select(e => MapToModel(e))
+            .ToListAsync();
+
+        return (items, totalCount);
+    }
+
+    public async Task DeleteAsync(Guid id)
+    {
+        var entity = await _context.DocumentParses.FindAsync(id);
+        if (entity != null)
+        {
+            _context.DocumentParses.Remove(entity);
+            await _context.SaveChangesAsync();
+        }
+    }
+
     private static DocumentParseEntity MapToEntity(DocumentParseModel model) => new()
     {
         Id = model.Id,

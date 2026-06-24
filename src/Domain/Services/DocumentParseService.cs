@@ -78,4 +78,21 @@ public class DocumentParseService : IDocumentParseService
     {
         return await _imageRepository.GetByFileIdAsync(documentFileId);
     }
+
+    public async Task<(List<DocumentParseModel> Items, int TotalCount)> GetListAsync(int page, int size, string? search = null)
+    {
+        return await _parseRepository.GetListAsync(page, size, search);
+    }
+
+    public async Task<bool> DeleteParseAsync(Guid parseId)
+    {
+        var model = await _parseRepository.GetByIdAsync(parseId);
+        if (model == null) return false;
+
+        await _imageRepository.DeleteByParseIdAsync(parseId);
+        await _parseRepository.DeleteAsync(parseId);
+
+        _logger.LogInformation("Document parse deleted: {ParseId}", parseId);
+        return true;
+    }
 }

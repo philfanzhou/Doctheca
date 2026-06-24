@@ -318,4 +318,79 @@ public class DocumentParseServiceTests
         // Assert
         result.Should().HaveCount(1);
     }
+
+    [Fact]
+    public async Task GetListAsync_ReturnsPagedResults_WithSearch()
+    {
+        // Arrange
+        var items = new List<DocumentParseModel>
+        {
+            new() { Id = Guid.NewGuid(), Status = DocumentParseStatus.Parsed },
+            new() { Id = Guid.NewGuid(), Status = DocumentParseStatus.Failed },
+        };
+        _parseRepoMock.Setup(r => r.GetListAsync(1, 20, "test"))
+            .ReturnsAsync((items, 2));
+
+        // Act
+        var (resultItems, totalCount) = await _service.GetListAsync(1, 20, "test");
+
+        // Assert
+        resultItems.Should().HaveCount(2);
+        totalCount.Should().Be(2);
+        _parseRepoMock.Verify(r => r.GetListAsync(1, 20, "test"), Times.Once);
+    }
+
+    [Fact]
+    public async Task GetListAsync_ReturnsPagedResults_WithoutSearch()
+    {
+        // Arrange
+        var items = new List<DocumentParseModel>
+        {
+            new() { Id = Guid.NewGuid(), Status = DocumentParseStatus.Parsed },
+        };
+        _parseRepoMock.Setup(r => r.GetListAsync(1, 20, null))
+            .ReturnsAsync((items, 1));
+
+        // Act
+        var (resultItems, totalCount) = await _service.GetListAsync(1, 20);
+
+        // Assert
+        resultItems.Should().HaveCount(1);
+        totalCount.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task DeleteParseAsync_DeletesImagesAndParse()
+    {
+        // Arrange
+        var parseId = Guid.NewGuid();
+        var model = new DocumentParseModel { Id = parseId, DocumentFileId = Guid.NewGuid() };
+        _parseRepoMock.Setup(r => r.GetByIdAsync(parseId)).ReturnsAsync(model);
+        _imageRepoMock.Setup(r => r.DeleteByParseIdAsync(parseId)).Returns(Task.CompletedTask);
+        _parseRepoMock.Setup(r => r.DeleteAsync(parseId)).Returns(Task.CompletedTask);
+
+        // Act
+        var result = await _service.DeleteParseAsync(parseId);
+
+        // Assert
+        result.Should().BeTrue();
+        _imageRepoMock.Verify(r => r.DeleteByParseIdAsync(parseId), Times.Once);
+        _parseRepoMock.Verify(r => r.DeleteAsync(parseId), Times.Once);
+    }
+
+    [Fact]
+    public async Task DeleteParseAsync_ReturnsFalse_WhenNotFound()
+    {
+        // Arrange
+        var parseId = Guid.NewGuid();
+        _parseRepoMock.Setup(r => r.GetByIdAsync(parseId)).ReturnsAsync((DocumentParseModel?)null);
+
+        // Act
+        var result = await _service.DeleteParseAsync(parseId);
+
+        // Assert
+        result.Should().BeFalse();
+        _imageRepoMock.Verify(r => r.DeleteByParseIdAsync(It.IsAny<Guid>()), Times.Never);
+        _parseRepoMock.Verify(r => r.DeleteAsync(It.IsAny<Guid>()), Times.Never);
+    }
 }

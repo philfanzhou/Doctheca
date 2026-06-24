@@ -70,10 +70,12 @@ public class DocumentFileEntity
     public Guid? CreatedBy { get; set; }
 
     [Column("created_at")]
-    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+    [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
+    public DateTimeOffset CreatedAt { get; set; }
 
     [Column("updated_at")]
     [ConcurrencyCheck]
+    [DatabaseGenerated(DatabaseGeneratedOption.Computed)]
     public DateTimeOffset? UpdatedAt { get; set; }
 }
 ```
@@ -188,17 +190,38 @@ public interface IDocumentParseService
     Task AddImageAsync(DocumentParseImageModel image);
     Task<List<DocumentParseImageModel>> GetImagesByParseIdAsync(Guid parseId);
     Task<List<DocumentParseImageModel>> GetImagesByFileIdAsync(Guid documentFileId);
+    // 新增：解析记录列表（含文档名搜索）
+    Task<(List<DocumentParseModel> Items, int TotalCount)> GetListAsync(int page, int size, string? search = null);
+    // 新增：删除单条解析记录（含 S3 图片清理）
+    Task<bool> DeleteParseAsync(Guid parseId, IOssService ossService);
+}
+```
+
+### IDocumentParseRepository（新增方法）
+
+```csharp
+public interface IDocumentParseRepository
+{
+    Task AddAsync(DocumentParseModel model);
+    Task<DocumentParseModel?> GetByIdAsync(Guid id);
+    Task<DocumentParseModel?> GetLatestByFileIdAsync(Guid documentFileId);
+    Task UpdateAsync(DocumentParseModel model);
+    Task<List<DocumentParseModel>> GetByStatusAsync(string status);
+    // 新增：分页列表（含搜索）
+    Task<(List<DocumentParseModel> Items, int TotalCount)> GetListAsync(int page, int size, string? search = null);
 }
 ```
 
 ## 端点设计
+
+### 文件管理端点组
 
 ```csharp
 var fileGroup = app.MapGroup("/admin/document-files")
     .RequireAuthorization();
 
 fileGroup.MapPost("/upload", UploadDocumentFile);
-fileGroup.MapGet("/", ListDocumentFiles);
+fileGroup.MapGet("/", ListDocumentFiles);          // 新增 parseStatus 过滤参数
 fileGroup.MapGet("/{id:guid}", GetDocumentFile);
 fileGroup.MapPost("/{id:guid}/parse", ParseDocumentFile);
 fileGroup.MapDelete("/{id:guid}", DeleteDocumentFile);
@@ -206,7 +229,69 @@ fileGroup.MapGet("/{id:guid}/export/markdown", ExportMarkdown);
 fileGroup.MapGet("/{id:guid}/export/html", ExportHtml);
 ```
 
-### 上传流程
+### 解析记录端点组（新增）
+
+```csharp
+var parseGroup = app.MapGroup("/admin/document-parses")
+    .RequireAuthorization();
+
+parseGroup.MapGet("/", ListDocumentParses);                // API-8
+parseGroup.MapDelete("/{parseId:guid}", DeleteDocumentParse); // API-9
+parseGroup.MapGet("/{parseId:guid}/export/markdown", ExportParseMarkdown); // API-10
+parseGroup.MapGet("/{parseId:guid}/export/html", ExportParseHtml);        // API-11
+```
+
+### 文件列表过滤
+
+```
+GET /admin/document-files?page=1&pageSize=20&parseStatus=
+  │
+  ├─ parseStatus 为空：返回所有文件
+  ├─ parseStatus=unparsed：返回无 parse 记录的文件
+  ├─ parseStatus=pending/parsing/parsed/failed：返回最新 parse 为对应状态的文件
+  └─ 实现方式：
+       1. 查询所有文件（分页）
+       2. 对每个文件查询最新 parse
+       3. 在内存中过滤 parseStatus
+       4. 重新分页返回
+```
+
+### 解析记录列表
+
+```
+GET /admin/document-parses?page=1&pageSize=20&search=
+  │
+  ├─ 1. 查询 document_parses JOIN document_files
+  ├─ 2. search 非空时：WHERE file_name ILIKE '%search%'
+  ├─ 3. ORDER BY parsed_at DESC NULLS LAST
+  └─ 4. 返回 { id, fileName, status, parsedAt, errorMessage }
+```
+
+### 删除解析记录
+
+```
+DELETE /admin/document-parses/{parseId}
+  │
+  ├─ 1. 查询解析记录 → 不存在返回 404
+  ├─ 2. 查询关联图片 → 从 S3 删除每张图片
+  ├─ 3. 删除数据库记录（级联：parse_images → parse）
+  └─ 4. 返回 { id, deleted } （原始文件不受影响）
+```
+
+### 按解析 ID 导出
+
+```
+GET /admin/document-parses/{parseId}/export/markdown
+GET /admin/document-parses/{parseId}/export/html
+  │
+  ├─ 1. 查询解析记录 → 不存在返回 404
+  ├─ 2. 校验 status=parsed → 非 parsed 返回 422
+  ├─ 3. 查询关联的 document_file 获取文件名
+  ├─ 4. 查询关联图片
+  └─ 5. 与按文件 ID 导出相同的 ZIP/HTML 构建逻辑
+```
+
+## 上传流程
 
 ```
 POST /admin/document-files/upload
@@ -219,7 +304,7 @@ POST /admin/document-files/upload
   └─ 6. 返回 { id, fileName, contentType }
 ```
 
-### 解析流程
+## 解析流程
 
 ```
 POST /admin/document-files/{id}/parse
@@ -231,7 +316,7 @@ POST /admin/document-files/{id}/parse
   └─ 5. 返回 { id, parseId, status }
 ```
 
-### MinerUFileParseWorker 流程
+## MinerUFileParseWorker 流程
 
 ```
 MinerUFileParseWorker (BackgroundService, 每 5 秒轮询)
@@ -256,31 +341,6 @@ MinerUFileParseWorker (BackgroundService, 每 5 秒轮询)
   └─ 3. 继续下一个 pending 任务
 ```
 
-### 查看文件详情
-
-```
-GET /admin/document-files/{id}
-  │
-  ├─ 1. 查询文件 → 不存在返回 404
-  ├─ 2. 查询最新 parse 记录
-  ├─ 3. 如果有 parse 且 status=parsed：
-  │     ├─ 查询关联图片
-  │     ├─ 对每张图片生成 presigned URL
-  │     └─ 替换 markdown_content 中的图片路径
-  └─ 4. 返回 { file info, parse: { ... } 或 null }
-```
-
-### 删除文件
-
-```
-DELETE /admin/document-files/{id}
-  │
-  ├─ 1. 查询文件 → 不存在返回 404
-  ├─ 2. 查询所有 parse 的图片 → 从 S3 删除
-  ├─ 3. 从 S3 删除源文件
-  └─ 4. 删除数据库记录（级联：parse_images → parses → file）
-```
-
 ## 图片管理策略
 
 - **S3 路径**：`documents/mineru/{taskId}/{imageName}`（由 `DownloadAndProcessZipAsync` 上传）
@@ -289,36 +349,36 @@ DELETE /admin/document-files/{id}
 - **图片元数据**：`DownloadAndProcessZipAsync` 返回 `List<ImageMetadata>`，Worker 直接写入 `document_parse_images` 表
 - **Presigned URL 有效期**：1 小时
 - **删除文件时**：级联删除 S3 上的源文件和所有关联解析的图片
+- **删除解析记录时**：仅删除该解析关联的 S3 图片，不删除原始文件
 
 ## 导出流程设计
 
-### 导出 MD+图片 ZIP
+### 按文件 ID 导出（使用最新 parse）
 
 ```
 GET /admin/document-files/{id}/export/markdown
-  │
-  ├─ 1. 查询文件 → 不存在返回 404
-  ├─ 2. 查询最新 parse → 未解析或非 parsed 返回 422
-  ├─ 3. 获取 markdown_content
-  ├─ 4. 获取关联图片列表
-  ├─ 5. 将 MD 中的 S3 路径替换为 images/{imageName}
-  ├─ 6. 下载每张图片的二进制数据（从 S3）
-  ├─ 7. 构建 ZIP：{fileName}.md + images/{imageName}
-  └─ 8. 返回 application/zip
-```
-
-### 导出 HTML
-
-```
 GET /admin/document-files/{id}/export/html
   │
   ├─ 1. 查询文件 → 不存在返回 404
   ├─ 2. 查询最新 parse → 未解析或非 parsed 返回 422
   ├─ 3. 获取 markdown_content
-  ├─ 4. 下载每张图片 → 转 base64 data URI
-  ├─ 5. 将 MD 中的 S3 路径替换为 data URI
-  ├─ 6. Markdig 转 HTML + 内联 CSS
-  └─ 7. 返回 text/html
+  ├─ 4. 获取关联图片列表
+  ├─ 5. 替换路径（MD: S3→相对, HTML: S3→base64）
+  └─ 6. 返回 ZIP/HTML
+```
+
+### 按解析 ID 导出
+
+```
+GET /admin/document-parses/{parseId}/export/markdown
+GET /admin/document-parses/{parseId}/export/html
+  │
+  ├─ 1. 查询解析记录 → 不存在返回 404
+  ├─ 2. 校验 status=parsed → 非 parsed 返回 422
+  ├─ 3. 查询关联的 document_file 获取文件名
+  ├─ 4. 获取 markdown_content 和关联图片
+  ├─ 5. 替换路径（MD: S3→相对, HTML: S3→base64）
+  └─ 6. 返回 ZIP/HTML
 ```
 
 ## 依赖的外部模块
@@ -326,7 +386,7 @@ GET /admin/document-files/{id}/export/html
 | 接口 | 提供能力 | 所在模块 |
 |------|---------|---------|
 | `IDocumentFileService` | 文件 CRUD | `Ruoyu.Study.DocRetrieval.Domain.Services` |
-| `IDocumentParseService` | 解析 CRUD、状态更新 | `Ruoyu.Study.DocRetrieval.Domain.Services` |
+| `IDocumentParseService` | 解析 CRUD、状态更新、列表、删除 | `Ruoyu.Study.DocRetrieval.Domain.Services` |
 | `MinerUPrecisionClient` | MinerU API 提交/轮询/下载 | `Ruoyu.Study.DocRetrieval.Service` |
 | `IOssService` | S3 上传/下载/删除/presigned URL | `Ruoyu.Study.Common.Oss` |
 

@@ -171,6 +171,14 @@ export interface DocumentFileDetail {
   } | null
 }
 
+export interface DocumentParse {
+  id: string
+  fileName: string
+  status: string
+  parsedAt: string | null
+  errorMessage: string | null
+}
+
 class DocApiClient {
   private client: ReturnType<typeof createAuthenticatedClient>
 
@@ -329,10 +337,10 @@ class DocApiClient {
   async listDocumentFiles(
     page: number = 1,
     pageSize: number = 20,
-    status?: string
+    parseStatus?: string
   ): Promise<DocPagedResponse<DocumentFile>> {
     const params: Record<string, unknown> = { page, pageSize }
-    if (status) params.status = status
+    if (parseStatus) params.parseStatus = parseStatus
     const response = await this.client.get('/admin/document-files', { params })
     return response.data
   }
@@ -370,6 +378,40 @@ class DocApiClient {
 
   async exportHtml(id: string): Promise<{ blob: Blob; fileName: string }> {
     const response = await this.client.get(`/admin/document-files/${id}/export/html`, {
+      responseType: 'blob'
+    })
+    const fileName = extractFileName(response, 'document.html')
+    return { blob: response.data as Blob, fileName }
+  }
+
+  // ========== Document Parses ==========
+
+  async listDocumentParses(
+    page: number = 1,
+    pageSize: number = 20,
+    search?: string
+  ): Promise<DocPagedResponse<DocumentParse>> {
+    const params: Record<string, unknown> = { page, pageSize }
+    if (search) params.search = search
+    const response = await this.client.get('/admin/document-parses', { params })
+    return response.data
+  }
+
+  async deleteDocumentParse(parseId: string): Promise<ApiResponse<{ id: string; deleted: boolean }>> {
+    const response = await this.client.delete(`/admin/document-parses/${parseId}`)
+    return response.data
+  }
+
+  async exportParseMarkdown(parseId: string): Promise<{ blob: Blob; fileName: string }> {
+    const response = await this.client.get(`/admin/document-parses/${parseId}/export/markdown`, {
+      responseType: 'blob'
+    })
+    const fileName = extractFileName(response, 'document_markdown.zip')
+    return { blob: response.data as Blob, fileName }
+  }
+
+  async exportParseHtml(parseId: string): Promise<{ blob: Blob; fileName: string }> {
+    const response = await this.client.get(`/admin/document-parses/${parseId}/export/html`, {
       responseType: 'blob'
     })
     const fileName = extractFileName(response, 'document.html')

@@ -75,6 +75,15 @@ public static class DocumentAdminEndpoints
         fileGroup.MapGet("/{id:guid}/export/markdown", ExportMarkdown);
         fileGroup.MapGet("/{id:guid}/export/html", ExportHtml);
 
+        // Document Parses endpoints
+        var parseGroup = app.MapGroup("/admin/document-parses")
+            .RequireAuthorization();
+
+        parseGroup.MapGet("/", ListDocumentParses);
+        parseGroup.MapDelete("/{parseId:guid}", DeleteDocumentParse);
+        parseGroup.MapGet("/{parseId:guid}/export/markdown", ExportParseMarkdown);
+        parseGroup.MapGet("/{parseId:guid}/export/html", ExportParseHtml);
+
         return app;
     }
 
@@ -1023,36 +1032,59 @@ public static class DocumentAdminEndpoints
         IDocumentFileService fileService,
         IDocumentParseService parseService,
         [FromQuery] int page = 1,
-        [FromQuery] int pageSize = 20)
+        [FromQuery] int pageSize = 20,
+        [FromQuery] string? parseStatus = null)
     {
-        var (items, totalCount) = await fileService.GetListAsync(page, pageSize);
+        // Fetch a larger set to allow in-memory filtering by parseStatus
+        var fetchPage = 1;
+        var fetchSize = string.IsNullOrEmpty(parseStatus) ? pageSize : 200;
+        var allEnriched = new List<(DocumentFileModel File, string? ParseStatus, string? ErrorMessage, DateTimeOffset? ParsedAt)>();
 
-        // Enrich with parse status
-        var enrichedItems = new List<object>();
-        foreach (var f in items)
+        while (true)
         {
-            var parse = await parseService.GetLatestByFileIdAsync(f.Id);
-            enrichedItems.Add(new
+            var (items, totalCount) = await fileService.GetListAsync(fetchPage, fetchSize);
+            foreach (var f in items)
             {
-                id = f.Id.ToString(),
-                fileName = f.FileName,
-                contentType = f.ContentType,
-                parseStatus = parse?.Status,
-                errorMessage = parse?.ErrorMessage,
-                createdBy = f.CreatedBy?.ToString(),
-                createdAt = f.CreatedAt.UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'"),
-                parsedAt = parse?.ParsedAt?.UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'"),
-            });
+                var parse = await parseService.GetLatestByFileIdAsync(f.Id);
+                allEnriched.Add((f, parse?.Status, parse?.ErrorMessage, parse?.ParsedAt));
+            }
+            if (items.Count < fetchSize || allEnriched.Count >= totalCount) break;
+            fetchPage++;
         }
+
+        // Filter by parseStatus
+        IEnumerable<(DocumentFileModel File, string? ParseStatus, string? ErrorMessage, DateTimeOffset? ParsedAt)> filtered = allEnriched;
+        if (!string.IsNullOrEmpty(parseStatus))
+        {
+            if (parseStatus == "unparsed")
+                filtered = allEnriched.Where(x => x.ParseStatus == null);
+            else
+                filtered = allEnriched.Where(x => x.ParseStatus == parseStatus);
+        }
+
+        var totalFiltered = filtered.Count();
+        var paged = filtered.Skip((page - 1) * pageSize).Take(pageSize).ToList();
+
+        var data = paged.Select(f => new
+        {
+            id = f.File.Id.ToString(),
+            fileName = f.File.FileName,
+            contentType = f.File.ContentType,
+            parseStatus = f.ParseStatus,
+            errorMessage = f.ErrorMessage,
+            createdBy = f.File.CreatedBy?.ToString(),
+            createdAt = f.File.CreatedAt.UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'"),
+            parsedAt = f.ParsedAt?.UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'"),
+        }).ToList();
 
         return Results.Ok(new
         {
             success = true,
-            data = enrichedItems,
-            total = totalCount,
+            data,
+            total = totalFiltered,
             page,
             pageSize,
-            totalPages = (totalCount + pageSize - 1) / pageSize
+            totalPages = (totalFiltered + pageSize - 1) / pageSize
         });
     }
 
@@ -1123,6 +1155,7 @@ public static class DocumentAdminEndpoints
                 id = file.Id.ToString(),
                 fileName = file.FileName,
                 contentType = file.ContentType,
+                createdAt = file.CreatedAt.UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'"),
                 parse = parse != null ? new
                 {
                     id = parse.Id.ToString(),
@@ -1130,9 +1163,8 @@ public static class DocumentAdminEndpoints
                     markdownContent,
                     errorMessage = parse.ErrorMessage,
                     parsedAt = parse.ParsedAt?.UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'"),
+                    images = imageList,
                 } : null,
-                images = imageList,
-                createdAt = file.CreatedAt.UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'"),
             }
         });
     }
@@ -1347,6 +1379,217 @@ public static class DocumentAdminEndpoints
         html.AppendLine("</html>");
 
         var htmlFileName = $"{Path.GetFileNameWithoutExtension(file.FileName)}.html";
+        var htmlBytes = System.Text.Encoding.UTF8.GetBytes(html.ToString());
+        var htmlStream = new MemoryStream(htmlBytes);
+        return Results.Stream(htmlStream, "text/html", htmlFileName);
+    }
+
+    // ===== Document Parses Endpoints =====
+
+    private static async Task<IResult> ListDocumentParses(
+        IDocumentParseService parseService,
+        IDocumentFileService fileService,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20,
+        [FromQuery] string? search = null)
+    {
+        var (items, totalCount) = await parseService.GetListAsync(page, pageSize, search);
+
+        var data = new List<object>();
+        foreach (var p in items)
+        {
+            var file = await fileService.GetByIdAsync(p.DocumentFileId);
+            data.Add(new
+            {
+                id = p.Id.ToString(),
+                fileName = file?.FileName ?? "Unknown",
+                status = p.Status,
+                parsedAt = p.ParsedAt?.UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'"),
+                errorMessage = p.ErrorMessage,
+            });
+        }
+
+        return Results.Ok(new
+        {
+            success = true,
+            data,
+            total = totalCount,
+            page,
+            pageSize,
+            totalPages = (totalCount + pageSize - 1) / pageSize
+        });
+    }
+
+    private static async Task<IResult> DeleteDocumentParse(
+        Guid parseId,
+        IDocumentParseService parseService,
+        IDocumentFileService fileService,
+        IOssService ossService,
+        [FromServices] ILoggerFactory loggerFactory)
+    {
+        var logger = loggerFactory.CreateLogger("DocumentAdminEndpoints");
+
+        var parse = await parseService.GetByIdAsync(parseId);
+        if (parse == null)
+            return Results.NotFound(new { success = false, message = "Parse record not found", errorCode = "DOCRETRIEVAL_PARSE_NOT_FOUND" });
+
+        // Delete associated images from S3
+        var images = await parseService.GetImagesByParseIdAsync(parseId);
+        foreach (var img in images)
+        {
+            try
+            {
+                await ossService.DeleteAsync(img.ImagePath);
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Failed to delete image from OSS: {ImagePath}", img.ImagePath);
+            }
+        }
+
+        // Delete parse record (cascade deletes images from DB)
+        await parseService.DeleteParseAsync(parseId);
+
+        return Results.Ok(new
+        {
+            success = true,
+            data = new { id = parseId.ToString(), deleted = true }
+        });
+    }
+
+    private static async Task<IResult> ExportParseMarkdown(
+        Guid parseId,
+        IDocumentParseService parseService,
+        IDocumentFileService fileService,
+        IOssService ossService,
+        [FromServices] ILoggerFactory loggerFactory)
+    {
+        var logger = loggerFactory.CreateLogger("DocumentAdminEndpoints");
+
+        var parse = await parseService.GetByIdAsync(parseId);
+        if (parse == null)
+            return Results.NotFound(new { success = false, message = "Parse record not found", errorCode = "DOCRETRIEVAL_PARSE_NOT_FOUND" });
+
+        if (parse.Status != DocumentParseStatus.Parsed)
+            return Results.Json(new { success = false, message = "Parse record is not parsed yet", errorCode = "DOCRETRIEVAL_PARSE_NOT_PARSED" }, statusCode: StatusCodes.Status422UnprocessableEntity);
+
+        var file = await fileService.GetByIdAsync(parse.DocumentFileId);
+        var fileName = file?.FileName ?? "document";
+
+        var images = await parseService.GetImagesByParseIdAsync(parseId);
+        var markdownContent = parse.MarkdownContent ?? string.Empty;
+
+        // Replace S3 paths in markdown with relative image paths
+        foreach (var img in images)
+        {
+            markdownContent = markdownContent.Replace($"({img.ImagePath})", $"(images/{img.ImageName})");
+            markdownContent = markdownContent.Replace($"src=\"{img.ImagePath}\"", $"src=\"images/{img.ImageName}\"");
+        }
+
+        // Build ZIP in memory (no 'using' — Results.Stream reads lazily after method returns)
+        var ms = new MemoryStream();
+        using (var archive = new System.IO.Compression.ZipArchive(ms, System.IO.Compression.ZipArchiveMode.Create, true))
+        {
+            var mdEntry = archive.CreateEntry(Path.GetFileNameWithoutExtension(fileName) + ".md", System.IO.Compression.CompressionLevel.Optimal);
+            using (var mdStream = mdEntry.Open())
+            using (var writer = new StreamWriter(mdStream))
+            {
+                await writer.WriteAsync(markdownContent);
+            }
+
+            foreach (var img in images)
+            {
+                try
+                {
+                    using var imgStream = await ossService.DownloadAsync(img.ImagePath);
+                    var imgEntry = archive.CreateEntry($"images/{img.ImageName}", System.IO.Compression.CompressionLevel.Fastest);
+                    using var entryStream = imgEntry.Open();
+                    await imgStream.CopyToAsync(entryStream);
+                }
+                catch (Exception ex)
+                {
+                    logger.LogWarning(ex, "Failed to download image for export: {ImagePath}", img.ImagePath);
+                }
+            }
+        }
+
+        ms.Position = 0;
+        var zipFileName = $"{Path.GetFileNameWithoutExtension(fileName)}_markdown.zip";
+        return Results.Stream(ms, "application/zip", zipFileName);
+    }
+
+    private static async Task<IResult> ExportParseHtml(
+        Guid parseId,
+        IDocumentParseService parseService,
+        IDocumentFileService fileService,
+        IOssService ossService,
+        [FromServices] ILoggerFactory loggerFactory)
+    {
+        var logger = loggerFactory.CreateLogger("DocumentAdminEndpoints");
+
+        var parse = await parseService.GetByIdAsync(parseId);
+        if (parse == null)
+            return Results.NotFound(new { success = false, message = "Parse record not found", errorCode = "DOCRETRIEVAL_PARSE_NOT_FOUND" });
+
+        if (parse.Status != DocumentParseStatus.Parsed)
+            return Results.Json(new { success = false, message = "Parse record is not parsed yet", errorCode = "DOCRETRIEVAL_PARSE_NOT_PARSED" }, statusCode: StatusCodes.Status422UnprocessableEntity);
+
+        var file = await fileService.GetByIdAsync(parse.DocumentFileId);
+        var fileName = file?.FileName ?? "document";
+
+        var images = await parseService.GetImagesByParseIdAsync(parseId);
+        var markdownContent = parse.MarkdownContent ?? string.Empty;
+
+        // Replace S3 paths with base64 data URIs
+        foreach (var img in images)
+        {
+            try
+            {
+                using var imgStream = await ossService.DownloadAsync(img.ImagePath);
+                using var imgMs = new MemoryStream();
+                await imgStream.CopyToAsync(imgMs);
+                var base64 = Convert.ToBase64String(imgMs.ToArray());
+                var dataUri = $"data:{img.ContentType};base64,{base64}";
+
+                markdownContent = markdownContent.Replace($"({img.ImagePath})", $"({dataUri})");
+                markdownContent = markdownContent.Replace($"src=\"{img.ImagePath}\"", $"src=\"{dataUri}\"");
+                markdownContent = markdownContent.Replace($"(images/{img.ImageName})", $"({dataUri})");
+                markdownContent = markdownContent.Replace($"src=\"images/{img.ImageName}\"", $"src=\"{dataUri}\"");
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Failed to download image for HTML export: {ImagePath}", img.ImagePath);
+            }
+        }
+
+        // Convert markdown to HTML using Markdig
+        var htmlBody = Markdig.Markdown.ToHtml(markdownContent);
+
+        // Wrap in full HTML document with inline CSS
+        var html = new StringBuilder();
+        html.AppendLine("<!DOCTYPE html>");
+        html.AppendLine("<html lang=\"zh-CN\">");
+        html.AppendLine("<head>");
+        html.AppendLine("  <meta charset=\"UTF-8\">");
+        html.AppendLine("  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">");
+        html.AppendLine($"  <title>{System.Net.WebUtility.HtmlEncode(fileName)}</title>");
+        html.AppendLine("  <style>");
+        html.AppendLine("    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;");
+        html.AppendLine("           max-width: 800px; margin: 0 auto; padding: 20px; line-height: 1.6; color: #333; }");
+        html.AppendLine("    img { max-width: 100%; height: auto; }");
+        html.AppendLine("    table { border-collapse: collapse; width: 100%; }");
+        html.AppendLine("    th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }");
+        html.AppendLine("    blockquote { border-left: 4px solid #ddd; margin: 0; padding-left: 16px; color: #666; }");
+        html.AppendLine("    code { background: #f4f4f4; padding: 2px 6px; border-radius: 3px; }");
+        html.AppendLine("    pre { background: #f4f4f4; padding: 16px; overflow-x: auto; border-radius: 6px; }");
+        html.AppendLine("  </style>");
+        html.AppendLine("</head>");
+        html.AppendLine("<body>");
+        html.AppendLine(htmlBody);
+        html.AppendLine("</body>");
+        html.AppendLine("</html>");
+
+        var htmlFileName = $"{Path.GetFileNameWithoutExtension(fileName)}.html";
         var htmlBytes = System.Text.Encoding.UTF8.GetBytes(html.ToString());
         var htmlStream = new MemoryStream(htmlBytes);
         return Results.Stream(htmlStream, "text/html", htmlFileName);

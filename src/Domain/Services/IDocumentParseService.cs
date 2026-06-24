@@ -12,4 +12,6 @@ public interface IDocumentParseService
     Task AddImageAsync(DocumentParseImageModel image);
     Task<List<DocumentParseImageModel>> GetImagesByParseIdAsync(Guid parseId);
     Task<List<DocumentParseImageModel>> GetImagesByFileIdAsync(Guid documentFileId);
+    Task<(List<DocumentParseModel> Items, int TotalCount)> GetListAsync(int page, int size, string? search = null);
+    Task<bool> DeleteParseAsync(Guid parseId);
 }

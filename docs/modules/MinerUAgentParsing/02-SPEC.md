@@ -4,6 +4,16 @@
 
 本模块实现文件管理与文档解析两个独立业务：文件上传存储 → 触发 MinerU 解析 → Markdown 查看/导出。文件与解析解耦，文件可独立存在，解析为可选操作。所有状态持久化在数据库中，前端无状态，刷新安全。
 
+## 前端菜单结构
+
+| 菜单 | Key | 功能 |
+|------|-----|------|
+| 文件管理 | files | 上传文件到 S3、查看所有文档、删除文件（含关联解析和图片） |
+| MinerU 解析 | parses | 查看未解析文档（默认）、触发解析、查看解析状态、强制重新解析 |
+| Markdown 数据 | markdown | 查看所有解析记录、按文档名搜索、删除解析记录（仅删解析和图片，不删原始文件）、导出 HTML/MD |
+| 检索测试 | search | 保留现有功能 |
+| 一致性检查 | consistency | 保留现有功能 |
+
 ## 数据模型
 
 ### document_files — 文件基础信息
@@ -52,11 +62,15 @@
 
 ### API-2：文件列表
 
-`GET /admin/document-files?page=1&pageSize=20`
+`GET /admin/document-files?page=1&pageSize=20&parseStatus=`
 
 - 响应：`{ success, data: [...], total, page, pageSize, totalPages }`
 - 每项包含：`id, fileName, contentType, createdAt, createdBy, parseStatus, parsedAt`
 - `parseStatus` 取自该文件最新 parse 记录的 status，无 parse 记录时为 null
+- 查询参数 `parseStatus`（可选）：
+  - 不传或空：返回所有文件
+  - `unparsed`：返回 parseStatus 为 null 的文件（未解析）
+  - `pending` / `parsing` / `parsed` / `failed`：返回对应状态的文件
 
 ### API-3：触发解析
 
@@ -83,7 +97,7 @@
 - 级联删除 document_parses 和 document_parse_images 记录
 - 响应：`{ success, data: { id, deleted } }`
 
-### API-6：导出为 MD+图片 ZIP
+### API-6：按文件 ID 导出为 MD+图片 ZIP
 
 `GET /admin/document-files/{id}/export/markdown`
 
@@ -94,7 +108,7 @@
   - `images/` 目录 — 所有引用的图片文件
 - 错误码：`DOCRETRIEVAL_FILE_NOT_FOUND`、`DOCRETRIEVAL_FILE_NOT_PARSED`
 
-### API-7：导出为 HTML
+### API-7：按文件 ID 导出为 HTML
 
 `GET /admin/document-files/{id}/export/html`
 
@@ -102,6 +116,46 @@
 - 响应：`text/html` 二进制流，文件名 `{fileName}.html`
 - HTML 为自包含文件：图片以 base64 data URI 内嵌，CSS 内联
 - 错误码：`DOCRETRIEVAL_FILE_NOT_FOUND`、`DOCRETRIEVAL_FILE_NOT_PARSED`
+
+### API-8：解析记录列表
+
+`GET /admin/document-parses?page=1&pageSize=20&search=`
+
+- 响应：`{ success, data: [...], total, page, pageSize, totalPages }`
+- 每项包含：`id, fileName, status, parsedAt, errorMessage`
+- `fileName` 来自关联的 document_files.file_name
+- 查询参数 `search`（可选）：按文档名模糊匹配
+- 按 parsed_at DESC 排序（最新解析在前）
+
+### API-9：删除解析记录
+
+`DELETE /admin/document-parses/{parseId}`
+
+- 仅删除指定的解析记录和关联的 S3 图片
+- **不删除**原始文件（document_files 记录保留）
+- 级联删除 document_parse_images 记录
+- 响应：`{ success, data: { id, deleted } }`
+- 错误码：`DOCRETRIEVAL_PARSE_NOT_FOUND`
+
+### API-10：按解析 ID 导出为 MD+图片 ZIP
+
+`GET /admin/document-parses/{parseId}/export/markdown`
+
+- 前置条件：解析记录存在且 status=parsed
+- 响应：`application/zip` 二进制流，文件名 `{fileName}_markdown.zip`
+- ZIP 内包含：
+  - `{fileName}.md` — Markdown 文件，图片引用为相对路径 `images/{imageName}`
+  - `images/` 目录 — 所有引用的图片文件
+- 错误码：`DOCRETRIEVAL_PARSE_NOT_FOUND`、`DOCRETRIEVAL_PARSE_NOT_PARSED`
+
+### API-11：按解析 ID 导出为 HTML
+
+`GET /admin/document-parses/{parseId}/export/html`
+
+- 前置条件：解析记录存在且 status=parsed
+- 响应：`text/html` 二进制流，文件名 `{fileName}.html`
+- HTML 为自包含文件：图片以 base64 data URI 内嵌，CSS 内联
+- 错误码：`DOCRETRIEVAL_PARSE_NOT_FOUND`、`DOCRETRIEVAL_PARSE_NOT_PARSED`
 
 ## 详细验收标准
 
@@ -143,7 +197,7 @@
 
 ### AC-PARSE-04：重复解析
 
-- **Given** 文件最新 parse status=failed
+- **Given** 文件最新 parse status=failed 或 parsed
 - **When** 调用解析 API
 - **Then** 新建 parse 记录，status=pending（保留历史记录）
 
@@ -177,19 +231,31 @@
 - **When** 调用 `DELETE /admin/document-files/{id}`
 - **Then** 数据库记录级联删除，S3 源文件和关联图片删除
 
+### AC-DELETE-02：删除解析记录
+
+- **Given** 解析记录存在
+- **When** 调用 `DELETE /admin/document-parses/{parseId}`
+- **Then** 删除解析记录和关联图片（S3 + DB），原始文件保留
+
+### AC-DELETE-03：删除解析记录不影响文件
+
+- **Given** 文件有 2 条解析记录
+- **When** 删除其中 1 条
+- **Then** 文件和另 1 条解析记录保留
+
 ### AC-CONCURRENT-01：并发解析
 
 - **Given** 多个文件同时触发解析
 - **When** Worker 处理
 - **Then** 每个文件独立处理，互不影响
 
-### AC-EXPORT-01：导出 MD+图片 ZIP
+### AC-EXPORT-01：按文件 ID 导出 MD+图片 ZIP
 
 - **Given** 文件最新 parse status=parsed
 - **When** 调用 `GET /admin/document-files/{id}/export/markdown`
 - **Then** 返回 ZIP 文件，包含 `.md` 文件和 `images/` 目录
 
-### AC-EXPORT-02：导出 HTML
+### AC-EXPORT-02：按文件 ID 导出 HTML
 
 - **Given** 文件最新 parse status=parsed
 - **When** 调用 `GET /admin/document-files/{id}/export/html`
@@ -198,14 +264,50 @@
 ### AC-EXPORT-03：导出未解析文件
 
 - **Given** 文件无 parsed 的 parse 记录
-- **When** 调用导出 API
+- **When** 调用按文件 ID 的导出 API
 - **Then** 返回 422，`DOCRETRIEVAL_FILE_NOT_PARSED`
 
 ### AC-EXPORT-04：导出不存在的文件
 
 - **Given** 文件 ID 不存在
-- **When** 调用导出 API
+- **When** 调用按文件 ID 的导出 API
 - **Then** 返回 404，`DOCRETRIEVAL_FILE_NOT_FOUND`
+
+### AC-EXPORT-05：按解析 ID 导出 MD+图片 ZIP
+
+- **Given** 解析记录存在且 status=parsed
+- **When** 调用 `GET /admin/document-parses/{parseId}/export/markdown`
+- **Then** 返回 ZIP 文件，包含 `.md` 文件和 `images/` 目录
+
+### AC-EXPORT-06：按解析 ID 导出 HTML
+
+- **Given** 解析记录存在且 status=parsed
+- **When** 调用 `GET /admin/document-parses/{parseId}/export/html`
+- **Then** 返回自包含 HTML 文件，图片以 base64 data URI 内嵌
+
+### AC-EXPORT-07：按解析 ID 导出未解析记录
+
+- **Given** 解析记录 status 不为 parsed
+- **When** 调用按解析 ID 的导出 API
+- **Then** 返回 422，`DOCRETRIEVAL_PARSE_NOT_PARSED`
+
+### AC-LIST-01：文件列表过滤
+
+- **Given** 系统有 5 个文件，3 个未解析，2 个已解析
+- **When** 调用 `GET /admin/document-files?parseStatus=unparsed`
+- **Then** 返回 3 个未解析文件
+
+### AC-LIST-02：解析记录列表
+
+- **Given** 系统有 3 条解析记录
+- **When** 调用 `GET /admin/document-parses`
+- **Then** 返回 3 条记录，每条包含 fileName, status, parsedAt
+
+### AC-LIST-03：解析记录搜索
+
+- **Given** 有解析记录关联文件名为 "英语三年级.pdf" 和 "数学五年级.pdf"
+- **When** 调用 `GET /admin/document-parses?search=英语`
+- **Then** 仅返回 "英语三年级.pdf" 的解析记录
 
 ## 解析状态流转
 

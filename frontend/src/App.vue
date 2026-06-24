@@ -1,99 +1,35 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
-import { ElMessage, type UploadUserFile } from 'element-plus'
-import { Upload } from '@element-plus/icons-vue'
 import { marked } from 'marked'
 import {
   createDocApiClient,
-  getDocErrorMessage,
-  type Document,
-  type DocumentStatus,
   type SearchResult,
-  type DocumentSegmentsData,
-  type SegmentDto,
-  type CorrectionDto,
   type ConsistencyScanResult,
   type DocumentFile,
-  type DocumentFileDetail
+  type DocumentFileDetail,
+  type DocumentParse
 } from './services/docApi'
 import { authService } from './services/authService'
 import LoginPage from './components/LoginPage.vue'
 
 const isAuthenticated = ref(false)
 const appTitle = ref('DocRetrieval Admin')
-const activeTab = ref('documents')
-const loadingDocuments = ref(false)
-const uploading = ref(false)
-const deleting = ref(false)
-const viewingStatus = ref(false)
-const documents = ref<Document[]>([])
-const total = ref(0)
-const totalReady = ref(0)
-const totalProcessing = ref(0)
-const totalFailed = ref(0)
-const page = ref(1)
-const pageSize = ref(20)
-const statusFilter = ref<string>('')
-const subjectFilter = ref<string>('')
-const gradeFilter = ref<string>('')
-const keywordFilter = ref<string>('')
-const yearFilter = ref<string>('')
+const activeTab = ref('files')
+
+// ===== Search =====
 const searchQuery = ref('')
 const searchPhrase = ref(false)
 const searchLoading = ref(false)
 const searchResults = ref<SearchResult[]>([])
 const searchTotalCount = ref(0)
 const searchNextToken = ref('')
-const sidebarOpen = ref(false)
-const sidebarCollapsed = ref(localStorage.getItem('docSidebarCollapsed') === 'true')
-const lastRefreshTime = ref('')
-const showUploadDialog = ref(false)
-const showStatusDialog = ref(false)
-const showUpdateMetadataDialog = ref(false)
-const showDeleteConfirm = ref(false)
 
-// Segment Refinement state
-const showSegmentDialog = ref(false)
-const segmentLoading = ref(false)
-const segmentData = ref<DocumentSegmentsData | null>(null)
-const segmentDocTitle = ref('')
-const selectedSegmentIds = ref<Set<string>>(new Set())
-const corrections = ref<CorrectionDto[]>([])
-const refining = ref(false)
-const showSplitDialog = ref(false)
-const splitTarget = ref<SegmentDto | null>(null)
-const splitPosition = ref(10)
-const showSplitMergeDialog = ref(false)
-const splitMergeTarget = ref<SegmentDto | null>(null)
-const splitMergePosition = ref(10)
-const splitMergeWithPrev = ref(true)
-const splitMergeWithNext = ref(true)
-
-// Consistency scan state
+// ===== Consistency Scan =====
 const scanLoading = ref(false)
 const scanResult = ref<ConsistencyScanResult | null>(null)
 const scanTime = ref('')
 const deletingOrphan = ref<string | null>(null)
 const forceDeleting = ref<string | null>(null)
-
-// MinerU Precision Parsing state
-const mineruFile = ref<File | null>(null)
-const mineruFileName = ref('')
-const mineruSubmitting = ref(false)
-const mineruTaskId = ref('')
-const mineruPolling = ref(false)
-const mineruState = ref('')
-const mineruImageCount = ref(0)
-const mineruMarkdown = ref('')
-const mineruViewMode = ref<'preview' | 'source'>('preview')
-const mineruDownloading = ref(false)
-const mineruError = ref('')
-let mineruPollTimer: number | null = null
-
-const mineruRenderedHtml = computed(() => {
-  if (!mineruMarkdown.value) return ''
-  return marked.parse(mineruMarkdown.value, { async: false }) as string
-})
 
 // ===== File Management =====
 const fileList = ref<DocumentFile[]>([])
@@ -102,10 +38,127 @@ const filePage = ref(1)
 const filePageSize = ref(20)
 const selectedFileDetail = ref<DocumentFileDetail | null>(null)
 const fileUploadInput = ref<HTMLInputElement | null>(null)
-const fileParsing = ref(false)
 const fileUploading = ref(false)
 const fileUploadProgress = ref(0)
 const filePollTimer = ref<number | null>(null)
+
+// ===== MinerU Parse Page =====
+const parseViewMode = ref<'unparsed' | 'all'>('unparsed')
+const parseFileList = ref<DocumentFile[]>([])
+const parseFileTotal = ref(0)
+const parseFilePage = ref(1)
+const parseFilePageSize = ref(20)
+const parsePollTimer = ref<number | null>(null)
+const parseFileParsing = ref(false)
+
+// ===== Markdown Data Page =====
+const parseList = ref<DocumentParse[]>([])
+const parseTotal = ref(0)
+const parsePage = ref(1)
+const parsePageSize = ref(20)
+const parseSearch = ref('')
+const parseDeleting = ref<string | null>(null)
+
+// ===== Sidebar =====
+const sidebarOpen = ref(false)
+const sidebarCollapsed = ref(localStorage.getItem('docSidebarCollapsed') === 'true')
+const lastRefreshTime = ref('')
+
+const client = createDocApiClient()
+
+const currentUser = computed(() => authService.getUser())
+const displayName = computed(() => currentUser.value?.username ?? '管理员')
+
+const navItems = [
+  {
+    key: 'files',
+    label: '文件管理',
+    icon: '<path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/>'
+  },
+  {
+    key: 'parses',
+    label: 'MinerU 解析',
+    icon: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>'
+  },
+  {
+    key: 'markdown',
+    label: 'Markdown 数据',
+    icon: '<path d="M15.5 13.333l1.533 1.322c.645.555.967.833.967 1.178s-.322.623-.967 1.179L15.5 18.333m-3.333-5l-1.534 1.322c-.644.555-.966.833-.966 1.178s.322.623.966 1.179l1.534 1.321"/><path d="M17.167 10.836v-4.32c0-1.41 0-2.117-.224-2.68-.359-.906-1.118-1.621-2.08-1.96-.599-.21-1.349-.21-2.848-.21-2.623 0-3.935 0-4.983.369-1.684.591-3.013 1.842-3.641 3.428C3 6.449 3 7.684 3 10.154v2.122c0 2.558 0 3.838.706 4.726q.306.383.713.671c.76.536 1.79.64 3.581.66"/>'
+  },
+  {
+    key: 'search',
+    label: '检索测试',
+    icon: '<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>'
+  },
+  {
+    key: 'consistency',
+    label: '一致性检查',
+    icon: '<path d="M9 12l2 2 4-4"/><path d="M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z"/>'
+  }
+]
+
+const currentNavLabel = computed(() => navItems.find((n) => n.key === activeTab.value)?.label ?? '')
+
+const fileTotalPages = computed(() => Math.ceil(fileTotal.value / filePageSize.value))
+const parseFileTotalPages = computed(() => Math.ceil(parseFileTotal.value / parseFilePageSize.value))
+const parseTotalPages = computed(() => Math.ceil(parseTotal.value / parsePageSize.value))
+
+// ===== Helper Functions =====
+
+function toggleSidebar() {
+  sidebarCollapsed.value = !sidebarCollapsed.value
+  localStorage.setItem('docSidebarCollapsed', String(sidebarCollapsed.value))
+}
+
+function formatTime(iso: string): string {
+  return new Date(iso).toLocaleString('zh-CN')
+}
+
+function renderMarkdown(content: string): string {
+  return marked.parse(content, { async: false }) as string
+}
+
+function getFileStatusLabel(status: string | null): string {
+  const labels: Record<string, string> = {
+    pending: '等待解析',
+    parsing: '解析中',
+    parsed: '已解析',
+    failed: '解析失败',
+  }
+  if (status === null) return '未解析'
+  return labels[status] || status
+}
+
+function getFileStatusClass(status: string | null): string {
+  if (status === 'parsed') return 'status-success'
+  if (status === 'failed') return 'status-error'
+  if (status === 'parsing' || status === 'pending') return 'status-processing'
+  return 'status-pending'
+}
+
+function formatDate(dateVal: string | number | null | undefined): string {
+  if (!dateVal && dateVal !== 0) return '-'
+  try {
+    let ts: number
+    if (typeof dateVal === 'number') {
+      ts = dateVal
+    } else {
+      const parsed = Number(dateVal)
+      ts = isNaN(parsed) ? new Date(dateVal).getTime() / 1000 : parsed
+    }
+    if (ts < 10000000000) ts *= 1000
+    const d = new Date(ts)
+    return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+  } catch {
+    return String(dateVal)
+  }
+}
+
+function handleApiError(prefix: string, error: unknown) {
+  console.error(prefix, error)
+}
+
+// ===== File Management Functions =====
 
 async function loadFileList() {
   try {
@@ -121,8 +174,6 @@ function handleFilePageChange(newPage: number) {
   filePage.value = newPage
   loadFileList()
 }
-
-const fileTotalPages = computed(() => Math.ceil(fileTotal.value / filePageSize.value))
 
 function triggerFileUpload() {
   fileUploadInput.value?.click()
@@ -156,20 +207,6 @@ async function handleFileUploadChange(event: Event) {
   input.value = ''
 }
 
-async function handleParseFile(id: string) {
-  fileParsing.value = true
-  try {
-    await client.parseDocumentFile(id)
-    await loadFileList()
-    startFilePolling()
-  } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : 'Parse request failed'
-    alert(msg)
-  } finally {
-    fileParsing.value = false
-  }
-}
-
 async function handleViewFile(id: string) {
   try {
     const response = await client.getDocumentFile(id)
@@ -185,47 +222,12 @@ async function handleDeleteFile(id: string) {
   try {
     await client.deleteDocumentFile(id)
     if (selectedFileDetail.value?.id === id) selectedFileDetail.value = null
-    // If last item on page deleted, go to previous page
     if (fileList.value.length <= 1 && filePage.value > 1) {
       filePage.value--
     }
     await loadFileList()
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : 'Delete failed'
-    alert(msg)
-  }
-}
-
-async function handleExportMarkdown(id: string) {
-  try {
-    const { blob, fileName } = await client.exportMarkdown(id)
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = fileName
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    URL.revokeObjectURL(url)
-  } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : 'Export failed'
-    alert(msg)
-  }
-}
-
-async function handleExportHtml(id: string) {
-  try {
-    const { blob, fileName } = await client.exportHtml(id)
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = fileName
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    URL.revokeObjectURL(url)
-  } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : 'Export failed'
     alert(msg)
   }
 }
@@ -248,526 +250,122 @@ function stopFilePolling() {
   }
 }
 
-function getFileStatusLabel(status: string | null): string {
-  const labels: Record<string, string> = {
-    pending: '等待解析',
-    parsing: '解析中',
-    parsed: '已解析',
-    failed: '解析失败',
+// ===== MinerU Parse Page Functions =====
+
+async function loadParseFileList() {
+  try {
+    const status = parseViewMode.value === 'unparsed' ? 'unparsed' : undefined
+    const response = await client.listDocumentFiles(parseFilePage.value, parseFilePageSize.value, status)
+    parseFileList.value = response.data as DocumentFile[]
+    parseFileTotal.value = response.total
+  } catch (e) {
+    console.error('Failed to load parse file list', e)
   }
-  if (status === null) return '未解析'
-  return labels[status] || status
 }
 
-function getFileStatusClass(status: string | null): string {
-  if (status === 'parsed') return 'status-success'
-  if (status === 'failed') return 'status-error'
-  if (status === 'parsing' || status === 'pending') return 'status-processing'
-  return 'status-pending'
+function handleParseFilePageChange(newPage: number) {
+  parseFilePage.value = newPage
+  loadParseFileList()
 }
 
-
-function formatTime(iso: string): string {
-  return new Date(iso).toLocaleString('zh-CN')
-}
-
-function renderMarkdown(content: string): string {
-  return marked.parse(content, { async: false }) as string
-}
-
-// Load file list when switching to files tab
-watch(activeTab, (tab) => {
-  if (tab === 'files') {
-    loadFileList()
-    const hasActive = fileList.value.some(f => f.parseStatus === 'pending' || f.parseStatus === 'parsing')
-    if (hasActive) startFilePolling()
-  } else {
-    stopFilePolling()
+async function handleParseFile(id: string) {
+  parseFileParsing.value = true
+  try {
+    await client.parseDocumentFile(id)
+    await loadParseFileList()
+    startParsePolling()
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : 'Parse request failed'
+    alert(msg)
+  } finally {
+    parseFileParsing.value = false
   }
-})
-
-onUnmounted(() => {
-  stopFilePolling()
-})
-
-const selectedDocument = ref<Document | null>(null)
-const selectedDocumentStatus = ref<DocumentStatus | null>(null)
-
-// 任务进度轮询：弹窗打开且 job 处于 processing 状态时启动
-const statusPollTimer = ref<number | null>(null)
-const stageLabels: Record<string, string> = {
-  pending: '等待处理',
-  starting: '启动中',
-  downloading: '下载文件',
-  analyzing: '文档分析',
-  parsing: '解析内容',
-  writing_pages: '写入页面',
-  writing_segments: '写入分段',
-  indexing: '建立索引',
-  completed: '已完成',
 }
 
-function startStatusPolling(documentId: string) {
-  if (statusPollTimer.value !== null) return
-  statusPollTimer.value = window.setInterval(async () => {
-    try {
-      const response = await client.getDocumentStatus(documentId)
-      selectedDocumentStatus.value = response.data
-      const latestJob = response.data.jobs?.[0]
-      if (latestJob && latestJob.status !== 'processing') {
-        stopStatusPolling()
-      }
-    } catch (e) {
-      // 网络错误保持轮询，下次重试
-      console.warn('状态轮询失败', e)
+function startParsePolling() {
+  if (parsePollTimer.value !== null) return
+  parsePollTimer.value = window.setInterval(async () => {
+    await loadParseFileList()
+    const hasActive = parseFileList.value.some(f => f.parseStatus === 'pending' || f.parseStatus === 'parsing')
+    if (!hasActive) {
+      stopParsePolling()
     }
-  }, 2000)
+  }, 5000)
 }
 
-function stopStatusPolling() {
-  if (statusPollTimer.value !== null) {
-    window.clearInterval(statusPollTimer.value)
-    statusPollTimer.value = null
-  }
-}
-const uploadFile = ref<File | null>(null)
-const uploadForm = ref({
-  title: '',
-  subject: '',
-  grade: '',
-  year: '',
-  tags: ''
-})
-
-const metadataForm = ref({
-  subject: '',
-  grade: '',
-  year: '',
-  tags: ''
-})
-
-const client = createDocApiClient()
-
-const currentUser = computed(() => authService.getUser())
-const displayName = computed(() => currentUser.value?.username ?? '管理员')
-
-const navItems = [
-  {
-    key: 'documents',
-    label: '文档管理',
-    icon: '<path d="M15.5 13.333l1.533 1.322c.645.555.967.833.967 1.178s-.322.623-.967 1.179L15.5 18.333m-3.333-5l-1.534 1.322c-.644.555-.966.833-.966 1.178s.322.623.966 1.179l1.534 1.321"/><path d="M17.167 10.836v-4.32c0-1.41 0-2.117-.224-2.68-.359-.906-1.118-1.621-2.08-1.96-.599-.21-1.349-.21-2.848-.21-2.623 0-3.935 0-4.983.369-1.684.591-3.013 1.842-3.641 3.428C3 6.449 3 7.684 3 10.154v2.122c0 2.558 0 3.838.706 4.726q.306.383.713.671c.76.536 1.79.64 3.581.66"/>'
-  },
-  {
-    key: 'search',
-    label: '检索测试',
-    icon: '<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>'
-  },
-  {
-    key: 'consistency',
-    label: '一致性检查',
-    icon: '<path d="M9 12l2 2 4-4"/><path d="M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z"/>'
-  },
-  {
-    key: 'mineru',
-    label: 'MinerU 解析',
-    icon: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>'
-  },
-  {
-    key: 'files',
-    label: '文件管理',
-    icon: '<path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/>'
-  }
-]
-
-const currentNavLabel = computed(() => navItems.find((n) => n.key === activeTab.value)?.label ?? '')
-const totalPages = computed(() => Math.ceil(total.value / pageSize.value))
-const pageNumbers = computed(() => {
-  const total = totalPages.value
-  if (total <= 0) return []
-  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1)
-  const pages: number[] = []
-  const current = page.value
-  const start = Math.max(1, current - 2)
-  const end = Math.min(total, current + 2)
-  for (let i = start; i <= end; i++) pages.push(i)
-  return pages
-})
-
-function toggleSidebar() {
-  sidebarCollapsed.value = !sidebarCollapsed.value
-  localStorage.setItem('docSidebarCollapsed', String(sidebarCollapsed.value))
-}
-
-function updateRefreshTime() {
-  lastRefreshTime.value = new Date().toLocaleTimeString()
-}
-
-function getStatusTagClass(status: string) {
-  switch (status) {
-    case 'ready':
-      return 'tag-success'
-    case 'failed':
-      return 'tag-danger'
-    case 'processing':
-      return 'tag-warning'
-    default:
-      return 'tag-info'
+function stopParsePolling() {
+  if (parsePollTimer.value !== null) {
+    clearInterval(parsePollTimer.value)
+    parsePollTimer.value = null
   }
 }
 
-function getStatusLabel(status: string) {
-  switch (status) {
-    case 'pending':
-      return '待处理'
-    case 'processing':
-      return '处理中'
-    case 'ready':
-      return '已就绪'
-    case 'failed':
-      return '失败'
-    default:
-      return status
-  }
-}
+// ===== Markdown Data Page Functions =====
 
-function formatDate(dateVal: string | number | null | undefined): string {
-  if (!dateVal && dateVal !== 0) return '-'
+async function loadParseList() {
   try {
-    let ts: number
-    if (typeof dateVal === 'number') {
-      ts = dateVal
-    } else {
-      const parsed = Number(dateVal)
-      ts = isNaN(parsed) ? new Date(dateVal).getTime() / 1000 : parsed
-    }
-    if (ts < 10000000000) ts *= 1000
-    const d = new Date(ts)
-    return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
-  } catch {
-    return String(dateVal)
+    const response = await client.listDocumentParses(parsePage.value, parsePageSize.value, parseSearch.value || undefined)
+    parseList.value = response.data as DocumentParse[]
+    parseTotal.value = response.total
+  } catch (e) {
+    console.error('Failed to load parse list', e)
   }
 }
 
-async function loadDocuments() {
-  loadingDocuments.value = true
+function handleParsePageChange(newPage: number) {
+  parsePage.value = newPage
+  loadParseList()
+}
+
+async function handleDeleteParse(parseId: string) {
+  if (!confirm('确定删除此解析记录？原始文件不会被删除。')) return
+  parseDeleting.value = parseId
   try {
-    const response = await client.listDocuments(
-      page.value,
-      pageSize.value,
-      statusFilter.value || undefined,
-      subjectFilter.value || undefined,
-      gradeFilter.value || undefined,
-      keywordFilter.value || undefined,
-      yearFilter.value || undefined
-    )
-    documents.value = response.data
-    total.value = response.total
-    // Update global stats only on first page without status filter
-    if (!statusFilter.value && page.value === 1) {
-      totalReady.value = documents.value.filter((d) => d.status === 'ready').length
-      totalProcessing.value = documents.value.filter((d) => d.status === 'processing').length
-      totalFailed.value = documents.value.filter((d) => d.status === 'failed').length
-    }
-    updateRefreshTime()
-  } catch (error) {
-    handleApiError('加载文档列表失败', error)
+    await client.deleteDocumentParse(parseId)
+    await loadParseList()
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : 'Delete failed'
+    alert(msg)
   } finally {
-    loadingDocuments.value = false
+    parseDeleting.value = null
   }
 }
 
-async function handleUpload() {
-  if (!uploadFile.value || !uploadForm.value.title) {
-    ElMessage.warning('请选择文件并填写标题')
-    return
-  }
-
-  uploading.value = true
+async function handleExportParseMarkdown(parseId: string) {
   try {
-    const tags = uploadForm.value.tags
-      ? uploadForm.value.tags.split(',').map((t) => t.trim()).filter((t) => t)
-      : undefined
-
-    await client.uploadDocument(
-      uploadFile.value,
-      uploadForm.value.title,
-      uploadForm.value.subject,
-      uploadForm.value.grade,
-      uploadForm.value.year || undefined,
-      tags
-    )
-
-    ElMessage.success('文档上传成功')
-    showUploadDialog.value = false
-    resetUploadForm()
-    await loadDocuments()
-  } finally {
-    uploading.value = false
+    const { blob, fileName } = await client.exportParseMarkdown(parseId)
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = fileName
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : 'Export failed'
+    alert(msg)
   }
 }
 
-async function handleViewStatus(doc: Document) {
-  selectedDocument.value = doc
-  viewingStatus.value = true
+async function handleExportParseHtml(parseId: string) {
   try {
-    const response = await client.getDocumentStatus(doc.id)
-    selectedDocumentStatus.value = response.data
-    showStatusDialog.value = true
-    // 如果最新 job 仍在 processing，启动 2 秒轮询
-    const latestJob = response.data.jobs?.[0]
-    if (latestJob && latestJob.status === 'processing') {
-      startStatusPolling(doc.id)
-    }
-  } catch (error) {
-    handleApiError('获取状态失败', error)
-  } finally {
-    viewingStatus.value = false
+    const { blob, fileName } = await client.exportParseHtml(parseId)
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = fileName
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : 'Export failed'
+    alert(msg)
   }
 }
 
-async function handleUpdateMetadata(doc: Document) {
-  selectedDocument.value = doc
-  metadataForm.value = {
-    subject: doc.subject,
-    grade: doc.grade,
-    year: doc.year,
-    tags: doc.tags || ''
-  }
-  showUpdateMetadataDialog.value = true
-}
-
-async function saveMetadata() {
-  if (!selectedDocument.value) return
-
-  try {
-    const tags = metadataForm.value.tags
-      ? metadataForm.value.tags.split(',').map((t) => t.trim()).filter((t) => t)
-      : undefined
-
-    await client.updateMetadata(selectedDocument.value.title, {
-      subject: metadataForm.value.subject || undefined,
-      grade: metadataForm.value.grade || undefined,
-      year: metadataForm.value.year || undefined,
-      tags
-    })
-
-    ElMessage.success('元数据更新成功')
-    showUpdateMetadataDialog.value = false
-    await loadDocuments()
-  } catch (error) {
-    handleApiError('更新元数据失败', error)
-  }
-}
-
-async function confirmDelete(doc: Document) {
-  selectedDocument.value = doc
-  showDeleteConfirm.value = true
-}
-
-async function handleDelete() {
-  if (!selectedDocument.value) return
-
-  deleting.value = true
-  try {
-    await client.deleteDocument(selectedDocument.value.title)
-    ElMessage.success('文档删除成功')
-    showDeleteConfirm.value = false
-    await loadDocuments()
-  } catch (error) {
-    handleApiError('删除文档失败', error)
-  } finally {
-    deleting.value = false
-  }
-}
-
-function handlePageChange(newPage: number) {
-  page.value = newPage
-  loadDocuments()
-}
-
-function handleFilterChange() {
-  page.value = 1
-  loadDocuments()
-}
-
-function handleFileChange(file: UploadUserFile) {
-  uploadFile.value = file.raw as File
-  if (!uploadForm.value.title && file.name) {
-    uploadForm.value.title = file.name.replace(/\.[^.]+$/, '')
-  }
-}
-
-function resetUploadForm() {
-  uploadForm.value = {
-    title: '',
-    subject: '',
-    grade: '',
-    year: '',
-    tags: ''
-  }
-  uploadFile.value = null
-}
-
-function handleApiError(prefix: string, error: unknown) {
-  ElMessage.error(`${prefix}: ${getDocErrorMessage(error)}`)
-}
-
-async function handleScanConsistency() {
-  scanLoading.value = true
-  scanResult.value = null
-  try {
-    const response = await client.scanConsistency()
-    scanResult.value = response.data
-    scanTime.value = new Date().toLocaleTimeString()
-    const s = response.data.summary
-    ElMessage.success(`扫描完成：${s.totalDocuments} 个文档，${s.brokenCount} 个异常，${s.orphanCount} 个孤儿文件`)
-  } catch (error) {
-    handleApiError('扫描失败', error)
-  } finally {
-    scanLoading.value = false
-  }
-}
-
-// ===== MinerU Agent Parsing =====
-
-function handleMineruFileChange(event: Event) {
-  const input = event.target as HTMLInputElement
-  const file = input.files?.[0]
-  if (!file) return
-  if (file.size > 200 * 1024 * 1024) {
-    ElMessage.warning('File size exceeds 200MB limit for MinerU Precision API')
-    input.value = ''
-    return
-  }
-  mineruFile.value = file
-  mineruFileName.value = file.name
-  mineruError.value = ''
-  mineruMarkdown.value = ''
-  mineruState.value = ''
-}
-
-async function handleMineruParse() {
-  if (!mineruFile.value) return
-  mineruSubmitting.value = true
-  mineruError.value = ''
-  mineruMarkdown.value = ''
-  mineruState.value = ''
-  mineruTaskId.value = ''
-
-  try {
-    const response = await client.mineruParse(mineruFile.value)
-    mineruTaskId.value = response.data.task_id
-    mineruState.value = 'submitted'
-    ElMessage.success(`Submitted: task_id=${response.data.task_id}`)
-    startMineruPolling()
-  } catch (error) {
-    mineruError.value = getDocErrorMessage(error)
-    handleApiError('MinerU parse failed', error)
-  } finally {
-    mineruSubmitting.value = false
-  }
-}
-
-function startMineruPolling() {
-  stopMineruPolling()
-  mineruPolling.value = true
-  mineruPollTimer = window.setInterval(async () => {
-    try {
-      const response = await client.mineruCheckStatus(mineruTaskId.value)
-      const { state, err_msg } = response.data
-      mineruState.value = state
-
-      if (state === 'done') {
-        stopMineruPolling()
-        // Auto-download markdown
-        await handleMineruDownload()
-      } else if (state === 'failed') {
-        stopMineruPolling()
-        mineruError.value = err_msg || 'Parsing failed on server side'
-      }
-    } catch (error) {
-      // Don't stop polling on transient errors
-      console.warn('MinerU poll error:', error)
-    }
-  }, 3000)
-}
-
-function stopMineruPolling() {
-  if (mineruPollTimer !== null) {
-    clearInterval(mineruPollTimer)
-    mineruPollTimer = null
-  }
-  mineruPolling.value = false
-}
-
-async function handleMineruDownload() {
-  if (!mineruTaskId.value) return
-  mineruDownloading.value = true
-  try {
-    const response = await client.mineruDownloadResult(mineruTaskId.value)
-    mineruMarkdown.value = response.data.markdown
-    mineruImageCount.value = response.data.image_count
-    mineruState.value = 'done'
-    ElMessage.success(`Markdown downloaded: ${response.data.markdown_length} chars`)
-  } catch (error) {
-    mineruError.value = getDocErrorMessage(error)
-    handleApiError('Download failed', error)
-  } finally {
-    mineruDownloading.value = false
-  }
-}
-
-function handleMineruSave() {
-  if (!mineruMarkdown.value) return
-  const blob = new Blob([mineruMarkdown.value], { type: 'text/markdown' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = mineruFileName.value.replace(/\.[^.]+$/, '') + '.md'
-  a.click()
-  URL.revokeObjectURL(url)
-}
-
-function handleMineruReset() {
-  stopMineruPolling()
-  mineruFile.value = null
-  mineruFileName.value = ''
-  mineruTaskId.value = ''
-  mineruState.value = ''
-  mineruMarkdown.value = ''
-  mineruViewMode.value = 'preview'
-  mineruError.value = ''
-  mineruImageCount.value = 0
-}
-
-async function handleDeleteOrphan(filePath: string) {
-  deletingOrphan.value = filePath
-  try {
-    // Orphan OSS files have no DB record, so we call force-delete by constructing a temp approach
-    // Actually we need a dedicated endpoint for this. For now, just show the path.
-    ElMessage.info(`孤儿文件：${filePath}（请手动删除或使用管理员工具）`)
-  } finally {
-    deletingOrphan.value = null
-  }
-}
-
-async function handleForceDelete(docId: string, title: string) {
-  if (!confirm(`确定强制删除文档「${title}」？此操作不可恢复。`)) return
-  forceDeleting.value = docId
-  try {
-    await client.forceDeleteDocument(docId)
-    ElMessage.success(`文档「${title}」已强制删除`)
-    // Remove from scan results
-    if (scanResult.value) {
-      scanResult.value.brokenDocuments = scanResult.value.brokenDocuments.filter(d => d.id !== docId)
-      scanResult.value.summary.brokenCount = scanResult.value.brokenDocuments.length
-    }
-  } catch (error) {
-    handleApiError('强制删除失败', error)
-  } finally {
-    forceDeleting.value = null
-  }
-}
+// ===== Search Functions =====
 
 async function handleSearch() {
   if (!searchQuery.value.trim()) return
@@ -796,9 +394,54 @@ function clearSearch() {
   searchNextToken.value = ''
 }
 
+// ===== Consistency Scan Functions =====
+
+async function handleScanConsistency() {
+  scanLoading.value = true
+  scanResult.value = null
+  try {
+    const response = await client.scanConsistency()
+    scanResult.value = response.data
+    scanTime.value = new Date().toLocaleTimeString()
+    const s = response.data.summary
+    console.log(`Scan complete: ${s.totalDocuments} docs, ${s.brokenCount} broken, ${s.orphanCount} orphans`)
+  } catch (error) {
+    handleApiError('扫描失败', error)
+  } finally {
+    scanLoading.value = false
+  }
+}
+
+async function handleDeleteOrphan(filePath: string) {
+  deletingOrphan.value = filePath
+  try {
+    console.log(`Orphan file: ${filePath}`)
+  } finally {
+    deletingOrphan.value = null
+  }
+}
+
+async function handleForceDelete(docId: string, title: string) {
+  if (!confirm(`确定强制删除文档「${title}」？此操作不可恢复。`)) return
+  forceDeleting.value = docId
+  try {
+    await client.forceDeleteDocument(docId)
+    if (scanResult.value) {
+      scanResult.value.brokenDocuments = scanResult.value.brokenDocuments.filter(d => d.id !== docId)
+      scanResult.value.summary.brokenCount = scanResult.value.brokenDocuments.length
+    }
+  } catch (error) {
+    handleApiError('强制删除失败', error)
+  } finally {
+    forceDeleting.value = null
+  }
+}
+
+// ===== Auth =====
+
 function handleLoginSuccess() {
   isAuthenticated.value = true
-  loadDocuments()
+  loadFileList()
 }
 
 async function handleLogout() {
@@ -806,317 +449,47 @@ async function handleLogout() {
   isAuthenticated.value = false
 }
 
+// ===== Watchers =====
+
+watch(activeTab, (tab) => {
+  if (tab === 'files') {
+    loadFileList()
+    const hasActive = fileList.value.some(f => f.parseStatus === 'pending' || f.parseStatus === 'parsing')
+    if (hasActive) startFilePolling()
+  } else {
+    stopFilePolling()
+  }
+  if (tab === 'parses') {
+    loadParseFileList()
+    const hasActive = parseFileList.value.some(f => f.parseStatus === 'pending' || f.parseStatus === 'parsing')
+    if (hasActive) startParsePolling()
+  } else {
+    stopParsePolling()
+  }
+  if (tab === 'markdown') {
+    loadParseList()
+  }
+})
+
+// ===== Lifecycle =====
+
 onMounted(async () => {
-  // Check if already authenticated
   if (authService.isAuthenticated()) {
     isAuthenticated.value = true
-    loadDocuments()
+    loadFileList()
   } else if (authService.canRefresh()) {
     const newTokens = await authService.refresh()
     if (newTokens) {
       isAuthenticated.value = true
-      loadDocuments()
+      loadFileList()
     }
   }
 })
 
 onUnmounted(() => {
-  stopStatusPolling()
-  stopMineruPolling()
+  stopFilePolling()
+  stopParsePolling()
 })
-
-function closeStatusDialog() {
-  showStatusDialog.value = false
-  stopStatusPolling()
-}
-
-// ========== Segment Refinement ==========
-
-async function openSegmentDialog(doc: Document) {
-  segmentDocTitle.value = doc.title
-  showSegmentDialog.value = true
-  segmentLoading.value = true
-  selectedSegmentIds.value = new Set()
-  corrections.value = []
-
-  try {
-    const response = await client.getDocumentSegments(doc.id)
-    segmentData.value = response.data
-  } catch (error) {
-    handleApiError('获取分段数据失败', error)
-    showSegmentDialog.value = false
-  } finally {
-    segmentLoading.value = false
-  }
-}
-
-function toggleSegmentSelect(sentenceId: string) {
-  const newSet = new Set(selectedSegmentIds.value)
-  if (newSet.has(sentenceId)) {
-    newSet.delete(sentenceId)
-  } else {
-    newSet.add(sentenceId)
-  }
-  selectedSegmentIds.value = newSet
-}
-
-function selectAllSegments() {
-  if (!segmentData.value) return
-  if (selectedSegmentIds.value.size === segmentData.value.segments.length) {
-    selectedSegmentIds.value = new Set()
-  } else {
-    selectedSegmentIds.value = new Set(segmentData.value.segments.map(s => s.sentenceId))
-  }
-}
-
-function mergeSelected() {
-  if (!segmentData.value) return
-  const selected = segmentData.value.segments
-    .filter(s => selectedSegmentIds.value.has(s.sentenceId))
-    .sort((a, b) => a.startOffset - b.startOffset)
-
-  if (selected.length < 2) {
-    ElMessage.warning('请至少选中 2 条 segment')
-    return
-  }
-
-  const mergedText = selected.map(s => s.text).join(' ')
-  const firstType = selected[0].segmentType
-
-  corrections.value.push({
-    originalSentenceIds: selected.map(s => s.sentenceId),
-    action: 'merge',
-    newText: mergedText,
-    newSegmentType: firstType
-  })
-
-  const newSegments = segmentData.value.segments.filter(s => !selectedSegmentIds.value.has(s.sentenceId))
-  newSegments.push({
-    id: 'merged-' + Date.now(),
-    sentenceId: selected[0].sentenceId,
-    segmentType: firstType,
-    text: mergedText,
-    startOffset: selected[0].startOffset,
-    endOffset: selected[selected.length - 1].endOffset,
-    pageNumber: selected[0].pageNumber
-  })
-  newSegments.sort((a, b) => a.startOffset - b.startOffset)
-
-  segmentData.value = { ...segmentData.value, segments: newSegments, totalCount: newSegments.length }
-  selectedSegmentIds.value = new Set()
-  ElMessage.success(`已合并 ${selected.length} 条 segment`)
-}
-
-function changeSegmentType(sentenceId: string, newType: string) {
-  if (!segmentData.value) return
-  const seg = segmentData.value.segments.find(s => s.sentenceId === sentenceId)
-  if (!seg || seg.segmentType === newType) return
-
-  corrections.value.push({
-    originalSentenceIds: [sentenceId],
-    action: 'retype',
-    newSegmentType: newType
-  })
-  seg.segmentType = newType
-  ElMessage.success(`已修改 ${sentenceId} 类型为 ${newType}`)
-}
-
-function startSplit(seg: SegmentDto) {
-  splitTarget.value = seg
-  splitPosition.value = Math.floor(seg.text.length / 2)
-  showSplitDialog.value = true
-}
-
-function confirmSplit() {
-  if (!splitTarget.value || !segmentData.value) return
-  const seg = splitTarget.value
-  const pos = splitPosition.value
-
-  if (pos <= 0 || pos >= seg.text.length) {
-    ElMessage.warning('拆分位置无效')
-    return
-  }
-
-  corrections.value.push({
-    originalSentenceIds: [seg.sentenceId],
-    action: 'split',
-    splitPosition: pos
-  })
-
-  const idx = segmentData.value.segments.findIndex(s => s.sentenceId === seg.sentenceId)
-  if (idx < 0) return
-
-  const part1: SegmentDto = {
-    id: seg.id + '-part1',
-    sentenceId: seg.sentenceId + '-a',
-    segmentType: seg.segmentType,
-    text: seg.text.slice(0, pos),
-    startOffset: seg.startOffset,
-    endOffset: seg.startOffset + pos,
-    pageNumber: seg.pageNumber
-  }
-  const part2: SegmentDto = {
-    id: seg.id + '-part2',
-    sentenceId: seg.sentenceId + '-b',
-    segmentType: seg.segmentType,
-    text: seg.text.slice(pos),
-    startOffset: seg.startOffset + pos,
-    endOffset: seg.endOffset,
-    pageNumber: seg.pageNumber
-  }
-
-  const newSegments = [...segmentData.value.segments]
-  newSegments.splice(idx, 1, part1, part2)
-  segmentData.value = { ...segmentData.value, segments: newSegments, totalCount: newSegments.length }
-  showSplitDialog.value = false
-  ElMessage.success(`已拆分 ${seg.sentenceId}`)
-}
-
-function startSplitMerge(seg: SegmentDto) {
-  splitMergeTarget.value = seg
-  splitMergePosition.value = Math.floor(seg.text.length / 2)
-  splitMergeWithPrev.value = true
-  splitMergeWithNext.value = true
-  showSplitMergeDialog.value = true
-}
-
-function confirmSplitMerge() {
-  if (!splitMergeTarget.value || !segmentData.value) return
-  const seg = splitMergeTarget.value
-  const pos = splitMergePosition.value
-  const withPrev = splitMergeWithPrev.value
-  const withNext = splitMergeWithNext.value
-
-  if (pos <= 0 || pos >= seg.text.length) {
-    ElMessage.warning('拆分位置无效')
-    return
-  }
-
-  if (!withPrev && !withNext) {
-    ElMessage.warning('请至少选择合并一个方向')
-    return
-  }
-
-  const segments = segmentData.value.segments
-  const idx = segments.findIndex(s => s.sentenceId === seg.sentenceId)
-  if (idx < 0) return
-
-  const prevSeg = idx > 0 ? segments[idx - 1] : null
-  const nextSeg = idx < segments.length - 1 ? segments[idx + 1] : null
-
-  if (withPrev && !prevSeg) {
-    ElMessage.warning('该段落是第一段，无法与上一段合并')
-    return
-  }
-  if (withNext && !nextSeg) {
-    ElMessage.warning('该段落是最后一段，无法与下一段合并')
-    return
-  }
-
-  // Record the correction
-  corrections.value.push({
-    originalSentenceIds: [seg.sentenceId],
-    action: 'splitMerge',
-    splitPosition: pos,
-    mergeFirstWithPrevious: withPrev,
-    mergeSecondWithNext: withNext
-  })
-
-  const part1Text = seg.text.slice(0, pos)
-  const part2Text = seg.text.slice(pos)
-
-  // Build new segments list
-  const newSegments: SegmentDto[] = []
-  for (let i = 0; i < segments.length; i++) {
-    if (i === idx) continue // Skip the target segment
-
-    if (withPrev && i === idx - 1) {
-      // Merge previous with first part
-      newSegments.push({
-        ...segments[i],
-        text: segments[i].text + part1Text,
-        endOffset: segments[i].endOffset + pos
-      })
-    } else if (withNext && i === idx + 1) {
-      // Merge next with second part
-      newSegments.push({
-        ...segments[i],
-        text: part2Text + segments[i].text,
-        startOffset: segments[i].startOffset - (seg.text.length - pos)
-      })
-    } else {
-      newSegments.push(segments[i])
-    }
-  }
-
-  // If not merging with prev, keep first part as independent segment
-  if (!withPrev) {
-    newSegments.splice(idx, 0, {
-      id: seg.id + '-part1',
-      sentenceId: seg.sentenceId + '-a',
-      segmentType: seg.segmentType,
-      text: part1Text,
-      startOffset: seg.startOffset,
-      endOffset: seg.startOffset + pos,
-      pageNumber: seg.pageNumber
-    })
-  }
-
-  // If not merging with next, keep second part as independent segment
-  if (!withNext) {
-    const insertIdx = newSegments.findIndex(s => s.sentenceId === (withPrev ? prevSeg!.sentenceId : seg.sentenceId + '-a'))
-    newSegments.splice(insertIdx + 1, 0, {
-      id: seg.id + '-part2',
-      sentenceId: seg.sentenceId + '-b',
-      segmentType: seg.segmentType,
-      text: part2Text,
-      startOffset: seg.startOffset + pos,
-      endOffset: seg.endOffset,
-      pageNumber: seg.pageNumber
-    })
-  }
-
-  newSegments.sort((a, b) => a.startOffset - b.startOffset)
-  segmentData.value = { ...segmentData.value, segments: newSegments, totalCount: newSegments.length }
-  showSplitMergeDialog.value = false
-  ElMessage.success(`已拆分并合并 ${seg.sentenceId}`)
-}
-
-function undoLastCorrection() {
-  if (corrections.value.length === 0) return
-  // Clear all corrections — individual undo is unsafe because remaining
-  // corrections reference stale sentence IDs after segment reload
-  corrections.value = []
-  // Reload segments from server to restore clean state
-  if (segmentData.value) {
-    const docId = segmentData.value.documentId
-    client.getDocumentSegments(docId).then(r => { segmentData.value = r.data })
-  }
-  ElMessage.info('已撤销所有操作')
-}
-
-function isCorrected(sentenceId: string): boolean {
-  return corrections.value.some(c => c.originalSentenceIds.includes(sentenceId))
-}
-
-async function submitRefinement() {
-  if (!segmentData.value || corrections.value.length === 0) return
-  if (!confirm(`确定要提交 ${corrections.value.length} 条修正并重新拆分文档吗？此操作将替换所有现有分段。`)) return
-
-  refining.value = true
-  try {
-    const response = await client.refineDocumentSegments(segmentData.value.documentId, corrections.value)
-    ElMessage.success(response.data.message || '修正完成')
-    corrections.value = []
-    // Reload segments
-    const refreshed = await client.getDocumentSegments(segmentData.value.documentId)
-    segmentData.value = refreshed.data
-  } catch (error) {
-    handleApiError('修正失败', error)
-  } finally {
-    refining.value = false
-  }
-}
 </script>
 
 <template>
@@ -1184,7 +557,7 @@ async function submitRefinement() {
           <span class="header-breadcrumb">{{ currentNavLabel }}</span>
         </div>
         <div class="header-actions">
-          <button class="icon-btn" @click="loadDocuments">
+          <button class="icon-btn" @click="loadFileList">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <polyline points="23 4 23 10 17 10" />
               <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
@@ -1195,185 +568,226 @@ async function submitRefinement() {
       </header>
 
       <main class="content-area">
-        <div v-if="activeTab === 'documents'" class="stats-bar">
-          <div class="stats-bar-item">
-            <span class="stats-bar-value">{{ total }}</span>
-            <span class="stats-bar-label">文档总数</span>
-          </div>
-          <div class="stats-bar-item">
-            <span class="stats-bar-value">{{ totalReady }}</span>
-            <span class="stats-bar-label">已就绪</span>
-          </div>
-          <div class="stats-bar-item">
-            <span class="stats-bar-value">{{ totalProcessing }}</span>
-            <span class="stats-bar-label">处理中</span>
-          </div>
-          <div class="stats-bar-item">
-            <span class="stats-bar-value">{{ totalFailed }}</span>
-            <span class="stats-bar-label">失败</span>
-          </div>
+        <!-- ===== Files Tab ===== -->
+        <div v-if="activeTab === 'files'" class="page-header">
+          <h1 class="page-title">文件管理</h1>
+          <p class="page-subtitle">上传文件到 S3，管理文件和解析状态</p>
         </div>
 
-        <div v-if="activeTab === 'documents'" class="page-header">
-          <h1 class="page-title">文档管理</h1>
-          <p class="page-subtitle">上传、管理和监控文档的处理状态</p>
-        </div>
-
-        <div v-if="activeTab === 'documents'" class="card table-card">
+        <div v-if="activeTab === 'files'" class="card">
           <div class="card-header">
-            <span>文档列表</span>
-            <div class="card-header-actions">
-              <button class="btn btn-primary btn-small" @click="showUploadDialog = true">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <line x1="12" y1="5" x2="12" y2="19" />
-                  <line x1="5" y1="12" x2="19" y2="12" />
-                </svg>
-                上传文档
+            <span>文件列表</span>
+            <div style="display: flex; align-items: center; gap: 12px">
+              <button class="btn btn-primary btn-small" :disabled="fileUploading" @click="triggerFileUpload">
+                {{ fileUploading ? '上传中...' : '上传文件' }}
               </button>
+              <input ref="fileUploadInput" type="file" accept=".pdf,.docx,.doc,.pptx,.ppt" style="display: none" @change="handleFileUploadChange" />
             </div>
           </div>
           <div class="card-body">
-            <div class="filter-bar filter-bar-compact">
-              <div class="select-wrap filter-item">
-                <select v-model="statusFilter" @change="handleFilterChange">
-                  <option value="">所有状态</option>
-                  <option value="pending">待处理</option>
-                  <option value="processing">处理中</option>
-                  <option value="ready">已就绪</option>
-                  <option value="failed">失败</option>
-                </select>
+            <!-- Upload Progress -->
+            <div v-if="fileUploading" style="margin-bottom: 16px">
+              <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px">
+                <span style="font-size: 12px; color: var(--text-secondary)">上传中...</span>
+                <span style="font-size: 12px; color: var(--primary)">{{ fileUploadProgress }}%</span>
               </div>
-              <div class="select-wrap filter-item">
-                <select v-model="subjectFilter" @change="handleFilterChange">
-                  <option value="">所有科目</option>
-                  <option value="英语">英语</option>
-                </select>
-              </div>
-              <div class="select-wrap filter-item">
-                <select v-model="gradeFilter" @change="handleFilterChange">
-                  <option value="">所有年级</option>
-                  <option value="K">幼儿园</option>
-                  <option value="G1">一年级</option>
-                  <option value="G2">二年级</option>
-                  <option value="G3">三年级</option>
-                  <option value="G4">四年级</option>
-                  <option value="G5">五年级</option>
-                  <option value="G6">六年级</option>
-                  <option value="G7">初一</option>
-                  <option value="G8">初二</option>
-                  <option value="G9">初三</option>
-                  <option value="G10">高一</option>
-                  <option value="G11">高二</option>
-                  <option value="G12">高三</option>
-                </select>
-              </div>
-              <div class="input-wrap filter-item filter-item-wide">
-                <input v-model="keywordFilter" type="text" placeholder="搜索文档标题..." @keyup.enter="handleFilterChange" />
-              </div>
-              <div class="input-wrap filter-item filter-item-narrow">
-                <input v-model="yearFilter" type="text" placeholder="年份" @keyup.enter="handleFilterChange" />
+              <div style="height: 6px; background: var(--bg-secondary); border-radius: 3px; overflow: hidden">
+                <div style="height: 100%; background: var(--primary); border-radius: 3px; transition: width 0.3s" :style="{ width: fileUploadProgress + '%' }"></div>
               </div>
             </div>
 
-            <table v-if="!loadingDocuments" class="data-table">
+            <table v-if="fileList.length > 0" class="data-table">
               <thead>
                 <tr>
-                  <th>标题</th>
-                  <th>科目</th>
-                  <th>年级</th>
-                  <th>年份</th>
-                  <th>状态</th>
-                  <th>创建时间</th>
+                  <th>文件名</th>
+                  <th>类型</th>
+                  <th>上传时间</th>
+                  <th>解析状态</th>
                   <th>操作</th>
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="doc in documents" :key="doc.id">
-                  <td>{{ doc.title }}</td>
+                <tr v-for="f in fileList" :key="f.id">
                   <td>
-                    <span v-if="doc.subject">{{ doc.subject }}</span>
-                    <span v-else-if="doc.status === 'pending' || doc.status === 'processing'" class="tag tag-info" style="font-size: 11px">识别中</span>
-                    <span v-else style="color: var(--text-muted)">-</span>
+                    <span style="cursor: pointer; color: var(--primary)" @click="handleViewFile(f.id)">{{ f.fileName }}</span>
+                  </td>
+                  <td>{{ f.contentType }}</td>
+                  <td>{{ formatTime(f.createdAt) }}</td>
+                  <td>
+                    <span class="status-badge" :class="getFileStatusClass(f.parseStatus)">{{ getFileStatusLabel(f.parseStatus) }}</span>
                   </td>
                   <td>
-                    <span v-if="doc.grade">{{ doc.grade }}</span>
-                    <span v-else-if="doc.status === 'pending' || doc.status === 'processing'" class="tag tag-info" style="font-size: 11px">识别中</span>
-                    <span v-else style="color: var(--text-muted)">-</span>
-                  </td>
-                  <td>
-                    <span v-if="doc.year">{{ doc.year }}</span>
-                    <span v-else-if="doc.status === 'pending' || doc.status === 'processing'" class="tag tag-info" style="font-size: 11px">识别中</span>
-                    <span v-else style="color: var(--text-muted)">-</span>
-                  </td>
-                  <td>
-                    <span class="tag" :class="getStatusTagClass(doc.status)">
-                      {{ getStatusLabel(doc.status) }}
-                    </span>
-                  </td>
-                  <td>{{ formatDate(doc.createdAt) }}</td>
-                  <td>
-                    <div class="table-actions">
-                      <button class="btn btn-link btn-small" @click="handleViewStatus(doc)">
-                        查看状态
-                      </button>
-                      <button class="btn btn-link btn-small" :disabled="doc.status !== 'ready'" @click="openSegmentDialog(doc)">
-                        分段管理
-                      </button>
-                      <button class="btn btn-link btn-small" @click="handleUpdateMetadata(doc)">
-                        更新元数据
-                      </button>
-                      <button class="btn btn-link btn-link-danger btn-small" @click="confirmDelete(doc)">
-                        删除
-                      </button>
-                    </div>
+                    <button class="btn btn-secondary btn-small" style="color: var(--danger)" @click="handleDeleteFile(f.id)">删除</button>
                   </td>
                 </tr>
-                <tr v-if="documents.length === 0">
-                  <td colspan="7">
-                    <div class="empty-state">
-                      <div class="empty-state-icon">
-                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                          <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-                          <circle cx="9" cy="7" r="4" />
-                          <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
-                          <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-                        </svg>
-                      </div>
-                      <div class="empty-state-text">暂无文档，点击上传开始使用</div>
+              </tbody>
+            </table>
+            <div v-else style="text-align: center; padding: 40px; color: var(--text-muted)">暂无文件，点击上方按钮上传</div>
+
+            <!-- Pagination -->
+            <div v-if="fileTotal > filePageSize" class="pagination-bar">
+              <span class="pagination-info">共 {{ fileTotal }} 条</span>
+              <button class="page-btn" :disabled="filePage <= 1" @click="handleFilePageChange(filePage - 1)">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6" /></svg>
+              </button>
+              <button v-for="p in fileTotalPages" :key="p" class="page-btn" :class="{ active: filePage === p }" @click="handleFilePageChange(p)">{{ p }}</button>
+              <button class="page-btn" :disabled="filePage >= fileTotalPages" @click="handleFilePageChange(filePage + 1)">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6" /></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- File Detail Dialog -->
+        <div v-if="selectedFileDetail && activeTab === 'files'" class="card" style="margin-top: 16px">
+          <div class="card-header">
+            <span>{{ selectedFileDetail.fileName }} — Markdown 预览</span>
+            <button class="btn btn-secondary btn-small" @click="selectedFileDetail = null">关闭</button>
+          </div>
+          <div class="card-body">
+            <div v-if="selectedFileDetail.parse?.errorMessage" style="margin-bottom: 12px; padding: 12px; background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; color: var(--danger); font-size: 13px">
+              {{ selectedFileDetail.parse.errorMessage }}
+            </div>
+            <div v-if="selectedFileDetail.parse?.markdownContent" class="markdown-preview" v-html="renderMarkdown(selectedFileDetail.parse.markdownContent)"></div>
+            <div v-else-if="selectedFileDetail.parse?.images && selectedFileDetail.parse.images.length > 0">
+              <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px">
+                <div v-for="img in selectedFileDetail.parse.images" :key="img.id" style="border: 1px solid var(--border-light); border-radius: 8px; overflow: hidden">
+                  <img :src="img.imageUrl" :alt="img.imageName" style="width: 100%; display: block" />
+                  <div style="padding: 6px 8px; font-size: 11px; color: var(--text-muted)">{{ img.imageName }}</div>
+                </div>
+              </div>
+            </div>
+            <div v-else style="text-align: center; padding: 40px; color: var(--text-muted)">暂无 Markdown 内容</div>
+          </div>
+        </div>
+
+        <!-- ===== Parses Tab ===== -->
+        <div v-if="activeTab === 'parses'" class="page-header">
+          <h1 class="page-title">MinerU 解析</h1>
+          <p class="page-subtitle">管理文件的 MinerU 解析任务</p>
+        </div>
+
+        <div v-if="activeTab === 'parses'" class="card">
+          <div class="card-header">
+            <span>解析管理</span>
+            <div style="display: flex; align-items: center; gap: 8px">
+              <div style="display: flex; border: 1px solid var(--border-light); border-radius: 6px; overflow: hidden">
+                <button class="btn btn-small" :class="parseViewMode === 'unparsed' ? 'btn-primary' : 'btn-secondary'" @click="parseViewMode = 'unparsed'; parseFilePage = 1; loadParseFileList()" style="border: none; border-radius: 0">未解析</button>
+                <button class="btn btn-small" :class="parseViewMode === 'all' ? 'btn-primary' : 'btn-secondary'" @click="parseViewMode = 'all'; parseFilePage = 1; loadParseFileList()" style="border: none; border-radius: 0">全部</button>
+              </div>
+            </div>
+          </div>
+          <div class="card-body">
+            <table v-if="parseFileList.length > 0" class="data-table">
+              <thead>
+                <tr>
+                  <th>文件名</th>
+                  <th>解析状态</th>
+                  <th>上传时间</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="f in parseFileList" :key="f.id">
+                  <td>{{ f.fileName }}</td>
+                  <td>
+                    <span class="status-badge" :class="getFileStatusClass(f.parseStatus)">{{ getFileStatusLabel(f.parseStatus) }}</span>
+                  </td>
+                  <td>{{ formatTime(f.createdAt) }}</td>
+                  <td>
+                    <button v-if="f.parseStatus === null || f.parseStatus === 'unparsed' || f.parseStatus === 'failed'" class="btn btn-primary btn-small" @click="handleParseFile(f.id)" :disabled="parseFileParsing">
+                      {{ f.parseStatus === 'failed' ? '重新解析' : '解析' }}
+                    </button>
+                    <span v-else-if="f.parseStatus === 'pending' || f.parseStatus === 'parsing'" style="font-size: 12px; color: var(--text-muted)">
+                      {{ getFileStatusLabel(f.parseStatus) }}
+                    </span>
+                    <button v-else-if="f.parseStatus === 'parsed'" class="btn btn-primary btn-small" @click="handleParseFile(f.id)" :disabled="parseFileParsing">重新解析</button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+            <div v-else style="text-align: center; padding: 40px; color: var(--text-muted)">
+              {{ parseViewMode === 'unparsed' ? '没有未解析的文件' : '暂无文件' }}
+            </div>
+
+            <!-- Pagination -->
+            <div v-if="parseFileTotal > parseFilePageSize" class="pagination-bar">
+              <span class="pagination-info">共 {{ parseFileTotal }} 条</span>
+              <button class="page-btn" :disabled="parseFilePage <= 1" @click="handleParseFilePageChange(parseFilePage - 1)">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6" /></svg>
+              </button>
+              <button v-for="p in parseFileTotalPages" :key="p" class="page-btn" :class="{ active: parseFilePage === p }" @click="handleParseFilePageChange(p)">{{ p }}</button>
+              <button class="page-btn" :disabled="parseFilePage >= parseFileTotalPages" @click="handleParseFilePageChange(parseFilePage + 1)">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6" /></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- ===== Markdown Data Tab ===== -->
+        <div v-if="activeTab === 'markdown'" class="page-header">
+          <h1 class="page-title">Markdown 数据</h1>
+          <p class="page-subtitle">管理解析记录，导出 Markdown 和 HTML</p>
+        </div>
+
+        <div v-if="activeTab === 'markdown'" class="card">
+          <div class="card-header">
+            <span>解析记录</span>
+            <div style="display: flex; align-items: center; gap: 8px">
+              <div class="input-wrap" style="width: 200px">
+                <input v-model="parseSearch" type="text" placeholder="搜索文档名..." @keyup.enter="parsePage = 1; loadParseList()" />
+              </div>
+              <button class="btn btn-secondary btn-small" @click="parsePage = 1; loadParseList()">搜索</button>
+            </div>
+          </div>
+          <div class="card-body">
+            <table v-if="parseList.length > 0" class="data-table">
+              <thead>
+                <tr>
+                  <th>文件名</th>
+                  <th>状态</th>
+                  <th>解析时间</th>
+                  <th>错误信息</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="p in parseList" :key="p.id">
+                  <td>{{ p.fileName }}</td>
+                  <td>
+                    <span class="status-badge" :class="getFileStatusClass(p.status)">{{ getFileStatusLabel(p.status) }}</span>
+                  </td>
+                  <td>{{ p.parsedAt ? formatTime(p.parsedAt) : '-' }}</td>
+                  <td style="max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap" :title="p.errorMessage || ''">{{ p.errorMessage || '-' }}</td>
+                  <td>
+                    <div style="display: flex; gap: 6px">
+                      <button class="btn btn-secondary btn-small" @click="handleExportParseMarkdown(p.id)">导出MD</button>
+                      <button class="btn btn-secondary btn-small" @click="handleExportParseHtml(p.id)">导出HTML</button>
+                      <button class="btn btn-secondary btn-small" style="color: var(--danger)" :disabled="parseDeleting === p.id" @click="handleDeleteParse(p.id)">
+                        {{ parseDeleting === p.id ? '删除中...' : '删除' }}
+                      </button>
                     </div>
                   </td>
                 </tr>
               </tbody>
             </table>
+            <div v-else style="text-align: center; padding: 40px; color: var(--text-muted)">暂无解析记录</div>
 
-            <div v-else class="empty-state">
-              <svg class="spinner empty-spinner" viewBox="0 0 50 50">
-                <circle cx="25" cy="25" r="20" fill="none" stroke="var(--primary-color)" stroke-width="4" stroke-linecap="round" stroke-dasharray="80" stroke-dashoffset="60">
-                  <animateTransform attributeName="transform" type="rotate" from="0 25 25" to="360 25 25" dur="1s" repeatCount="indefinite" />
-                </circle>
-              </svg>
-              <div class="empty-state-text">加载中...</div>
-            </div>
-
-            <div v-if="total > 0" class="pagination-bar">
-              <span class="pagination-info">共 {{ total }} 条</span>
-              <button class="page-btn" :disabled="page <= 1" @click="handlePageChange(page - 1)">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <polyline points="15 18 9 12 15 6" />
-                </svg>
+            <!-- Pagination -->
+            <div v-if="parseTotal > parsePageSize" class="pagination-bar">
+              <span class="pagination-info">共 {{ parseTotal }} 条</span>
+              <button class="page-btn" :disabled="parsePage <= 1" @click="handleParsePageChange(parsePage - 1)">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6" /></svg>
               </button>
-              <button v-for="p in pageNumbers" :key="p" class="page-btn" :class="{ active: page === p }" @click="handlePageChange(p)">
-                {{ p }}
-              </button>
-              <button class="page-btn" :disabled="page >= totalPages" @click="handlePageChange(page + 1)">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <polyline points="9 18 15 12 9 6" />
-                </svg>
+              <button v-for="p in parseTotalPages" :key="p" class="page-btn" :class="{ active: parsePage === p }" @click="handleParsePageChange(p)">{{ p }}</button>
+              <button class="page-btn" :disabled="parsePage >= parseTotalPages" @click="handleParsePageChange(parsePage + 1)">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6" /></svg>
               </button>
             </div>
           </div>
         </div>
 
+        <!-- ===== Search Tab ===== -->
         <div v-if="activeTab === 'search'" class="page-header">
           <h1 class="page-title">检索测试</h1>
           <p class="page-subtitle">测试文档检索功能</p>
@@ -1443,7 +857,7 @@ async function submitRefinement() {
           </div>
         </div>
 
-        <!-- Consistency Scan Tab -->
+        <!-- ===== Consistency Scan Tab ===== -->
         <div v-if="activeTab === 'consistency'" class="page-header">
           <h1 class="page-title">一致性检查</h1>
           <p class="page-subtitle">扫描 OSS 文件与数据库记录的一致性</p>
@@ -1540,550 +954,7 @@ async function submitRefinement() {
             </div>
           </div>
         </div>
-
-        <!-- MinerU Precision Parsing Tab -->
-        <div v-if="activeTab === 'mineru'" class="page-header">
-          <h1 class="page-title">MinerU 解析</h1>
-          <p class="page-subtitle">上传文档调用 MinerU Precision API 解析为 Markdown（含图片，≤200MB/≤200页）</p>
-        </div>
-
-        <div v-if="activeTab === 'mineru'" class="card">
-          <div class="card-header">
-            <span>文档解析</span>
-            <button v-if="mineruTaskId" class="btn btn-secondary btn-small" @click="handleMineruReset">重新开始</button>
-          </div>
-          <div class="card-body">
-            <!-- Upload Section -->
-            <div v-if="!mineruTaskId" style="margin-bottom: 20px">
-              <div style="margin-bottom: 16px">
-                <label style="display: block; font-size: 13px; font-weight: 600; margin-bottom: 8px; color: var(--text-secondary)">选择文件</label>
-                <input type="file" accept=".pdf,.doc,.docx,.ppt,.pptx,.png,.jpg,.jpeg" @change="handleMineruFileChange"
-                  style="font-size: 13px; padding: 8px; border: 1px solid var(--border-light); border-radius: 6px; width: 100%; max-width: 500px" />
-                <div v-if="mineruFileName" style="margin-top: 6px; font-size: 12px; color: var(--text-muted)">已选择: {{ mineruFileName }}</div>
-              </div>
-
-              <button class="btn btn-primary" :disabled="!mineruFile || mineruSubmitting" @click="handleMineruParse">
-                {{ mineruSubmitting ? '提交中...' : '开始解析' }}
-              </button>
-            </div>
-
-            <!-- Status Section -->
-            <div v-if="mineruTaskId" style="margin-bottom: 20px">
-              <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px">
-                <span style="font-size: 13px; color: var(--text-secondary)">Task ID:</span>
-                <code style="font-size: 12px; background: var(--bg-secondary); padding: 4px 8px; border-radius: 4px">{{ mineruTaskId }}</code>
-              </div>
-
-              <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px">
-                <span style="font-size: 13px; color: var(--text-secondary)">状态:</span>
-                <span v-if="mineruPolling" style="font-size: 13px; color: var(--primary)">
-                  {{ mineruState === 'processing' ? '解析中...' :
-                     mineruState === 'pending' ? '排队中...' :
-                     mineruState === 'submitted' ? '已提交...' : mineruState }}
-                </span>
-                <span v-else-if="mineruState === 'done'" style="font-size: 13px; color: var(--success)">✓ 解析完成{{ mineruImageCount > 0 ? ` (${mineruImageCount} 张图片)` : '' }}</span>
-                <span v-else-if="mineruError" style="font-size: 13px; color: var(--danger)">✗ {{ mineruError }}</span>
-                <span v-else style="font-size: 13px">{{ mineruState }}</span>
-              </div>
-
-              <div v-if="mineruPolling" style="margin-bottom: 12px">
-                <div style="height: 4px; background: var(--bg-secondary); border-radius: 2px; overflow: hidden; max-width: 400px">
-                  <div style="height: 100%; background: var(--primary); border-radius: 2px; transition: width 0.3s; animation: pulse 2s ease-in-out infinite"
-                    :style="{ width: mineruState === 'processing' ? '60%' : '30%' }"></div>
-                </div>
-              </div>
-            </div>
-
-            <!-- Markdown Result -->
-            <div v-if="mineruMarkdown" style="margin-top: 16px">
-              <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px">
-                <h3 style="font-size: 14px; font-weight: 600">解析结果 ({{ mineruMarkdown.length }} 字符)</h3>
-                <div style="display: flex; gap: 8px; align-items: center">
-                  <div style="display: flex; border: 1px solid var(--border-light); border-radius: 6px; overflow: hidden">
-                    <button class="btn btn-small" :class="mineruViewMode === 'preview' ? 'btn-primary' : 'btn-secondary'" @click="mineruViewMode = 'preview'" style="border: none; border-radius: 0">预览</button>
-                    <button class="btn btn-small" :class="mineruViewMode === 'source' ? 'btn-primary' : 'btn-secondary'" @click="mineruViewMode = 'source'" style="border: none; border-radius: 0">源码</button>
-                  </div>
-                  <button class="btn btn-secondary btn-small" @click="handleMineruSave">下载 Markdown</button>
-                </div>
-              </div>
-              <div v-if="mineruViewMode === 'preview'" class="markdown-preview" v-html="mineruRenderedHtml"></div>
-              <pre v-else style="background: var(--bg-secondary); padding: 16px; border-radius: 8px; font-size: 12px; line-height: 1.6; max-height: 600px; overflow: auto; white-space: pre-wrap; word-break: break-word">{{ mineruMarkdown }}</pre>
-            </div>
-
-            <!-- Error -->
-            <div v-if="mineruError && !mineruPolling" style="margin-top: 16px; padding: 12px; background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; color: var(--danger); font-size: 13px">
-              {{ mineruError }}
-            </div>
-          </div>
-        </div>
-
-        <!-- Files Tab -->
-        <div v-if="activeTab === 'files'" class="page-header">
-          <h1 class="page-title">文件管理</h1>
-          <p class="page-subtitle">上传文件到 S3，触发 MinerU 解析，查看 Markdown 结果</p>
-        </div>
-
-        <div v-if="activeTab === 'files'" class="card">
-          <div class="card-header">
-            <span>文件列表</span>
-            <div style="display: flex; align-items: center; gap: 12px">
-              <button class="btn btn-primary btn-small" :disabled="fileUploading" @click="triggerFileUpload">
-                {{ fileUploading ? '上传中...' : '上传文件' }}
-              </button>
-              <input ref="fileUploadInput" type="file" accept=".pdf,.docx,.doc,.pptx,.ppt" style="display: none" @change="handleFileUploadChange" />
-            </div>
-          </div>
-          <div class="card-body">
-            <!-- Upload Progress -->
-            <div v-if="fileUploading" style="margin-bottom: 16px">
-              <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px">
-                <span style="font-size: 12px; color: var(--text-secondary)">上传中...</span>
-                <span style="font-size: 12px; color: var(--primary)">{{ fileUploadProgress }}%</span>
-              </div>
-              <div style="height: 6px; background: var(--bg-secondary); border-radius: 3px; overflow: hidden">
-                <div style="height: 100%; background: var(--primary); border-radius: 3px; transition: width 0.3s" :style="{ width: fileUploadProgress + '%' }"></div>
-              </div>
-            </div>
-
-            <table v-if="fileList.length > 0" class="data-table">
-              <thead>
-                <tr>
-                  <th>文件名</th>
-                  <th>状态</th>
-                  <th>上传时间</th>
-                  <th>操作</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="f in fileList" :key="f.id">
-                  <td>{{ f.fileName }}</td>
-                  <td>
-                    <span class="status-badge" :class="getFileStatusClass(f.parseStatus)">{{ getFileStatusLabel(f.parseStatus) }}</span>
-                  </td>
-                  <td>{{ formatTime(f.createdAt) }}</td>
-                  <td style="display: flex; gap: 6px">
-                    <button v-if="f.parseStatus === null || f.parseStatus === 'failed'" class="btn btn-primary btn-small" @click="handleParseFile(f.id)" :disabled="fileParsing">解析</button>
-                    <button v-if="f.parseStatus === 'parsed'" class="btn btn-secondary btn-small" @click="handleViewFile(f.id)">查看</button>
-                    <button v-if="f.parseStatus === 'parsed'" class="btn btn-secondary btn-small" @click="handleExportMarkdown(f.id)">导出MD</button>
-                    <button v-if="f.parseStatus === 'parsed'" class="btn btn-secondary btn-small" @click="handleExportHtml(f.id)">导出HTML</button>
-                    <button class="btn btn-secondary btn-small" style="color: var(--danger)" @click="handleDeleteFile(f.id)">删除</button>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-            <div v-else style="text-align: center; padding: 40px; color: var(--text-muted)">暂无文件，点击上方按钮上传</div>
-
-            <!-- Pagination -->
-            <div v-if="fileTotal > filePageSize" class="pagination-bar">
-              <span class="pagination-info">共 {{ fileTotal }} 条</span>
-              <button class="page-btn" :disabled="filePage <= 1" @click="handleFilePageChange(filePage - 1)">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6" /></svg>
-              </button>
-              <button v-for="p in fileTotalPages" :key="p" class="page-btn" :class="{ active: filePage === p }" @click="handleFilePageChange(p)">{{ p }}</button>
-              <button class="page-btn" :disabled="filePage >= fileTotalPages" @click="handleFilePageChange(filePage + 1)">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6" /></svg>
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <!-- File Detail Dialog -->
-        <div v-if="selectedFileDetail" class="card" style="margin-top: 16px">
-          <div class="card-header">
-            <span>{{ selectedFileDetail.fileName }} — Markdown 预览</span>
-            <button class="btn btn-secondary btn-small" @click="selectedFileDetail = null">关闭</button>
-          </div>
-          <div class="card-body">
-            <div v-if="selectedFileDetail.parse?.errorMessage" style="margin-bottom: 12px; padding: 12px; background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; color: var(--danger); font-size: 13px">
-              {{ selectedFileDetail.parse.errorMessage }}
-            </div>
-            <div v-if="selectedFileDetail.parse?.markdownContent" class="markdown-preview" v-html="renderMarkdown(selectedFileDetail.parse.markdownContent)"></div>
-            <div v-else-if="selectedFileDetail.parse?.images && selectedFileDetail.parse.images.length > 0">
-              <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px">
-                <div v-for="img in selectedFileDetail.parse.images" :key="img.id" style="border: 1px solid var(--border-light); border-radius: 8px; overflow: hidden">
-                  <img :src="img.imageUrl" :alt="img.imageName" style="width: 100%; display: block" />
-                  <div style="padding: 6px 8px; font-size: 11px; color: var(--text-muted)">{{ img.imageName }}</div>
-                </div>
-              </div>
-            </div>
-            <div v-else style="text-align: center; padding: 40px; color: var(--text-muted)">暂无 Markdown 内容</div>
-          </div>
-        </div>
       </main>
-    </div>
-
-    <div v-if="showUploadDialog" class="dialog-overlay" @click.self="showUploadDialog = false">
-      <div class="dialog">
-        <div class="dialog-header">
-          <div class="dialog-icon primary">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-              <polyline points="17 8 12 3 7 8" />
-              <line x1="12" y1="3" x2="12" y2="15" />
-            </svg>
-          </div>
-          上传文档
-        </div>
-        <div class="dialog-body">
-          <div class="form-group">
-            <label>文档标题 (选择文件后自动填充)</label>
-            <div class="input-wrap">
-              <input v-model="uploadForm.title" type="text" placeholder="选择文件后自动填充，可修改" />
-            </div>
-          </div>
-          <div class="form-group">
-            <label>选择文件</label>
-            <div>
-              <el-upload
-                drag
-                action="#"
-                :auto-upload="false"
-                :show-file-list="false"
-                :on-change="handleFileChange"
-                accept=".pdf,.doc,.docx,.ppt,.pptx"
-              >
-                <el-icon class="el-icon--upload"><upload /></el-icon>
-                <div class="el-upload__text">
-                  将文件拖到此处，或<em>点击上传</em>
-                </div>
-                <template #tip>
-                  <div class="el-upload__tip">
-                    支持 pdf、doc、docx、ppt、pptx 格式文件
-                  </div>
-                </template>
-              </el-upload>
-              <div v-if="uploadFile" style="margin-top: 8px; font-size: 13px; color: var(--text-secondary)">
-                已选择: {{ uploadFile.name }}
-              </div>
-            </div>
-          </div>
-          <div class="form-group">
-            <label>标签 (逗号分隔)</label>
-            <div class="input-wrap">
-              <input v-model="uploadForm.tags" type="text" placeholder="可选，用逗号分隔" />
-            </div>
-          </div>
-        </div>
-        <div class="dialog-footer">
-          <button class="btn btn-secondary btn-small" @click="showUploadDialog = false; resetUploadForm()">
-            取消
-          </button>
-          <button class="btn btn-primary btn-small" :disabled="uploading" @click="handleUpload">
-            <svg v-if="uploading" class="spinner" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M21 12a9 9 0 1 1-6.219-8.56" />
-            </svg>
-            {{ uploading ? '上传中...' : '上传' }}
-          </button>
-        </div>
-      </div>
-    </div>
-
-    <div v-if="showStatusDialog" class="dialog-overlay" @click.self="closeStatusDialog">
-      <div class="dialog">
-        <div class="dialog-header">
-          导入任务状态 - {{ selectedDocument?.title }}
-        </div>
-        <div class="dialog-body">
-          <div v-if="viewingStatus" class="empty-state">
-            <svg class="spinner empty-spinner" viewBox="0 0 50 50">
-              <circle cx="25" cy="25" r="20" fill="none" stroke="var(--primary-color)" stroke-width="4" stroke-linecap="round" stroke-dasharray="80" stroke-dashoffset="60">
-                <animateTransform attributeName="transform" type="rotate" from="0 25 25" to="360 25 25" dur="1s" repeatCount="indefinite" />
-              </circle>
-            </svg>
-            <div class="empty-state-text">加载中...</div>
-          </div>
-          <div v-else-if="selectedDocumentStatus">
-            <div class="form-group">
-              <label>文档状态</label>
-              <span class="tag" :class="getStatusTagClass(selectedDocumentStatus.status)" style="margin-left: 8px">
-                {{ getStatusLabel(selectedDocumentStatus.status) }}
-              </span>
-            </div>
-            <div class="form-group">
-              <label>导入任务</label>
-              <div v-for="job in selectedDocumentStatus.jobs" :key="job.jobId" style="padding: 8px 0; border-bottom: 1px solid var(--border-light)">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px">
-                  <span class="tag" :class="getStatusTagClass(job.status)">
-                    {{ getStatusLabel(job.status) }}
-                  </span>
-                  <span style="font-size: 12px; color: var(--text-muted)">{{ formatDate(job.startedAt) || '-' }}</span>
-                </div>
-                <el-progress
-                  v-if="job.status === 'processing'"
-                  :percentage="job.progress || 0"
-                  :stroke-width="14"
-                  :text-inside="true"
-                />
-                <el-progress
-                  v-else-if="job.status === 'failed' && job.progress != null"
-                  :percentage="job.progress"
-                  status="exception"
-                  :stroke-width="14"
-                  :text-inside="true"
-                />
-                <div v-if="job.progressStage" style="font-size: 12px; color: var(--text-muted); margin-top: 4px">
-                  {{ stageLabels[job.progressStage] || job.progressStage }}
-                </div>
-                <div style="font-size: 12px; color: var(--text-secondary); margin-top: 4px">
-                  解析器版本: {{ job.parserVersion || '-' }} | OCR 版本: {{ job.ocrVersion || '-' }}
-                </div>
-                <div v-if="job.errorMessage" style="font-size: 12px; color: var(--danger-color); margin-top: 4px">
-                  错误: {{ job.errorMessage }}
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div class="dialog-footer">
-          <button class="btn btn-secondary btn-small" @click="closeStatusDialog">
-            关闭
-          </button>
-          <button class="btn btn-primary btn-small" @click="loadDocuments; closeStatusDialog">
-            刷新并关闭
-          </button>
-        </div>
-      </div>
-    </div>
-
-    <div v-if="showUpdateMetadataDialog" class="dialog-overlay" @click.self="showUpdateMetadataDialog = false">
-      <div class="dialog">
-        <div class="dialog-header">
-          更新元数据 - {{ selectedDocument?.title }}
-        </div>
-        <div class="dialog-body">
-          <div class="form-group">
-            <label>科目</label>
-            <div class="select-wrap">
-              <select v-model="metadataForm.subject">
-                <option value="英语">英语</option>
-              </select>
-            </div>
-          </div>
-          <div class="form-group">
-            <label>年级</label>
-            <div class="select-wrap">
-              <select v-model="metadataForm.grade">
-                <option value="K">幼儿园</option>
-                <option value="G1">一年级</option>
-                <option value="G2">二年级</option>
-                <option value="G3">三年级</option>
-                <option value="G4">四年级</option>
-                <option value="G5">五年级</option>
-                <option value="G6">六年级</option>
-                <option value="G7">初一</option>
-                <option value="G8">初二</option>
-                <option value="G9">初三</option>
-                <option value="G10">高一</option>
-                <option value="G11">高二</option>
-                <option value="G12">高三</option>
-              </select>
-            </div>
-          </div>
-          <div class="form-group">
-            <label>年份</label>
-            <div class="input-wrap">
-              <input v-model="metadataForm.year" type="text" />
-            </div>
-          </div>
-          <div class="form-group">
-            <label>标签 (逗号分隔)</label>
-            <div class="input-wrap">
-              <input v-model="metadataForm.tags" type="text" placeholder="可选，用逗号分隔" />
-            </div>
-          </div>
-        </div>
-        <div class="dialog-footer">
-          <button class="btn btn-secondary btn-small" @click="showUpdateMetadataDialog = false">
-            取消
-          </button>
-          <button class="btn btn-primary btn-small" @click="saveMetadata">
-            保存
-          </button>
-        </div>
-      </div>
-    </div>
-
-    <div v-if="showDeleteConfirm" class="dialog-overlay" @click.self="showDeleteConfirm = false">
-      <div class="dialog dialog-narrow">
-        <div class="dialog-header">
-          <div class="dialog-icon warning">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
-              <line x1="12" y1="9" x2="12" y2="13" />
-              <line x1="12" y1="17" x2="12.01" y2="17" />
-            </svg>
-          </div>
-          确认删除
-        </div>
-        <div class="dialog-body">
-          <p>确定要删除文档 "{{ selectedDocument?.title }}" 吗？此操作不可撤销。</p>
-        </div>
-        <div class="dialog-footer">
-          <button class="btn btn-secondary btn-small" @click="showDeleteConfirm = false">
-            取消
-          </button>
-          <button class="btn btn-danger btn-small" :disabled="deleting" @click="handleDelete">
-            <svg v-if="deleting" class="spinner" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M21 12a9 9 0 1 1-6.219-8.56" />
-            </svg>
-            {{ deleting ? '删除中...' : '删除' }}
-          </button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Segment Management Dialog -->
-    <div v-if="showSegmentDialog" class="dialog-overlay" @click.self="showSegmentDialog = false">
-      <div class="dialog dialog-wide">
-        <div class="dialog-header">
-          分段管理 — {{ segmentDocTitle }}
-        </div>
-        <div class="dialog-body">
-          <div v-if="segmentLoading" class="empty-state">
-            <svg class="spinner empty-spinner" viewBox="0 0 50 50">
-              <circle cx="25" cy="25" r="20" fill="none" stroke="var(--primary-color)" stroke-width="4" stroke-linecap="round" stroke-dasharray="80" stroke-dashoffset="60">
-                <animateTransform attributeName="transform" type="rotate" from="0 25 25" to="360 25 25" dur="1s" repeatCount="indefinite" />
-              </circle>
-            </svg>
-            <div class="empty-state-text">加载中...</div>
-          </div>
-          <div v-else-if="segmentData">
-            <!-- LLM Profile -->
-            <div v-if="segmentData.profile" class="profile-section">
-              <div class="profile-title">LLM 分析结果</div>
-              <div class="profile-grid">
-                <div class="profile-item"><span class="profile-label">学科</span><span>{{ segmentData.profile.subject }}</span></div>
-                <div class="profile-item"><span class="profile-label">文档类型</span><span>{{ segmentData.profile.docType }}</span></div>
-                <div class="profile-item"><span class="profile-label">分段策略</span><span class="tag tag-info">{{ segmentData.profile.segmentStrategy }}</span></div>
-                <div class="profile-item">
-                  <span class="profile-label">结构</span>
-                  <span v-if="segmentData.profile.structure.hasChapters" class="tag tag-success" style="margin-right: 4px">章节</span>
-                  <span v-if="segmentData.profile.structure.hasQuestions" class="tag tag-warning" style="margin-right: 4px">题目</span>
-                  <span v-if="segmentData.profile.structure.hasWordList" class="tag tag-info" style="margin-right: 4px">单词表</span>
-                  <span v-if="segmentData.profile.structure.hasFormulas" class="tag tag-danger">公式</span>
-                  <span v-if="!segmentData.profile.structure.hasChapters && !segmentData.profile.structure.hasQuestions && !segmentData.profile.structure.hasWordList && !segmentData.profile.structure.hasFormulas">—</span>
-                </div>
-              </div>
-            </div>
-            <div v-else class="profile-section">
-              <div class="empty-state" style="padding: 12px">
-                <div class="empty-state-text">该文档无 LLM 分析记录（使用规则切割）</div>
-              </div>
-            </div>
-
-            <!-- Toolbar -->
-            <div class="segment-toolbar">
-              <span class="segment-count">共 {{ segmentData.totalCount }} 条分段</span>
-              <div class="segment-toolbar-actions">
-                <button class="btn btn-secondary btn-small" @click="selectAllSegments">
-                  {{ selectedSegmentIds.size === segmentData.segments.length ? '取消全选' : '全选' }}
-                </button>
-                <button class="btn btn-primary btn-small" :disabled="selectedSegmentIds.size < 2" @click="mergeSelected">
-                  合并选中 ({{ selectedSegmentIds.size }})
-                </button>
-                <button class="btn btn-secondary btn-small" :disabled="corrections.length === 0" @click="undoLastCorrection">
-                  撤销 ({{ corrections.length }})
-                </button>
-                <button class="btn btn-success btn-small" :disabled="corrections.length === 0 || refining" @click="submitRefinement">
-                  {{ refining ? '提交中...' : `提交修正 (${corrections.length})` }}
-                </button>
-              </div>
-            </div>
-
-            <!-- Segment List -->
-            <div class="segment-list">
-              <div v-for="seg in segmentData.segments" :key="seg.sentenceId" class="segment-item" :class="{ selected: selectedSegmentIds.has(seg.sentenceId), corrected: isCorrected(seg.sentenceId) }">
-                <div class="segment-header">
-                  <input type="checkbox" :checked="selectedSegmentIds.has(seg.sentenceId)" @change="toggleSegmentSelect(seg.sentenceId)" />
-                  <span class="segment-id">{{ seg.sentenceId }}</span>
-                  <select :value="seg.segmentType" @change="changeSegmentType(seg.sentenceId, ($event.target as HTMLSelectElement).value)" class="segment-type-select">
-                    <option value="sentence">sentence</option>
-                    <option value="concept">concept</option>
-                    <option value="word_entry">word_entry</option>
-                    <option value="knowledge_point">knowledge_point</option>
-                    <option value="question">question</option>
-                  </select>
-                  <span class="segment-page">P{{ seg.pageNumber }}</span>
-                  <button class="btn btn-link btn-small" @click="startSplit(seg)">拆分</button>
-                  <button class="btn btn-link btn-small" @click="startSplitMerge(seg)">拆分并合并</button>
-                </div>
-                <div class="segment-text">{{ seg.text }}</div>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div class="dialog-footer">
-          <button class="btn btn-secondary btn-small" @click="showSegmentDialog = false">关闭</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Split Dialog -->
-    <div v-if="showSplitDialog" class="dialog-overlay" @click.self="showSplitDialog = false">
-      <div class="dialog dialog-narrow">
-        <div class="dialog-header">拆分 Segment</div>
-        <div class="dialog-body">
-          <div v-if="splitTarget">
-            <div class="split-preview">{{ splitTarget.text }}</div>
-            <div class="form-group">
-              <label>拆分位置（字符偏移）</label>
-              <input type="range" v-model.number="splitPosition" :min="1" :max="splitTarget.text.length - 1" style="width: 100%" />
-              <div style="display: flex; justify-content: space-between; font-size: 12px; color: var(--text-muted)">
-                <span>0</span>
-                <span>{{ splitPosition }}</span>
-                <span>{{ splitTarget.text.length - 1 }}</span>
-              </div>
-            </div>
-            <div class="split-result">
-              <div class="split-part"><span class="split-label">前半部分：</span>{{ splitTarget.text.slice(0, splitPosition) }}</div>
-              <div class="split-part"><span class="split-label">后半部分：</span>{{ splitTarget.text.slice(splitPosition) }}</div>
-            </div>
-          </div>
-        </div>
-        <div class="dialog-footer">
-          <button class="btn btn-secondary btn-small" @click="showSplitDialog = false">取消</button>
-          <button class="btn btn-primary btn-small" @click="confirmSplit">确认拆分</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Split and Merge Dialog -->
-    <div v-if="showSplitMergeDialog" class="dialog-overlay" @click.self="showSplitMergeDialog = false">
-      <div class="dialog dialog-narrow">
-        <div class="dialog-header">拆分并合并</div>
-        <div class="dialog-body">
-          <div v-if="splitMergeTarget">
-            <div class="split-preview">{{ splitMergeTarget.text }}</div>
-            <div class="form-group">
-              <label>拆分位置（字符偏移）</label>
-              <input type="range" v-model.number="splitMergePosition" :min="1" :max="splitMergeTarget.text.length - 1" style="width: 100%" />
-              <div style="display: flex; justify-content: space-between; font-size: 12px; color: var(--text-muted)">
-                <span>0</span>
-                <span>{{ splitMergePosition }}</span>
-                <span>{{ splitMergeTarget.text.length - 1 }}</span>
-              </div>
-            </div>
-            <div class="split-result">
-              <div class="split-part"><span class="split-label">前半部分：</span>{{ splitMergeTarget.text.slice(0, splitMergePosition) }}</div>
-              <div class="split-part"><span class="split-label">后半部分：</span>{{ splitMergeTarget.text.slice(splitMergePosition) }}</div>
-            </div>
-            <div class="form-group" style="margin-top: 16px">
-              <label style="display: flex; align-items: center; gap: 8px">
-                <input type="checkbox" v-model="splitMergeWithPrev" />
-                前半部分与上一段合并
-              </label>
-              <label style="display: flex; align-items: center; gap: 8px; margin-top: 8px">
-                <input type="checkbox" v-model="splitMergeWithNext" />
-                后半部分与下一段合并
-              </label>
-            </div>
-          </div>
-        </div>
-        <div class="dialog-footer">
-          <button class="btn btn-secondary btn-small" @click="showSplitMergeDialog = false">取消</button>
-          <button class="btn btn-primary btn-small" @click="confirmSplitMerge">确认</button>
-        </div>
-      </div>
     </div>
   </div>
 </template>

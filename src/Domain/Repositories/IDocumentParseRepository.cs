@@ -9,4 +9,6 @@ public interface IDocumentParseRepository
     Task<DocumentParseModel?> GetLatestByFileIdAsync(Guid documentFileId);
     Task<DocumentParseModel> UpdateAsync(DocumentParseModel model);
     Task<List<DocumentParseModel>> GetByStatusAsync(string status);
+    Task<(List<DocumentParseModel> Items, int TotalCount)> GetListAsync(int page, int size, string? search = null);
+    Task DeleteAsync(Guid id);
 }
