@@ -213,7 +213,7 @@ Endpoint 保存备份（fire-and-forget，失败仅记日志）
 ### API Client
 
 ```typescript
-// services/docRetrievalApi.ts
+// services/docApi.ts
 class DocLibraryApiClient {
   async getDocumentSegments(documentId: string): Promise<DocumentSegmentsResponse>
   async refineDocumentSegments(documentId: string, corrections: CorrectionDto[]): Promise<RefinementResponse>

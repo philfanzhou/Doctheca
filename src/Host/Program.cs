@@ -49,7 +49,7 @@ builder.Services.AddDbContext<DocLibraryDbContext>(options =>
     if (isPostgreSql)
         options.UseNpgsql(connectionString);
     else
-        options.UseSqlite(connectionString ?? "Data Source=data/sqlite/ruoyu_study_docretrieval.db");
+        options.UseSqlite(connectionString ?? "Data Source=data/sqlite/ruoyu_study_doclibrary.db");
 });
 
 var useLocalOss = Environment.GetEnvironmentVariable("USE_LOCAL_OSS") == "1";

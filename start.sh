@@ -13,11 +13,11 @@ IDENTITY_GRPC_ENDPOINT="http://ruoyu-identity:5001"
 IDENTITY_JWKS_ENDPOINT="http://ruoyu-identity:5002/.well-known/jwks"
 
 OPENSEARCH_URL="http://ruoyu-opensearch:9200"
-OPENSEARCH_INDEX="docretrieval-segments"
+OPENSEARCH_INDEX="doclibrary-segments"
 
 DB_HOST="ruoyu-postgres"
 DB_PORT="5432"
-DB_NAME="ruoyu_study_docretrieval"
+DB_NAME="ruoyu_study_doclibrary"
 DB_USER="postgres"
 DB_PASS="postgres"
 

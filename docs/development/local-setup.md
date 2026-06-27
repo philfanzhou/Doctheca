@@ -31,7 +31,7 @@
 默认的 `appsettings.json` 包含 PostgreSQL 连接字符串：
 
 ```
-Host=localhost;Port=5432;Database=ruoyu_study_docretrieval;Username=phil
+Host=localhost;Port=5432;Database=ruoyu_study_doclibrary;Username=phil
 ```
 
 若要改用 SQLite，请将 `ConnectionStrings:Default` 改为 SQLite 风格的字符串，例如：

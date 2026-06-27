@@ -90,6 +90,11 @@ public static class DatabaseNameMigrationService
         createCmd.CommandText = $"CREATE DATABASE \"{NewDbName}\" TEMPLATE \"{OldDbName}\"";
         await createCmd.ExecuteNonQueryAsync();
 
+        // Clear all Npgsql connection pools: the pg_terminate_backend above killed
+        // pooled connections that EF Core may still hold, so they must be discarded
+        // to prevent "terminating connection due to administrator command" errors.
+        NpgsqlConnection.ClearAllPools();
+
         logger.LogInformation("Database migration completed: {OldDb} -> {NewDb}", OldDbName, NewDbName);
     }
 
@@ -121,6 +126,9 @@ public static class DatabaseNameMigrationService
         await using var dropCmd = conn.CreateCommand();
         dropCmd.CommandText = $"DROP DATABASE \"{OldDbName}\"";
         await dropCmd.ExecuteNonQueryAsync();
+
+        // Clear pools: terminate_backend killed any lingering connections to old DB
+        NpgsqlConnection.ClearAllPools();
 
         logger.LogInformation("Old database {OldDb} dropped", OldDbName);
     }

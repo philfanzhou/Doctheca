@@ -83,7 +83,7 @@ public class ConstantsTests
     {
         var options = new OpenSearchOptions();
         Assert.Equal("http://localhost:9200", options.Url);
-        Assert.Equal("docretrieval-segments", options.IndexName);
+        Assert.Equal("doclibrary-segments", options.IndexName);
     }
 
     #endregion
