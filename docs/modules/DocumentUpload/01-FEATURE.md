@@ -17,7 +17,7 @@
 - AC-5：相同文件哈希且状态为 `ready` 的文档已存在时返回 409（`DOCLIBRARY_FILE_HASH_ALREADY_EXISTS`）。
 - AC-6：学科/年级/年份由 AI 自动识别填充，前端无需填写。用户上传后 LLM 分析 2000 字符自动填写。
 - AC-7：文档记录和导入任务在同一 `SaveChangesAsync` 中原子写入，保证数据一致性。
-- AC-8：OSS 路径格式为 `documents/docretrieval/{Guid}{ext}`，SHA-256 哈希计算后 `stream.Position=0` 再上传 OSS。
+- AC-8：OSS 路径格式为 `documents/doclibrary/{Guid}{ext}`，SHA-256 哈希计算后 `stream.Position=0` 再上传 OSS。
 
 ## 明确列出"范围外"（不做什么）
 

@@ -179,6 +179,16 @@ using (var scope = app.Services.CreateScope())
     await DatabaseInitializer.InitializeAsync(dbContext, loggerFactory);
 }
 
+// Migrate legacy OSS paths (docretrieval → doclibrary) — see LegacyPathMigrationService for details
+using (var migrateScope = app.Services.CreateScope())
+{
+    var sp = migrateScope.ServiceProvider;
+    await LegacyPathMigrationService.MigrateAsync(
+        sp.GetRequiredService<IOssService>(),
+        sp.GetRequiredService<DocLibraryDbContext>(),
+        sp.GetRequiredService<ILoggerFactory>());
+}
+
 // Initialize search indices
 using (var initScope = app.Services.CreateScope())
 {

@@ -16,7 +16,7 @@
 - [x] REQ-CONSISTENCY-01 扫描端点：`GET /admin/documents/scan-consistency`
   - 查询所有 `documents` 记录的 `file_path`（去重）
   - 逐个调用 `IOssService.ObjectExistsAsync` 检查 OSS 文件是否存在
-  - 调用 `IOssService.ListObjectsAsync("documents/docretrieval/")` 列出 Documents 桶下所有文件
+  - 调用 `IOssService.ListObjectsAsync("documents/doclibrary/")` 列出 Documents 桶下所有文件
   - 反向比对：OSS 文件路径不在任何 document 的 `file_path` 中 = 孤儿文件
   - 返回：`{ orphanOssFiles: string[], brokenDocuments: { id, title, filePath, status }[] }`
 
@@ -35,9 +35,9 @@
 
 ```gherkin
 Scenario: 扫描发现孤儿 OSS 文件
-  Given OSS 中存在文件 "docretrieval/orphan.pdf" 但 DB 无对应记录
+  Given OSS 中存在文件 "doclibrary/orphan.pdf" 但 DB 无对应记录
   When 调用 GET /admin/documents/scan-consistency
-  Then 返回 orphanOssFiles 包含 "docretrieval/orphan.pdf"
+  Then 返回 orphanOssFiles 包含 "doclibrary/orphan.pdf"
   And brokenDocuments 为空
 
 Scenario: 扫描发现悬空文档记录

@@ -14,7 +14,7 @@
 - [x] REQ-UPLOAD-04 能校验文件格式：仅支持 PDF/Word/PPT 的 MIME 类型，不符返回 400（`DOCLIBRARY_FILE_FORMAT_UNSUPPORTED`）。
 - [x] REQ-UPLOAD-05 能检测加密 PDF：在 PDF 文件前 4096 字节中搜索 `/Encrypt` 标记，命中返回 400（`DOCLIBRARY_FILE_ENCRYPTED`）。
 - [x] REQ-UPLOAD-06 能计算文件 SHA-256 哈希，计算后将 `stream.Position` 重置为 0 再上传 OSS。
-- [x] REQ-UPLOAD-07 能上传文件到 OSS，路径格式为 `documents/docretrieval/{Guid}{ext}`，使用 `OssBucket.Documents` 桶（独立于图片的 `uploads` 桶，避免被僵尸图片审计误扫）。
+- [x] REQ-UPLOAD-07 能上传文件到 OSS，路径格式为 `documents/doclibrary/{Guid}{ext}`，使用 `OssBucket.Documents` 桶（独立于图片的 `uploads` 桶，避免被僵尸图片审计误扫）。
 - [x] REQ-UPLOAD-08 能校验元数据：`title` 必填（不超过 200 字符），`subject`/`grade` 可选（为空时由 AI 自动填充），`year`/`tags` 可选。
 - [x] REQ-UPLOAD-08a 前端选择文件后，自动将文件名（不含扩展名）填入标题输入框；若标题字段已有内容则不覆盖。
 - [x] REQ-UPLOAD-09 能校验学科与年级（仅在非空时校验）：学科仅支持"英语"（`DOCLIBRARY_SUBJECT_INVALID`），年级必须为 K/G1~G12（`DOCLIBRARY_GRADE_INVALID`）。为空时不校验，由 AI 自动填充。
@@ -31,7 +31,7 @@
 ### 场景 A：正常上传
 
 - AC-A1：上传合法 PDF 文件，提供完整元数据（title="英语G3测试", subject="英语", grade="G3", year="2025"），返回 200，`success=true`，`data.documentId` 非 `Guid.Empty`，`data.status=="pending"`，`data.jobId` 非 `Guid.Empty`。
-- AC-A2：数据库中 `documents` 表新增一条记录，`Status=="pending"`，`SourceType=="pdf"`，`FileHash` 为 64 位小写十六进制字符串，`FilePath` 以 `docretrieval/` 开头。
+- AC-A2：数据库中 `documents` 表新增一条记录，`Status=="pending"`，`SourceType=="pdf"`，`FileHash` 为 64 位小写十六进制字符串，`FilePath` 以 `doclibrary/` 开头。
 - AC-A3：数据库中 `document_ingestion_jobs` 表新增一条记录，`DocumentId` 与文档 `Id` 一致，`Status=="pending"`。
 - AC-A4：`CreatedAt` 接近当前时间（误差 < 5s）。
 

@@ -48,16 +48,16 @@ public class DocumentConsistencyTests
         _documentRepoMock.Setup(r => r.GetAllDocumentsWithFilePathAsync())
             .ReturnsAsync(new List<(Guid, string, string, string)>
             {
-                (docId, "Test Doc", "docretrieval/test.pdf", "ready")
+                (docId, "Test Doc", "documents/doclibrary/test.pdf", "ready")
             });
 
-        _ossServiceMock.Setup(s => s.ObjectExistsAsync("docretrieval/test.pdf"))
+        _ossServiceMock.Setup(s => s.ObjectExistsAsync("documents/doclibrary/test.pdf"))
             .ReturnsAsync(true);
 
-        _ossServiceMock.Setup(s => s.ListObjectsAsync("docretrieval/"))
+        _ossServiceMock.Setup(s => s.ListObjectsAsync("documents/doclibrary/"))
             .ReturnsAsync(new List<OssObjectInfo>
             {
-                new() { ObjectPath = "docretrieval/test.pdf", Size = 1000 }
+                new() { ObjectPath = "documents/doclibrary/test.pdf", Size = 1000 }
             });
 
         // Act
@@ -76,13 +76,13 @@ public class DocumentConsistencyTests
         _documentRepoMock.Setup(r => r.GetAllDocumentsWithFilePathAsync())
             .ReturnsAsync(new List<(Guid, string, string, string)>
             {
-                (docId, "Missing Doc", "docretrieval/missing.pdf", "ready")
+                (docId, "Missing Doc", "documents/doclibrary/missing.pdf", "ready")
             });
 
-        _ossServiceMock.Setup(s => s.ObjectExistsAsync("docretrieval/missing.pdf"))
+        _ossServiceMock.Setup(s => s.ObjectExistsAsync("documents/doclibrary/missing.pdf"))
             .ReturnsAsync(false);
 
-        _ossServiceMock.Setup(s => s.ListObjectsAsync("docretrieval/"))
+        _ossServiceMock.Setup(s => s.ListObjectsAsync("documents/doclibrary/"))
             .ReturnsAsync(new List<OssObjectInfo>());
 
         // Act
@@ -101,10 +101,10 @@ public class DocumentConsistencyTests
         _documentRepoMock.Setup(r => r.GetAllDocumentsWithFilePathAsync())
             .ReturnsAsync(new List<(Guid, string, string, string)>());
 
-        _ossServiceMock.Setup(s => s.ListObjectsAsync("docretrieval/"))
+        _ossServiceMock.Setup(s => s.ListObjectsAsync("documents/doclibrary/"))
             .ReturnsAsync(new List<OssObjectInfo>
             {
-                new() { ObjectPath = "docretrieval/orphan.pdf", Size = 500 }
+                new() { ObjectPath = "documents/doclibrary/orphan.pdf", Size = 500 }
             });
 
         // Act
@@ -113,7 +113,7 @@ public class DocumentConsistencyTests
         // Assert
         Assert.Empty(result.BrokenDocuments);
         Assert.Single(result.OrphanOssFiles);
-        Assert.Equal("docretrieval/orphan.pdf", result.OrphanOssFiles[0]);
+        Assert.Equal("documents/doclibrary/orphan.pdf", result.OrphanOssFiles[0]);
     }
 
     [Fact]
@@ -125,20 +125,20 @@ public class DocumentConsistencyTests
         _documentRepoMock.Setup(r => r.GetAllDocumentsWithFilePathAsync())
             .ReturnsAsync(new List<(Guid, string, string, string)>
             {
-                (docId1, "Good Doc", "docretrieval/good.pdf", "ready"),
-                (docId2, "Broken Doc", "docretrieval/broken.pdf", "ready")
+                (docId1, "Good Doc", "documents/doclibrary/good.pdf", "ready"),
+                (docId2, "Broken Doc", "documents/doclibrary/broken.pdf", "ready")
             });
 
-        _ossServiceMock.Setup(s => s.ObjectExistsAsync("docretrieval/good.pdf"))
+        _ossServiceMock.Setup(s => s.ObjectExistsAsync("documents/doclibrary/good.pdf"))
             .ReturnsAsync(true);
-        _ossServiceMock.Setup(s => s.ObjectExistsAsync("docretrieval/broken.pdf"))
+        _ossServiceMock.Setup(s => s.ObjectExistsAsync("documents/doclibrary/broken.pdf"))
             .ReturnsAsync(false);
 
-        _ossServiceMock.Setup(s => s.ListObjectsAsync("docretrieval/"))
+        _ossServiceMock.Setup(s => s.ListObjectsAsync("documents/doclibrary/"))
             .ReturnsAsync(new List<OssObjectInfo>
             {
-                new() { ObjectPath = "docretrieval/good.pdf", Size = 1000 },
-                new() { ObjectPath = "docretrieval/orphan.pdf", Size = 500 }
+                new() { ObjectPath = "documents/doclibrary/good.pdf", Size = 1000 },
+                new() { ObjectPath = "documents/doclibrary/orphan.pdf", Size = 500 }
             });
 
         // Act
@@ -148,7 +148,7 @@ public class DocumentConsistencyTests
         Assert.Single(result.BrokenDocuments);
         Assert.Equal(docId2, result.BrokenDocuments[0].Id);
         Assert.Single(result.OrphanOssFiles);
-        Assert.Equal("docretrieval/orphan.pdf", result.OrphanOssFiles[0]);
+        Assert.Equal("documents/doclibrary/orphan.pdf", result.OrphanOssFiles[0]);
     }
 
     [Fact]
@@ -160,17 +160,17 @@ public class DocumentConsistencyTests
         _documentRepoMock.Setup(r => r.GetAllDocumentsWithFilePathAsync())
             .ReturnsAsync(new List<(Guid, string, string, string)>
             {
-                (docId1, "Doc A", "docretrieval/shared.pdf", "ready"),
-                (docId2, "Doc B", "docretrieval/shared.pdf", "ready")
+                (docId1, "Doc A", "documents/doclibrary/shared.pdf", "ready"),
+                (docId2, "Doc B", "documents/doclibrary/shared.pdf", "ready")
             });
 
-        _ossServiceMock.Setup(s => s.ObjectExistsAsync("docretrieval/shared.pdf"))
+        _ossServiceMock.Setup(s => s.ObjectExistsAsync("documents/doclibrary/shared.pdf"))
             .ReturnsAsync(true);
 
-        _ossServiceMock.Setup(s => s.ListObjectsAsync("docretrieval/"))
+        _ossServiceMock.Setup(s => s.ListObjectsAsync("documents/doclibrary/"))
             .ReturnsAsync(new List<OssObjectInfo>
             {
-                new() { ObjectPath = "docretrieval/shared.pdf", Size = 1000 }
+                new() { ObjectPath = "documents/doclibrary/shared.pdf", Size = 1000 }
             });
 
         // Act
@@ -180,7 +180,7 @@ public class DocumentConsistencyTests
         Assert.Empty(result.BrokenDocuments);
         Assert.Empty(result.OrphanOssFiles);
         // Verify OSS check was called only once (dedup by file_path)
-        _ossServiceMock.Verify(s => s.ObjectExistsAsync("docretrieval/shared.pdf"), Times.Once);
+        _ossServiceMock.Verify(s => s.ObjectExistsAsync("documents/doclibrary/shared.pdf"), Times.Once);
     }
 
     #endregion
@@ -196,13 +196,13 @@ public class DocumentConsistencyTests
         {
             Id = docId,
             Title = "Test Doc",
-            FilePath = "docretrieval/test.pdf",
+            FilePath = "documents/doclibrary/test.pdf",
             Status = DocumentStatus.Ready
         };
 
         _documentRepoMock.Setup(r => r.GetByIdAsync(docId)).ReturnsAsync(document);
         _domainServiceMock.Setup(s => s.DeleteDocumentAsync("Test Doc")).ReturnsAsync(true);
-        _ossServiceMock.Setup(s => s.DeleteAsync("docretrieval/test.pdf")).ReturnsAsync(true);
+        _ossServiceMock.Setup(s => s.DeleteAsync("documents/doclibrary/test.pdf")).ReturnsAsync(true);
         _searchIndexMock.Setup(s => s.DeleteDocumentIndexAsync(docId)).Returns(Task.CompletedTask);
 
         // Act
@@ -211,7 +211,7 @@ public class DocumentConsistencyTests
         // Assert
         Assert.True(result.Success);
         _domainServiceMock.Verify(s => s.DeleteDocumentAsync("Test Doc"), Times.Once);
-        _ossServiceMock.Verify(s => s.DeleteAsync("docretrieval/test.pdf"), Times.Once);
+        _ossServiceMock.Verify(s => s.DeleteAsync("documents/doclibrary/test.pdf"), Times.Once);
         _searchIndexMock.Verify(s => s.DeleteDocumentIndexAsync(docId), Times.Once);
     }
 
@@ -224,13 +224,13 @@ public class DocumentConsistencyTests
         {
             Id = docId,
             Title = "Test Doc",
-            FilePath = "docretrieval/missing.pdf",
+            FilePath = "documents/doclibrary/missing.pdf",
             Status = DocumentStatus.Ready
         };
 
         _documentRepoMock.Setup(r => r.GetByIdAsync(docId)).ReturnsAsync(document);
         _domainServiceMock.Setup(s => s.DeleteDocumentAsync("Test Doc")).ReturnsAsync(true);
-        _ossServiceMock.Setup(s => s.DeleteAsync("docretrieval/missing.pdf"))
+        _ossServiceMock.Setup(s => s.DeleteAsync("documents/doclibrary/missing.pdf"))
             .ThrowsAsync(new Exception("OSS delete failed"));
 
         // Act
@@ -282,7 +282,7 @@ public class DocumentConsistencyTests
         }
 
         var orphanOssFiles = new List<string>();
-        var ossObjects = await _ossServiceMock.Object.ListObjectsAsync("docretrieval/");
+        var ossObjects = await _ossServiceMock.Object.ListObjectsAsync("documents/doclibrary/");
         foreach (var obj in ossObjects)
         {
             if (!dbFilePaths.Contains(obj.ObjectPath))

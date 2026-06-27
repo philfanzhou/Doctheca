@@ -367,7 +367,7 @@ public class DocumentRefinementTests
             Title = "Test Document",
             SourceType = "pdf",
             FileHash = "abc123",
-            FilePath = "docretrieval/test.pdf",
+            FilePath = "doclibrary/test.pdf",
             FileSize = 1024,
             Language = "en",
             Grade = "G10",

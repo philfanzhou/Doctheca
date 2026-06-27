@@ -9,7 +9,7 @@
 - **私有方法**：采用 PascalCase；纯函数（如 `IsEncryptedPdf`）使用 `static`。
 - **字段**：私有依赖注入字段采用 `_camelCase` 下划线前缀（如 `_documentRepository`、`_jobRepository`、`_unitOfWork`、`_logger`）。
 - **数据库**：表名 `documents`、`document_ingestion_jobs` 小写蛇形；列名 `file_hash`、`file_path`、`source_type`、`created_at`、`updated_at` 蛇形命名；并发字段 `updated_at` 使用 `[ConcurrencyCheck]`。
-- **OSS 路径**：`documents/docretrieval/{Guid}{ext}`，使用 `OssBucket.Documents` 桶，Guid 保证唯一性，ext 保留原始扩展名。
+- **OSS 路径**：`documents/doclibrary/{Guid}{ext}`，使用 `OssBucket.Documents` 桶，Guid 保证唯一性，ext 保留原始扩展名。
 - **错误码**：采用 `DOCLIBRARY_` 前缀 + 大写蛇形，如 `DOCLIBRARY_FILE_REQUIRED`、`DOCLIBRARY_TITLE_ALREADY_EXISTS`。
 
 ## 日志级别
@@ -97,7 +97,7 @@
 - [ ] 文档记录和导入任务在同一 `SaveChangesAsync` 中原子提交，无部分写入。
 - [ ] `IsEncryptedPdf` 在 `finally` 块中恢复 `stream.Position`。
 - [ ] SHA-256 计算后 `stream.Position = 0` 再上传 OSS。
-- [x] OSS 路径格式为 `documents/docretrieval/{Guid}{ext}`，使用 `OssBucket.Documents` 桶。
+- [x] OSS 路径格式为 `documents/doclibrary/{Guid}{ext}`，使用 `OssBucket.Documents` 桶。
 - [ ] 错误码映射与 SPEC 错误码表一致。
 - [ ] 日志未泄漏敏感信息；日志模板使用结构化参数。
 - [ ] 测试命名遵循 `[方法]_[场景]_[预期]` 格式，场景覆盖成功、失败、边界、异常。

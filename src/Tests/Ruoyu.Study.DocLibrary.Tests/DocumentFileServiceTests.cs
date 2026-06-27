@@ -28,7 +28,7 @@ public class DocumentFileServiceTests
         var model = new DocumentFileModel
         {
             FileName = "test.pdf",
-            FilePath = "docretrieval-files/abc.pdf",
+            FilePath = "doclibrary-files/abc.pdf",
             ContentType = "application/pdf",
         };
 
@@ -271,7 +271,7 @@ public class DocumentParseServiceTests
         {
             ParseId = Guid.NewGuid(),
             ImageName = "img1.jpg",
-            ImagePath = "docretrieval-images/abc/img1.jpg",
+            ImagePath = "doclibrary-images/abc/img1.jpg",
         };
         _imageRepoMock.Setup(r => r.AddAsync(image)).ReturnsAsync(image);
 

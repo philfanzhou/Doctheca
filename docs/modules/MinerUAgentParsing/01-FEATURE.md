@@ -58,7 +58,7 @@
 
 ```
 用户选择文件 → POST /admin/document-files/upload
-  → 文件上传到 S3 (documents/docretrieval-files/{Guid}{ext})
+  → 文件上传到 S3 (documents/doclibrary-files/{Guid}{ext})
   → 数据库写入 document_files 记录 (status=uploaded)
   → 返回 fileId
 ```

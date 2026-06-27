@@ -123,7 +123,7 @@ POST /admin/documents/upload (multipart/form-data: file, title, subject, grade, 
 // 6. 校验元数据必填性
 // 7. 加密 PDF 检测 (IsEncryptedPdf)
 // 8. 计算 SHA-256 哈希 → stream.Position=0
-// 9. 上传 OSS (documents/docretrieval/{Guid}{ext})
+// 9. 上传 OSS (documents/doclibrary/{Guid}{ext})
 // 10. 推导 sourceType
 // 11. 构建 DocumentModel
 // 12. 调用 DocumentDomainService.CreateDocumentAsync
@@ -230,7 +230,7 @@ DocumentAdminEndpoints.UploadDocument
   │     ├─ IsEncryptedPdf(stream, contentType) → 400 (DOCLIBRARY_FILE_ENCRYPTED)
   │     ├─ SHA256.ComputeHashAsync(stream) → fileHash
   │     ├─ stream.Position = 0
-  │     └─ ossService.UploadAsync(stream, "documents/docretrieval/{Guid}{ext}", contentType, Documents, "docretrieval") → filePath
+  │     └─ ossService.UploadAsync(stream, "documents/doclibrary/{Guid}{ext}", contentType, Documents, "doclibrary") → filePath
   │
   ├─ 5. 推导 sourceType (pdf/word/ppt)
   │

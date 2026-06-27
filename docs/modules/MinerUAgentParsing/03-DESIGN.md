@@ -309,7 +309,7 @@ POST /admin/document-files/upload
   │
   ├─ 1. 校验 HasFormContentType
   ├─ 2. 提取 file → 校验存在性/大小/格式
-  ├─ 3. 上传到 S3 (documents/docretrieval-files/{Guid}{ext})
+  ├─ 3. 上传到 S3 (documents/doclibrary-files/{Guid}{ext})
   ├─ 4. 构建 DocumentFileModel
   ├─ 5. 调用 DocumentFileService.CreateAsync
   └─ 6. 返回 { id, fileName, contentType }

@@ -139,7 +139,7 @@ public static class DocumentAdminEndpoints
 
             var ext = Path.GetExtension(file.FileName) ?? ".bin";
             var objectName = $"{Guid.NewGuid()}{ext}";
-            filePath = await ossService.UploadAsync(stream, objectName, file.ContentType, OssBucket.Documents, "docretrieval");
+            filePath = await ossService.UploadAsync(stream, objectName, file.ContentType, OssBucket.Documents, "doclibrary");
         }
 
         var sourceType = file.ContentType switch
@@ -743,11 +743,11 @@ public static class DocumentAdminEndpoints
                 }
             }
 
-            // 3. List all OSS files under docretrieval/ prefix
+            // 3. List all OSS files under doclibrary/ prefix
             var orphanOssFiles = new List<string>();
             try
             {
-                var ossObjects = await ossService.ListObjectsAsync("documents/docretrieval/");
+                var ossObjects = await ossService.ListObjectsAsync("documents/doclibrary/");
                 foreach (var obj in ossObjects)
                 {
                     if (!dbFilePaths.Contains(obj.ObjectPath))
@@ -996,8 +996,8 @@ public static class DocumentAdminEndpoints
         using (var stream = file.OpenReadStream())
         {
             var ext = Path.GetExtension(file.FileName) ?? ".bin";
-            var objectName = $"docretrieval-files/{Guid.NewGuid()}{ext}";
-            filePath = await ossService.UploadAsync(stream, objectName, file.ContentType, OssBucket.Documents, "docretrieval-files");
+            var objectName = $"{Guid.NewGuid()}{ext}";
+            filePath = await ossService.UploadAsync(stream, objectName, file.ContentType, OssBucket.Documents, "doclibrary-files");
         }
 
         var createdBy = Guid.TryParse(
