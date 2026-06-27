@@ -13,7 +13,7 @@
 ```json
 {
   "ConnectionStrings": {
-    "Default": "Host=ruoyu-postgres;Port=5432;Database=ruoyu_study_docretrieval;Username=postgres;Password=postgres"
+    "Default": "Host=ruoyu-postgres;Port=5432;Database=ruoyu_study_doclibrary;Username=postgres;Password=postgres"
   }
 }
 ```
@@ -37,8 +37,8 @@
 
 ```bash
 # 备份
-docker exec ruoyu-postgres pg_dump -U postgres ruoyu_study_docretrieval | gzip > backup_docretrieval_$(date +%Y%m%d_%H%M%S).sql.gz
+docker exec ruoyu-postgres pg_dump -U postgres ruoyu_study_doclibrary | gzip > backup_doclibrary_$(date +%Y%m%d_%H%M%S).sql.gz
 
 # 恢复
-gunzip -c backup_docretrieval_20240101_020000.sql.gz | docker exec -i ruoyu-postgres psql -U postgres -d ruoyu_study_docretrieval
+gunzip -c backup_doclibrary_20240101_020000.sql.gz | docker exec -i ruoyu-postgres psql -U postgres -d ruoyu_study_doclibrary
 ```

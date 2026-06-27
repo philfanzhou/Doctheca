@@ -36,16 +36,16 @@ public class OpenSearchIndexService : ISearchIndexService
 
     public async Task EnsureIndexAsync()
     {
-        var indexName = _options.IndexName;
+        await EnsureIndexExistsAsync(_client, _options.IndexName, _logger);
+    }
 
-        var existsResponse = await _client.Indices.ExistsAsync<BytesResponse>(indexName);
-        if (existsResponse.Success && existsResponse.HttpStatusCode == 200)
-        {
-            _logger.LogInformation("OpenSearch index already exists: {IndexName}", indexName);
-            return;
-        }
-
-        var indexBody = new
+    /// <summary>
+    /// Builds the OpenSearch index body (settings + mappings) for index creation.
+    /// Extracted as static so migration services can reuse the exact same schema.
+    /// </summary>
+    internal static object BuildIndexBody()
+    {
+        return new
         {
             settings = new
             {
@@ -107,17 +107,32 @@ public class OpenSearchIndexService : ISearchIndexService
                 }
             }
         };
+    }
 
-        var json = JsonSerializer.Serialize(indexBody);
-        var response = await _client.Indices.CreateAsync<BytesResponse>(indexName, json);
+    /// <summary>
+    /// Ensures the OpenSearch index exists, creating it if necessary.
+    /// Static so migration services can reuse without DI.
+    /// </summary>
+    internal static async Task EnsureIndexExistsAsync(
+        OpenSearchLowLevelClient client, string indexName, ILogger logger)
+    {
+        var existsResponse = await client.Indices.ExistsAsync<BytesResponse>(indexName);
+        if (existsResponse.Success && existsResponse.HttpStatusCode == 200)
+        {
+            logger.LogInformation("OpenSearch index already exists: {IndexName}", indexName);
+            return;
+        }
+
+        var json = JsonSerializer.Serialize(BuildIndexBody());
+        var response = await client.Indices.CreateAsync<BytesResponse>(indexName, json);
 
         if (response.Success && (response.HttpStatusCode == 200 || response.HttpStatusCode == 201))
         {
-            _logger.LogInformation("OpenSearch index created: {IndexName}", indexName);
+            logger.LogInformation("OpenSearch index created: {IndexName}", indexName);
         }
         else
         {
-            _logger.LogWarning("OpenSearch index creation failed: {IndexName}, status code: {StatusCode}", indexName, response.HttpStatusCode);
+            logger.LogWarning("OpenSearch index creation failed: {IndexName}, status code: {StatusCode}", indexName, response.HttpStatusCode);
         }
     }
 

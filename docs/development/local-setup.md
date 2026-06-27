@@ -38,11 +38,11 @@ Host=localhost;Port=5432;Database=ruoyu_study_docretrieval;Username=phil
 
 ```json
 "ConnectionStrings": {
-  "Default": "Data Source=data/sqlite/ruoyu_study_docretrieval.db"
+  "Default": "Data Source=data/sqlite/ruoyu_study_doclibrary.db"
 }
 ```
 
-如果连接字符串为空或 null，SQLite 默认使用 `Data Source=data/sqlite/ruoyu_study_docretrieval.db`。
+如果连接字符串为空或 null，SQLite 默认使用 `Data Source=data/sqlite/ruoyu_study_doclibrary.db`。
 
 数据库和表会在启动时通过 `DatabaseInitializer.InitializeAsync` 自动创建。
 
