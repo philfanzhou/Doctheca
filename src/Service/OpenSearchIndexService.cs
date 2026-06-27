@@ -41,9 +41,8 @@ public class OpenSearchIndexService : ISearchIndexService
 
     /// <summary>
     /// Builds the OpenSearch index body (settings + mappings) for index creation.
-    /// Extracted as static so migration services can reuse the exact same schema.
     /// </summary>
-    internal static object BuildIndexBody()
+    private static object BuildIndexBody()
     {
         return new
         {
@@ -111,9 +110,8 @@ public class OpenSearchIndexService : ISearchIndexService
 
     /// <summary>
     /// Ensures the OpenSearch index exists, creating it if necessary.
-    /// Static so migration services can reuse without DI.
     /// </summary>
-    internal static async Task EnsureIndexExistsAsync(
+    private static async Task EnsureIndexExistsAsync(
         OpenSearchLowLevelClient client, string indexName, ILogger logger)
     {
         var existsResponse = await client.Indices.ExistsAsync<BytesResponse>(indexName);

@@ -179,20 +179,6 @@ using (var scope = app.Services.CreateScope())
     await DatabaseInitializer.InitializeAsync(dbContext, loggerFactory);
 }
 
-// Migrate database name from docretrieval to doclibrary (one-time migration, safe to delete after 2026-07-07)
-using (var dbMigrateScope = app.Services.CreateScope())
-{
-    var dbMigrateLogger = dbMigrateScope.ServiceProvider.GetRequiredService<ILogger<Program>>();
-    try
-    {
-        await DatabaseNameMigrationService.MigrateAsync(connectionString, dbMigrateLogger);
-    }
-    catch (Exception ex)
-    {
-        dbMigrateLogger.LogWarning(ex, "Database name migration failed, continuing with current database");
-    }
-}
-
 // Initialize search indices
 using (var initScope = app.Services.CreateScope())
 {
@@ -200,10 +186,6 @@ using (var initScope = app.Services.CreateScope())
     var initLogger = initScope.ServiceProvider.GetRequiredService<ILogger<Program>>();
     try
     {
-        // Migrate search index name from docretrieval-segments to doclibrary-segments (one-time migration, safe to delete after 2026-07-07)
-        var openSearchOptions = initScope.ServiceProvider.GetRequiredService<IOptions<OpenSearchOptions>>().Value;
-        await SearchIndexMigrationService.MigrateAsync(openSearchOptions, initLogger);
-
         await searchIndexService.EnsureIndexAsync();
         initLogger.LogInformation("Search index initialization completed");
     }

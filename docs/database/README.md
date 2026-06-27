@@ -30,6 +30,5 @@
 ## 数据库配置
 
 - **数据库名**：`ruoyu_study_doclibrary`
-- **旧数据库名**：`ruoyu_study_docretrieval`（已通过 `DatabaseNameMigrationService` 自动迁移，详见部署文档）
 - **引擎**：PostgreSQL（生产） / SQLite（本地开发，通过连接字符串自动切换）
 - **连接字符串**：`ConnectionStrings:Default`
