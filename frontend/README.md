@@ -5,7 +5,7 @@
 ## 开发
 
 ```bash
-cd admin_frontend
+cd frontend
 npm install
 npm run dev
 ```
