@@ -79,8 +79,8 @@ DocLibrary 的 Admin API 通过 JWT Bearer Token 进行认证，Token 由 Quantu
 └──────────┘                                 └────────┬─────────┘
                                                       │
                                              4. gRPC GetToken
-                                             (password grant_type
-                                              + AppId/AppSecret)
+                                             (password grant_type,
+                                              AppId 可选用于审计)
                                                       │
                                                       ▼
                                              ┌──────────────────┐
@@ -95,7 +95,7 @@ DocLibrary 的 Admin API 通过 JWT Bearer Token 进行认证，Token 由 Quantu
 
 ### 认证流程
 
-1. **登录**：前端发送用户名/密码到 `POST /admin/auth/login`，DocLibrary 后端通过 gRPC 调用 Identity 的 `GetToken`（password grant_type + AppId/AppSecret），验证成功后将 JWT 和 RefreshToken 返回给前端
+1. **登录**：前端发送用户名/密码到 `POST /admin/auth/login`，DocLibrary 后端通过 gRPC 调用 Identity 的 `GetToken`（password grant_type），验证成功后将 JWT 和 RefreshToken 返回给前端
 2. **请求**：前端在每次 API 请求中携带 `Authorization: Bearer <JWT>`，ASP.NET Core 通过 Identity 的 JWKS 端点验证 JWT 签名
 3. **刷新**：JWT 过期前，前端通过 `POST /admin/auth/refresh` 使用 RefreshToken 获取新 JWT
 4. **登出**：前端清除本地 Token 存储，可选调用 `POST /admin/auth/logout` 通知 Identity 吊销 RefreshToken
@@ -105,8 +105,8 @@ DocLibrary 的 Admin API 通过 JWT Bearer Token 进行认证，Token 由 Quantu
 | 配置键 | 说明 | 示例 |
 |--------|------|------|
 | `Identity:GrpcEndpoint` | Identity gRPC 地址 | `http://localhost:5001` |
-| `Identity:AppId` | DocLibrary 在 Identity 注册的 AppId | `docretrieval_admin` |
-| `Identity:AppSecret` | DocLibrary 的 AppSecret | （环境变量 `IDENTITY_APP_SECRET`） |
+| `Identity:AppId` | 应用标识，仅用于审计日志和 RefreshToken 标记（password 流程不校验） | （未配置，留空） |
+| `Identity:AppSecret` | 应用密钥，password 流程不使用 | （未配置） |
 | `Jwt:Issuer` | JWT 签发者（与 Identity 一致） | `QuantumZhou.Identity` |
 | `Jwt:Audience` | JWT 受众（与 Identity 一致） | `QuantumZhou.microservices` |
 | `Jwt:JwksEndpoint` | JWKS 公钥端点 | `http://localhost:5002/.well-known/jwks` |
