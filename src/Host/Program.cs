@@ -2,12 +2,12 @@ using System.Data.Common;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Ruoyu.Study.Common.Oss;
-using Ruoyu.Study.DocRetrieval.Database;
-using Ruoyu.Study.DocRetrieval.Database.Repositories;
-using Ruoyu.Study.DocRetrieval.Domain.Models;
-using Ruoyu.Study.DocRetrieval.Domain.Repositories;
-using Ruoyu.Study.DocRetrieval.Domain.Services;
-using Ruoyu.Study.DocRetrieval.Service;
+using Ruoyu.Study.DocLibrary.Database;
+using Ruoyu.Study.DocLibrary.Database.Repositories;
+using Ruoyu.Study.DocLibrary.Domain.Models;
+using Ruoyu.Study.DocLibrary.Domain.Repositories;
+using Ruoyu.Study.DocLibrary.Domain.Services;
+using Ruoyu.Study.DocLibrary.Service;
 using QuantumZhou.Identity.Client;
 using IHttpClientFactory = System.Net.Http.IHttpClientFactory;
 
@@ -44,7 +44,7 @@ var connectionString = builder.Configuration.GetConnectionString("Default");
 var isPostgreSql = !string.IsNullOrWhiteSpace(connectionString)
     && (connectionString.Contains("Host=", StringComparison.OrdinalIgnoreCase)
         || connectionString.Contains("Server=", StringComparison.OrdinalIgnoreCase));
-builder.Services.AddDbContext<DocRetrievalDbContext>(options =>
+builder.Services.AddDbContext<DocLibraryDbContext>(options =>
 {
     if (isPostgreSql)
         options.UseNpgsql(connectionString);
@@ -120,7 +120,7 @@ builder.Services.AddIdentityClient(builder.Configuration);
 
 var app = builder.Build();
 
-app.Logger.LogInformation("DocRetrieval Service starting");
+app.Logger.LogInformation("DocLibrary Service starting");
 app.Logger.LogInformation("Endpoints: gRPC={GrpcPort}, HTTP={HttpPort}", grpcPort, httpPort);
 if (isPostgreSql && !string.IsNullOrEmpty(connectionString))
 {
@@ -174,7 +174,7 @@ if (llmEnabled)
 
 using (var scope = app.Services.CreateScope())
 {
-    var dbContext = scope.ServiceProvider.GetRequiredService<DocRetrievalDbContext>();
+    var dbContext = scope.ServiceProvider.GetRequiredService<DocLibraryDbContext>();
     var loggerFactory = scope.ServiceProvider.GetRequiredService<ILoggerFactory>();
     await DatabaseInitializer.InitializeAsync(dbContext, loggerFactory);
 }
@@ -195,7 +195,7 @@ using (var initScope = app.Services.CreateScope())
     }
 }
 
-app.MapGrpcService<DocumentRetrievalServiceImpl>();
+app.MapGrpcService<DocumentLibraryServiceImpl>();
 
 app.UseIdentityClient();
 

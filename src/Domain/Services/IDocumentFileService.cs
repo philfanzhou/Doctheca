@@ -1,6 +1,6 @@
-using Ruoyu.Study.DocRetrieval.Domain.Models;
+using Ruoyu.Study.DocLibrary.Domain.Models;
 
-namespace Ruoyu.Study.DocRetrieval.Domain.Services;
+namespace Ruoyu.Study.DocLibrary.Domain.Services;
 
 public interface IDocumentFileService
 {

@@ -23,10 +23,10 @@
 每一项均可通过单元测试独立验证。
 
 - [x] **FR-1 仅 ready 状态可修改** — 只有 `Status == "ready"` 的文档允许修改元数据。
-- [x] **FR-2 文档不存在抛异常** — 按标题查找文档，不存在时抛 `DocRetrievalValidationException("文档不存在")`。
-- [x] **FR-3 未就绪抛异常** — 文档存在但 `Status != "ready"` 时抛 `DocRetrievalValidationException("文档未就绪，不允许修改元数据")`。
-- [x] **FR-4 学科校验** — subject 非空时，仅支持"英语"（`DocRetrievalConstants.IsValidSubject`），否则抛 `DocRetrievalValidationException("学科仅支持：英语")`。
-- [x] **FR-5 年级校验** — grade 非空时，必须为 K/G1~G12（`DocRetrievalConstants.IsValidGrade`），否则抛 `DocRetrievalValidationException` 含有效值列表。
+- [x] **FR-2 文档不存在抛异常** — 按标题查找文档，不存在时抛 `DocLibraryValidationException("文档不存在")`。
+- [x] **FR-3 未就绪抛异常** — 文档存在但 `Status != "ready"` 时抛 `DocLibraryValidationException("文档未就绪，不允许修改元数据")`。
+- [x] **FR-4 学科校验** — subject 非空时，仅支持"英语"（`DocLibraryConstants.IsValidSubject`），否则抛 `DocLibraryValidationException("学科仅支持：英语")`。
+- [x] **FR-5 年级校验** — grade 非空时，必须为 K/G1~G12（`DocLibraryConstants.IsValidGrade`），否则抛 `DocLibraryValidationException` 含有效值列表。
 - [x] **FR-6 null 参数不修改** — subject/grade/year/tags 为 null 时表示不修改，仅更新非 null 字段。
 - [x] **FR-7 更新时间戳** — 更新后设置 `UpdatedAt = DateTimeOffset.UtcNow`。
 - [x] **FR-8 搜索索引同步** — 更新成功后调用 `ISearchIndexService.UpdateDocumentMetadataAsync(documentId, subject, grade, year)`，失败仅记 Error 日志，不影响主流程。
@@ -64,7 +64,7 @@
 - 调用 `UpdateMetadataAsync("NotFound", subject: "英语", grade: null, year: null, tags: null)`
 
 **Then:**
-- 抛出 `DocRetrievalValidationException`，消息为 "文档不存在"
+- 抛出 `DocLibraryValidationException`，消息为 "文档不存在"
 
 ---
 
@@ -78,7 +78,7 @@
 - 调用 `UpdateMetadataAsync("PendingDoc", subject: "英语", grade: null, year: null, tags: null)`
 
 **Then:**
-- 抛出 `DocRetrievalValidationException`，消息为 "文档未就绪，不允许修改元数据"
+- 抛出 `DocLibraryValidationException`，消息为 "文档未就绪，不允许修改元数据"
 
 ---
 
@@ -92,7 +92,7 @@
 - 调用 `UpdateMetadataAsync("TestDoc", subject: "数学", grade: null, year: null, tags: null)`
 
 **Then:**
-- 抛出 `DocRetrievalValidationException`，消息为 "学科仅支持：英语"
+- 抛出 `DocLibraryValidationException`，消息为 "学科仅支持：英语"
 
 ---
 
@@ -106,7 +106,7 @@
 - 调用 `UpdateMetadataAsync("TestDoc", subject: null, grade: "G99", year: null, tags: null)`
 
 **Then:**
-- 抛出 `DocRetrievalValidationException`，消息包含 "年级取值非法"
+- 抛出 `DocLibraryValidationException`，消息包含 "年级取值非法"
 
 ---
 
@@ -180,10 +180,10 @@
 **When/Then:**
 | 异常消息 | HTTP 状态码 | errorCode |
 |----------|-------------|-----------|
-| 包含"不存在" | 404 | DOCRETRIEVAL_DOCUMENT_NOT_FOUND |
-| 包含"未就绪" | 422 | DOCRETRIEVAL_DOCUMENT_NOT_READY |
-| 包含"学科仅支持" | 400 | DOCRETRIEVAL_SUBJECT_INVALID |
-| 包含"年级取值非法" | 400 | DOCRETRIEVAL_GRADE_INVALID |
+| 包含"不存在" | 404 | DOCLIBRARY_DOCUMENT_NOT_FOUND |
+| 包含"未就绪" | 422 | DOCLIBRARY_DOCUMENT_NOT_READY |
+| 包含"学科仅支持" | 400 | DOCLIBRARY_SUBJECT_INVALID |
+| 包含"年级取值非法" | 400 | DOCLIBRARY_GRADE_INVALID |
 
 ---
 

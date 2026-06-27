@@ -1,4 +1,4 @@
-namespace Ruoyu.Study.DocRetrieval.Domain.Models;
+namespace Ruoyu.Study.DocLibrary.Domain.Models;
 
 /// <summary>
 /// Configuration options for LLM segmentation service.

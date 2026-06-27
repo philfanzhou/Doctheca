@@ -2,7 +2,7 @@
 
 ## 命名约定
 
-- **命名空间**：领域代码使用 `Ruoyu.Study.DocRetrieval.Domain.*`；服务层使用 `Ruoyu.Study.DocRetrieval.Service.*`；数据库层使用 `Ruoyu.Study.DocRetrieval.Database.*`。
+- **命名空间**：领域代码使用 `Ruoyu.Study.DocLibrary.Domain.*`；服务层使用 `Ruoyu.Study.DocLibrary.Service.*`；数据库层使用 `Ruoyu.Study.DocLibrary.Database.*`。
 - **类名**：领域服务采用 `XxxDomainService`；模型采用 `XxxModel`；仓储接口采用 `IXxxRepository`/`IXxxService`；仓储实现采用 `XxxRepository`/`XxxService`。
 - **方法名**：动词开头，遵循 `[动词][名词][Async]`，如 `ExactSearchAsync`、`DatabaseSearchAsync`。
 - **返回值类**：gRPC 层使用 proto 定义的 `SearchResponse`、`SearchResult`；领域层返回元组 `(List<SearchResultModel>, int, string?)`。
@@ -22,9 +22,9 @@
 
 | 场景 | 错误码 | 消息文本 |
 | --- | --- | --- |
-| 查询词为空 | `DOCRETRIEVAL_QUERY_REQUIRED` | `"DOCRETRIEVAL_QUERY_REQUIRED: 查询词不能为空"` |
-| 查询词超过 200 字符 | `DOCRETRIEVAL_QUERY_TOO_LONG` | `"DOCRETRIEVAL_QUERY_TOO_LONG: 查询词超过200字符"` |
-| page_size 超过 100 | `DOCRETRIEVAL_PAGE_SIZE_INVALID` | `"DOCRETRIEVAL_PAGE_SIZE_INVALID: page_size超过最大值100"` |
+| 查询词为空 | `DOCLIBRARY_QUERY_REQUIRED` | `"DOCLIBRARY_QUERY_REQUIRED: 查询词不能为空"` |
+| 查询词超过 200 字符 | `DOCLIBRARY_QUERY_TOO_LONG` | `"DOCLIBRARY_QUERY_TOO_LONG: 查询词超过200字符"` |
+| page_size 超过 100 | `DOCLIBRARY_PAGE_SIZE_INVALID` | `"DOCLIBRARY_PAGE_SIZE_INVALID: page_size超过最大值100"` |
 
 > 注：错误码与消息文本之间使用冒号+空格分隔；领域服务内部 `throw` 原始异常时应保留异常类型与消息，由 gRPC 拦截器统一转换为用户可见响应。
 

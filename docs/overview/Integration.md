@@ -13,7 +13,7 @@
 
 ## gRPC 接口（入方向）
 
-定义在 [docretrieval.proto](../../src/Contract/Protos/docretrieval.proto)：
+定义在 [doclibrary.proto](../../src/Contract/Protos/doclibrary.proto)：
 
 | RPC | 请求 | 响应 | 说明 |
 |-----|------|------|------|

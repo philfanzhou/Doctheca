@@ -1,8 +1,8 @@
 using System;
-using global::Ruoyu.Study.DocRetrieval.Domain.Models;
+using global::Ruoyu.Study.DocLibrary.Domain.Models;
 using Xunit;
 
-namespace Ruoyu.Study.DocRetrieval.Tests;
+namespace Ruoyu.Study.DocLibrary.Tests;
 
 public class ConstantsTests
 {
@@ -15,14 +15,14 @@ public class ConstantsTests
     [InlineData("", false)]
     public void IsValidSubject_ValidatesCorrectly(string subject, bool expected)
     {
-        Assert.Equal(expected, DocRetrievalConstants.IsValidSubject(subject));
+        Assert.Equal(expected, DocLibraryConstants.IsValidSubject(subject));
     }
 
     [Fact]
     public void ValidSubjects_ContainsOnlyEnglish()
     {
-        Assert.Single(DocRetrievalConstants.ValidSubjects);
-        Assert.Equal("英语", DocRetrievalConstants.ValidSubjects[0]);
+        Assert.Single(DocLibraryConstants.ValidSubjects);
+        Assert.Equal("英语", DocLibraryConstants.ValidSubjects[0]);
     }
 
     #endregion
@@ -43,25 +43,25 @@ public class ConstantsTests
     [InlineData("高一", false)] // Labels are for display, not validation
     public void IsValidGrade_ValidatesCorrectly(string grade, bool expected)
     {
-        Assert.Equal(expected, DocRetrievalConstants.IsValidGrade(grade));
+        Assert.Equal(expected, DocLibraryConstants.IsValidGrade(grade));
     }
 
     [Fact]
     public void ValidGrades_Contains13Levels()
     {
-        Assert.Equal(13, DocRetrievalConstants.ValidGrades.Length);
-        Assert.Contains("K", DocRetrievalConstants.ValidGrades);
-        Assert.Contains("G1", DocRetrievalConstants.ValidGrades);
-        Assert.Contains("G12", DocRetrievalConstants.ValidGrades);
+        Assert.Equal(13, DocLibraryConstants.ValidGrades.Length);
+        Assert.Contains("K", DocLibraryConstants.ValidGrades);
+        Assert.Contains("G1", DocLibraryConstants.ValidGrades);
+        Assert.Contains("G12", DocLibraryConstants.ValidGrades);
     }
 
     [Fact]
     public void GradeLabels_HasLabelsForAllGrades()
     {
-        Assert.Equal(13, DocRetrievalConstants.GradeLabels.Count);
-        Assert.Equal("Kindergarten", DocRetrievalConstants.GradeLabels["K"]);
-        Assert.Equal("Grade 10", DocRetrievalConstants.GradeLabels["G10"]);
-        Assert.Equal("Grade 12", DocRetrievalConstants.GradeLabels["G12"]);
+        Assert.Equal(13, DocLibraryConstants.GradeLabels.Count);
+        Assert.Equal("Kindergarten", DocLibraryConstants.GradeLabels["K"]);
+        Assert.Equal("Grade 10", DocLibraryConstants.GradeLabels["G10"]);
+        Assert.Equal("Grade 12", DocLibraryConstants.GradeLabels["G12"]);
     }
 
     #endregion
@@ -71,7 +71,7 @@ public class ConstantsTests
     [Fact]
     public void SubjectEnglish_IsEnglish()
     {
-        Assert.Equal("英语", DocRetrievalConstants.SubjectEnglish);
+        Assert.Equal("英语", DocLibraryConstants.SubjectEnglish);
     }
 
     #endregion

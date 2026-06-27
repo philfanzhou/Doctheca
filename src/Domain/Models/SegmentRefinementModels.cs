@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace Ruoyu.Study.DocRetrieval.Domain.Models;
+namespace Ruoyu.Study.DocLibrary.Domain.Models;
 
 /// <summary>
 /// User-submitted correction for a segment

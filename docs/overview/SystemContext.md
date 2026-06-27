@@ -2,7 +2,7 @@
 
 ## 服务定位
 
-`ruoyu.docretrieval` 是 Ruoyu.Study 平台的**文档检索微服务**，负责教育文档的存储、解析和全文精确搜索。
+`ruoyu.doclibrary` 是 Ruoyu.Study 平台的**文档检索微服务**，负责教育文档的存储、解析和全文精确搜索。
 
 ## 上下游关系
 
@@ -15,7 +15,7 @@
        │ (5012)             │
        ▼                    ▼
 ┌─────────────────────────────────────────┐
-│           DocRetrieval                  │
+│           DocLibrary                  │
 │                                         │
 │  ┌─────────────────────────────────┐    │       ┌──────────────────┐
 │  │  gRPC: ExactSearch              │    │──────►│  OpenSearch      │
@@ -61,7 +61,7 @@
 
 | 端口 | 协议 | 用途 |
 |------|------|------|
-| 5011 | gRPC (HTTP/2) | DocumentRetrieval gRPC 服务 |
+| 5011 | gRPC (HTTP/2) | DocumentLibrary gRPC 服务 |
 | 5012 | HTTP (HTTP/1.1) | Admin API + 静态文件 + Health Check |
 
 ## 服务边界

@@ -1,4 +1,4 @@
-namespace Ruoyu.Study.DocRetrieval.Service;
+namespace Ruoyu.Study.DocLibrary.Service;
 
 /// <summary>
 /// Metadata for an image extracted from a MinerU ZIP and uploaded to S3.

@@ -8,13 +8,13 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Moq;
 using Ruoyu.Study.Common.Oss;
-using Ruoyu.Study.DocRetrieval.Domain.Models;
-using Ruoyu.Study.DocRetrieval.Domain.Repositories;
-using Ruoyu.Study.DocRetrieval.Domain.Services;
-using Ruoyu.Study.DocRetrieval.Service;
+using Ruoyu.Study.DocLibrary.Domain.Models;
+using Ruoyu.Study.DocLibrary.Domain.Repositories;
+using Ruoyu.Study.DocLibrary.Domain.Services;
+using Ruoyu.Study.DocLibrary.Service;
 using Xunit;
 
-namespace Ruoyu.Study.DocRetrieval.Tests;
+namespace Ruoyu.Study.DocLibrary.Tests;
 
 /// <summary>
 /// Tests for document consistency scanning and force-delete logic.

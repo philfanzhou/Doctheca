@@ -1,6 +1,6 @@
-﻿# 文档列表查询与筛选 — 测试方案与代码骨架（TESTS）
+# 文档列表查询与筛选 — 测试方案与代码骨架（TESTS）
 
-> 对应测试文件：`test/Ruoyu.Study.DocRetrieval.Tests/DocumentDomainServiceTests.cs`（列表相关测试方法）
+> 对应测试文件：`test/Ruoyu.Study.DocLibrary.Tests/DocumentDomainServiceTests.cs`（列表相关测试方法）
 > 运行命令：`dotnet test --filter "FullyQualifiedName~DocumentListTests"`
 
 ---
@@ -146,12 +146,12 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Moq;
-using Ruoyu.Study.DocRetrieval.Domain.Models;
-using Ruoyu.Study.DocRetrieval.Domain.Repositories;
-using Ruoyu.Study.DocRetrieval.Domain.Services;
+using Ruoyu.Study.DocLibrary.Domain.Models;
+using Ruoyu.Study.DocLibrary.Domain.Repositories;
+using Ruoyu.Study.DocLibrary.Domain.Services;
 using Xunit;
 
-namespace Ruoyu.Study.DocRetrieval.Tests;
+namespace Ruoyu.Study.DocLibrary.Tests;
 
 public class DocumentListTests
 {
@@ -280,7 +280,7 @@ public class DocumentListTests
 ## 4. 运行方式
 
 ```bash
-cd src/services/ruoyu.docretrieval
+cd src/services/ruoyu.doclibrary
 dotnet test --filter "FullyQualifiedName~DocumentListTests" -v normal
 ```
 

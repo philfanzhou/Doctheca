@@ -14,14 +14,14 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Ruoyu.Study.Common.Oss;
-using Ruoyu.Study.DocRetrieval.Database;
-using Ruoyu.Study.DocRetrieval.Database.Entities;
-using Ruoyu.Study.DocRetrieval.Domain.Exceptions;
-using Ruoyu.Study.DocRetrieval.Domain.Models;
-using Ruoyu.Study.DocRetrieval.Domain.Repositories;
-using Ruoyu.Study.DocRetrieval.Domain.Services;
+using Ruoyu.Study.DocLibrary.Database;
+using Ruoyu.Study.DocLibrary.Database.Entities;
+using Ruoyu.Study.DocLibrary.Domain.Exceptions;
+using Ruoyu.Study.DocLibrary.Domain.Models;
+using Ruoyu.Study.DocLibrary.Domain.Repositories;
+using Ruoyu.Study.DocLibrary.Domain.Services;
 
-namespace Ruoyu.Study.DocRetrieval.Service;
+namespace Ruoyu.Study.DocLibrary.Service;
 
 public static class DocumentAdminEndpoints
 {
@@ -102,13 +102,13 @@ public static class DocumentAdminEndpoints
 
         var file = form.Files.GetFile("file");
         if (file == null || file.Length == 0)
-            return Results.BadRequest(new { success = false, message = "File cannot be empty", errorCode = "DOCRETRIEVAL_FILE_REQUIRED" });
+            return Results.BadRequest(new { success = false, message = "File cannot be empty", errorCode = "DOCLIBRARY_FILE_REQUIRED" });
 
         if (file.Length > MaxFileSize)
             return Results.BadRequest(new { success = false, message = "File size exceeds 200MB limit" });
 
         if (!AllowedMimeTypes.Contains(file.ContentType))
-            return Results.BadRequest(new { success = false, message = "Unsupported file format", errorCode = "DOCRETRIEVAL_FILE_FORMAT_UNSUPPORTED" });
+            return Results.BadRequest(new { success = false, message = "Unsupported file format", errorCode = "DOCLIBRARY_FILE_FORMAT_UNSUPPORTED" });
 
         var title = form["title"].ToString();
         var subject = form["subject"].ToString();
@@ -123,7 +123,7 @@ public static class DocumentAdminEndpoints
         }
 
         if (string.IsNullOrWhiteSpace(title))
-            return Results.BadRequest(new { success = false, message = "Title is required", errorCode = "DOCRETRIEVAL_METADATA_REQUIRED" });
+            return Results.BadRequest(new { success = false, message = "Title is required", errorCode = "DOCLIBRARY_METADATA_REQUIRED" });
 
         string fileHash;
         string filePath;
@@ -131,7 +131,7 @@ public static class DocumentAdminEndpoints
         {
             // Encrypted file detection (must reject before async phase)
             if (IsEncryptedPdf(stream, file.ContentType))
-                return Results.BadRequest(new { success = false, message = "Encrypted files not supported", errorCode = "DOCRETRIEVAL_FILE_ENCRYPTED" });
+                return Results.BadRequest(new { success = false, message = "Encrypted files not supported", errorCode = "DOCLIBRARY_FILE_ENCRYPTED" });
 
             using var sha256 = SHA256.Create();
             fileHash = BitConverter.ToString(await sha256.ComputeHashAsync(stream)).Replace("-", "").ToLowerInvariant();
@@ -182,16 +182,16 @@ public static class DocumentAdminEndpoints
                 }
             });
         }
-        catch (DocRetrievalValidationException ex)
+        catch (DocLibraryValidationException ex)
         {
             var (statusCode, errorCode) = ex.Message switch
             {
-                var msg when msg.Contains("Document title already exists") => (StatusCodes.Status409Conflict, "DOCRETRIEVAL_TITLE_ALREADY_EXISTS"),
-                var msg when msg.Contains("File already imported") => (StatusCodes.Status409Conflict, "DOCRETRIEVAL_FILE_HASH_ALREADY_EXISTS"),
-                var msg when msg.Contains("Subject only supports") => (StatusCodes.Status400BadRequest, "DOCRETRIEVAL_SUBJECT_INVALID"),
-                var msg when msg.Contains("Invalid grade value") => (StatusCodes.Status400BadRequest, "DOCRETRIEVAL_GRADE_INVALID"),
-                var msg when msg.Contains("cannot be empty") => (StatusCodes.Status400BadRequest, "DOCRETRIEVAL_METADATA_REQUIRED"),
-                _ => (StatusCodes.Status400BadRequest, "DOCRETRIEVAL_METADATA_REQUIRED")
+                var msg when msg.Contains("Document title already exists") => (StatusCodes.Status409Conflict, "DOCLIBRARY_TITLE_ALREADY_EXISTS"),
+                var msg when msg.Contains("File already imported") => (StatusCodes.Status409Conflict, "DOCLIBRARY_FILE_HASH_ALREADY_EXISTS"),
+                var msg when msg.Contains("Subject only supports") => (StatusCodes.Status400BadRequest, "DOCLIBRARY_SUBJECT_INVALID"),
+                var msg when msg.Contains("Invalid grade value") => (StatusCodes.Status400BadRequest, "DOCLIBRARY_GRADE_INVALID"),
+                var msg when msg.Contains("cannot be empty") => (StatusCodes.Status400BadRequest, "DOCLIBRARY_METADATA_REQUIRED"),
+                _ => (StatusCodes.Status400BadRequest, "DOCLIBRARY_METADATA_REQUIRED")
             };
             return Results.Json(new { success = false, message = ex.Message, errorCode }, statusCode: statusCode);
         }
@@ -239,7 +239,7 @@ public static class DocumentAdminEndpoints
     {
         var document = await documentService.GetDocumentAsync(id);
         if (document == null)
-            return Results.NotFound(new { success = false, message = "Document not found", errorCode = "DOCRETRIEVAL_DOCUMENT_NOT_FOUND" });
+            return Results.NotFound(new { success = false, message = "Document not found", errorCode = "DOCLIBRARY_DOCUMENT_NOT_FOUND" });
 
         var jobs = await documentService.GetJobsByDocumentIdAsync(id);
 
@@ -273,7 +273,7 @@ public static class DocumentAdminEndpoints
     {
         var document = await documentService.GetDocumentAsync(id);
         if (document == null)
-            return Results.NotFound(new { success = false, message = "Document not found", errorCode = "DOCRETRIEVAL_DOCUMENT_NOT_FOUND" });
+            return Results.NotFound(new { success = false, message = "Document not found", errorCode = "DOCLIBRARY_DOCUMENT_NOT_FOUND" });
 
         return Results.Ok(new
         {
@@ -307,7 +307,7 @@ public static class DocumentAdminEndpoints
 
         var document = await documentService.GetDocumentAsync(id);
         if (document == null)
-            return Results.NotFound(new { success = false, message = "Document not found", errorCode = "DOCRETRIEVAL_DOCUMENT_NOT_FOUND" });
+            return Results.NotFound(new { success = false, message = "Document not found", errorCode = "DOCLIBRARY_DOCUMENT_NOT_FOUND" });
 
         var deleted = await documentService.DeleteDocumentAsync(document.Title);
 
@@ -409,15 +409,15 @@ public static class DocumentAdminEndpoints
                 }
             });
         }
-        catch (DocRetrievalValidationException ex)
+        catch (DocLibraryValidationException ex)
         {
             var (statusCode, errorCode) = ex.Message switch
             {
-                var msg when msg.Contains("not found") => (StatusCodes.Status404NotFound, "DOCRETRIEVAL_DOCUMENT_NOT_FOUND"),
-                var msg when msg.Contains("not ready") => (StatusCodes.Status422UnprocessableEntity, "DOCRETRIEVAL_DOCUMENT_NOT_READY"),
-                var msg when msg.Contains("Subject only supports") => (StatusCodes.Status400BadRequest, "DOCRETRIEVAL_SUBJECT_INVALID"),
-                var msg when msg.Contains("Invalid grade value") => (StatusCodes.Status400BadRequest, "DOCRETRIEVAL_GRADE_INVALID"),
-                _ => (StatusCodes.Status400BadRequest, "DOCRETRIEVAL_METADATA_REQUIRED")
+                var msg when msg.Contains("not found") => (StatusCodes.Status404NotFound, "DOCLIBRARY_DOCUMENT_NOT_FOUND"),
+                var msg when msg.Contains("not ready") => (StatusCodes.Status422UnprocessableEntity, "DOCLIBRARY_DOCUMENT_NOT_READY"),
+                var msg when msg.Contains("Subject only supports") => (StatusCodes.Status400BadRequest, "DOCLIBRARY_SUBJECT_INVALID"),
+                var msg when msg.Contains("Invalid grade value") => (StatusCodes.Status400BadRequest, "DOCLIBRARY_GRADE_INVALID"),
+                _ => (StatusCodes.Status400BadRequest, "DOCLIBRARY_METADATA_REQUIRED")
             };
             return Results.Json(new { success = false, message = ex.Message, errorCode }, statusCode: statusCode);
         }
@@ -508,11 +508,11 @@ public static class DocumentAdminEndpoints
     {
         var document = await documentService.GetDocumentAsync(id);
         if (document == null)
-            return Results.NotFound(new { success = false, message = "Document not found", errorCode = "DOCRETRIEVAL_DOCUMENT_NOT_FOUND" });
+            return Results.NotFound(new { success = false, message = "Document not found", errorCode = "DOCLIBRARY_DOCUMENT_NOT_FOUND" });
 
         var job = await documentService.GetIngestionJobAsync(id);
         if (job == null || (job.Status != DocumentStatus.Pending && job.Status != DocumentStatus.Processing))
-            return Results.Json(new { success = false, message = "No cancellable job found for this document", errorCode = "DOCRETRIEVAL_JOB_NOT_CANCELLABLE" }, statusCode: StatusCodes.Status422UnprocessableEntity);
+            return Results.Json(new { success = false, message = "No cancellable job found for this document", errorCode = "DOCLIBRARY_JOB_NOT_CANCELLABLE" }, statusCode: StatusCodes.Status422UnprocessableEntity);
 
         await documentService.CancelIngestionJobAsync(id);
         return Results.Ok(new { success = true, message = "Ingestion job cancelled" });
@@ -529,11 +529,11 @@ public static class DocumentAdminEndpoints
         }
         catch (InvalidOperationException)
         {
-            return Results.NotFound(new { success = false, message = "Document not found", errorCode = "DOCRETRIEVAL_DOCUMENT_NOT_FOUND" });
+            return Results.NotFound(new { success = false, message = "Document not found", errorCode = "DOCLIBRARY_DOCUMENT_NOT_FOUND" });
         }
-        catch (DocRetrievalValidationException ex)
+        catch (DocLibraryValidationException ex)
         {
-            return Results.Json(new { success = false, message = ex.Message, errorCode = "DOCRETRIEVAL_DOCUMENT_NOT_FAILED" }, statusCode: StatusCodes.Status422UnprocessableEntity);
+            return Results.Json(new { success = false, message = ex.Message, errorCode = "DOCLIBRARY_DOCUMENT_NOT_FAILED" }, statusCode: StatusCodes.Status422UnprocessableEntity);
         }
     }
 
@@ -581,7 +581,7 @@ public static class DocumentAdminEndpoints
         }
         catch (KeyNotFoundException)
         {
-            return Results.NotFound(new { success = false, message = "Document not found", errorCode = "DOCRETRIEVAL_DOCUMENT_NOT_FOUND" });
+            return Results.NotFound(new { success = false, message = "Document not found", errorCode = "DOCLIBRARY_DOCUMENT_NOT_FOUND" });
         }
     }
 
@@ -589,7 +589,7 @@ public static class DocumentAdminEndpoints
         Guid id,
         HttpRequest request,
         IDocumentDomainService documentService,
-        DocRetrievalDbContext dbContext,
+        DocLibraryDbContext dbContext,
         [FromServices] ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger("DocumentAdminEndpoints");
@@ -683,23 +683,23 @@ public static class DocumentAdminEndpoints
         }
         catch (KeyNotFoundException)
         {
-            return Results.NotFound(new { success = false, message = "Document not found", errorCode = "DOCRETRIEVAL_DOCUMENT_NOT_FOUND" });
+            return Results.NotFound(new { success = false, message = "Document not found", errorCode = "DOCLIBRARY_DOCUMENT_NOT_FOUND" });
         }
-        catch (DocRetrievalValidationException ex)
+        catch (DocLibraryValidationException ex)
         {
             var (statusCode, errorCode) = ex.Message switch
             {
-                var msg when msg.Contains("not ready") => (StatusCodes.Status422UnprocessableEntity, "DOCRETRIEVAL_DOCUMENT_NOT_READY"),
-                var msg when msg.Contains("Too many") => (StatusCodes.Status400BadRequest, "DOCRETRIEVAL_TOO_MANY_CORRECTIONS"),
-                var msg when msg.Contains("not configured") => (StatusCodes.Status503ServiceUnavailable, "DOCRETRIEVAL_LLM_NOT_CONFIGURED"),
-                _ => (StatusCodes.Status400BadRequest, "DOCRETRIEVAL_REFINE_FAILED")
+                var msg when msg.Contains("not ready") => (StatusCodes.Status422UnprocessableEntity, "DOCLIBRARY_DOCUMENT_NOT_READY"),
+                var msg when msg.Contains("Too many") => (StatusCodes.Status400BadRequest, "DOCLIBRARY_TOO_MANY_CORRECTIONS"),
+                var msg when msg.Contains("not configured") => (StatusCodes.Status503ServiceUnavailable, "DOCLIBRARY_LLM_NOT_CONFIGURED"),
+                _ => (StatusCodes.Status400BadRequest, "DOCLIBRARY_REFINE_FAILED")
             };
             return Results.Json(new { success = false, message = ex.Message, errorCode }, statusCode: statusCode);
         }
         catch (Exception ex)
         {
             logger.LogError(ex, "Document refinement failed: {DocumentId}", id);
-            return Results.Json(new { success = false, message = "Refinement failed", errorCode = "DOCRETRIEVAL_LLM_REFINE_FAILED" }, statusCode: StatusCodes.Status500InternalServerError);
+            return Results.Json(new { success = false, message = "Refinement failed", errorCode = "DOCLIBRARY_LLM_REFINE_FAILED" }, statusCode: StatusCodes.Status500InternalServerError);
         }
     }
 
@@ -798,7 +798,7 @@ public static class DocumentAdminEndpoints
         {
             var document = await documentRepository.GetByIdAsync(id);
             if (document == null)
-                return Results.NotFound(new { success = false, message = "Document not found", errorCode = "DOCRETRIEVAL_DOCUMENT_NOT_FOUND" });
+                return Results.NotFound(new { success = false, message = "Document not found", errorCode = "DOCLIBRARY_DOCUMENT_NOT_FOUND" });
 
             // Delete DB records (cascade)
             await documentService.DeleteDocumentAsync(document.Title);
@@ -984,13 +984,13 @@ public static class DocumentAdminEndpoints
         var form = await request.ReadFormAsync();
         var file = form.Files.GetFile("file");
         if (file == null || file.Length == 0)
-            return Results.BadRequest(new { success = false, message = "File cannot be empty", errorCode = "DOCRETRIEVAL_FILE_REQUIRED" });
+            return Results.BadRequest(new { success = false, message = "File cannot be empty", errorCode = "DOCLIBRARY_FILE_REQUIRED" });
 
         if (file.Length > MaxFileSize)
             return Results.BadRequest(new { success = false, message = "File size exceeds 200MB limit" });
 
         if (!DocumentFileMimeTypes.Contains(file.ContentType))
-            return Results.BadRequest(new { success = false, message = "Unsupported file format", errorCode = "DOCRETRIEVAL_FILE_FORMAT_UNSUPPORTED" });
+            return Results.BadRequest(new { success = false, message = "Unsupported file format", errorCode = "DOCLIBRARY_FILE_FORMAT_UNSUPPORTED" });
 
         string filePath;
         using (var stream = file.OpenReadStream())
@@ -1099,7 +1099,7 @@ public static class DocumentAdminEndpoints
 
         var file = await fileService.GetByIdAsync(id);
         if (file == null)
-            return Results.NotFound(new { success = false, message = "File not found", errorCode = "DOCRETRIEVAL_FILE_NOT_FOUND" });
+            return Results.NotFound(new { success = false, message = "File not found", errorCode = "DOCLIBRARY_FILE_NOT_FOUND" });
 
         // Get latest parse record
         var parse = await parseService.GetLatestByFileIdAsync(id);
@@ -1180,15 +1180,15 @@ public static class DocumentAdminEndpoints
 
         var file = await fileService.GetByIdAsync(id);
         if (file == null)
-            return Results.NotFound(new { success = false, message = "File not found", errorCode = "DOCRETRIEVAL_FILE_NOT_FOUND" });
+            return Results.NotFound(new { success = false, message = "File not found", errorCode = "DOCLIBRARY_FILE_NOT_FOUND" });
 
         // Check if there's an active parse (pending or parsing)
         var latestParse = await parseService.GetLatestByFileIdAsync(id);
         if (latestParse != null && (latestParse.Status == DocumentParseStatus.Pending || latestParse.Status == DocumentParseStatus.Parsing))
-            return Results.Json(new { success = false, message = "File is not in a parseable state", errorCode = "DOCRETRIEVAL_PARSE_IN_PROGRESS" }, statusCode: StatusCodes.Status422UnprocessableEntity);
+            return Results.Json(new { success = false, message = "File is not in a parseable state", errorCode = "DOCLIBRARY_PARSE_IN_PROGRESS" }, statusCode: StatusCodes.Status422UnprocessableEntity);
 
         if (string.IsNullOrEmpty(minerUOptions.Value.ApiToken))
-            return Results.Json(new { success = false, message = "MinerU API Token not configured", errorCode = "DOCRETRIEVAL_MINERU_NOT_CONFIGURED" }, statusCode: StatusCodes.Status503ServiceUnavailable);
+            return Results.Json(new { success = false, message = "MinerU API Token not configured", errorCode = "DOCLIBRARY_MINERU_NOT_CONFIGURED" }, statusCode: StatusCodes.Status503ServiceUnavailable);
 
         var parse = await parseService.CreateAsync(id);
         logger.LogInformation("Document file parse requested: {Id}, ParseId={ParseId}", id, parse.Id);
@@ -1211,7 +1211,7 @@ public static class DocumentAdminEndpoints
 
         var file = await fileService.GetByIdAsync(id);
         if (file == null)
-            return Results.NotFound(new { success = false, message = "File not found", errorCode = "DOCRETRIEVAL_FILE_NOT_FOUND" });
+            return Results.NotFound(new { success = false, message = "File not found", errorCode = "DOCLIBRARY_FILE_NOT_FOUND" });
 
         // Delete associated images from S3
         var images = await parseService.GetImagesByFileIdAsync(id);
@@ -1258,11 +1258,11 @@ public static class DocumentAdminEndpoints
 
         var file = await fileService.GetByIdAsync(id);
         if (file == null)
-            return Results.NotFound(new { success = false, message = "File not found", errorCode = "DOCRETRIEVAL_FILE_NOT_FOUND" });
+            return Results.NotFound(new { success = false, message = "File not found", errorCode = "DOCLIBRARY_FILE_NOT_FOUND" });
 
         var parse = await parseService.GetLatestByFileIdAsync(id);
         if (parse == null || parse.Status != DocumentParseStatus.Parsed)
-            return Results.Json(new { success = false, message = "File is not parsed yet", errorCode = "DOCRETRIEVAL_FILE_NOT_PARSED" }, statusCode: StatusCodes.Status422UnprocessableEntity);
+            return Results.Json(new { success = false, message = "File is not parsed yet", errorCode = "DOCLIBRARY_FILE_NOT_PARSED" }, statusCode: StatusCodes.Status422UnprocessableEntity);
 
         var images = await parseService.GetImagesByParseIdAsync(parse.Id);
         var markdownContent = parse.MarkdownContent ?? string.Empty;
@@ -1319,11 +1319,11 @@ public static class DocumentAdminEndpoints
 
         var file = await fileService.GetByIdAsync(id);
         if (file == null)
-            return Results.NotFound(new { success = false, message = "File not found", errorCode = "DOCRETRIEVAL_FILE_NOT_FOUND" });
+            return Results.NotFound(new { success = false, message = "File not found", errorCode = "DOCLIBRARY_FILE_NOT_FOUND" });
 
         var parse = await parseService.GetLatestByFileIdAsync(id);
         if (parse == null || parse.Status != DocumentParseStatus.Parsed)
-            return Results.Json(new { success = false, message = "File is not parsed yet", errorCode = "DOCRETRIEVAL_FILE_NOT_PARSED" }, statusCode: StatusCodes.Status422UnprocessableEntity);
+            return Results.Json(new { success = false, message = "File is not parsed yet", errorCode = "DOCLIBRARY_FILE_NOT_PARSED" }, statusCode: StatusCodes.Status422UnprocessableEntity);
 
         var images = await parseService.GetImagesByParseIdAsync(parse.Id);
         var markdownContent = parse.MarkdownContent ?? string.Empty;
@@ -1431,7 +1431,7 @@ public static class DocumentAdminEndpoints
 
         var parse = await parseService.GetByIdAsync(parseId);
         if (parse == null)
-            return Results.NotFound(new { success = false, message = "Parse record not found", errorCode = "DOCRETRIEVAL_PARSE_NOT_FOUND" });
+            return Results.NotFound(new { success = false, message = "Parse record not found", errorCode = "DOCLIBRARY_PARSE_NOT_FOUND" });
 
         // Delete associated images from S3
         var images = await parseService.GetImagesByParseIdAsync(parseId);
@@ -1468,10 +1468,10 @@ public static class DocumentAdminEndpoints
 
         var parse = await parseService.GetByIdAsync(parseId);
         if (parse == null)
-            return Results.NotFound(new { success = false, message = "Parse record not found", errorCode = "DOCRETRIEVAL_PARSE_NOT_FOUND" });
+            return Results.NotFound(new { success = false, message = "Parse record not found", errorCode = "DOCLIBRARY_PARSE_NOT_FOUND" });
 
         if (parse.Status != DocumentParseStatus.Parsed)
-            return Results.Json(new { success = false, message = "Parse record is not parsed yet", errorCode = "DOCRETRIEVAL_PARSE_NOT_PARSED" }, statusCode: StatusCodes.Status422UnprocessableEntity);
+            return Results.Json(new { success = false, message = "Parse record is not parsed yet", errorCode = "DOCLIBRARY_PARSE_NOT_PARSED" }, statusCode: StatusCodes.Status422UnprocessableEntity);
 
         var file = await fileService.GetByIdAsync(parse.DocumentFileId);
         var fileName = file?.FileName ?? "document";
@@ -1529,10 +1529,10 @@ public static class DocumentAdminEndpoints
 
         var parse = await parseService.GetByIdAsync(parseId);
         if (parse == null)
-            return Results.NotFound(new { success = false, message = "Parse record not found", errorCode = "DOCRETRIEVAL_PARSE_NOT_FOUND" });
+            return Results.NotFound(new { success = false, message = "Parse record not found", errorCode = "DOCLIBRARY_PARSE_NOT_FOUND" });
 
         if (parse.Status != DocumentParseStatus.Parsed)
-            return Results.Json(new { success = false, message = "Parse record is not parsed yet", errorCode = "DOCRETRIEVAL_PARSE_NOT_PARSED" }, statusCode: StatusCodes.Status422UnprocessableEntity);
+            return Results.Json(new { success = false, message = "Parse record is not parsed yet", errorCode = "DOCLIBRARY_PARSE_NOT_PARSED" }, statusCode: StatusCodes.Status422UnprocessableEntity);
 
         var file = await fileService.GetByIdAsync(parse.DocumentFileId);
         var fileName = file?.FileName ?? "document";

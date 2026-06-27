@@ -1,9 +1,9 @@
 using System;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
-using Ruoyu.Study.DocRetrieval.Domain.Models;
+using Ruoyu.Study.DocLibrary.Domain.Models;
 
-namespace Ruoyu.Study.DocRetrieval.Database.Entities;
+namespace Ruoyu.Study.DocLibrary.Database.Entities;
 
 [Table("document_segments")]
 public class DocumentSegmentEntity

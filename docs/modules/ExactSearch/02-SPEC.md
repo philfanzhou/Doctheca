@@ -8,9 +8,9 @@
 
 ## 功能要求清单（可独立测试）
 
-- [x] FR-01 查询词为空时 gRPC 返回 `RpcException(StatusCode.InvalidArgument, "DOCRETRIEVAL_QUERY_REQUIRED")`。
-- [x] FR-02 查询词超过 200 字符时 gRPC 返回 `RpcException(StatusCode.InvalidArgument, "DOCRETRIEVAL_QUERY_TOO_LONG")`。
-- [x] FR-03 `page_size` 超过 100 时 gRPC 返回 `RpcException(StatusCode.InvalidArgument, "DOCRETRIEVAL_PAGE_SIZE_INVALID")`。
+- [x] FR-01 查询词为空时 gRPC 返回 `RpcException(StatusCode.InvalidArgument, "DOCLIBRARY_QUERY_REQUIRED")`。
+- [x] FR-02 查询词超过 200 字符时 gRPC 返回 `RpcException(StatusCode.InvalidArgument, "DOCLIBRARY_QUERY_TOO_LONG")`。
+- [x] FR-03 `page_size` 超过 100 时 gRPC 返回 `RpcException(StatusCode.InvalidArgument, "DOCLIBRARY_PAGE_SIZE_INVALID")`。
 - [x] FR-04 `page_size` 默认 50，最小 1，最大 100；传入 0 或负值时使用默认值 50。
 - [x] FR-05 优先使用 OpenSearch BM25 搜索（`ISearchIndexService.ExactSearchAsync`）。
 - [x] FR-06 OpenSearch 不可用（`_searchIndexService == null`，通过构造函数可选注入 nullable 参数）或查询异常时，回退数据库搜索并记录 LogWarning。
@@ -27,9 +27,9 @@
 
 ## 详细的验收标准（可自动验证）
 
-- AC-FR-01：调用 `ExactSearch` 传入 `query = ""` 时，抛出 `RpcException(StatusCode.InvalidArgument, "DOCRETRIEVAL_QUERY_REQUIRED")`。
-- AC-FR-02：调用 `ExactSearch` 传入 `query` 长度 > 200 时，抛出 `RpcException(StatusCode.InvalidArgument, "DOCRETRIEVAL_QUERY_TOO_LONG")`。
-- AC-FR-03：调用 `ExactSearch` 传入 `page_size = 101` 时，抛出 `RpcException(StatusCode.InvalidArgument, "DOCRETRIEVAL_PAGE_SIZE_INVALID")`。
+- AC-FR-01：调用 `ExactSearch` 传入 `query = ""` 时，抛出 `RpcException(StatusCode.InvalidArgument, "DOCLIBRARY_QUERY_REQUIRED")`。
+- AC-FR-02：调用 `ExactSearch` 传入 `query` 长度 > 200 时，抛出 `RpcException(StatusCode.InvalidArgument, "DOCLIBRARY_QUERY_TOO_LONG")`。
+- AC-FR-03：调用 `ExactSearch` 传入 `page_size = 101` 时，抛出 `RpcException(StatusCode.InvalidArgument, "DOCLIBRARY_PAGE_SIZE_INVALID")`。
 - AC-FR-04：调用 `ExactSearch` 传入 `page_size = 0` 时，实际使用 `pageSize = 50`；传入 `page_size = 100` 时正常使用。
 - AC-FR-05：`_searchIndexService` 不为 null 且不抛异常时，调用 `ISearchIndexService.ExactSearchAsync`。
 - AC-FR-06：`_searchIndexService` 为 null（构造函数传入 null）时，直接调用 `DatabaseSearchAsync`；`_searchIndexService` 抛异常时，捕获异常并 LogWarning 后回退 `DatabaseSearchAsync`。

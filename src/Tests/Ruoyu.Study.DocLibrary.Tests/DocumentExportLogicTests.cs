@@ -5,7 +5,7 @@ using FluentAssertions;
 using Markdig;
 using Xunit;
 
-namespace Ruoyu.Study.DocRetrieval.Tests;
+namespace Ruoyu.Study.DocLibrary.Tests;
 
 public class DocumentExportLogicTests
 {

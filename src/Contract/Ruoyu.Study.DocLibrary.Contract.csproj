@@ -16,8 +16,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Protobuf Include="Protos\docretrieval.common.proto" GrpcServices="None" />
-    <Protobuf Include="Protos\docretrieval.proto" GrpcServices="Both" />
+    <Protobuf Include="Protos\doclibrary.common.proto" GrpcServices="None" />
+    <Protobuf Include="Protos\doclibrary.proto" GrpcServices="Both" />
   </ItemGroup>
 
 </Project>

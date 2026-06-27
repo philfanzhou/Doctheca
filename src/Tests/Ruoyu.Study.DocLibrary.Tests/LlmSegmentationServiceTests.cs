@@ -10,11 +10,11 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Moq;
 using Moq.Protected;
-using Ruoyu.Study.DocRetrieval.Domain.Models;
-using Ruoyu.Study.DocRetrieval.Service;
+using Ruoyu.Study.DocLibrary.Domain.Models;
+using Ruoyu.Study.DocLibrary.Service;
 using Xunit;
 
-namespace Ruoyu.Study.DocRetrieval.Tests;
+namespace Ruoyu.Study.DocLibrary.Tests;
 
 public class LlmSegmentationServiceTests
 {

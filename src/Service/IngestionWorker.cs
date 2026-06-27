@@ -7,11 +7,11 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.DependencyInjection;
 using Ruoyu.Study.Common.Oss;
-using Ruoyu.Study.DocRetrieval.Domain.Models;
-using Ruoyu.Study.DocRetrieval.Domain.Repositories;
-using Ruoyu.Study.DocRetrieval.Domain.Services;
+using Ruoyu.Study.DocLibrary.Domain.Models;
+using Ruoyu.Study.DocLibrary.Domain.Repositories;
+using Ruoyu.Study.DocLibrary.Domain.Services;
 
-namespace Ruoyu.Study.DocRetrieval.Service;
+namespace Ruoyu.Study.DocLibrary.Service;
 
 public class IngestionWorker : BackgroundService
 {

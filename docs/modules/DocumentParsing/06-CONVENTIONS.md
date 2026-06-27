@@ -20,7 +20,7 @@
 | 数据库实体 | `{Entity}Entity` | `DocumentEntity`、`DocumentIngestionJobEntity` |
 | 仓储接口 | `I{Entity}Repository` | `IDocumentPageRepository` |
 | 配置选项 | `{Technology}Options` | `OpenSearchOptions`、`LlmSegmentationOptions` |
-| 自定义异常 | `{Feature}ValidationException` | `DocRetrievalValidationException` |
+| 自定义异常 | `{Feature}ValidationException` | `DocLibraryValidationException` |
 
 ### 方法命名
 
@@ -93,7 +93,7 @@
 
 ## 错误消息约定
 
-### 用户可见错误（DocRetrievalValidationException）
+### 用户可见错误（DocLibraryValidationException）
 
 | 场景 | 消息 |
 |------|------|

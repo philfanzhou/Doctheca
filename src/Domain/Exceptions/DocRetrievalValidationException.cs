@@ -1,6 +1,6 @@
-namespace Ruoyu.Study.DocRetrieval.Domain.Exceptions;
+namespace Ruoyu.Study.DocLibrary.Domain.Exceptions;
 
-public class DocRetrievalValidationException : Exception
+public class DocLibraryValidationException : Exception
 {
-    public DocRetrievalValidationException(string message) : base(message) { }
+    public DocLibraryValidationException(string message) : base(message) { }
 }

@@ -1,6 +1,6 @@
-﻿# 本地搭建
+# 本地搭建
 
-如何在本地搭建并运行 `ruoyu.docretrieval`。
+如何在本地搭建并运行 `ruoyu.doclibrary`。
 
 ## 前置条件
 
@@ -48,7 +48,7 @@ Host=localhost;Port=5432;Database=ruoyu_study_docretrieval;Username=phil
 
 ## 运行服务
 
-在 `src/services/ruoyu.docretrieval/` 目录下执行：
+在 `src/services/ruoyu.doclibrary/` 目录下执行：
 
 ```bash
 dotnet run --project src/Host

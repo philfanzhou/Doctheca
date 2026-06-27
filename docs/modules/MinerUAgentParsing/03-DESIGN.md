@@ -3,7 +3,7 @@
 ## 目录与文件结构
 
 ```
-src/services/ruoyu.docretrieval/
+src/services/ruoyu.doclibrary/
 ├── src/
 │   ├── Service/
 │   │   ├── DocumentAdminEndpoints.cs              # 端点（文件 + 解析 + 导出）
@@ -528,11 +528,11 @@ GET /admin/document-parses/{parseId}/export/html
 
 | 接口 | 提供能力 | 所在模块 |
 |------|---------|---------|
-| `IDocumentFileService` | 文件 CRUD | `Ruoyu.Study.DocRetrieval.Domain.Services` |
-| `IDocumentParseService` | 解析 CRUD、状态更新、列表、删除 | `Ruoyu.Study.DocRetrieval.Domain.Services` |
-| `MinerUPrecisionClient` | MinerU API 提交/轮询/下载 | `Ruoyu.Study.DocRetrieval.Service` |
-| `IPdfSplitService` | PDF 页数检测、拆分 | `Ruoyu.Study.DocRetrieval.Service` |
-| `IFileConversionService` | 非 PDF 转 PDF（LibreOffice） | `Ruoyu.Study.DocRetrieval.Service` |
+| `IDocumentFileService` | 文件 CRUD | `Ruoyu.Study.DocLibrary.Domain.Services` |
+| `IDocumentParseService` | 解析 CRUD、状态更新、列表、删除 | `Ruoyu.Study.DocLibrary.Domain.Services` |
+| `MinerUPrecisionClient` | MinerU API 提交/轮询/下载 | `Ruoyu.Study.DocLibrary.Service` |
+| `IPdfSplitService` | PDF 页数检测、拆分 | `Ruoyu.Study.DocLibrary.Service` |
+| `IFileConversionService` | 非 PDF 转 PDF（LibreOffice） | `Ruoyu.Study.DocLibrary.Service` |
 | `IOssService` | S3 上传/下载/删除/presigned URL | `Ruoyu.Study.Common.Oss` |
 
 ## DI 注册

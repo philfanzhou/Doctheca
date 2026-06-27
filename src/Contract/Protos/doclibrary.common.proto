@@ -1,8 +1,8 @@
 syntax = "proto3";
 
-package ruoyu.study.docretrieval.v1;
+package ruoyu.study.doclibrary.v1;
 
-option csharp_namespace = "Ruoyu.Study.DocRetrieval.Contract.Protos";
+option csharp_namespace = "Ruoyu.Study.DocLibrary.Contract.Protos";
 
 // Document status
 enum DocumentStatus {

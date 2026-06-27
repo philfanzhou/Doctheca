@@ -1,9 +1,9 @@
 using Microsoft.Extensions.Logging;
-using Ruoyu.Study.DocRetrieval.Domain.Models;
-using Ruoyu.Study.DocRetrieval.Domain.Repositories;
-using Ruoyu.Study.DocRetrieval.Domain.Services;
+using Ruoyu.Study.DocLibrary.Domain.Models;
+using Ruoyu.Study.DocLibrary.Domain.Repositories;
+using Ruoyu.Study.DocLibrary.Domain.Services;
 
-namespace Ruoyu.Study.DocRetrieval.Domain.Services;
+namespace Ruoyu.Study.DocLibrary.Domain.Services;
 
 public class DocumentFileService : IDocumentFileService
 {

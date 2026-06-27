@@ -1,4 +1,4 @@
-﻿[
+[
   {
     "id": "T-01",
     "title": "代码审查：UpdateMetadataAsync 文档查找与状态校验",
@@ -7,8 +7,8 @@
     "target": "src/Domain/Services/DocumentDomainService.cs",
     "checkpoints": [
       "使用 GetByTitleAsync(title) 查找文档",
-      "null 时抛 DocRetrievalValidationException(\"文档不存在\")",
-      "Status != \"ready\" 时抛 DocRetrievalValidationException(\"文档未就绪，不允许修改元数据\")",
+      "null 时抛 DocLibraryValidationException(\"文档不存在\")",
+      "Status != \"ready\" 时抛 DocLibraryValidationException(\"文档未就绪，不允许修改元数据\")",
       "状态校验在学科/年级校验之前"
     ],
     "acceptance": "dotnet test --filter \"FullyQualifiedName~DocumentMetadataTests\""
@@ -17,7 +17,7 @@
     "id": "T-02",
     "title": "代码审查：UpdateMetadataAsync 学科与年级校验",
     "type": "code-review",
-    "description": "检查学科校验使用 DocRetrievalConstants.IsValidSubject，年级校验使用 DocRetrievalConstants.IsValidGrade，且仅在参数非 null 时校验。",
+    "description": "检查学科校验使用 DocLibraryConstants.IsValidSubject，年级校验使用 DocLibraryConstants.IsValidGrade，且仅在参数非 null 时校验。",
     "target": "src/Domain/Services/DocumentDomainService.cs",
     "checkpoints": [
       "subject != null 时调用 IsValidSubject(subject)",
@@ -79,13 +79,13 @@
     "id": "T-06",
     "title": "代码审查：UpdateMetadata 端点错误码映射",
     "type": "code-review",
-    "description": "检查 DocRetrievalValidationException 的消息匹配与 HTTP 状态码映射：不存在→404, 未就绪→422, 学科无效→400, 年级无效→400。",
+    "description": "检查 DocLibraryValidationException 的消息匹配与 HTTP 状态码映射：不存在→404, 未就绪→422, 学科无效→400, 年级无效→400。",
     "target": "src/Service/DocumentAdminEndpoints.cs",
     "checkpoints": [
-      "消息包含\"不存在\" → 404 DOCRETRIEVAL_DOCUMENT_NOT_FOUND",
-      "消息包含\"未就绪\" → 422 DOCRETRIEVAL_DOCUMENT_NOT_READY",
-      "消息包含\"学科仅支持\" → 400 DOCRETRIEVAL_SUBJECT_INVALID",
-      "消息包含\"年级取值非法\" → 400 DOCRETRIEVAL_GRADE_INVALID",
+      "消息包含\"不存在\" → 404 DOCLIBRARY_DOCUMENT_NOT_FOUND",
+      "消息包含\"未就绪\" → 422 DOCLIBRARY_DOCUMENT_NOT_READY",
+      "消息包含\"学科仅支持\" → 400 DOCLIBRARY_SUBJECT_INVALID",
+      "消息包含\"年级取值非法\" → 400 DOCLIBRARY_GRADE_INVALID",
       "使用 Results.Json 返回带 statusCode 的响应"
     ],
     "acceptance": "dotnet test --filter \"FullyQualifiedName~DocumentMetadataTests\""
@@ -108,8 +108,8 @@
     "id": "T-08",
     "title": "编译验证：dotnet build 成功",
     "type": "build-verify",
-    "description": "在 src/services/ruoyu.docretrieval 目录执行 dotnet build -c Release，确认零编译错误。",
-    "target": "src/services/ruoyu.docretrieval",
+    "description": "在 src/services/ruoyu.doclibrary 目录执行 dotnet build -c Release，确认零编译错误。",
+    "target": "src/services/ruoyu.doclibrary",
     "checkpoints": [
       "dotnet build -c Release 退出码为 0",
       "无 CSxxxx 错误"
@@ -121,7 +121,7 @@
     "title": "测试验证：运行全部单元测试",
     "type": "test-verify",
     "description": "运行文档元数据更新相关的单元测试，确认全部通过。",
-    "target": "src/services/ruoyu.docretrieval",
+    "target": "src/services/ruoyu.doclibrary",
     "checkpoints": [
       "所有 [Fact] 方法全部通过",
       "退出码为 0"

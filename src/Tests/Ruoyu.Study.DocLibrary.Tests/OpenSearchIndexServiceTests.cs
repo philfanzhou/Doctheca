@@ -3,11 +3,11 @@ using System.Collections.Generic;
 using System.Text;
 using System.Text.Json;
 using FluentAssertions;
-using global::Ruoyu.Study.DocRetrieval.Domain.Models;
-using global::Ruoyu.Study.DocRetrieval.Service;
+using global::Ruoyu.Study.DocLibrary.Domain.Models;
+using global::Ruoyu.Study.DocLibrary.Service;
 using Xunit;
 
-namespace Ruoyu.Study.DocRetrieval.Tests;
+namespace Ruoyu.Study.DocLibrary.Tests;
 
 public class OpenSearchIndexServiceTests
 {

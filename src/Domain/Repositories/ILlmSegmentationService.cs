@@ -1,6 +1,6 @@
-using Ruoyu.Study.DocRetrieval.Domain.Models;
+using Ruoyu.Study.DocLibrary.Domain.Models;
 
-namespace Ruoyu.Study.DocRetrieval.Domain.Repositories;
+namespace Ruoyu.Study.DocLibrary.Domain.Repositories;
 
 /// <summary>
 /// LLM-based intelligent document segmentation service

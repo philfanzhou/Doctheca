@@ -121,7 +121,7 @@
     "status": "done",
     "priority": "P0",
     "requirement": "REQ-PARSE-01~09",
-    "files": ["test/Ruoyu.Study.DocRetrieval.Tests/IngestionWorkerTests.cs"],
+    "files": ["test/Ruoyu.Study.DocLibrary.Tests/IngestionWorkerTests.cs"],
     "depends_on": ["TASK-012"]
   },
   {
@@ -131,7 +131,7 @@
     "status": "done",
     "priority": "P0",
     "requirement": "REQ-PARSE-02",
-    "files": ["test/Ruoyu.Study.DocRetrieval.Tests/DocumentDomainServiceTests.cs"],
+    "files": ["test/Ruoyu.Study.DocLibrary.Tests/DocumentDomainServiceTests.cs"],
     "depends_on": ["TASK-002"]
   },
   {
@@ -141,7 +141,7 @@
     "status": "done",
     "priority": "P0",
     "requirement": "REQ-PARSE-03",
-    "files": ["test/Ruoyu.Study.DocRetrieval.Tests/DocumentParserServiceTests.cs"],
+    "files": ["test/Ruoyu.Study.DocLibrary.Tests/DocumentParserServiceTests.cs"],
     "depends_on": ["TASK-005"]
   },
   {
@@ -151,7 +151,7 @@
     "status": "pending",
     "priority": "P1",
     "requirement": "REQ-PARSE-01~09",
-    "files": ["test/Ruoyu.Study.DocRetrieval.Tests/IngestionIntegrationTests.cs [当前无测试覆盖]"],
+    "files": ["test/Ruoyu.Study.DocLibrary.Tests/IngestionIntegrationTests.cs [当前无测试覆盖]"],
     "depends_on": ["TASK-013", "TASK-014", "TASK-015"]
   },
   {
@@ -208,7 +208,7 @@
     "status": "pending",
     "priority": "P0",
     "requirement": "REQ-PARSE-10",
-    "files": ["test/Ruoyu.Study.DocRetrieval.Tests/LlmSegmentationServiceTests.cs"],
+    "files": ["test/Ruoyu.Study.DocLibrary.Tests/LlmSegmentationServiceTests.cs"],
     "depends_on": ["TASK-018"]
   },
   {
@@ -218,7 +218,7 @@
     "status": "pending",
     "priority": "P0",
     "requirement": "REQ-PARSE-10",
-    "files": ["test/Ruoyu.Study.DocRetrieval.Tests/DocumentParserServiceLlmTests.cs"],
+    "files": ["test/Ruoyu.Study.DocLibrary.Tests/DocumentParserServiceLlmTests.cs"],
     "depends_on": ["TASK-019", "TASK-021"]
   }
 ]
@@ -230,7 +230,7 @@
 
 ```bash
 # 构建解决方案
-dotnet build Ruoyu.Study.DocRetrieval.sln
+dotnet build Ruoyu.Study.DocLibrary.sln
 
 # 运行服务
 dotnet run --project src/Host

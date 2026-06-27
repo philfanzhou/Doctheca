@@ -8,13 +8,13 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Moq;
 using Ruoyu.Study.Common.Oss;
-using Ruoyu.Study.DocRetrieval.Domain.Exceptions;
-using Ruoyu.Study.DocRetrieval.Domain.Models;
-using Ruoyu.Study.DocRetrieval.Domain.Repositories;
-using Ruoyu.Study.DocRetrieval.Domain.Services;
+using Ruoyu.Study.DocLibrary.Domain.Exceptions;
+using Ruoyu.Study.DocLibrary.Domain.Models;
+using Ruoyu.Study.DocLibrary.Domain.Repositories;
+using Ruoyu.Study.DocLibrary.Domain.Services;
 using Xunit;
 
-namespace Ruoyu.Study.DocRetrieval.Tests;
+namespace Ruoyu.Study.DocLibrary.Tests;
 
 public class DocumentRefinementTests
 {
@@ -180,7 +180,7 @@ public class DocumentRefinementTests
             .ToList();
 
         // Act & Assert
-        var ex = await Assert.ThrowsAsync<DocRetrievalValidationException>(
+        var ex = await Assert.ThrowsAsync<DocLibraryValidationException>(
             () => _service.RefineSegmentsAsync(documentId, corrections));
         Assert.Contains("Too many", ex.Message);
     }
@@ -192,7 +192,7 @@ public class DocumentRefinementTests
         var documentId = Guid.NewGuid();
 
         // Act & Assert
-        var ex = await Assert.ThrowsAsync<DocRetrievalValidationException>(
+        var ex = await Assert.ThrowsAsync<DocLibraryValidationException>(
             () => _service.RefineSegmentsAsync(documentId, []));
         Assert.Contains("cannot be empty", ex.Message);
     }
@@ -213,7 +213,7 @@ public class DocumentRefinementTests
         };
 
         // Act & Assert
-        var ex = await Assert.ThrowsAsync<DocRetrievalValidationException>(
+        var ex = await Assert.ThrowsAsync<DocLibraryValidationException>(
             () => _service.RefineSegmentsAsync(documentId, corrections));
         Assert.Contains("not ready", ex.Message);
     }
@@ -247,7 +247,7 @@ public class DocumentRefinementTests
         };
 
         // Act & Assert
-        var ex = await Assert.ThrowsAsync<DocRetrievalValidationException>(
+        var ex = await Assert.ThrowsAsync<DocLibraryValidationException>(
             () => serviceWithoutLlm.RefineSegmentsAsync(documentId, corrections));
         Assert.Contains("not configured", ex.Message);
     }

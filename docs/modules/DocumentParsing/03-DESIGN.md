@@ -22,7 +22,7 @@ src/
 │   │   ├── ParsedSegment.cs              # 解析器输出片段
 │   │   ├── ParsedQuestion.cs             # 解析器输出题目
 │   │   ├── ParsedToken.cs                # 解析器输出词元
-│   │   ├── DocRetrievalConstants.cs      # 常量定义（学科、年级）
+│   │   ├── DocLibraryConstants.cs      # 常量定义（学科、年级）
 │   │   ├── DocumentStatus.cs             # 文档状态常量
 │   │   ├── SegmentTypes.cs               # 片段类型常量
 │   │   ├── SourceTypes.cs                # 来源类型常量
@@ -59,7 +59,7 @@ src/
 │   │   ├── DocumentRepository.cs
 │   │   ├── QuestionSegmentRepository.cs
 │   │   └── UnitOfWork.cs
-│   └── DocRetrievalDbContext.cs
+│   └── DocLibraryDbContext.cs
 └── Host/
     └── Program.cs                      # DI 注册
 ```

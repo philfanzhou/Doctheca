@@ -4,20 +4,20 @@ using System.Linq;
 using System.Threading.Tasks;
 using Grpc.Core;
 using Microsoft.Extensions.Logging;
-using Ruoyu.Study.DocRetrieval.Contract.Protos;
-using Ruoyu.Study.DocRetrieval.Domain.Models;
-using Ruoyu.Study.DocRetrieval.Domain.Services;
+using Ruoyu.Study.DocLibrary.Contract.Protos;
+using Ruoyu.Study.DocLibrary.Domain.Models;
+using Ruoyu.Study.DocLibrary.Domain.Services;
 
-namespace Ruoyu.Study.DocRetrieval.Service;
+namespace Ruoyu.Study.DocLibrary.Service;
 
-public class DocumentRetrievalServiceImpl : DocumentRetrievalService.DocumentRetrievalServiceBase
+public class DocumentLibraryServiceImpl : DocumentLibraryService.DocumentLibraryServiceBase
 {
     private readonly ISearchDomainService _searchService;
-    private readonly ILogger<DocumentRetrievalServiceImpl> _logger;
+    private readonly ILogger<DocumentLibraryServiceImpl> _logger;
 
-    public DocumentRetrievalServiceImpl(
+    public DocumentLibraryServiceImpl(
         ISearchDomainService searchService,
-        ILogger<DocumentRetrievalServiceImpl> logger)
+        ILogger<DocumentLibraryServiceImpl> logger)
     {
         _searchService = searchService;
         _logger = logger;
@@ -51,13 +51,13 @@ public class DocumentRetrievalServiceImpl : DocumentRetrievalService.DocumentRet
     private static void ValidateSearchRequest(string query, int pageSize)
     {
         if (string.IsNullOrWhiteSpace(query))
-            throw new RpcException(new Status(StatusCode.InvalidArgument, "DOCRETRIEVAL_QUERY_REQUIRED: Query cannot be empty"));
+            throw new RpcException(new Status(StatusCode.InvalidArgument, "DOCLIBRARY_QUERY_REQUIRED: Query cannot be empty"));
 
         if (query.Length > 200)
-            throw new RpcException(new Status(StatusCode.InvalidArgument, "DOCRETRIEVAL_QUERY_TOO_LONG: Query exceeds 200 characters"));
+            throw new RpcException(new Status(StatusCode.InvalidArgument, "DOCLIBRARY_QUERY_TOO_LONG: Query exceeds 200 characters"));
 
         if (pageSize > 100)
-            throw new RpcException(new Status(StatusCode.InvalidArgument, "DOCRETRIEVAL_PAGE_SIZE_INVALID: page_size exceeds maximum value 100"));
+            throw new RpcException(new Status(StatusCode.InvalidArgument, "DOCLIBRARY_PAGE_SIZE_INVALID: page_size exceeds maximum value 100"));
     }
 
     private static SearchFilterModel? MapFilter(SearchFilter? filter)

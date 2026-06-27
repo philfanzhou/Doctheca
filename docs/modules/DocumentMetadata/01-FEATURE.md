@@ -19,8 +19,8 @@
 ## 关键验收条件摘要（可测试）
 
 1. **AC-1：仅 ready 状态可修改** — 只有 status 为 "ready" 的文档允许修改元数据。
-2. **AC-2：文档不存在抛异常** — 按标题查找，不存在时抛 `DocRetrievalValidationException("文档不存在")`。
-3. **AC-3：未就绪抛异常** — 非 ready 状态抛 `DocRetrievalValidationException("文档未就绪，不允许修改元数据")`。
+2. **AC-2：文档不存在抛异常** — 按标题查找，不存在时抛 `DocLibraryValidationException("文档不存在")`。
+3. **AC-3：未就绪抛异常** — 非 ready 状态抛 `DocLibraryValidationException("文档未就绪，不允许修改元数据")`。
 4. **AC-4：学科与年级校验** — 学科仅支持"英语"，年级必须 K/G1~G12。
 5. **AC-5：null 参数不修改** — null 参数表示不修改，仅更新非 null 字段。
 6. **AC-6：更新时间戳** — 更新后设置 `UpdatedAt = DateTimeOffset.UtcNow`。

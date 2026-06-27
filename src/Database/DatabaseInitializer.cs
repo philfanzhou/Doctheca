@@ -2,17 +2,17 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Ruoyu.Study.Common.Database;
 
-namespace Ruoyu.Study.DocRetrieval.Database;
+namespace Ruoyu.Study.DocLibrary.Database;
 
 public static class DatabaseInitializer
 {
-    public static async Task InitializeAsync(DocRetrievalDbContext context, ILoggerFactory loggerFactory)
+    public static async Task InitializeAsync(DocLibraryDbContext context, ILoggerFactory loggerFactory)
     {
         await Common.Database.DatabaseInitializer.InitializeAsync(context, loggerFactory, GetTableCreationSql);
         await EnsureColumnsAsync(context, loggerFactory);
     }
 
-    private static async Task EnsureColumnsAsync(DocRetrievalDbContext context, ILoggerFactory loggerFactory)
+    private static async Task EnsureColumnsAsync(DocLibraryDbContext context, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger("DatabaseInitializer");
 

@@ -59,7 +59,7 @@
 
 - 请求字段：`file`（必填，PDF/DOCX/PPTX，≤200MB）
 - 响应：`{ success, data: { id, fileName, contentType } }`
-- 错误码：`DOCRETRIEVAL_FILE_REQUIRED`、`DOCRETRIEVAL_FILE_FORMAT_UNSUPPORTED`
+- 错误码：`DOCLIBRARY_FILE_REQUIRED`、`DOCLIBRARY_FILE_FORMAT_UNSUPPORTED`
 
 ### API-2：文件列表
 
@@ -79,7 +79,7 @@
 
 - 前置条件：文件存在，且无进行中的解析（最新 parse status 不为 pending/parsing）
 - 响应：`{ success, data: { id, parseId, status } }`
-- 错误码：`DOCRETRIEVAL_FILE_NOT_FOUND`、`DOCRETRIEVAL_PARSE_IN_PROGRESS`、`DOCRETRIEVAL_MINERU_NOT_CONFIGURED`
+- 错误码：`DOCLIBRARY_FILE_NOT_FOUND`、`DOCLIBRARY_PARSE_IN_PROGRESS`、`DOCLIBRARY_MINERU_NOT_CONFIGURED`
 
 ### API-4：获取文件详情（含 MD）
 
@@ -107,7 +107,7 @@
 - ZIP 内包含：
   - `{fileName}.md` — Markdown 文件，图片引用为相对路径 `images/{imageName}`
   - `images/` 目录 — 所有引用的图片文件
-- 错误码：`DOCRETRIEVAL_FILE_NOT_FOUND`、`DOCRETRIEVAL_FILE_NOT_PARSED`
+- 错误码：`DOCLIBRARY_FILE_NOT_FOUND`、`DOCLIBRARY_FILE_NOT_PARSED`
 
 ### API-7：按文件 ID 导出为 HTML
 
@@ -116,7 +116,7 @@
 - 前置条件：文件存在且最新 parse status=parsed
 - 响应：`text/html` 二进制流，文件名 `{fileName}.html`
 - HTML 为自包含文件：图片以 base64 data URI 内嵌，CSS 内联
-- 错误码：`DOCRETRIEVAL_FILE_NOT_FOUND`、`DOCRETRIEVAL_FILE_NOT_PARSED`
+- 错误码：`DOCLIBRARY_FILE_NOT_FOUND`、`DOCLIBRARY_FILE_NOT_PARSED`
 
 ### API-8：解析记录列表
 
@@ -136,7 +136,7 @@
 - **不删除**原始文件（document_files 记录保留）
 - 级联删除 document_parse_images 记录
 - 响应：`{ success, data: { id, deleted } }`
-- 错误码：`DOCRETRIEVAL_PARSE_NOT_FOUND`
+- 错误码：`DOCLIBRARY_PARSE_NOT_FOUND`
 
 ### API-10：按解析 ID 导出为 MD+图片 ZIP
 
@@ -147,7 +147,7 @@
 - ZIP 内包含：
   - `{fileName}.md` — Markdown 文件，图片引用为相对路径 `images/{imageName}`
   - `images/` 目录 — 所有引用的图片文件
-- 错误码：`DOCRETRIEVAL_PARSE_NOT_FOUND`、`DOCRETRIEVAL_PARSE_NOT_PARSED`
+- 错误码：`DOCLIBRARY_PARSE_NOT_FOUND`、`DOCLIBRARY_PARSE_NOT_PARSED`
 
 ### API-11：按解析 ID 导出为 HTML
 
@@ -156,7 +156,7 @@
 - 前置条件：解析记录存在且 status=parsed
 - 响应：`text/html` 二进制流，文件名 `{fileName}.html`
 - HTML 为自包含文件：图片以 base64 data URI 内嵌，CSS 内联
-- 错误码：`DOCRETRIEVAL_PARSE_NOT_FOUND`、`DOCRETRIEVAL_PARSE_NOT_PARSED`
+- 错误码：`DOCLIBRARY_PARSE_NOT_FOUND`、`DOCLIBRARY_PARSE_NOT_PARSED`
 
 ## 详细验收标准
 
@@ -206,13 +206,13 @@
 
 - **Given** 文件最新 parse status=pending 或 parsing
 - **When** 调用解析 API
-- **Then** 返回 422，`DOCRETRIEVAL_PARSE_IN_PROGRESS`
+- **Then** 返回 422，`DOCLIBRARY_PARSE_IN_PROGRESS`
 
 ### AC-PARSE-06：Token 未配置
 
 - **Given** MinerU:ApiToken 为空
 - **When** 调用解析 API
-- **Then** 返回 503，`DOCRETRIEVAL_MINERU_NOT_CONFIGURED`
+- **Then** 返回 503，`DOCLIBRARY_MINERU_NOT_CONFIGURED`
 
 ### AC-VIEW-01：查看已解析文件
 
@@ -266,13 +266,13 @@
 
 - **Given** 文件无 parsed 的 parse 记录
 - **When** 调用按文件 ID 的导出 API
-- **Then** 返回 422，`DOCRETRIEVAL_FILE_NOT_PARSED`
+- **Then** 返回 422，`DOCLIBRARY_FILE_NOT_PARSED`
 
 ### AC-EXPORT-04：导出不存在的文件
 
 - **Given** 文件 ID 不存在
 - **When** 调用按文件 ID 的导出 API
-- **Then** 返回 404，`DOCRETRIEVAL_FILE_NOT_FOUND`
+- **Then** 返回 404，`DOCLIBRARY_FILE_NOT_FOUND`
 
 ### AC-EXPORT-05：按解析 ID 导出 MD+图片 ZIP
 
@@ -290,7 +290,7 @@
 
 - **Given** 解析记录 status 不为 parsed
 - **When** 调用按解析 ID 的导出 API
-- **Then** 返回 422，`DOCRETRIEVAL_PARSE_NOT_PARSED`
+- **Then** 返回 422，`DOCLIBRARY_PARSE_NOT_PARSED`
 
 ### AC-PREVIEW-01：在线预览解析记录
 

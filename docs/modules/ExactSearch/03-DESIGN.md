@@ -3,7 +3,7 @@
 ## 本功能在项目中的目录与文件结构
 
 ```
-src/services/ruoyu.docretrieval/
+src/services/ruoyu.doclibrary/
 ├── src/
 │   ├── Domain/
 │   │   ├── Models/
@@ -14,15 +14,15 @@ src/services/ruoyu.docretrieval/
 │   │       ├── ISearchIndexService.cs             # 搜索索引接口 (ExactSearchAsync)
 │   │       └── IRepositories.cs                   # 各仓储接口定义 (IDocumentRepository, IDocumentSegmentRepository, IQuestionSegmentRepository, IDocumentPageRepository 等)
 │   ├── Service/
-│   │   ├── DocumentRetrievalServiceImpl.cs        # gRPC 实现 (ExactSearch)
+│   │   ├── DocumentLibraryServiceImpl.cs        # gRPC 实现 (ExactSearch)
 │   │   └── OpenSearchIndexService.cs              # OpenSearch 索引服务实现
 │   ├── Database/
 │   │   └── Repositories/                          # 仓储实现
 │   └── Contract/Protos/
-│       ├── docretrieval.proto                     # gRPC 服务定义
-│       └── docretrieval.common.proto              # 公共消息定义
+│       ├── doclibrary.proto                     # gRPC 服务定义
+│       └── doclibrary.common.proto              # 公共消息定义
 ├── test/
-│   └── Ruoyu.Study.DocRetrieval.Tests/
+│   └── Ruoyu.Study.DocLibrary.Tests/
 │       └── SearchDomainServiceTests.cs            # 单元测试
 └── docs/modules/ExactSearch/                      # 本文档所在目录
     ├── 01-FEATURE.md
@@ -38,10 +38,10 @@ src/services/ruoyu.docretrieval/
 ### gRPC 接口
 
 ```protobuf
-// src/Contract/Protos/docretrieval.proto
+// src/Contract/Protos/doclibrary.proto
 rpc ExactSearch(ExactSearchRequest) returns (SearchResponse);
 
-// src/Contract/Protos/docretrieval.common.proto
+// src/Contract/Protos/doclibrary.common.proto
 message ExactSearchRequest {
   string query = 1;
   bool phrase = 2;
@@ -122,10 +122,10 @@ public class SearchFilterModel
 ### gRPC 服务实现
 
 ```csharp
-// src/Service/DocumentRetrievalServiceImpl.cs
-public DocumentRetrievalServiceImpl(
+// src/Service/DocumentLibraryServiceImpl.cs
+public DocumentLibraryServiceImpl(
     ISearchDomainService searchService,
-    ILogger<DocumentRetrievalServiceImpl> logger)
+    ILogger<DocumentLibraryServiceImpl> logger)
 ```
 
 ### 注入的外部依赖
@@ -176,7 +176,7 @@ private static async Task<IResult> SearchTest(
 ### ExactSearch 完整流程
 
 1. gRPC 层接收 `ExactSearchRequest`，调用 `ValidateSearchRequest` 校验参数。
-2. 参数校验：`query` 为空 → `INVALID_ARGUMENT (DOCRETRIEVAL_QUERY_REQUIRED)`；`query` 长度 > 200 → `INVALID_ARGUMENT (DOCRETRIEVAL_QUERY_TOO_LONG)`；`page_size` > 100 → `INVALID_ARGUMENT (DOCRETRIEVAL_PAGE_SIZE_INVALID)`。
+2. 参数校验：`query` 为空 → `INVALID_ARGUMENT (DOCLIBRARY_QUERY_REQUIRED)`；`query` 长度 > 200 → `INVALID_ARGUMENT (DOCLIBRARY_QUERY_TOO_LONG)`；`page_size` > 100 → `INVALID_ARGUMENT (DOCLIBRARY_PAGE_SIZE_INVALID)`。
 3. `MapFilter` 将 `SearchFilter` 中空字符串字段转为 `null`。
 4. `pageSize` 修正：`pageSize = request.PageSize > 0 ? Math.Min(request.PageSize, 100) : 50`。
 5. 调用 `SearchDomainService.ExactSearchAsync(query, phrase, filter, pageSize, pageToken)`。
@@ -218,11 +218,11 @@ private static async Task<IResult> SearchTest(
 
 | 接口 | 提供能力 | 所在模块 |
 | --- | --- | --- |
-| `ISearchIndexService` | OpenSearch BM25 精确搜索 | `Ruoyu.Study.DocRetrieval.Domain.Repositories` |
-| `IDocumentRepository` | 文档列表查询（含筛选） | `Ruoyu.Study.DocRetrieval.Domain.Repositories` |
-| `IDocumentSegmentRepository` | 文档片段按文档 ID 查询；数据库级 LIKE 搜索与分页（`SearchByTextAsync`） | `Ruoyu.Study.DocRetrieval.Domain.Repositories` |
-| `IQuestionSegmentRepository` | 题目片段按文档 ID 查询；数据库级 LIKE 搜索与分页（`SearchByStemAsync`） | `Ruoyu.Study.DocRetrieval.Domain.Repositories` |
-| `IDocumentPageRepository` | 文档页面按文档 ID 查询 | `Ruoyu.Study.DocRetrieval.Domain.Repositories` |
+| `ISearchIndexService` | OpenSearch BM25 精确搜索 | `Ruoyu.Study.DocLibrary.Domain.Repositories` |
+| `IDocumentRepository` | 文档列表查询（含筛选） | `Ruoyu.Study.DocLibrary.Domain.Repositories` |
+| `IDocumentSegmentRepository` | 文档片段按文档 ID 查询；数据库级 LIKE 搜索与分页（`SearchByTextAsync`） | `Ruoyu.Study.DocLibrary.Domain.Repositories` |
+| `IQuestionSegmentRepository` | 题目片段按文档 ID 查询；数据库级 LIKE 搜索与分页（`SearchByStemAsync`） | `Ruoyu.Study.DocLibrary.Domain.Repositories` |
+| `IDocumentPageRepository` | 文档页面按文档 ID 查询 | `Ruoyu.Study.DocLibrary.Domain.Repositories` |
 
 ## 可测试性设计
 

@@ -1,6 +1,6 @@
-# DocRetrieval 文档
+# DocLibrary 文档
 
-ruoyu.docretrieval 是文档检索服务，负责文档上传、解析、管理与精确搜索能力。
+ruoyu.doclibrary 是文档检索服务，负责文档上传、解析、管理与精确搜索能力。
 
 ## 入口
 

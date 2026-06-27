@@ -4,25 +4,25 @@ using System.Threading.Tasks;
 using Grpc.Core;
 using Microsoft.Extensions.Logging;
 using Moq;
-using global::Ruoyu.Study.DocRetrieval.Contract.Protos;
-using global::Ruoyu.Study.DocRetrieval.Domain.Models;
-using global::Ruoyu.Study.DocRetrieval.Domain.Services;
-using global::Ruoyu.Study.DocRetrieval.Service;
+using global::Ruoyu.Study.DocLibrary.Contract.Protos;
+using global::Ruoyu.Study.DocLibrary.Domain.Models;
+using global::Ruoyu.Study.DocLibrary.Domain.Services;
+using global::Ruoyu.Study.DocLibrary.Service;
 using Xunit;
 
-namespace Ruoyu.Study.DocRetrieval.Tests;
+namespace Ruoyu.Study.DocLibrary.Tests;
 
-public class DocumentRetrievalServiceImplTests
+public class DocumentLibraryServiceImplTests
 {
     private readonly Mock<ISearchDomainService> _searchServiceMock;
-    private readonly Mock<ILogger<DocumentRetrievalServiceImpl>> _loggerMock;
-    private readonly DocumentRetrievalServiceImpl _service;
+    private readonly Mock<ILogger<DocumentLibraryServiceImpl>> _loggerMock;
+    private readonly DocumentLibraryServiceImpl _service;
 
-    public DocumentRetrievalServiceImplTests()
+    public DocumentLibraryServiceImplTests()
     {
         _searchServiceMock = new Mock<ISearchDomainService>();
-        _loggerMock = new Mock<ILogger<DocumentRetrievalServiceImpl>>();
-        _service = new DocumentRetrievalServiceImpl(_searchServiceMock.Object, _loggerMock.Object);
+        _loggerMock = new Mock<ILogger<DocumentLibraryServiceImpl>>();
+        _service = new DocumentLibraryServiceImpl(_searchServiceMock.Object, _loggerMock.Object);
     }
 
     #region ExactSearch Tests
@@ -108,7 +108,7 @@ public class DocumentRetrievalServiceImplTests
             _service.ExactSearch(new ExactSearchRequest { Query = "", Phrase = false }, CreateTestContext()));
 
         Assert.Equal(StatusCode.InvalidArgument, ex.StatusCode);
-        Assert.Contains("DOCRETRIEVAL_QUERY_REQUIRED", ex.Status.Detail);
+        Assert.Contains("DOCLIBRARY_QUERY_REQUIRED", ex.Status.Detail);
     }
 
     [Fact]
@@ -119,7 +119,7 @@ public class DocumentRetrievalServiceImplTests
             _service.ExactSearch(new ExactSearchRequest { Query = "   ", Phrase = false }, CreateTestContext()));
 
         Assert.Equal(StatusCode.InvalidArgument, ex.StatusCode);
-        Assert.Contains("DOCRETRIEVAL_QUERY_REQUIRED", ex.Status.Detail);
+        Assert.Contains("DOCLIBRARY_QUERY_REQUIRED", ex.Status.Detail);
     }
 
     [Fact]
@@ -133,7 +133,7 @@ public class DocumentRetrievalServiceImplTests
             _service.ExactSearch(new ExactSearchRequest { Query = longQuery, Phrase = false }, CreateTestContext()));
 
         Assert.Equal(StatusCode.InvalidArgument, ex.StatusCode);
-        Assert.Contains("DOCRETRIEVAL_QUERY_TOO_LONG", ex.Status.Detail);
+        Assert.Contains("DOCLIBRARY_QUERY_TOO_LONG", ex.Status.Detail);
     }
 
     [Fact]
@@ -144,7 +144,7 @@ public class DocumentRetrievalServiceImplTests
             _service.ExactSearch(new ExactSearchRequest { Query = "hello", PageSize = 101 }, CreateTestContext()));
 
         Assert.Equal(StatusCode.InvalidArgument, ex.StatusCode);
-        Assert.Contains("DOCRETRIEVAL_PAGE_SIZE_INVALID", ex.Status.Detail);
+        Assert.Contains("DOCLIBRARY_PAGE_SIZE_INVALID", ex.Status.Detail);
     }
 
     [Fact]
@@ -180,7 +180,7 @@ public class DocumentRetrievalServiceImplTests
             }, CreateTestContext()));
 
         Assert.Equal(StatusCode.InvalidArgument, ex.StatusCode);
-        Assert.Contains("DOCRETRIEVAL_PAGE_SIZE_INVALID", ex.Status.Detail);
+        Assert.Contains("DOCLIBRARY_PAGE_SIZE_INVALID", ex.Status.Detail);
     }
 
     [Fact]
@@ -377,7 +377,7 @@ public class DocumentRetrievalServiceImplTests
     {
         public TestServerCallContext() { }
 
-        protected override string MethodCore => "/ruoyu.study.docretrieval.v1.DocumentRetrievalService/Test";
+        protected override string MethodCore => "/ruoyu.study.doclibrary.v1.DocumentLibraryService/Test";
         protected override string HostCore => "localhost";
         protected override string PeerCore => "127.0.0.1";
         protected override DateTime DeadlineCore => DateTime.UtcNow.AddMinutes(1);

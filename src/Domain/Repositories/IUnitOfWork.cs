@@ -1,6 +1,6 @@
 using System.Threading.Tasks;
 
-namespace Ruoyu.Study.DocRetrieval.Domain.Repositories;
+namespace Ruoyu.Study.DocLibrary.Domain.Repositories;
 
 public interface IUnitOfWork
 {

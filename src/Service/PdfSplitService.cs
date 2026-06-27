@@ -2,7 +2,7 @@ using PdfSharpCore.Pdf;
 using PdfSharpCore.Pdf.IO;
 using Microsoft.Extensions.Logging;
 
-namespace Ruoyu.Study.DocRetrieval.Service;
+namespace Ruoyu.Study.DocLibrary.Service;
 
 /// <summary>
 /// Service for splitting large PDF files into smaller chunks

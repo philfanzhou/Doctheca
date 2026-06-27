@@ -3,7 +3,7 @@
 ## 1. 目录与文件结构
 
 ```
-src/services/ruoyu.docretrieval/
+src/services/ruoyu.doclibrary/
 ├── docs/modules/DocumentDeletion/
 │   ├── 01-FEATURE.md
 │   ├── 02-SPEC.md
@@ -293,6 +293,6 @@ DocumentAdminEndpoints.DeleteDocumentById(id, documentService, ossService, logge
 
 ### 6.4 禁止的反模式
 
-- 禁止在 Admin 端点中直接访问 `DocRetrievalDbContext`；必须通过 `IDocumentDomainService`。
+- 禁止在 Admin 端点中直接访问 `DocLibraryDbContext`；必须通过 `IDocumentDomainService`。
 - 禁止吞掉数据库级联删除异常；应冒泡给调用方。
 - 禁止在 `DeleteDocumentAsync` 中直接调用 `IOssService`；OSS 清理由 Admin 端点负责。

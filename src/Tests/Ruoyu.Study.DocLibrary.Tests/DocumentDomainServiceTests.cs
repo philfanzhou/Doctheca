@@ -3,13 +3,13 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Moq;
-using global::Ruoyu.Study.DocRetrieval.Domain.Exceptions;
-using global::Ruoyu.Study.DocRetrieval.Domain.Models;
-using global::Ruoyu.Study.DocRetrieval.Domain.Repositories;
-using global::Ruoyu.Study.DocRetrieval.Domain.Services;
+using global::Ruoyu.Study.DocLibrary.Domain.Exceptions;
+using global::Ruoyu.Study.DocLibrary.Domain.Models;
+using global::Ruoyu.Study.DocLibrary.Domain.Repositories;
+using global::Ruoyu.Study.DocLibrary.Domain.Services;
 using Xunit;
 
-namespace Ruoyu.Study.DocRetrieval.Tests;
+namespace Ruoyu.Study.DocLibrary.Tests;
 
 public class DocumentDomainServiceTests
 {
@@ -112,7 +112,7 @@ public class DocumentDomainServiceTests
         _documentRepoMock.Setup(r => r.GetByTitleAsync(document.Title)).ReturnsAsync(new DocumentModel { Title = document.Title });
 
         // Act & Assert
-        var ex = await Assert.ThrowsAsync<DocRetrievalValidationException>(() => _service.CreateDocumentAsync(document));
+        var ex = await Assert.ThrowsAsync<DocLibraryValidationException>(() => _service.CreateDocumentAsync(document));
         Assert.Contains("Document title already exists", ex.Message);
     }
 
@@ -125,7 +125,7 @@ public class DocumentDomainServiceTests
         _documentRepoMock.Setup(r => r.GetByFileHashAndStatusAsync(document.FileHash, DocumentStatus.Ready)).ReturnsAsync(new DocumentModel());
 
         // Act & Assert
-        var ex = await Assert.ThrowsAsync<DocRetrievalValidationException>(() => _service.CreateDocumentAsync(document));
+        var ex = await Assert.ThrowsAsync<DocLibraryValidationException>(() => _service.CreateDocumentAsync(document));
         Assert.Contains("File already imported", ex.Message);
     }
 
@@ -151,7 +151,7 @@ public class DocumentDomainServiceTests
         };
 
         // Act & Assert
-        var ex = await Assert.ThrowsAsync<DocRetrievalValidationException>(() => _service.CreateDocumentAsync(document));
+        var ex = await Assert.ThrowsAsync<DocLibraryValidationException>(() => _service.CreateDocumentAsync(document));
         Assert.Contains(expectedErrorPart, ex.Message);
     }
 
@@ -218,7 +218,7 @@ public class DocumentDomainServiceTests
         _documentRepoMock.Setup(r => r.GetByTitleAsync("nonexistent")).ReturnsAsync((DocumentModel?)null);
 
         // Act & Assert
-        var ex = await Assert.ThrowsAsync<DocRetrievalValidationException>(() =>
+        var ex = await Assert.ThrowsAsync<DocLibraryValidationException>(() =>
             _service.UpdateMetadataAsync("nonexistent", "英语", "G1", "2023", null));
         Assert.Contains("Document not found", ex.Message);
     }
@@ -231,7 +231,7 @@ public class DocumentDomainServiceTests
         _documentRepoMock.Setup(r => r.GetByTitleAsync("pending-doc")).ReturnsAsync(document);
 
         // Act & Assert
-        var ex = await Assert.ThrowsAsync<DocRetrievalValidationException>(() =>
+        var ex = await Assert.ThrowsAsync<DocLibraryValidationException>(() =>
             _service.UpdateMetadataAsync("pending-doc", "英语", "G1", "2023", null));
         Assert.Contains("Document not ready", ex.Message);
     }
@@ -244,7 +244,7 @@ public class DocumentDomainServiceTests
         _documentRepoMock.Setup(r => r.GetByTitleAsync("ready-doc")).ReturnsAsync(document);
 
         // Act & Assert
-        var ex = await Assert.ThrowsAsync<DocRetrievalValidationException>(() =>
+        var ex = await Assert.ThrowsAsync<DocLibraryValidationException>(() =>
             _service.UpdateMetadataAsync("ready-doc", "数学", null, null, null));
         Assert.Contains("Subject only supports", ex.Message);
     }
@@ -257,7 +257,7 @@ public class DocumentDomainServiceTests
         _documentRepoMock.Setup(r => r.GetByTitleAsync("ready-doc")).ReturnsAsync(document);
 
         // Act & Assert
-        var ex = await Assert.ThrowsAsync<DocRetrievalValidationException>(() =>
+        var ex = await Assert.ThrowsAsync<DocLibraryValidationException>(() =>
             _service.UpdateMetadataAsync("ready-doc", null, "Invalid", null, null));
         Assert.Contains("Invalid grade value", ex.Message);
     }

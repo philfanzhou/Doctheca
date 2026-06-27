@@ -73,7 +73,7 @@ TASK-400 (Tests)
   - few-shot prompt 构造逻辑
 - **依赖**: TASK-102
 
-## TASK-300: 前端（DocRetrieval 自带管理前端）
+## TASK-300: 前端（DocLibrary 自带管理前端）
 
 ### TASK-301: API Client
 

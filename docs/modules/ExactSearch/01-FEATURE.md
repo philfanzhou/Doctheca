@@ -10,9 +10,9 @@
 
 ## 关键验收条件摘要
 
-- AC-1：查询词为空时返回 `INVALID_ARGUMENT (DOCRETRIEVAL_QUERY_REQUIRED)`。
-- AC-2：查询词超过 200 字符时返回 `INVALID_ARGUMENT (DOCRETRIEVAL_QUERY_TOO_LONG)`。
-- AC-3：`page_size` 超过 100 时返回 `INVALID_ARGUMENT (DOCRETRIEVAL_PAGE_SIZE_INVALID)`。
+- AC-1：查询词为空时返回 `INVALID_ARGUMENT (DOCLIBRARY_QUERY_REQUIRED)`。
+- AC-2：查询词超过 200 字符时返回 `INVALID_ARGUMENT (DOCLIBRARY_QUERY_TOO_LONG)`。
+- AC-3：`page_size` 超过 100 时返回 `INVALID_ARGUMENT (DOCLIBRARY_PAGE_SIZE_INVALID)`。
 - AC-4：`page_size` 默认 50，最小 1，最大 100。
 - AC-5：优先使用 OpenSearch BM25 搜索（`ISearchIndexService.ExactSearchAsync`）。
 - AC-6：OpenSearch 不可用或异常时，回退数据库搜索并记录 LogWarning。
@@ -36,14 +36,14 @@
 
 | 组件 | 文件路径 |
 |------|---------|
-| DocumentRetrievalServiceImpl | `src/Service/DocumentRetrievalServiceImpl.cs` |
+| DocumentLibraryServiceImpl | `src/Service/DocumentLibraryServiceImpl.cs` |
 | SearchDomainService | `src/Domain/Services/SearchDomainService.cs` |
 | ISearchIndexService | `src/Domain/Repositories/ISearchIndexService.cs` |
 | OpenSearchIndexService | `src/Service/OpenSearchIndexService.cs` |
 | SearchResultModel | `src/Domain/Models/SearchConfig.cs` |
 | SearchFilterModel | `src/Domain/Models/SearchConfig.cs` |
-| gRPC 契约 | `src/Contract/Protos/docretrieval.proto` |
-| 公共消息 | `src/Contract/Protos/docretrieval.common.proto` |
+| gRPC 契约 | `src/Contract/Protos/doclibrary.proto` |
+| 公共消息 | `src/Contract/Protos/doclibrary.common.proto` |
 
 ## 文档索引
 

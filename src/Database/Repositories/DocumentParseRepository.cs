@@ -1,15 +1,15 @@
 using Microsoft.EntityFrameworkCore;
-using Ruoyu.Study.DocRetrieval.Database.Entities;
-using Ruoyu.Study.DocRetrieval.Domain.Models;
-using Ruoyu.Study.DocRetrieval.Domain.Repositories;
+using Ruoyu.Study.DocLibrary.Database.Entities;
+using Ruoyu.Study.DocLibrary.Domain.Models;
+using Ruoyu.Study.DocLibrary.Domain.Repositories;
 
-namespace Ruoyu.Study.DocRetrieval.Database.Repositories;
+namespace Ruoyu.Study.DocLibrary.Database.Repositories;
 
 public class DocumentParseRepository : IDocumentParseRepository
 {
-    private readonly DocRetrievalDbContext _context;
+    private readonly DocLibraryDbContext _context;
 
-    public DocumentParseRepository(DocRetrievalDbContext context)
+    public DocumentParseRepository(DocLibraryDbContext context)
     {
         _context = context;
     }

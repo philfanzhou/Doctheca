@@ -1,4 +1,4 @@
-﻿# DocumentUpload — 任务清单 (TASKS)
+# DocumentUpload — 任务清单 (TASKS)
 
 > 说明：本功能代码已实现完成，下列任务为 **代码评审与自动化验证** 任务。
 
@@ -55,7 +55,7 @@
   {
     "id": "T07",
     "depends_on": ["T04", "T05"],
-    "action": "评审错误码映射逻辑：确认 DocRetrievalValidationException 的消息文本与 HTTP 状态码/错误码的映射关系与 SPEC 一致（文档名已存在→409/TITLE_ALREADY_EXISTS，文件已被导入→409/HASH_ALREADY_EXISTS，学科仅支持→400/SUBJECT_INVALID，年级取值非法→400/GRADE_INVALID）。",
+    "action": "评审错误码映射逻辑：确认 DocLibraryValidationException 的消息文本与 HTTP 状态码/错误码的映射关系与 SPEC 一致（文档名已存在→409/TITLE_ALREADY_EXISTS，文件已被导入→409/HASH_ALREADY_EXISTS，学科仅支持→400/SUBJECT_INVALID，年级取值非法→400/GRADE_INVALID）。",
     "files": ["src/Service/DocumentAdminEndpoints.cs"],
     "acceptance": "代码走查映射关系与 SPEC 错误码表一致。",
     "notes": "映射基于消息文本 Contains 匹配，需确保领域服务消息文本稳定。"
@@ -75,10 +75,10 @@
 
 ```bash
 # 编译
-dotnet build src/services/ruoyu.docretrieval/Ruoyu.Study.DocRetrieval.sln
+dotnet build src/services/ruoyu.doclibrary/Ruoyu.Study.DocLibrary.sln
 
 # 运行所有测试
-dotnet test src/services/ruoyu.docretrieval/Ruoyu.Study.DocRetrieval.sln --configuration Release
+dotnet test src/services/ruoyu.doclibrary/Ruoyu.Study.DocLibrary.sln --configuration Release
 
 # 运行特定测试
 dotnet test --filter FullyQualifiedName~DocumentDomainServiceTests

@@ -5,10 +5,10 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using Ruoyu.Study.DocRetrieval.Domain.Models;
-using Ruoyu.Study.DocRetrieval.Domain.Repositories;
+using Ruoyu.Study.DocLibrary.Domain.Models;
+using Ruoyu.Study.DocLibrary.Domain.Repositories;
 
-namespace Ruoyu.Study.DocRetrieval.Domain.Services;
+namespace Ruoyu.Study.DocLibrary.Domain.Services;
 
 public class SearchDomainService : ISearchDomainService
 {

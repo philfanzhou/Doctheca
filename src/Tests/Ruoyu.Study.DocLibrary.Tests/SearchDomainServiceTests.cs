@@ -3,12 +3,12 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Moq;
-using global::Ruoyu.Study.DocRetrieval.Domain.Models;
-using global::Ruoyu.Study.DocRetrieval.Domain.Repositories;
-using global::Ruoyu.Study.DocRetrieval.Domain.Services;
+using global::Ruoyu.Study.DocLibrary.Domain.Models;
+using global::Ruoyu.Study.DocLibrary.Domain.Repositories;
+using global::Ruoyu.Study.DocLibrary.Domain.Services;
 using Xunit;
 
-namespace Ruoyu.Study.DocRetrieval.Tests;
+namespace Ruoyu.Study.DocLibrary.Tests;
 
 public class SearchDomainServiceTests
 {

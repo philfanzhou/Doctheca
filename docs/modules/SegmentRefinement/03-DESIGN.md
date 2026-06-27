@@ -11,7 +11,7 @@
 └──────────────────────────┬──────────────────────────────────┘
                            │
 ┌──────────────────────────▼──────────────────────────────────┐
-│  DocRetrieval Service (.NET 8)                              │
+│  DocLibrary Service (.NET 8)                              │
 │  DocumentAdminEndpoints.cs                                  │
 │    ├── GetDocumentSegments() → IDocumentDomainService       │
 │    └── RefineDocumentSegments() → IDocumentDomainService    │
@@ -214,7 +214,7 @@ Endpoint 保存备份（fire-and-forget，失败仅记日志）
 
 ```typescript
 // services/docRetrievalApi.ts
-class DocRetrievalApiClient {
+class DocLibraryApiClient {
   async getDocumentSegments(documentId: string): Promise<DocumentSegmentsResponse>
   async refineDocumentSegments(documentId: string, corrections: CorrectionDto[]): Promise<RefinementResponse>
 }
@@ -237,8 +237,8 @@ DocumentSegmentView.vue
 
 | 错误 | HTTP 状态码 | 错误码 |
 |------|------------|--------|
-| 文档不存在 | 404 | DOCRETRIEVAL_DOCUMENT_NOT_FOUND |
-| 文档未就绪 | 422 | DOCRETRIEVAL_DOCUMENT_NOT_READY |
-| 修正数量超限 | 400 | DOCRETRIEVAL_TOO_MANY_CORRECTIONS |
-| LLM 调用失败 | 500 | DOCRETRIEVAL_LLM_REFINE_FAILED |
+| 文档不存在 | 404 | DOCLIBRARY_DOCUMENT_NOT_FOUND |
+| 文档未就绪 | 422 | DOCLIBRARY_DOCUMENT_NOT_READY |
+| 修正数量超限 | 400 | DOCLIBRARY_TOO_MANY_CORRECTIONS |
+| LLM 调用失败 | 500 | DOCLIBRARY_LLM_REFINE_FAILED |
 | 备份保存失败 | 无（fire-and-forget，仅记日志） | 无 |

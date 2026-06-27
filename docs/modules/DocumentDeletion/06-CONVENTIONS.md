@@ -106,8 +106,8 @@ _logger.LogError($"Failed: {title}");
 
 ### 4.2 测试项目命名
 
-- `Ruoyu.Study.DocRetrieval.Tests.Unit` — 单元测试
-- `Ruoyu.Study.DocRetrieval.Tests.Integration` — 集成测试
+- `Ruoyu.Study.DocLibrary.Tests.Unit` — 单元测试
+- `Ruoyu.Study.DocLibrary.Tests.Integration` — 集成测试
 
 ### 4.3 测试分类
 

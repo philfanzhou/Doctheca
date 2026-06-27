@@ -1,11 +1,11 @@
 syntax = "proto3";
 
-package ruoyu.study.docretrieval.v1;
+package ruoyu.study.doclibrary.v1;
 
-import "Protos/docretrieval.common.proto";
+import "Protos/doclibrary.common.proto";
 
-option csharp_namespace = "Ruoyu.Study.DocRetrieval.Contract.Protos";
+option csharp_namespace = "Ruoyu.Study.DocLibrary.Contract.Protos";
 
-service DocumentRetrievalService {
+service DocumentLibraryService {
   rpc ExactSearch(ExactSearchRequest) returns (SearchResponse);
 }

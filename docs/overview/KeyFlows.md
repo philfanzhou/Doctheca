@@ -3,7 +3,7 @@
 ## 1. 文档上传 → 解析 → 可搜索
 
 ```
-  Admin UI          DocRetrieval           OSS              Worker             OpenSearch
+  Admin UI          DocLibrary           OSS              Worker             OpenSearch
     │                    │                   │                 │                      │
     │ POST /upload       │                   │                 │                      │
     │───────────────────►│                   │                 │                      │
@@ -42,7 +42,7 @@
 ```
 
 **触发条件**：用户通过 Admin UI 上传 PDF/DOCX 文件
-**参与服务**：Admin UI → DocRetrieval → OSS → PostgreSQL；Worker → OpenSearch
+**参与服务**：Admin UI → DocLibrary → OSS → PostgreSQL；Worker → OpenSearch
 **数据流转**：OSS 文件 → 解析器 → 结构化数据写入 6 张表 → 搜索引擎索引
 
 ---
@@ -50,7 +50,7 @@
 ## 2. 精确搜索 (ExactSearch)
 
 ```
-  Client             DocRetrieval           PostgreSQL              OpenSearch
+  Client             DocLibrary           PostgreSQL              OpenSearch
     │                    │                       │                      │
     │ ExactSearch(query) │                       │                      │
     │───────────────────►│                       │                      │

@@ -13,7 +13,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Domain\Ruoyu.Study.DocRetrieval.Domain.csproj" />
+    <ProjectReference Include="..\Domain\Ruoyu.Study.DocLibrary.Domain.csproj" />
   </ItemGroup>
 
 </Project>

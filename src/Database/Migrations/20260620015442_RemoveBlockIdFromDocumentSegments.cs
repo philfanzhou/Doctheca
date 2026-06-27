@@ -1,8 +1,8 @@
-﻿using Microsoft.EntityFrameworkCore.Migrations;
+using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
-namespace Ruoyu.Study.DocRetrieval.Database.Migrations
+namespace Ruoyu.Study.DocLibrary.Database.Migrations
 {
     /// <inheritdoc />
     public partial class RemoveBlockIdFromDocumentSegments : Migration

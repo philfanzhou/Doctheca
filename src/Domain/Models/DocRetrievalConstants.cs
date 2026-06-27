@@ -1,6 +1,6 @@
-namespace Ruoyu.Study.DocRetrieval.Domain.Models;
+namespace Ruoyu.Study.DocLibrary.Domain.Models;
 
-public static class DocRetrievalConstants
+public static class DocLibraryConstants
 {
     public const string SubjectEnglish = "英语";
 

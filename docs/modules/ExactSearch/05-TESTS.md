@@ -1,6 +1,6 @@
 # ExactSearch — 测试计划 (TESTS)
 
-测试工具：`xUnit + Moq`。现有测试文件：`test/Ruoyu.Study.DocRetrieval.Tests/SearchDomainServiceTests.cs`、`test/Ruoyu.Study.DocRetrieval.Tests/DocumentRetrievalServiceImplTests.cs`。
+测试工具：`xUnit + Moq`。现有测试文件：`test/Ruoyu.Study.DocLibrary.Tests/SearchDomainServiceTests.cs`、`test/Ruoyu.Study.DocLibrary.Tests/DocumentLibraryServiceImplTests.cs`。
 
 ## 单元测试 — Given-When-Then 格式
 
@@ -8,19 +8,19 @@
 
 - **Given**：`ExactSearchRequest { Query = "", Phrase = false, PageSize = 10 }`。
 - **When**：调用 `ExactSearch`。
-- **Then**：抛出 `RpcException`，`StatusCode == InvalidArgument`，消息包含 `DOCRETRIEVAL_QUERY_REQUIRED`。
+- **Then**：抛出 `RpcException`，`StatusCode == InvalidArgument`，消息包含 `DOCLIBRARY_QUERY_REQUIRED`。
 
 ### UT-02 查询词超过 200 字符（验证 SPEC FR-02）
 
 - **Given**：`ExactSearchRequest { Query = "a".PadLeft(201, 'a'), Phrase = false, PageSize = 10 }`。
 - **When**：调用 `ExactSearch`。
-- **Then**：抛出 `RpcException`，`StatusCode == InvalidArgument`，消息包含 `DOCRETRIEVAL_QUERY_TOO_LONG`。
+- **Then**：抛出 `RpcException`，`StatusCode == InvalidArgument`，消息包含 `DOCLIBRARY_QUERY_TOO_LONG`。
 
 ### UT-03 page_size 超过 100（验证 SPEC FR-03）
 
 - **Given**：`ExactSearchRequest { Query = "test", PageSize = 101 }`。
 - **When**：调用 `ExactSearch`。
-- **Then**：抛出 `RpcException`，`StatusCode == InvalidArgument`，消息包含 `DOCRETRIEVAL_PAGE_SIZE_INVALID`。
+- **Then**：抛出 `RpcException`，`StatusCode == InvalidArgument`，消息包含 `DOCLIBRARY_PAGE_SIZE_INVALID`。
 
 ### UT-04 page_size 默认值和修正（验证 SPEC FR-04）
 

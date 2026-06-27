@@ -2,7 +2,7 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 
-namespace Ruoyu.Study.DocRetrieval.Service;
+namespace Ruoyu.Study.DocLibrary.Service;
 
 /// <summary>
 /// Client for MinerU Agent Lightweight Extract API.
@@ -35,7 +35,7 @@ public class MinerUAgentClient
             BaseAddress = new Uri(BaseUrl),
         };
 
-        _httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("DocRetrieval/1.0 (.NET 8)");
+        _httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("DocLibrary/1.0 (.NET 8)");
         _httpClient.DefaultRequestHeaders.Accept.ParseAdd("application/json");
     }
 

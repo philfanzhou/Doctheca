@@ -9,9 +9,9 @@
 ### 1.1 文件与命名空间
 
 - **命名空间**：
-  - 领域服务放在 `Ruoyu.Study.DocRetrieval.Domain.Services` 命名空间下；
-  - Admin 端点放在 `Ruoyu.Study.DocRetrieval.Service` 命名空间下；
-  - 异常类 `DocRetrievalValidationException` 放在 `Ruoyu.Study.DocRetrieval.Domain.Services` 命名空间下。
+  - 领域服务放在 `Ruoyu.Study.DocLibrary.Domain.Services` 命名空间下；
+  - Admin 端点放在 `Ruoyu.Study.DocLibrary.Service` 命名空间下；
+  - 异常类 `DocLibraryValidationException` 放在 `Ruoyu.Study.DocLibrary.Domain.Services` 命名空间下。
 
 ### 1.2 类与方法
 
@@ -20,7 +20,7 @@
 | 领域服务方法 | 动宾短语 + `Async` 后缀 | `UpdateMetadataAsync` |
 | Repository 方法 | 动宾短语 + `Async` 后缀 | `GetByTitleAsync`、`UpdateAsync` |
 | Admin 端点方法 | PascalCase，描述动作 | `UpdateMetadata` |
-| 异常类 | 功能前缀 + 异常类型 | `DocRetrievalValidationException` |
+| 异常类 | 功能前缀 + 异常类型 | `DocLibraryValidationException` |
 
 ### 1.3 字段与局部变量
 
@@ -33,7 +33,7 @@
 - 路由：`PUT /admin/documents/{title}/metadata`
 - 请求体字段：`subject`、`grade`、`year`、`tags`（camelCase）
 - 响应字段：`snake_case`（与项目现有风格一致）
-- 错误码：`DOCRETRIEVAL_` 前缀 + 大写蛇形，例如 `DOCRETRIEVAL_DOCUMENT_NOT_FOUND`
+- 错误码：`DOCLIBRARY_` 前缀 + 大写蛇形，例如 `DOCLIBRARY_DOCUMENT_NOT_FOUND`
 
 ---
 
@@ -69,7 +69,7 @@
 
 ### 3.1 异常消息
 
-所有业务校验异常使用 `DocRetrievalValidationException`，消息为中文：
+所有业务校验异常使用 `DocLibraryValidationException`，消息为中文：
 
 | 场景 | 消息 |
 |------|------|
@@ -84,7 +84,7 @@
 {
   "success": false,
   "message": "文档不存在",
-  "errorCode": "DOCRETRIEVAL_DOCUMENT_NOT_FOUND"
+  "errorCode": "DOCLIBRARY_DOCUMENT_NOT_FOUND"
 }
 ```
 
@@ -94,10 +94,10 @@
 
 | 消息关键词 | HTTP 状态码 | errorCode |
 |-----------|-------------|-----------|
-| "不存在" | 404 | DOCRETRIEVAL_DOCUMENT_NOT_FOUND |
-| "未就绪" | 422 | DOCRETRIEVAL_DOCUMENT_NOT_READY |
-| "学科仅支持" | 400 | DOCRETRIEVAL_SUBJECT_INVALID |
-| "年级取值非法" | 400 | DOCRETRIEVAL_GRADE_INVALID |
+| "不存在" | 404 | DOCLIBRARY_DOCUMENT_NOT_FOUND |
+| "未就绪" | 422 | DOCLIBRARY_DOCUMENT_NOT_READY |
+| "学科仅支持" | 400 | DOCLIBRARY_SUBJECT_INVALID |
+| "年级取值非法" | 400 | DOCLIBRARY_GRADE_INVALID |
 
 ---
 
@@ -120,7 +120,7 @@
 - **null 判断模式**：使用 `?? throw` 模式替代 `if/null` 检查。
   ```csharp
   var document = await _documentRepository.GetByTitleAsync(title)
-      ?? throw new DocRetrievalValidationException("文档不存在");
+      ?? throw new DocLibraryValidationException("文档不存在");
   ```
 - **可选依赖**：`ISearchIndexService?` 使用 `?.` 安全调用，内部 `try/catch` 包裹。
 - **tags 获取**：端点层使用 `JsonElement.GetRawText()` 获取原始 JSON 文本，不使用 `GetString()`。

@@ -122,13 +122,13 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Moq;
 using Ruoyu.Study.Common.Oss;
-using Ruoyu.Study.DocRetrieval.Domain.Models;
-using Ruoyu.Study.DocRetrieval.Domain.Repositories;
-using Ruoyu.Study.DocRetrieval.Domain.Services;
-using Ruoyu.Study.DocRetrieval.Service;
+using Ruoyu.Study.DocLibrary.Domain.Models;
+using Ruoyu.Study.DocLibrary.Domain.Repositories;
+using Ruoyu.Study.DocLibrary.Domain.Services;
+using Ruoyu.Study.DocLibrary.Service;
 using Xunit;
 
-namespace Ruoyu.Study.DocRetrieval.Tests;
+namespace Ruoyu.Study.DocLibrary.Tests;
 
 public class IngestionWorkerTests
 {
@@ -211,7 +211,7 @@ public class IngestionWorkerTests
 
 ### DocumentDomainServiceTests.cs
 
-> 文件路径：`test/Ruoyu.Study.DocRetrieval.Tests/DocumentDomainServiceTests.cs`
+> 文件路径：`test/Ruoyu.Study.DocLibrary.Tests/DocumentDomainServiceTests.cs`
 
 ```csharp
 using System;
@@ -219,12 +219,12 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Moq;
-using Ruoyu.Study.DocRetrieval.Domain.Models;
-using Ruoyu.Study.DocRetrieval.Domain.Repositories;
-using Ruoyu.Study.DocRetrieval.Domain.Services;
+using Ruoyu.Study.DocLibrary.Domain.Models;
+using Ruoyu.Study.DocLibrary.Domain.Repositories;
+using Ruoyu.Study.DocLibrary.Domain.Services;
 using Xunit;
 
-namespace Ruoyu.Study.DocRetrieval.Tests.Domain;
+namespace Ruoyu.Study.DocLibrary.Tests.Domain;
 
 public class DocumentDomainServiceTests
 {
@@ -315,7 +315,7 @@ public class DocumentDomainServiceTests
 
 ### DocumentParserServiceTests.cs
 
-> 文件路径：`test/Ruoyu.Study.DocRetrieval.Tests/DocumentParserServiceTests.cs`
+> 文件路径：`test/Ruoyu.Study.DocLibrary.Tests/DocumentParserServiceTests.cs`
 
 ```csharp
 using System.IO;
@@ -323,10 +323,10 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Moq;
-using Ruoyu.Study.DocRetrieval.Service;
+using Ruoyu.Study.DocLibrary.Service;
 using Xunit;
 
-namespace Ruoyu.Study.DocRetrieval.Tests;
+namespace Ruoyu.Study.DocLibrary.Tests;
 
 public class DocumentParserServiceTests
 {

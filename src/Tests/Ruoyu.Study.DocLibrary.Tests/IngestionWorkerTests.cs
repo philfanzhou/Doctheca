@@ -6,13 +6,13 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Moq;
 using global::Ruoyu.Study.Common.Oss;
-using global::Ruoyu.Study.DocRetrieval.Domain.Models;
-using global::Ruoyu.Study.DocRetrieval.Domain.Repositories;
-using global::Ruoyu.Study.DocRetrieval.Domain.Services;
-using global::Ruoyu.Study.DocRetrieval.Service;
+using global::Ruoyu.Study.DocLibrary.Domain.Models;
+using global::Ruoyu.Study.DocLibrary.Domain.Repositories;
+using global::Ruoyu.Study.DocLibrary.Domain.Services;
+using global::Ruoyu.Study.DocLibrary.Service;
 using Xunit;
 
-namespace Ruoyu.Study.DocRetrieval.Tests;
+namespace Ruoyu.Study.DocLibrary.Tests;
 
 public class IngestionWorkerTests
 {

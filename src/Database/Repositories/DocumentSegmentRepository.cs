@@ -3,17 +3,17 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
-using Ruoyu.Study.DocRetrieval.Database.Entities;
-using Ruoyu.Study.DocRetrieval.Domain.Models;
-using Ruoyu.Study.DocRetrieval.Domain.Repositories;
+using Ruoyu.Study.DocLibrary.Database.Entities;
+using Ruoyu.Study.DocLibrary.Domain.Models;
+using Ruoyu.Study.DocLibrary.Domain.Repositories;
 
-namespace Ruoyu.Study.DocRetrieval.Database.Repositories;
+namespace Ruoyu.Study.DocLibrary.Database.Repositories;
 
 public class DocumentSegmentRepository : IDocumentSegmentRepository
 {
-    private readonly DocRetrievalDbContext _dbContext;
+    private readonly DocLibraryDbContext _dbContext;
 
-    public DocumentSegmentRepository(DocRetrievalDbContext dbContext)
+    public DocumentSegmentRepository(DocLibraryDbContext dbContext)
     {
         _dbContext = dbContext;
     }

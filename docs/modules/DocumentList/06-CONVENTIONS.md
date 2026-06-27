@@ -9,8 +9,8 @@
 ### 1.1 文件与命名空间
 
 - **命名空间**：
-  - 领域服务放在 `Ruoyu.Study.DocRetrieval.Domain.Services` 命名空间下；
-  - Admin 端点放在 `Ruoyu.Study.DocRetrieval.Service` 命名空间下。
+  - 领域服务放在 `Ruoyu.Study.DocLibrary.Domain.Services` 命名空间下；
+  - Admin 端点放在 `Ruoyu.Study.DocLibrary.Service` 命名空间下。
 
 ### 1.2 类与方法
 
@@ -51,7 +51,7 @@
 
 ## 3. 错误消息格式约定
 
-- 列表查询不抛出 `DocRetrievalValidationException`，分页参数修正为静默修正，不返回错误。
+- 列表查询不抛出 `DocLibraryValidationException`，分页参数修正为静默修正，不返回错误。
 - 数据库异常由上层中间件统一处理，返回 500 + 通用错误消息。
 
 ---

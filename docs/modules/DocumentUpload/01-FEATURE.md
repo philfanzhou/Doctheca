@@ -11,10 +11,10 @@
 ## 关键验收条件摘要
 
 - AC-1：只需提供 `file` 和 `title`。`title` 从文件名自动填充。`subject`/`grade`/`year` 由 AI 在文档解析时自动识别写入。
-- AC-2：文件大小 ≤ 200MB，仅支持 PDF/Word/PPT 格式，超限或格式不符返回 400（`DOCRETRIEVAL_FILE_FORMAT_UNSUPPORTED` / `DOCRETRIEVAL_FILE_REQUIRED`）。
-- AC-3：加密 PDF 被拒绝，返回 400（`DOCRETRIEVAL_FILE_ENCRYPTED`）。
-- AC-4：相同标题已存在时返回 409（`DOCRETRIEVAL_TITLE_ALREADY_EXISTS`）。
-- AC-5：相同文件哈希且状态为 `ready` 的文档已存在时返回 409（`DOCRETRIEVAL_FILE_HASH_ALREADY_EXISTS`）。
+- AC-2：文件大小 ≤ 200MB，仅支持 PDF/Word/PPT 格式，超限或格式不符返回 400（`DOCLIBRARY_FILE_FORMAT_UNSUPPORTED` / `DOCLIBRARY_FILE_REQUIRED`）。
+- AC-3：加密 PDF 被拒绝，返回 400（`DOCLIBRARY_FILE_ENCRYPTED`）。
+- AC-4：相同标题已存在时返回 409（`DOCLIBRARY_TITLE_ALREADY_EXISTS`）。
+- AC-5：相同文件哈希且状态为 `ready` 的文档已存在时返回 409（`DOCLIBRARY_FILE_HASH_ALREADY_EXISTS`）。
 - AC-6：学科/年级/年份由 AI 自动识别填充，前端无需填写。用户上传后 LLM 分析 2000 字符自动填写。
 - AC-7：文档记录和导入任务在同一 `SaveChangesAsync` 中原子写入，保证数据一致性。
 - AC-8：OSS 路径格式为 `documents/docretrieval/{Guid}{ext}`，SHA-256 哈希计算后 `stream.Position=0` 再上传 OSS。

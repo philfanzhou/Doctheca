@@ -36,8 +36,8 @@ export interface RefreshResponse {
   }
 }
 
-const TOKEN_KEY = 'docretrieval_auth_tokens'
-const USER_KEY = 'docretrieval_auth_user'
+const TOKEN_KEY = 'doclibrary_auth_tokens'
+const USER_KEY = 'doclibrary_auth_user'
 
 class AuthService {
   private tokens: AuthTokens | null = null

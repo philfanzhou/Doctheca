@@ -40,7 +40,7 @@ async function handleLogin() {
     <div class="login-card">
       <div class="login-header">
         <div class="login-logo">DR</div>
-        <h1 class="login-title">DocRetrieval Admin</h1>
+        <h1 class="login-title">DocLibrary Admin</h1>
         <p class="login-subtitle">文档检索管理后台</p>
       </div>
       <form class="login-form" @submit.prevent="handleLogin">

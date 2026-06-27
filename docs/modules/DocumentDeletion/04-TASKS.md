@@ -1,4 +1,4 @@
-﻿# DocumentDeletion — 任务与验证 (TASKS)
+# DocumentDeletion — 任务与验证 (TASKS)
 
 > 说明：DocumentDeletion 的生产代码已实现完成。以下任务面向代码审查、可测性验证与回归保障，每个任务都有一条可自动执行的命令或一组断言。
 
@@ -11,7 +11,7 @@
     "files": [
       "src/Domain/Services/DocumentDomainService.cs"
     ],
-    "acceptance": "dotnet build --no-restore Ruoyu.Study.DocRetrieval.sln",
+    "acceptance": "dotnet build --no-restore Ruoyu.Study.DocLibrary.sln",
     "notes": "级联删除顺序必须严格按 occurrences → questions → segments → pages → document 执行。"
   },
   {
@@ -21,7 +21,7 @@
     "files": [
       "src/Service/DocumentAdminEndpoints.cs"
     ],
-    "acceptance": "dotnet build --no-restore Ruoyu.Study.DocRetrieval.sln",
+    "acceptance": "dotnet build --no-restore Ruoyu.Study.DocLibrary.sln",
     "notes": "OSS 删除失败仅记 Warning 日志，不影响接口返回。"
   },
   {
@@ -34,7 +34,7 @@
       "src/Database/Repositories/DocumentSegmentRepository.cs",
       "src/Database/Repositories/DocumentPageRepository.cs"
     ],
-    "acceptance": "dotnet build --no-restore Ruoyu.Study.DocRetrieval.sln",
+    "acceptance": "dotnet build --no-restore Ruoyu.Study.DocLibrary.sln",
     "notes": "无关联记录时删除操作不报错。"
   },
   {
@@ -44,7 +44,7 @@
     "files": [
       "src/Database/Repositories/DocumentRepository.cs"
     ],
-    "acceptance": "dotnet build --no-restore Ruoyu.Study.DocRetrieval.sln",
+    "acceptance": "dotnet build --no-restore Ruoyu.Study.DocLibrary.sln",
     "notes": "GetByTitleAsync 在标题不存在时返回 null。"
   },
   {
@@ -54,7 +54,7 @@
     "files": [
       "src/Service/DocumentAdminEndpoints.cs"
     ],
-    "acceptance": "dotnet build --no-restore Ruoyu.Study.DocRetrieval.sln",
+    "acceptance": "dotnet build --no-restore Ruoyu.Study.DocLibrary.sln",
     "notes": "deleted=true 表示文档存在并被删除，deleted=false 表示文档不存在（幂等）。"
   },
   {
@@ -72,11 +72,11 @@
 
 ## 命令速查
 
-在 `src/services/ruoyu.docretrieval/` 目录下执行：
+在 `src/services/ruoyu.doclibrary/` 目录下执行：
 
 ```bash
 # 构建
-dotnet build --no-restore Ruoyu.Study.DocRetrieval.sln
+dotnet build --no-restore Ruoyu.Study.DocLibrary.sln
 
 # 按命名空间筛选运行
 dotnet test --filter "FullyQualifiedName~DocumentDeletion"

@@ -1,8 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
-    <ProjectReference Include="..\Database\Ruoyu.Study.DocRetrieval.Database.csproj" />
-    <ProjectReference Include="..\Domain\Ruoyu.Study.DocRetrieval.Domain.csproj" />
+    <ProjectReference Include="..\Database\Ruoyu.Study.DocLibrary.Database.csproj" />
+    <ProjectReference Include="..\Domain\Ruoyu.Study.DocLibrary.Domain.csproj" />
   </ItemGroup>
 
   <ItemGroup>
@@ -23,7 +23,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <InternalsVisibleTo Include="Ruoyu.Study.DocRetrieval.Tests" />
+    <InternalsVisibleTo Include="Ruoyu.Study.DocLibrary.Tests" />
   </ItemGroup>
 
 </Project>

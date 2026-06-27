@@ -4,14 +4,14 @@
 
 ```
 ┌─────────────────────────────────────────────────┐
-│  Host (Ruoyu.Study.DocRetrieval.Host)           │
+│  Host (Ruoyu.Study.DocLibrary.Host)           │
 │  Program.cs: DI, Kestrel, gRPC, HTTP            │
 │  appsettings.json: 配置管理                      │
 └───────────────┬─────────────────────────────────┘
                 │
 ┌───────────────▼─────────────────────────────────┐
-│  Service (Ruoyu.Study.DocRetrieval.Service)     │
-│  DocumentRetrievalServiceImpl.cs: gRPC 实现     │
+│  Service (Ruoyu.Study.DocLibrary.Service)     │
+│  DocumentLibraryServiceImpl.cs: gRPC 实现     │
 │  DocumentAdminEndpoints.cs: HTTP Admin API      │
 │  IngestionWorker.cs: 后台导入任务                │
 │  OpenSearchIndexService.cs: 搜索索引            │
@@ -21,28 +21,28 @@
 └───────────────┬─────────────────────────────────┘
                 │
 ┌───────────────▼─────────────────────────────────┐
-│  Domain (Ruoyu.Study.DocRetrieval.Domain)       │
+│  Domain (Ruoyu.Study.DocLibrary.Domain)       │
 │  IDocumentDomainService.cs: 文档 CRUD 接口      │
 │  DocumentDomainService.cs: 文档 CRUD 实现       │
 │  SearchDomainService.cs: 搜索逻辑（含降级）      │
 │  IDocumentParserService: 解析器接口              │
 │  Repositories/: 各仓储接口（每接口一文件）       │
-│  Exceptions/DocRetrievalValidationException.cs   │
+│  Exceptions/DocLibraryValidationException.cs   │
 │  Models/: 各模型（每模型一文件）                 │
 └───────────────┬─────────────────────────────────┘
                 │
 ┌───────────────▼─────────────────────────────────┐
-│  Database (Ruoyu.Study.DocRetrieval.Database)   │
+│  Database (Ruoyu.Study.DocLibrary.Database)   │
 │  Entities/: 6 个 EF Core Entity                  │
 │  Repositories/: Repository 实现                  │
-│  DocRetrievalDbContext.cs: EF DbContext          │
+│  DocLibraryDbContext.cs: EF DbContext          │
 │  DatabaseInitializer.cs: SQL 初始化              │
 └───────────────┬─────────────────────────────────┘
                 │
 ┌───────────────▼─────────────────────────────────┐
-│  Contract (Ruoyu.Study.DocRetrieval.Contract)   │
-│  Protos/docretrieval.proto: gRPC 服务定义       │
-│  Protos/docretrieval.common.proto: 公共消息      │
+│  Contract (Ruoyu.Study.DocLibrary.Contract)   │
+│  Protos/doclibrary.proto: gRPC 服务定义       │
+│  Protos/doclibrary.common.proto: 公共消息      │
 └─────────────────────────────────────────────────┘
 ```
 
@@ -51,7 +51,7 @@
 | 组件 | 技术 | 说明 |
 |------|------|------|
 | 框架 | .NET 8 | ASP.NET Core gRPC + HTTP |
-| 通信 | gRPC (protobuf) | DocumentRetrieval 服务 |
+| 通信 | gRPC (protobuf) | DocumentLibrary 服务 |
 | ORM | EF Core 8.0 | Npgsql + SQLite |
 | 数据库 | PostgreSQL / SQLite | 双数据库切换 |
 | 对象映射 | Mapster 10.0 | Entity ↔ Model 映射 |
@@ -64,11 +64,11 @@
 
 ### 方案：JWT Bearer（QuantumZhou.Identity 签发）
 
-DocRetrieval 的 Admin API 通过 JWT Bearer Token 进行认证，Token 由 QuantumZhou.Identity 服务签发。
+DocLibrary 的 Admin API 通过 JWT Bearer Token 进行认证，Token 由 QuantumZhou.Identity 服务签发。
 
 ```
 ┌──────────┐  1. POST /admin/auth/login    ┌──────────────────┐
-│  Admin   │ ──────────────────────────────► │  DocRetrieval    │
+│  Admin   │ ──────────────────────────────► │  DocLibrary    │
 │  前端    │                                 │  (AuthEndpoints) │
 │          │  2. 返回 JWT + RefreshToken     │                  │
 │          │ ◄────────────────────────────── │                  │
@@ -95,7 +95,7 @@ DocRetrieval 的 Admin API 通过 JWT Bearer Token 进行认证，Token 由 Quan
 
 ### 认证流程
 
-1. **登录**：前端发送用户名/密码到 `POST /admin/auth/login`，DocRetrieval 后端通过 gRPC 调用 Identity 的 `GetToken`（password grant_type + AppId/AppSecret），验证成功后将 JWT 和 RefreshToken 返回给前端
+1. **登录**：前端发送用户名/密码到 `POST /admin/auth/login`，DocLibrary 后端通过 gRPC 调用 Identity 的 `GetToken`（password grant_type + AppId/AppSecret），验证成功后将 JWT 和 RefreshToken 返回给前端
 2. **请求**：前端在每次 API 请求中携带 `Authorization: Bearer <JWT>`，ASP.NET Core 通过 Identity 的 JWKS 端点验证 JWT 签名
 3. **刷新**：JWT 过期前，前端通过 `POST /admin/auth/refresh` 使用 RefreshToken 获取新 JWT
 4. **登出**：前端清除本地 Token 存储，可选调用 `POST /admin/auth/logout` 通知 Identity 吊销 RefreshToken
@@ -105,8 +105,8 @@ DocRetrieval 的 Admin API 通过 JWT Bearer Token 进行认证，Token 由 Quan
 | 配置键 | 说明 | 示例 |
 |--------|------|------|
 | `Identity:GrpcEndpoint` | Identity gRPC 地址 | `http://localhost:5001` |
-| `Identity:AppId` | DocRetrieval 在 Identity 注册的 AppId | `docretrieval_admin` |
-| `Identity:AppSecret` | DocRetrieval 的 AppSecret | （环境变量 `IDENTITY_APP_SECRET`） |
+| `Identity:AppId` | DocLibrary 在 Identity 注册的 AppId | `docretrieval_admin` |
+| `Identity:AppSecret` | DocLibrary 的 AppSecret | （环境变量 `IDENTITY_APP_SECRET`） |
 | `Jwt:Issuer` | JWT 签发者（与 Identity 一致） | `QuantumZhou.Identity` |
 | `Jwt:Audience` | JWT 受众（与 Identity 一致） | `QuantumZhou.microservices` |
 | `Jwt:JwksEndpoint` | JWKS 公钥端点 | `http://localhost:5002/.well-known/jwks` |
@@ -128,11 +128,11 @@ DocRetrieval 的 Admin API 通过 JWT Bearer Token 进行认证，Token 由 Quan
 | 文件 | 用途 |
 |------|------|
 | [Program.cs](../../src/Host/Program.cs) | 服务启动配置 + `AddIdentityClient()` 调用 |
-| [docretrieval.proto](../../src/Contract/Protos/docretrieval.proto) | gRPC 契约 |
+| [doclibrary.proto](../../src/Contract/Protos/doclibrary.proto) | gRPC 契约 |
 | [IDocumentDomainService.cs](../../src/Domain/Services/IDocumentDomainService.cs) | 文档领域接口 |
 | [DocumentDomainService.cs](../../src/Domain/Services/DocumentDomainService.cs) | 文档领域实现 |
 | [SearchDomainService.cs](../../src/Domain/Services/SearchDomainService.cs) | 搜索领域逻辑 |
-| [DocumentRetrievalServiceImpl.cs](../../src/Service/DocumentRetrievalServiceImpl.cs) | gRPC 实现 |
+| [DocumentLibraryServiceImpl.cs](../../src/Service/DocumentLibraryServiceImpl.cs) | gRPC 实现 |
 | [IngestionWorker.cs](../../src/Service/IngestionWorker.cs) | 后台导入 |
 | [DocumentAdminEndpoints.cs](../../src/Service/DocumentAdminEndpoints.cs) | HTTP API |
 | [MinerUAgentClient.cs](../../src/Service/MinerUAgentClient.cs) | MinerU Agent API 客户端（降级方案，无图片） |

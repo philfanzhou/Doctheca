@@ -1,6 +1,6 @@
 using Microsoft.Extensions.Logging;
 
-namespace Ruoyu.Study.DocRetrieval.Service;
+namespace Ruoyu.Study.DocLibrary.Service;
 
 /// <summary>
 /// Service for converting non-PDF files (DOCX, PPTX, etc.) to PDF

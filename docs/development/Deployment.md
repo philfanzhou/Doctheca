@@ -4,7 +4,7 @@
 
 - Dockerfile：`src/Host/Dockerfile`
 - 部署脚本：见项目 scripts/ 目录
-- 前端目录：`src/services/ruoyu.docretrieval/frontend/`（Dockerfile 中 COPY 路径必须与此一致）
+- 前端目录：`src/services/ruoyu.doclibrary/frontend/`（Dockerfile 中 COPY 路径必须与此一致）
 
 ## 配置�?
 

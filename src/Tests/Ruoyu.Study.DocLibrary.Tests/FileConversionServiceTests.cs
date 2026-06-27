@@ -1,10 +1,10 @@
 using FluentAssertions;
 using Microsoft.Extensions.Logging;
 using Moq;
-using Ruoyu.Study.DocRetrieval.Service;
+using Ruoyu.Study.DocLibrary.Service;
 using Xunit;
 
-namespace Ruoyu.Study.DocRetrieval.Tests;
+namespace Ruoyu.Study.DocLibrary.Tests;
 
 public class FileConversionServiceTests
 {

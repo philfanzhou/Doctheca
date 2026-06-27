@@ -235,7 +235,7 @@ Scenario: 重试失败文档
 Scenario: 非 failed 状态不可重试
   Given 文档 status = "ready"
   When 调用 POST /admin/documents/{id}/retry
-  Then 返回 422，错误码 DOCRETRIEVAL_DOCUMENT_NOT_FAILED
+  Then 返回 422，错误码 DOCLIBRARY_DOCUMENT_NOT_FAILED
 ```
 
 ---
@@ -371,7 +371,7 @@ Scenario: 取消 processing 任务
 Scenario: 无可取消任务
   Given 文档 job 状态为 "success"
   When 调用 POST /admin/documents/{id}/cancel
-  Then 返回 422，错误码 DOCRETRIEVAL_JOB_NOT_CANCELLABLE
+  Then 返回 422，错误码 DOCLIBRARY_JOB_NOT_CANCELLABLE
 ```
 
 ---

@@ -3,8 +3,8 @@ set -e
 
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 IMAGE_TAG="20260619"
-IMAGE_NAME="ruoyu.docretrieval:${IMAGE_TAG}"
-CONTAINER_NAME="ruoyu-docretrieval"
+IMAGE_NAME="ruoyu.doclibrary:${IMAGE_TAG}"
+CONTAINER_NAME="ruoyu-doclibrary"
 NETWORK_NAME="ruoyu-net"
 GRPC_PORT="5011"
 HTTP_PORT="5012"

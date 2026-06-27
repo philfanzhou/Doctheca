@@ -18,7 +18,7 @@ import { authService } from './services/authService'
 import LoginPage from './components/LoginPage.vue'
 
 const isAuthenticated = ref(false)
-const appTitle = ref('DocRetrieval Admin')
+const appTitle = ref('DocLibrary Admin')
 const activeTab = ref('files')
 
 // ===== Search =====

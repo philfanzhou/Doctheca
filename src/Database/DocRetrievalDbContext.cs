@@ -1,11 +1,11 @@
 using Microsoft.EntityFrameworkCore;
-using Ruoyu.Study.DocRetrieval.Database.Entities;
+using Ruoyu.Study.DocLibrary.Database.Entities;
 
-namespace Ruoyu.Study.DocRetrieval.Database;
+namespace Ruoyu.Study.DocLibrary.Database;
 
-public class DocRetrievalDbContext : DbContext
+public class DocLibraryDbContext : DbContext
 {
-    public DocRetrievalDbContext(DbContextOptions<DocRetrievalDbContext> options) : base(options)
+    public DocLibraryDbContext(DbContextOptions<DocLibraryDbContext> options) : base(options)
     {
     }
 

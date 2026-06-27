@@ -14,13 +14,13 @@
 
 - **Given**：`_documentRepository.GetByTitleAsync` 返回一个已存在的 `DocumentModel`。
 - **When**：调用 `CreateDocumentAsync(document)`。
-- **Then**：抛出 `DocRetrievalValidationException`，消息包含"文档名已存在"；`_documentRepository.AddAsync` 未被调用；`_unitOfWork.SaveChangesAsync` 未被调用。
+- **Then**：抛出 `DocLibraryValidationException`，消息包含"文档名已存在"；`_documentRepository.AddAsync` 未被调用；`_unitOfWork.SaveChangesAsync` 未被调用。
 
 ### UT-03 文件哈希重复(ready)拒绝（验证 SPEC REQ-UPLOAD-11）
 
 - **Given**：`_documentRepository.GetByTitleAsync` 返回 null，`_documentRepository.GetByFileHashAndStatusAsync(hash, "ready")` 返回一个已存在的 `DocumentModel`。
 - **When**：调用 `CreateDocumentAsync(document)`。
-- **Then**：抛出 `DocRetrievalValidationException`，消息包含"文件已被导入"；`_documentRepository.AddAsync` 未被调用。
+- **Then**：抛出 `DocLibraryValidationException`，消息包含"文件已被导入"；`_documentRepository.AddAsync` 未被调用。
 
 ### UT-04 文件哈希重复(非ready)允许（验证 SPEC AC-D3）
 
@@ -32,37 +32,37 @@
 
 - **Given**：`DocumentModel` 的 `Title` 为空字符串。
 - **When**：调用 `CreateDocumentAsync(document)`。
-- **Then**：抛出 `DocRetrievalValidationException`，消息包含"文档名不能为空"；`_documentRepository.AddAsync` 未被调用。
+- **Then**：抛出 `DocLibraryValidationException`，消息包含"文档名不能为空"；`_documentRepository.AddAsync` 未被调用。
 
 ### UT-06 学科非法校验（验证 SPEC REQ-UPLOAD-09）
 
 - **Given**：`DocumentModel` 的 `Subject = "数学"`。
 - **When**：调用 `CreateDocumentAsync(document)`。
-- **Then**：抛出 `DocRetrievalValidationException`，消息包含"学科仅支持：英语"。
+- **Then**：抛出 `DocLibraryValidationException`，消息包含"学科仅支持：英语"。
 
 ### UT-07 年级非法校验（验证 SPEC REQ-UPLOAD-09）
 
 - **Given**：`DocumentModel` 的 `Grade = "大学"`。
 - **When**：调用 `CreateDocumentAsync(document)`。
-- **Then**：抛出 `DocRetrievalValidationException`，消息包含"年级取值非法"。
+- **Then**：抛出 `DocLibraryValidationException`，消息包含"年级取值非法"。
 
 ### UT-08 标题超长校验（验证 SPEC REQ-UPLOAD-08）
 
 - **Given**：`DocumentModel` 的 `Title` 长度 > 200 字符。
 - **When**：调用 `CreateDocumentAsync(document)`。
-- **Then**：抛出 `DocRetrievalValidationException`，消息包含"文档名超过200字符"。
+- **Then**：抛出 `DocLibraryValidationException`，消息包含"文档名超过200字符"。
 
 ### UT-09 FileHash 为空校验
 
 - **Given**：`DocumentModel` 的 `FileHash` 为空字符串。
 - **When**：调用 `CreateDocumentAsync(document)`。
-- **Then**：抛出 `DocRetrievalValidationException`，消息包含"文件哈希不能为空"。
+- **Then**：抛出 `DocLibraryValidationException`，消息包含"文件哈希不能为空"。
 
 ### UT-10 多项校验同时失败
 
 - **Given**：`DocumentModel` 的 `Title` 为空、`Subject` 为"数学"、`Grade` 为"大学"。
 - **When**：调用 `CreateDocumentAsync(document)`。
-- **Then**：抛出 `DocRetrievalValidationException`，消息包含所有错误项（以分号分隔）。
+- **Then**：抛出 `DocLibraryValidationException`，消息包含所有错误项（以分号分隔）。
 
 ### UT-11 加密 PDF 检测（验证 SPEC REQ-UPLOAD-05）
 
@@ -82,17 +82,17 @@
 - **When**：调用 `IsEncryptedPdf(stream, contentType)`。
 - **Then**：返回 `false`；`stream.Position` 恢复为原始值。
 
-### UT-14 DocRetrievalConstants 校验
+### UT-14 DocLibraryConstants 校验
 
-- **Given**：`DocRetrievalConstants` 的定义。
+- **Given**：`DocLibraryConstants` 的定义。
 - **When**：分别调用 `IsValidSubject("英语")`、`IsValidSubject("数学")`、`IsValidGrade("G3")`、`IsValidGrade("大学")`、`IsValidGrade("K")`。
 - **Then**：`IsValidSubject("英语") == true`，`IsValidSubject("数学") == false`，`IsValidGrade("G3") == true`，`IsValidGrade("大学") == false`，`IsValidGrade("K") == true`。
 
 ### UT-15 端点错误码映射（验证 SPEC 错误码表）
 
-- **Given**：`DocumentDomainService.CreateDocumentAsync` 抛出不同消息的 `DocRetrievalValidationException`。
+- **Given**：`DocumentDomainService.CreateDocumentAsync` 抛出不同消息的 `DocLibraryValidationException`。
 - **When**：在 `UploadDocument` 中捕获异常并映射。
-- **Then**：消息包含"文档名已存在"→ 409/`DOCRETRIEVAL_TITLE_ALREADY_EXISTS`；消息包含"文件已被导入"→ 409/`DOCRETRIEVAL_FILE_HASH_ALREADY_EXISTS`；消息包含"学科仅支持"→ 400/`DOCRETRIEVAL_SUBJECT_INVALID`；消息包含"年级取值非法"→ 400/`DOCRETRIEVAL_GRADE_INVALID`。
+- **Then**：消息包含"文档名已存在"→ 409/`DOCLIBRARY_TITLE_ALREADY_EXISTS`；消息包含"文件已被导入"→ 409/`DOCLIBRARY_FILE_HASH_ALREADY_EXISTS`；消息包含"学科仅支持"→ 400/`DOCLIBRARY_SUBJECT_INVALID`；消息包含"年级取值非法"→ 400/`DOCLIBRARY_GRADE_INVALID`。
 
 ## 集成测试
 
@@ -107,12 +107,12 @@
 ### IT-02 上传重复标题 → 409
 
 1. 上传文档 A（title="重复测试"），成功。
-2. 上传文档 B（title="重复测试"，不同文件），返回 409，`errorCode == "DOCRETRIEVAL_TITLE_ALREADY_EXISTS"`。
+2. 上传文档 B（title="重复测试"，不同文件），返回 409，`errorCode == "DOCLIBRARY_TITLE_ALREADY_EXISTS"`。
 
 ### IT-03 上传重复哈希(ready) → 409
 
 1. 上传文档 A，手动将其状态设为 `ready`。
-2. 上传文档 B（相同文件，不同标题），返回 409，`errorCode == "DOCRETRIEVAL_FILE_HASH_ALREADY_EXISTS"`。
+2. 上传文档 B（相同文件，不同标题），返回 409，`errorCode == "DOCLIBRARY_FILE_HASH_ALREADY_EXISTS"`。
 
 ## 边界和异常测试
 
@@ -129,12 +129,12 @@ using System;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Moq;
-using Ruoyu.Study.DocRetrieval.Domain.Models;
-using Ruoyu.Study.DocRetrieval.Domain.Repositories;
-using Ruoyu.Study.DocRetrieval.Domain.Services;
+using Ruoyu.Study.DocLibrary.Domain.Models;
+using Ruoyu.Study.DocLibrary.Domain.Repositories;
+using Ruoyu.Study.DocLibrary.Domain.Services;
 using Xunit;
 
-namespace Ruoyu.Study.DocRetrieval.Tests;
+namespace Ruoyu.Study.DocLibrary.Tests;
 
 public class DocumentDomainServiceTests
 {
@@ -215,7 +215,7 @@ public class DocumentDomainServiceTests
             .ReturnsAsync(new DocumentModel { Title = document.Title });
 
         // When
-        var ex = await Assert.ThrowsAsync<DocRetrievalValidationException>(
+        var ex = await Assert.ThrowsAsync<DocLibraryValidationException>(
             () => _service.CreateDocumentAsync(document));
 
         // Then
@@ -241,7 +241,7 @@ public class DocumentDomainServiceTests
             .ReturnsAsync(new DocumentModel { FileHash = document.FileHash, Status = "ready" });
 
         // When
-        var ex = await Assert.ThrowsAsync<DocRetrievalValidationException>(
+        var ex = await Assert.ThrowsAsync<DocLibraryValidationException>(
             () => _service.CreateDocumentAsync(document));
 
         // Then
@@ -262,7 +262,7 @@ public class DocumentDomainServiceTests
         };
 
         // When
-        var ex = await Assert.ThrowsAsync<DocRetrievalValidationException>(
+        var ex = await Assert.ThrowsAsync<DocLibraryValidationException>(
             () => _service.CreateDocumentAsync(document));
 
         // Then
@@ -283,7 +283,7 @@ public class DocumentDomainServiceTests
         };
 
         // When
-        var ex = await Assert.ThrowsAsync<DocRetrievalValidationException>(
+        var ex = await Assert.ThrowsAsync<DocLibraryValidationException>(
             () => _service.CreateDocumentAsync(document));
 
         // Then
@@ -293,18 +293,18 @@ public class DocumentDomainServiceTests
     [Fact]
     public void IsValidSubject_ShouldReturnCorrectResults()
     {
-        Assert.True(DocRetrievalConstants.IsValidSubject("英语"));
-        Assert.False(DocRetrievalConstants.IsValidSubject("数学"));
+        Assert.True(DocLibraryConstants.IsValidSubject("英语"));
+        Assert.False(DocLibraryConstants.IsValidSubject("数学"));
     }
 
     [Fact]
     public void IsValidGrade_ShouldReturnCorrectResults()
     {
-        Assert.True(DocRetrievalConstants.IsValidGrade("K"));
-        Assert.True(DocRetrievalConstants.IsValidGrade("G3"));
-        Assert.True(DocRetrievalConstants.IsValidGrade("G12"));
-        Assert.False(DocRetrievalConstants.IsValidGrade("大学"));
-        Assert.False(DocRetrievalConstants.IsValidGrade("g3")); // 大小写敏感
+        Assert.True(DocLibraryConstants.IsValidGrade("K"));
+        Assert.True(DocLibraryConstants.IsValidGrade("G3"));
+        Assert.True(DocLibraryConstants.IsValidGrade("G12"));
+        Assert.False(DocLibraryConstants.IsValidGrade("大学"));
+        Assert.False(DocLibraryConstants.IsValidGrade("g3")); // 大小写敏感
     }
 }
 ```

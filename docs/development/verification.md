@@ -1,6 +1,6 @@
-﻿# Verification Guide
+# Verification Guide
 
-How to verify `ruoyu.docretrieval` is running correctly.
+How to verify `ruoyu.doclibrary` is running correctly.
 
 ## Health Check
 
@@ -166,10 +166,10 @@ Query parameters: `query` (required), `phrase` (boolean, default false), `pageSi
 
 ## Run Unit Tests
 
-From `src/services/ruoyu.docretrieval/` directory:
+From `src/services/ruoyu.doclibrary/` directory:
 
 ```bash
-dotnet test test/Ruoyu.Study.DocRetrieval.Tests
+dotnet test test/Ruoyu.Study.DocLibrary.Tests
 ```
 
 Filter by module:

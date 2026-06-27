@@ -1,6 +1,6 @@
 using System;
 
-namespace Ruoyu.Study.DocRetrieval.Domain.Models;
+namespace Ruoyu.Study.DocLibrary.Domain.Models;
 
 public class DocumentSegmentModel
 {

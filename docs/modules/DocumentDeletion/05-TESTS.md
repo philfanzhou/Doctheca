@@ -1,4 +1,4 @@
-﻿# DocumentDeletion — 测试计划 (TESTS)
+# DocumentDeletion — 测试计划 (TESTS)
 
 > 测试工具：**xUnit + Moq**
 > 目标：对 `DeleteDocumentAsync` 和 `DeleteDocument` 端点达成 100% 分支覆盖。
@@ -32,7 +32,7 @@
 
 | # | 场景 | Setup | Action | Assertion | 验证 SPEC |
 |---|------|-------|--------|-----------|-----------|
-| IT-01 | 删除后关联数据被清理 | 构造 DocRetrievalDbContext，预置文档及关联数据 | `DeleteDocumentAsync` | `document_occurrences`、`question_segments`、`document_segments`、`document_pages` 中该 documentId 的记录数为 0 | REQ-DEL-01, REQ-DEL-02 |
+| IT-01 | 删除后关联数据被清理 | 构造 DocLibraryDbContext，预置文档及关联数据 | `DeleteDocumentAsync` | `document_occurrences`、`question_segments`、`document_segments`、`document_pages` 中该 documentId 的记录数为 0 | REQ-DEL-01, REQ-DEL-02 |
 | IT-02 | 删除后文档记录消失 | 预置文档记录 | `DeleteDocumentAsync` | `documents` 表中该记录不存在 | REQ-DEL-01 |
 | IT-03 | 端到端删除含 OSS | 预置文档和 OSS 文件 | `DELETE /admin/documents/{title}` | 数据库记录消失，OSS 文件被删除 | REQ-DEL-06 |
 
@@ -141,7 +141,7 @@ public class DocumentDeletionTests
 ## 6. 运行命令
 
 ```bash
-cd src/services/ruoyu.docretrieval
+cd src/services/ruoyu.doclibrary
 
 # 单元测试
 dotnet test --filter "FullyQualifiedName~DocumentDeletion"

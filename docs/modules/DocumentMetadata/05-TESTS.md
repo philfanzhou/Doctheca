@@ -1,6 +1,6 @@
-﻿# 文档元数据更新 — 测试方案与代码骨架（TESTS）
+# 文档元数据更新 — 测试方案与代码骨架（TESTS）
 
-> 对应测试文件：`test/Ruoyu.Study.DocRetrieval.Tests/DocumentDomainServiceTests.cs`（元数据更新相关测试方法）
+> 对应测试文件：`test/Ruoyu.Study.DocLibrary.Tests/DocumentDomainServiceTests.cs`（元数据更新相关测试方法）
 > 运行命令：`dotnet test --filter "FullyQualifiedName~DocumentMetadataTests"`
 
 ---
@@ -33,7 +33,7 @@
 - 调用 `UpdateMetadataAsync("NotFound", subject: "英语", grade: null, year: null, tags: null)`
 
 **Then:**
-- 抛出 `DocRetrievalValidationException`，消息为 "文档不存在"
+- 抛出 `DocLibraryValidationException`，消息为 "文档不存在"
 
 ---
 
@@ -46,7 +46,7 @@
 - 调用 `UpdateMetadataAsync("PendingDoc", subject: "英语", grade: null, year: null, tags: null)`
 
 **Then**
-- 抛出 `DocRetrievalValidationException`，消息为 "文档未就绪，不允许修改元数据"
+- 抛出 `DocLibraryValidationException`，消息为 "文档未就绪，不允许修改元数据"
 
 ---
 
@@ -59,7 +59,7 @@
 - 调用 `UpdateMetadataAsync("TestDoc", subject: "数学", grade: null, year: null, tags: null)`
 
 **Then**
-- 抛出 `DocRetrievalValidationException`，消息为 "学科仅支持：英语"
+- 抛出 `DocLibraryValidationException`，消息为 "学科仅支持：英语"
 
 ---
 
@@ -72,7 +72,7 @@
 - 调用 `UpdateMetadataAsync("TestDoc", subject: null, grade: "G99", year: null, tags: null)`
 
 **Then**
-- 抛出 `DocRetrievalValidationException`，消息包含 "年级取值非法"
+- 抛出 `DocLibraryValidationException`，消息包含 "年级取值非法"
 
 ---
 
@@ -156,12 +156,12 @@ using System;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Moq;
-using Ruoyu.Study.DocRetrieval.Domain.Models;
-using Ruoyu.Study.DocRetrieval.Domain.Repositories;
-using Ruoyu.Study.DocRetrieval.Domain.Services;
+using Ruoyu.Study.DocLibrary.Domain.Models;
+using Ruoyu.Study.DocLibrary.Domain.Repositories;
+using Ruoyu.Study.DocLibrary.Domain.Services;
 using Xunit;
 
-namespace Ruoyu.Study.DocRetrieval.Tests;
+namespace Ruoyu.Study.DocLibrary.Tests;
 
 public class DocumentMetadataTests
 {
@@ -220,7 +220,7 @@ public class DocumentMetadataTests
         // TC-02
         _mockDocRepo.Setup(r => r.GetByTitleAsync("NotFound")).ReturnsAsync((DocumentModel?)null);
 
-        var ex = await Assert.ThrowsAsync<DocRetrievalValidationException>(
+        var ex = await Assert.ThrowsAsync<DocLibraryValidationException>(
             () => _service.UpdateMetadataAsync("NotFound", "英语", null, null, null));
 
         Assert.Equal("文档不存在", ex.Message);
@@ -234,7 +234,7 @@ public class DocumentMetadataTests
         doc.Status = "pending";
         _mockDocRepo.Setup(r => r.GetByTitleAsync("PendingDoc")).ReturnsAsync(doc);
 
-        var ex = await Assert.ThrowsAsync<DocRetrievalValidationException>(
+        var ex = await Assert.ThrowsAsync<DocLibraryValidationException>(
             () => _service.UpdateMetadataAsync("PendingDoc", "英语", null, null, null));
 
         Assert.Equal("文档未就绪，不允许修改元数据", ex.Message);
@@ -246,7 +246,7 @@ public class DocumentMetadataTests
         // TC-04
         _mockDocRepo.Setup(r => r.GetByTitleAsync("TestDoc")).ReturnsAsync(CreateReadyDocument());
 
-        var ex = await Assert.ThrowsAsync<DocRetrievalValidationException>(
+        var ex = await Assert.ThrowsAsync<DocLibraryValidationException>(
             () => _service.UpdateMetadataAsync("TestDoc", "数学", null, null, null));
 
         Assert.Equal("学科仅支持：英语", ex.Message);
@@ -258,7 +258,7 @@ public class DocumentMetadataTests
         // TC-05
         _mockDocRepo.Setup(r => r.GetByTitleAsync("TestDoc")).ReturnsAsync(CreateReadyDocument());
 
-        var ex = await Assert.ThrowsAsync<DocRetrievalValidationException>(
+        var ex = await Assert.ThrowsAsync<DocLibraryValidationException>(
             () => _service.UpdateMetadataAsync("TestDoc", null, "G99", null, null));
 
         Assert.Contains("年级取值非法", ex.Message);
@@ -349,7 +349,7 @@ public class DocumentMetadataTests
 ## 3. 测试数据准备要点
 
 1. **文档状态**：使用 `CreateReadyDocument()` 辅助方法创建 `Status="ready"` 的文档，按需修改状态。
-2. **异常验证**：使用 `Assert.ThrowsAsync<DocRetrievalValidationException>` 捕获异常并验证消息内容。
+2. **异常验证**：使用 `Assert.ThrowsAsync<DocLibraryValidationException>` 捕获异常并验证消息内容。
 3. **Mock 验证**：使用 `Verify` 确认 Repository 和 SearchIndexService 的调用次数和参数。
 4. **搜索索引隔离**：TC-07 中 Mock 搜索索引服务抛异常，验证主流程不中断。
 5. **null 服务测试**：TC-10 中构造不含 `ISearchIndexService` 的服务实例，验证无 NullReferenceException。
@@ -357,7 +357,7 @@ public class DocumentMetadataTests
 ## 4. 运行方式
 
 ```bash
-cd src/services/ruoyu.docretrieval
+cd src/services/ruoyu.doclibrary
 dotnet test --filter "FullyQualifiedName~DocumentMetadataTests" -v normal
 ```
 

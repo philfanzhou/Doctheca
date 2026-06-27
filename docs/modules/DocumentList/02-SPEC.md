@@ -75,7 +75,7 @@
 **When** 调用 `GET /admin/documents?subject=数学`
 **Then** 返回空列表（列表查询不进行学科校验，由仓储层过滤）[推断]
 
-> 注：学科校验仅在创建/更新文档时执行（`DocRetrievalConstants.IsValidSubject`），列表查询不做参数校验 [推断]
+> 注：学科校验仅在创建/更新文档时执行（`DocLibraryConstants.IsValidSubject`），列表查询不做参数校验 [推断]
 
 ### AC-FR-04：按年级筛选
 
@@ -87,7 +87,7 @@
 **When** 调用 `GET /admin/documents?grade=G13`
 **Then** 返回空列表（列表查询不进行年级校验，由仓储层过滤）[推断]
 
-> 注：年级有效值为 `K`, `G1`, `G2`, `G3`, `G4`, `G5`, `G6`, `G7`, `G8`, `G9`, `G10`, `G11`, `G12`（定义于 `DocRetrievalConstants.ValidGrades`）
+> 注：年级有效值为 `K`, `G1`, `G2`, `G3`, `G4`, `G5`, `G6`, `G7`, `G8`, `G9`, `G10`, `G11`, `G12`（定义于 `DocLibraryConstants.ValidGrades`）
 
 ### AC-FR-05：按关键词搜索
 
@@ -167,7 +167,7 @@
 {
   "success": false,
   "message": "文档不存在",
-  "errorCode": "DOCRETRIEVAL_DOCUMENT_NOT_FOUND"
+  "errorCode": "DOCLIBRARY_DOCUMENT_NOT_FOUND"
 }
 ```
 
@@ -190,6 +190,6 @@
 | 单元测试 | `DocumentDomainService.GetDocumentByTitleAsync` | 验证存在/不存在标题的返回值 |
 | 单元测试 | `DocumentDomainService.GetIngestionJobAsync` | 验证存在/不存在文档 ID 时导入任务的返回值 |
 | 集成测试 | `GET /admin/documents` | 验证各筛选参数组合的正确性，包括无参数默认分页、单条件筛选、多条件组合筛选 |
-| 集成测试 | `GET /admin/documents/{id}/status` | 验证文档存在时返回状态与任务信息、文档不存在时返回 404 及 `DOCRETRIEVAL_DOCUMENT_NOT_FOUND` |
+| 集成测试 | `GET /admin/documents/{id}/status` | 验证文档存在时返回状态与任务信息、文档不存在时返回 404 及 `DOCLIBRARY_DOCUMENT_NOT_FOUND` |
 | 集成测试 | 分页边界 | 验证空列表、仅 1 条记录、跨页等边界场景 |
 | 集成测试 | 响应格式 | 验证返回字段完整性和时间格式（ISO 8601 UTC） |

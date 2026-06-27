@@ -5,12 +5,12 @@
 ## 1. 目录与文件结构
 
 ```
-src/services/ruoyu.docretrieval/
+src/services/ruoyu.doclibrary/
 ├── src/
 │   ├── Domain/
 │   │   ├── Models/
 │   │   │   ├── DocumentModel.cs                              # DocumentModel 实体
-│   │   │   └── DocRetrievalConstants.cs                      # DocRetrievalConstants（学科/年级校验）
+│   │   │   └── DocLibraryConstants.cs                      # DocLibraryConstants（学科/年级校验）
 │   │   ├── Repositories/
 │   │   │   └── IDocumentRepository.cs                        # IDocumentRepository（含 GetListAsync）
 │   │   └── Services/
@@ -143,7 +143,7 @@ private static async Task<IResult> GetDocument(
 }
 ```
 
-文档不存在时返回 404：`{ success: false, message: "Document not found", errorCode: "DOCRETRIEVAL_DOCUMENT_NOT_FOUND" }`。
+文档不存在时返回 404：`{ success: false, message: "Document not found", errorCode: "DOCLIBRARY_DOCUMENT_NOT_FOUND" }`。
 
 ---
 
@@ -213,7 +213,7 @@ DocumentAdminEndpoints.GetDocument
 |------|----------|----------|----------|
 | ASP.NET Core 中间件 | 未认证请求 | 自动拦截，返回 401 | — |
 | `GetDocumentListAsync` | 数据库连接失败等 | 异常向上抛出，由端点层或中间件统一处理 | `LogError` |
-| `ListDocuments` 端点 | `DocRetrievalValidationException` | 当前列表查询不抛此异常 | - |
+| `ListDocuments` 端点 | `DocLibraryValidationException` | 当前列表查询不抛此异常 | - |
 | `ListDocuments` 端点 | 未预期异常 | ASP.NET Core 中间件统一捕获，返回 500 | `LogError` |
 
 > **设计权衡**：列表查询为纯读操作，不涉及业务校验异常。分页参数修正逻辑在领域层完成，确保无论调用方是 Admin 端点还是未来其他调用方，均能获得一致的修正行为。

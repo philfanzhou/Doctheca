@@ -5,7 +5,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Ruoyu.Study.Common.Oss;
 
-namespace Ruoyu.Study.DocRetrieval.Service;
+namespace Ruoyu.Study.DocLibrary.Service;
 
 /// <summary>
 /// Client for MinerU Precision Extract API.
@@ -44,7 +44,7 @@ public class MinerUPrecisionClient
             BaseAddress = new Uri(_options.BaseUrl ?? DefaultBaseUrl),
         };
 
-        _httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("DocRetrieval/1.0 (.NET 8)");
+        _httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("DocLibrary/1.0 (.NET 8)");
         _httpClient.DefaultRequestHeaders.Accept.ParseAdd("application/json");
 
         if (!string.IsNullOrEmpty(_options.ApiToken))

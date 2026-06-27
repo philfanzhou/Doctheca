@@ -7,11 +7,11 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Ruoyu.Study.Common.Oss;
-using Ruoyu.Study.DocRetrieval.Domain.Exceptions;
-using Ruoyu.Study.DocRetrieval.Domain.Models;
-using Ruoyu.Study.DocRetrieval.Domain.Repositories;
+using Ruoyu.Study.DocLibrary.Domain.Exceptions;
+using Ruoyu.Study.DocLibrary.Domain.Models;
+using Ruoyu.Study.DocLibrary.Domain.Repositories;
 
-namespace Ruoyu.Study.DocRetrieval.Domain.Services;
+namespace Ruoyu.Study.DocLibrary.Domain.Services;
 
 public class DocumentDomainService : IDocumentDomainService
 {
@@ -59,11 +59,11 @@ public class DocumentDomainService : IDocumentDomainService
 
         var existingByTitle = await _documentRepository.GetByTitleAsync(document.Title);
         if (existingByTitle != null)
-            throw new DocRetrievalValidationException("Document title already exists");
+            throw new DocLibraryValidationException("Document title already exists");
 
         var existingByHash = await _documentRepository.GetByFileHashAndStatusAsync(document.FileHash, DocumentStatus.Ready);
         if (existingByHash != null)
-            throw new DocRetrievalValidationException("File already imported");
+            throw new DocLibraryValidationException("File already imported");
 
         document.Id = Guid.NewGuid();
         document.Status = DocumentStatus.Pending;
@@ -109,16 +109,16 @@ public class DocumentDomainService : IDocumentDomainService
         string title, string? subject, string? grade, string? year, string? tags)
     {
         var document = await _documentRepository.GetByTitleAsync(title)
-            ?? throw new DocRetrievalValidationException("Document not found");
+            ?? throw new DocLibraryValidationException("Document not found");
 
         if (document.Status != DocumentStatus.Ready)
-            throw new DocRetrievalValidationException("Document not ready, metadata update not allowed");
+            throw new DocLibraryValidationException("Document not ready, metadata update not allowed");
 
-        if (subject != null && !DocRetrievalConstants.IsValidSubject(subject))
-            throw new DocRetrievalValidationException("Subject only supports: English");
+        if (subject != null && !DocLibraryConstants.IsValidSubject(subject))
+            throw new DocLibraryValidationException("Subject only supports: English");
 
-        if (grade != null && !DocRetrievalConstants.IsValidGrade(grade))
-            throw new DocRetrievalValidationException($"Invalid grade value, valid values: {string.Join(", ", DocRetrievalConstants.ValidGrades)}");
+        if (grade != null && !DocLibraryConstants.IsValidGrade(grade))
+            throw new DocLibraryValidationException($"Invalid grade value, valid values: {string.Join(", ", DocLibraryConstants.ValidGrades)}");
 
         if (subject != null) document.Subject = subject;
         if (grade != null) document.Grade = grade;
@@ -342,7 +342,7 @@ public class DocumentDomainService : IDocumentDomainService
             ?? throw new InvalidOperationException($"Document not found: {documentId}");
 
         if (document.Status != DocumentStatus.Failed)
-            throw new DocRetrievalValidationException("Document status is not failed, cannot retry");
+            throw new DocLibraryValidationException("Document status is not failed, cannot retry");
 
         // Clear old parsed data
         await _occurrenceRepository.DeleteByDocumentIdAsync(documentId);
@@ -389,17 +389,17 @@ public class DocumentDomainService : IDocumentDomainService
             errors.Add("Document title exceeds 200 characters");
 
         // Subject and grade are optional (AI auto-fills if empty)
-        if (!string.IsNullOrWhiteSpace(document.Subject) && !DocRetrievalConstants.IsValidSubject(document.Subject))
+        if (!string.IsNullOrWhiteSpace(document.Subject) && !DocLibraryConstants.IsValidSubject(document.Subject))
             errors.Add("Subject only supports: English");
 
-        if (!string.IsNullOrWhiteSpace(document.Grade) && !DocRetrievalConstants.IsValidGrade(document.Grade))
-            errors.Add($"Invalid grade value, valid values: {string.Join(", ", DocRetrievalConstants.ValidGrades)}");
+        if (!string.IsNullOrWhiteSpace(document.Grade) && !DocLibraryConstants.IsValidGrade(document.Grade))
+            errors.Add($"Invalid grade value, valid values: {string.Join(", ", DocLibraryConstants.ValidGrades)}");
 
         if (string.IsNullOrWhiteSpace(document.FileHash))
             errors.Add("File hash cannot be empty");
 
         if (errors.Count > 0)
-            throw new DocRetrievalValidationException(string.Join("; ", errors));
+            throw new DocLibraryValidationException(string.Join("; ", errors));
     }
 
     public async Task UpdateDocumentProfileAsync(Guid documentId, string profileJson, string? subject = null, string? grade = null, string? year = null)
@@ -473,19 +473,19 @@ public class DocumentDomainService : IDocumentDomainService
     {
         const int MaxCorrections = 20;
         if (corrections.Count > MaxCorrections)
-            throw new DocRetrievalValidationException($"Too many corrections: {corrections.Count}, max is {MaxCorrections}");
+            throw new DocLibraryValidationException($"Too many corrections: {corrections.Count}, max is {MaxCorrections}");
 
         if (corrections.Count == 0)
-            throw new DocRetrievalValidationException("Corrections list cannot be empty");
+            throw new DocLibraryValidationException("Corrections list cannot be empty");
 
         var document = await _documentRepository.GetByIdAsync(documentId)
             ?? throw new KeyNotFoundException($"Document not found: {documentId}");
 
         if (document.Status != DocumentStatus.Ready)
-            throw new DocRetrievalValidationException("Document not ready, refinement not allowed");
+            throw new DocLibraryValidationException("Document not ready, refinement not allowed");
 
         if (_ossService == null || _llmSegmentation == null)
-            throw new DocRetrievalValidationException("LLM segmentation service not configured");
+            throw new DocLibraryValidationException("LLM segmentation service not configured");
 
         // 1. Get current segments for backup
         var currentSegments = await _segmentRepository.GetByDocumentIdAsync(documentId);
