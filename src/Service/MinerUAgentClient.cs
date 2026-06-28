@@ -70,7 +70,7 @@ public class MinerUAgentClient
         if (!response.IsSuccessStatusCode)
         {
             var errorBody = await response.Content.ReadAsStringAsync(ct);
-            _logger.LogError("MinerU submit failed: HTTP {StatusCode} - {Body}", (int)response.StatusCode, errorBody);
+            _logger.LogWarning("MinerU submit failed: HTTP {StatusCode} - {Body}", (int)response.StatusCode, errorBody);
             throw new InvalidOperationException($"MinerU submit failed (HTTP {(int)response.StatusCode}): {errorBody}");
         }
 

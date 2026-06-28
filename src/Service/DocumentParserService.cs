@@ -708,8 +708,8 @@ public partial class DocumentParserService : IDocumentParserService
             }).ToList();
         }
 
-        _logger.LogError(
-            "LLM 分段失败且策略 {Strategy} 不支持规则回退，将触发任务级失败",
+        _logger.LogWarning(
+            "LLM segmentation failed and strategy {Strategy} does not support rule-based fallback, will trigger job-level failure",
             strategy);
         return new List<SegmentWithOffset>();
     }
@@ -803,7 +803,7 @@ public partial class DocumentParserService : IDocumentParserService
                 else
                 {
                     _logger.LogWarning(
-                        "LLM 返回空 segments，回退到规则切割：ChunkOffset={GlobalStartOffset}",
+                        "LLM returned empty segments, falling back to rule-based splitting: ChunkOffset={GlobalStartOffset}",
                         chunk.GlobalStartOffset);
                     segments = FallbackSegment(chunk.Text, profile);
                     llmFailed = true;
@@ -812,7 +812,7 @@ public partial class DocumentParserService : IDocumentParserService
             catch (Exception ex)
             {
                 _logger.LogWarning(ex,
-                    "LLM 分段失败，回退到规则切割：ChunkOffset={GlobalStartOffset}",
+                    "LLM segmentation failed, falling back to rule-based splitting: ChunkOffset={GlobalStartOffset}",
                     chunk.GlobalStartOffset);
                 segments = FallbackSegment(chunk.Text, profile);
                 llmFailed = true;

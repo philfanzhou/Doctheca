@@ -273,7 +273,7 @@ public class OpenSearchIndexService : ISearchIndexService
     {
         var indexName = _options.IndexName;
 
-        var searchBody = BuildSearchBody(query, phrase, filter, pageSize, pageToken);
+        var searchBody = BuildSearchBody(query, phrase, filter, pageSize, pageToken, _logger);
         var json = JsonSerializer.Serialize(searchBody);
         var response = await _client.SearchAsync<BytesResponse>(indexName, json);
 
@@ -290,7 +290,7 @@ public class OpenSearchIndexService : ISearchIndexService
     /// Builds the OpenSearch search request body (pure logic, testable).
     /// </summary>
     internal static Dictionary<string, object> BuildSearchBody(
-        string query, bool phrase, SearchFilterModel? filter, int pageSize, string? pageToken)
+        string query, bool phrase, SearchFilterModel? filter, int pageSize, string? pageToken, ILogger? logger = null)
     {
         // Build the main query
         // Phrase query uses text.exact field (english_phrase analyzer, lowercase only without stemming, ensures phrase integrity)
@@ -336,8 +336,10 @@ public class OpenSearchIndexService : ISearchIndexService
                 var decoded = Encoding.UTF8.GetString(Convert.FromBase64String(pageToken));
                 searchAfter = JsonSerializer.Deserialize<List<object>>(decoded);
             }
-            catch
+            catch (Exception ex)
             {
+                // pageToken is opaque client input; invalid tokens are expected occasionally
+                logger?.LogDebug(ex, "Failed to decode page token, starting from first page");
                 searchAfter = null;
             }
         }
