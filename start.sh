@@ -36,6 +36,8 @@ LLM_MAX_TOKENS="4K"
 
 MINERU_API_TOKEN=""
 
+LOKI_URI="http://ruoyu-loki:3100"
+
 docker network inspect "$NETWORK_NAME" >/dev/null 2>&1 || docker network create "$NETWORK_NAME"
 if [ -n "$(docker ps -q --filter "name=^/${CONTAINER_NAME}$")" ]; then
     echo "Container is already running, stopping it..."
@@ -69,6 +71,7 @@ docker run -d \
   -e LlmSegmentation__ContextLength="${LLM_CONTEXT_LENGTH:-128K}" \
   -e LlmSegmentation__MaxTokens="${LLM_MAX_TOKENS:-4096}" \
   -e MinerU__ApiToken="${MINERU_API_TOKEN}" \
+  -e LOKI_URI="${LOKI_URI}" \
   -e Logging__LogLevel__Microsoft_EntityFrameworkCore_Database_Command="Warning" \
   "$IMAGE_NAME"
 

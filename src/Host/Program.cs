@@ -8,10 +8,25 @@ using Ruoyu.Study.DocLibrary.Domain.Models;
 using Ruoyu.Study.DocLibrary.Domain.Repositories;
 using Ruoyu.Study.DocLibrary.Domain.Services;
 using Ruoyu.Study.DocLibrary.Service;
+using Ruoyu.Study.DocLibrary.Host;
 using QuantumZhou.Identity.Client;
 using IHttpClientFactory = System.Net.Http.IHttpClientFactory;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// ========== Serilog (Console + Grafana Loki) ==========
+// LOKI_URI environment variable injects Loki address (overrides appsettings.json fallback).
+// Loki Sink throws ArgumentNullException when uri is null; fallback uri in config ensures startup.
+// Loki unreachable: Sink retries asynchronously, does not affect service.
+var lokiUri = Environment.GetEnvironmentVariable("LOKI_URI");
+if (!string.IsNullOrWhiteSpace(lokiUri))
+{
+    builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
+    {
+        ["Serilog:WriteTo:1:Args:uri"] = lokiUri
+    });
+}
+builder.Host.UseAgentSerilog("Ruoyu.Study.DocLibrary");
 
 var grpcPort = builder.Configuration.GetValue<int?>("Endpoints:Grpc") ?? 5011;
 var httpPort = builder.Configuration.GetValue<int?>("Endpoints:Http") ?? 5012;
@@ -31,6 +46,7 @@ builder.WebHost.ConfigureKestrel(options =>
 
 builder.Services.AddGrpc(options =>
 {
+    options.Interceptors.Add<CorrelationIdInterceptor>();
     options.MaxReceiveMessageSize = 200 * 1024 * 1024;
     options.MaxSendMessageSize = 200 * 1024 * 1024;
 });
@@ -152,7 +168,7 @@ app.Logger.LogInformation(
     llmModel ?? "(not configured)",
     llmContextLength ?? "(not configured)",
     llmMaxTokens ?? "4K (default)",
-    string.IsNullOrEmpty(llmApiKey) ? "(empty - service disabled)" : "(configured)");
+    string.IsNullOrEmpty(llmApiKey) ? "(empty - service disabled)" : SensitiveDataMasker.MaskApiKey(llmApiKey));
 
 // Initialize LLM segmentation at startup (verify config, compute ChunkSize)
 if (llmEnabled)
@@ -197,6 +213,7 @@ using (var initScope = app.Services.CreateScope())
 
 app.MapGrpcService<DocumentLibraryServiceImpl>();
 
+app.UseMiddleware<CorrelationIdMiddleware>();
 app.UseIdentityClient();
 
 app.UseDefaultFiles();
