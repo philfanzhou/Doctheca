@@ -249,7 +249,7 @@ public class DocumentDomainService : IDocumentDomainService
         catch (Exception ex)
         {
             // 进度更新失败不能影响任务
-            _logger.LogDebug(ex, "更新任务进度失败：{JobId}", jobId);
+            _logger.LogDebug(ex, "Failed to update job progress: {JobId}", jobId);
         }
     }
 
@@ -301,7 +301,7 @@ public class DocumentDomainService : IDocumentDomainService
             await _unitOfWork.SaveChangesAsync();
         }
 
-        _logger.LogError("Document ingestion failed: {DocumentId}, reason: {Error}", jobId, errorMessage);
+        _logger.LogWarning("Document ingestion failed: {DocumentId}, reason: {Error}", jobId, errorMessage);
     }
 
     /// <summary>

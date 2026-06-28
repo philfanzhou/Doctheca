@@ -26,6 +26,8 @@ public class DocumentLibraryServiceImpl : DocumentLibraryService.DocumentLibrary
     // ExactSearch: name constrained by proto definition, no Async suffix per gRPC convention
     public override async Task<SearchResponse> ExactSearch(ExactSearchRequest request, ServerCallContext context)
     {
+        _logger.LogDebug("ExactSearch: Query={Query}, PageSize={PageSize}", request.Query, request.PageSize);
+
         ValidateSearchRequest(request.Query, request.PageSize);
 
         var filter = MapFilter(request.Filter);
@@ -44,6 +46,8 @@ public class DocumentLibraryServiceImpl : DocumentLibraryService.DocumentLibrary
             NextPageToken = nextToken ?? string.Empty
         };
         response.Results.AddRange(results.Select(MapSearchResult));
+
+        _logger.LogDebug("ExactSearch completed: {TotalCount} results", totalCount);
 
         return response;
     }

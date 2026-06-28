@@ -881,7 +881,7 @@ public static class DocumentAdminEndpoints
         }
         catch (InvalidOperationException ex)
         {
-            logger.LogWarning(ex, "MinerU parse submit failed");
+            logger.LogWarning(ex, "MinerU parse submit failed: {Message}", ex.Message);
             return Results.Json(new { success = false, message = ex.Message }, statusCode: StatusCodes.Status502BadGateway);
         }
         catch (Exception ex)

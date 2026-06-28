@@ -211,10 +211,10 @@ using (var initScope = app.Services.CreateScope())
     }
 }
 
-app.MapGrpcService<DocumentLibraryServiceImpl>();
-
 app.UseMiddleware<CorrelationIdMiddleware>();
 app.UseIdentityClient();
+
+app.MapGrpcService<DocumentLibraryServiceImpl>();
 
 app.UseDefaultFiles();
 app.UseStaticFiles();
