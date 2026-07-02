@@ -507,8 +507,12 @@ GET /admin/document-files/{id}/export/html
   ├─ 3. 获取 markdown_content
   ├─ 4. 获取关联图片列表
   ├─ 5. 替换路径（MD: S3→相对, HTML: S3→base64）
-  └─ 6. 返回 ZIP/HTML
-```
+  │    支持的替换格式：
+  │      - ![alt](S3Path)          → ![alt](images/name)
+  │      - <img src="S3Path">       → <img src="images/name">
+  │      - <img src='S3Path'>       → <img src='images/name'>
+  ├─ 6. 下载图片到 ZIP images/ 目录（MD 导出）
+  └─ 7. 返回 ZIP/HTML
 
 ### 按解析 ID 导出
 

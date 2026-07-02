@@ -40,6 +40,40 @@ public class DocumentExportLogicTests
     }
 
     [Fact]
+    public void MarkdownPathReplacement_ReplacesSrcAttribute_SingleQuotes()
+    {
+        // Arrange
+        var markdown = "<img src='documents/mineru/task-123/abc.jpg'/>";
+        var imagePath = "documents/mineru/task-123/abc.jpg";
+        var imageName = "abc.jpg";
+
+        // Act
+        var result = markdown.Replace($"src='{imagePath}'", $"src='images/{imageName}'");
+
+        // Assert
+        result.Should().Be("<img src='images/abc.jpg'/>");
+    }
+
+    [Fact]
+    public void MarkdownPathReplacement_ReplacesMixedQuoteFormats()
+    {
+        // Arrange
+        var markdown = "![i](documents/mineru/t/a.jpg)\n<img src=\"documents/mineru/t/a.jpg\"/>\n<img src='documents/mineru/t/a.jpg'/>";
+        var imagePath = "documents/mineru/t/a.jpg";
+        var imageName = "a.jpg";
+
+        // Act
+        var result = markdown
+            .Replace($"({imagePath})", $"(images/{imageName})")
+            .Replace($"src=\"{imagePath}\"", $"src=\"images/{imageName}\"")
+            .Replace($"src='{imagePath}'", $"src='images/{imageName}'");
+
+        // Assert
+        result.Should().Be("![i](images/a.jpg)\n<img src=\"images/a.jpg\"/>\n<img src='images/a.jpg'/>");
+        result.Should().NotContain("documents/");
+    }
+
+    [Fact]
     public void MarkdownPathReplacement_HandlesMultipleImages()
     {
         // Arrange

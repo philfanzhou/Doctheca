@@ -424,8 +424,12 @@ public static class DocumentAdminEndpoints
         // Replace S3 paths in markdown with relative image paths
         foreach (var img in images)
         {
+            // Markdown: ![alt](S3Path) → ![alt](images/name)
             markdownContent = markdownContent.Replace($"({img.ImagePath})", $"(images/{img.ImageName})");
+            // HTML: <img src="S3Path"> → <img src="images/name">
             markdownContent = markdownContent.Replace($"src=\"{img.ImagePath}\"", $"src=\"images/{img.ImageName}\"");
+            // HTML: <img src='S3Path'> → <img src='images/name'>
+            markdownContent = markdownContent.Replace($"src='{img.ImagePath}'", $"src='images/{img.ImageName}'");
         }
 
         // Build ZIP in memory (no 'using' — Results.Stream reads lazily after method returns)
@@ -495,9 +499,11 @@ public static class DocumentAdminEndpoints
 
                 markdownContent = markdownContent.Replace($"({img.ImagePath})", $"({dataUri})");
                 markdownContent = markdownContent.Replace($"src=\"{img.ImagePath}\"", $"src=\"{dataUri}\"");
+                markdownContent = markdownContent.Replace($"src='{img.ImagePath}'", $"src='{dataUri}'");
                 // Also replace relative paths if any remain
                 markdownContent = markdownContent.Replace($"(images/{img.ImageName})", $"({dataUri})");
                 markdownContent = markdownContent.Replace($"src=\"images/{img.ImageName}\"", $"src=\"{dataUri}\"");
+                markdownContent = markdownContent.Replace($"src='images/{img.ImageName}'", $"src='{dataUri}'");
             }
             catch (Exception ex)
             {
@@ -636,8 +642,12 @@ public static class DocumentAdminEndpoints
         // Replace S3 paths in markdown with relative image paths
         foreach (var img in images)
         {
+            // Markdown: ![alt](S3Path) → ![alt](images/name)
             markdownContent = markdownContent.Replace($"({img.ImagePath})", $"(images/{img.ImageName})");
+            // HTML: <img src="S3Path"> → <img src="images/name">
             markdownContent = markdownContent.Replace($"src=\"{img.ImagePath}\"", $"src=\"images/{img.ImageName}\"");
+            // HTML: <img src='S3Path'> → <img src='images/name'>
+            markdownContent = markdownContent.Replace($"src='{img.ImagePath}'", $"src='images/{img.ImageName}'");
         }
 
         // Build ZIP in memory (no 'using' — Results.Stream reads lazily after method returns)

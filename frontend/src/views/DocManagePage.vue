@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { marked } from 'marked'
-import { createDocApiClient, type DocumentFile, type DocumentFileDetail } from '../services/docApi'
+import { createDocApiClient, type DocumentFile } from '../services/docApi'
 import { formatTime, getFileStatusLabel, getFileStatusClass } from '../utils/format'
 
 const client = createDocApiClient()
@@ -11,7 +10,6 @@ const fileTotal = ref(0)
 const filePage = ref(1)
 const filePageSize = ref(20)
 const fileNameSearch = ref('')
-const selectedFileDetail = ref<DocumentFileDetail | null>(null)
 const fileUploadInput = ref<HTMLInputElement | null>(null)
 const fileUploading = ref(false)
 const fileUploadProgress = ref(0)
@@ -19,10 +17,6 @@ const parseFileParsing = ref(false)
 const pollTimer = ref<number | null>(null)
 
 const fileTotalPages = computed(() => Math.ceil(fileTotal.value / filePageSize.value))
-
-function renderMarkdown(content: string): string {
-  return marked.parse(content, { async: false }) as string
-}
 
 async function loadFileList() {
   try {
@@ -91,21 +85,10 @@ async function handleParseFile(id: string) {
   }
 }
 
-async function handleViewFile(id: string) {
-  try {
-    const response = await client.getDocumentFile(id)
-    selectedFileDetail.value = response.data as DocumentFileDetail
-  } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : 'Failed to load file'
-    alert(msg)
-  }
-}
-
 async function handleDeleteFile(id: string) {
   if (!confirm('确定删除此文件？')) return
   try {
     await client.deleteDocumentFile(id)
-    if (selectedFileDetail.value?.id === id) selectedFileDetail.value = null
     if (fileList.value.length <= 1 && filePage.value > 1) {
       filePage.value--
     }
@@ -148,7 +131,7 @@ onUnmounted(() => {
 <template>
   <div class="page-header">
     <h1 class="page-title">文档管理</h1>
-    <p class="page-subtitle">管理文档的上传、解析和预览</p>
+    <p class="page-subtitle">管理文档的上传和解析</p>
   </div>
 
   <div class="card">
@@ -188,9 +171,7 @@ onUnmounted(() => {
         </thead>
         <tbody>
           <tr v-for="f in fileList" :key="f.id">
-            <td>
-              <span style="cursor: pointer; color: var(--primary)" @click="handleViewFile(f.id)">{{ f.fileName }}</span>
-            </td>
+            <td>{{ f.fileName }}</td>
             <td>{{ f.contentType }}</td>
             <td>{{ formatTime(f.createdAt) }}</td>
             <td>
@@ -210,7 +191,6 @@ onUnmounted(() => {
                   {{ getFileStatusLabel(f.parseStatus) }}
                 </span>
                 <button v-else-if="f.parseStatus === 'parsed'" class="btn btn-primary btn-small" @click="handleParseFile(f.id)" :disabled="parseFileParsing">重新解析</button>
-                <button class="btn btn-secondary btn-small" @click="handleViewFile(f.id)">查看</button>
                 <button class="btn btn-secondary btn-small" style="color: var(--danger)" @click="handleDeleteFile(f.id)">删除</button>
               </div>
             </td>
@@ -229,28 +209,6 @@ onUnmounted(() => {
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6" /></svg>
         </button>
       </div>
-    </div>
-  </div>
-
-  <div v-if="selectedFileDetail" class="card" style="margin-top: 16px">
-    <div class="card-header">
-      <span>{{ selectedFileDetail.fileName }} — Markdown 预览</span>
-      <button class="btn btn-secondary btn-small" @click="selectedFileDetail = null">关闭</button>
-    </div>
-    <div class="card-body">
-      <div v-if="selectedFileDetail.parse?.errorMessage" style="margin-bottom: 12px; padding: 12px; background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; color: var(--danger); font-size: 13px">
-        {{ selectedFileDetail.parse.errorMessage }}
-      </div>
-      <div v-if="selectedFileDetail.parse?.markdownContent" class="markdown-preview" v-html="renderMarkdown(selectedFileDetail.parse.markdownContent)"></div>
-      <div v-else-if="selectedFileDetail.parse?.images && selectedFileDetail.parse.images.length > 0">
-        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px">
-          <div v-for="img in selectedFileDetail.parse.images" :key="img.id" style="border: 1px solid var(--border-light); border-radius: 8px; overflow: hidden">
-            <img :src="img.imageUrl" :alt="img.imageName" style="width: 100%; display: block" />
-            <div style="padding: 6px 8px; font-size: 11px; color: var(--text-muted)">{{ img.imageName }}</div>
-          </div>
-        </div>
-      </div>
-      <div v-else style="text-align: center; padding: 40px; color: var(--text-muted)">暂无 Markdown 内容</div>
     </div>
   </div>
 </template>
