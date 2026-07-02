@@ -35,4 +35,4 @@
 | NFR-02 | 文档解析异步执行，不阻塞上传响应 |
 | NFR-03 | OpenSearch 不可用时降级，不中断主流程 |
 | NFR-04 | 支持 PostgreSQL 和 SQLite 双数据库 |
-| NFR-05 | 服务双端口：gRPC(5011) + HTTP(5012) |
+| NFR-05 | 服务单端口：HTTP(5012) |

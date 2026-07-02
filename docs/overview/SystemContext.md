@@ -11,14 +11,14 @@
 │  Admin UI    │     │  Third-party │
 │  (HTTP)      │     │  Clients    │
 └──────┬───────┘     └──────┬───────┘
-       │ HTTP               │ gRPC (5011)
-       │ (5012)             │
+       │ HTTP               │ HTTP
+       │ (5012)             │ (5012)
        ▼                    ▼
 ┌─────────────────────────────────────────┐
 │           DocLibrary                  │
 │                                         │
 │  ┌─────────────────────────────────┐    │       ┌──────────────────┐
-│  │  gRPC: ExactSearch              │    │──────►│  OpenSearch      │
+│  │  HTTP: ExactSearch              │    │──────►│  OpenSearch      │
 │  │  HTTP: UploadDocument           │    │       │  (搜索索引)      │
 │  │  HTTP: ListDocuments            │    │       └──────────────────┘
 │  │  HTTP: DeleteDocument           │    │
@@ -46,7 +46,7 @@
 | 调用方 | 协议 | 用途 |
 |--------|------|------|
 | Admin UI 前端 | HTTP (5012) | 文档上传、列表、删除、元数据更新 |
-| 其他微服务 | gRPC (5011) | 精确搜索 |
+| 其他微服务 / HTTP 客户端 | HTTP (5012) | 精确搜索 |
 
 ## 下游依赖
 
@@ -61,8 +61,7 @@
 
 | 端口 | 协议 | 用途 |
 |------|------|------|
-| 5011 | gRPC (HTTP/2) | DocumentLibrary gRPC 服务 |
-| 5012 | HTTP (HTTP/1.1) | Admin API + 静态文件 + Health Check |
+| 5012 | HTTP (HTTP/1.1) | Admin API + 搜索 API + 静态文件 + Health Check |
 
 ## 服务边界
 

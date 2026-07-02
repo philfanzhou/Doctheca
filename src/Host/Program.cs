@@ -28,27 +28,11 @@ if (!string.IsNullOrWhiteSpace(lokiUri))
 }
 builder.Host.UseAgentSerilog("Ruoyu.Study.DocLibrary");
 
-var grpcPort = builder.Configuration.GetValue<int?>("Endpoints:Grpc") ?? 5011;
 var httpPort = builder.Configuration.GetValue<int?>("Endpoints:Http") ?? 5012;
 
 builder.WebHost.ConfigureKestrel(options =>
 {
-    options.ListenAnyIP(grpcPort, listenOptions =>
-    {
-        listenOptions.Protocols = Microsoft.AspNetCore.Server.Kestrel.Core.HttpProtocols.Http2;
-    });
-
-    options.ListenAnyIP(httpPort, listenOptions =>
-    {
-        listenOptions.Protocols = Microsoft.AspNetCore.Server.Kestrel.Core.HttpProtocols.Http1;
-    });
-});
-
-builder.Services.AddGrpc(options =>
-{
-    options.Interceptors.Add<CorrelationIdInterceptor>();
-    options.MaxReceiveMessageSize = 200 * 1024 * 1024;
-    options.MaxSendMessageSize = 200 * 1024 * 1024;
+    options.ListenAnyIP(httpPort);
 });
 
 builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(options =>
@@ -137,7 +121,7 @@ builder.Services.AddIdentityClient(builder.Configuration);
 var app = builder.Build();
 
 app.Logger.LogInformation("DocLibrary Service starting");
-app.Logger.LogInformation("Endpoints: gRPC={GrpcPort}, HTTP={HttpPort}", grpcPort, httpPort);
+app.Logger.LogInformation("Endpoints: HTTP={HttpPort}", httpPort);
 if (isPostgreSql && !string.IsNullOrEmpty(connectionString))
 {
     var csb = new DbConnectionStringBuilder { ConnectionString = connectionString };
@@ -213,8 +197,6 @@ using (var initScope = app.Services.CreateScope())
 
 app.UseMiddleware<CorrelationIdMiddleware>();
 app.UseIdentityClient();
-
-app.MapGrpcService<DocumentLibraryServiceImpl>();
 
 app.UseDefaultFiles();
 app.UseStaticFiles();

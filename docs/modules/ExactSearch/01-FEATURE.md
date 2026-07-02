@@ -2,18 +2,18 @@
 
 ## 功能名称和一句话概括
 
-精确关键词检索 — Student 服务通过 gRPC 调用精确检索接口，根据关键词在文档库中搜索匹配的文本片段，获取文档名、页码、上下文文本和匹配位置。
+精确关键词检索 — 通过 HTTP API 调用精确检索接口，根据关键词在文档库中搜索匹配的文本片段，获取文档名、页码、上下文文本和匹配位置。
 
 ## 核心用户故事
 
-**Student 服务精确检索文档片段**：作为 Student 服务，我希望通过 gRPC 调用精确检索接口，根据关键词在文档库中搜索匹配的文本片段，系统返回文档名、页码、上下文文本、匹配类型和偏移位置，让我能快速定位到用户所需的文档内容。
+**Student 服务精确检索文档片段**：作为 Student 服务，我希望通过 HTTP API 调用精确检索接口，根据关键词在文档库中搜索匹配的文本片段，系统返回文档名、页码、上下文文本、匹配类型和偏移位置，让我能快速定位到用户所需的文档内容。
 
 ## 关键验收条件摘要
 
-- AC-1：查询词为空时返回 `INVALID_ARGUMENT (DOCLIBRARY_QUERY_REQUIRED)`。
-- AC-2：查询词超过 200 字符时返回 `INVALID_ARGUMENT (DOCLIBRARY_QUERY_TOO_LONG)`。
-- AC-3：`page_size` 超过 100 时返回 `INVALID_ARGUMENT (DOCLIBRARY_PAGE_SIZE_INVALID)`。
-- AC-4：`page_size` 默认 50，最小 1，最大 100。
+- AC-1：查询词为空时返回 `400 Bad Request (DOCLIBRARY_QUERY_REQUIRED)`。
+- AC-2：查询词超过 200 字符时返回 `400 Bad Request (DOCLIBRARY_QUERY_TOO_LONG)`。
+- AC-3：`page_size` 超过 100 时静默截断为 100（不报错）。
+- AC-4：`page_size` 默认 20，最小 1，最大 100。
 - AC-5：优先使用 OpenSearch BM25 搜索（`ISearchIndexService.ExactSearchAsync`）。
 - AC-6：OpenSearch 不可用或异常时，回退数据库搜索并记录 LogWarning。
 - AC-7：数据库搜索在 segments 和 questions 两表中使用 `IndexOf(query, OrdinalIgnoreCase)` 匹配。
@@ -36,14 +36,12 @@
 
 | 组件 | 文件路径 |
 |------|---------|
-| DocumentLibraryServiceImpl | `src/Service/DocumentLibraryServiceImpl.cs` |
+| DocumentAdminEndpoints | `src/Service/DocumentAdminEndpoints.cs` |
 | SearchDomainService | `src/Domain/Services/SearchDomainService.cs` |
 | ISearchIndexService | `src/Domain/Repositories/ISearchIndexService.cs` |
 | OpenSearchIndexService | `src/Service/OpenSearchIndexService.cs` |
 | SearchResultModel | `src/Domain/Models/SearchConfig.cs` |
 | SearchFilterModel | `src/Domain/Models/SearchConfig.cs` |
-| gRPC 契约 | `src/Contract/Protos/doclibrary.proto` |
-| 公共消息 | `src/Contract/Protos/doclibrary.common.proto` |
 
 ## 文档索引
 

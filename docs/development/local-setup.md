@@ -58,8 +58,7 @@ dotnet run --project src/Host
 
 | 协议 | 默认端口 | 配置键 | 说明 |
 |------|----------|--------|------|
-| gRPC | 5011 | `Endpoints:Grpc` | 仅 HTTP/2 |
-| HTTP | 5012 | `Endpoints:Http` | 仅 HTTP/1（管理 API + 健康检查） |
+| HTTP | 5012 | `Endpoints:Http` | 管理 API + 搜索 API + 健康检查 |
 
 端口可在 `appsettings.json` 的 `Endpoints` 节中覆盖。
 

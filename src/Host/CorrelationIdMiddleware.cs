@@ -5,7 +5,6 @@ namespace Ruoyu.Study.DocLibrary.Host;
 /// <summary>
 /// HTTP CorrelationId middleware: reads or creates a CorrelationId from the x-correlation-id header,
 /// injects it into the log context via ILogger.BeginScope, and writes it back to the response header.
-/// Shares the same header name with the gRPC CorrelationIdInterceptor.
 /// </summary>
 public class CorrelationIdMiddleware
 {
@@ -24,14 +23,6 @@ public class CorrelationIdMiddleware
 
     public async Task InvokeAsync(HttpContext context)
     {
-        // gRPC requests are handled by CorrelationIdInterceptor, skip to avoid double generation
-        var contentType = context.Request.ContentType;
-        if (contentType != null && contentType.StartsWith("application/grpc", StringComparison.OrdinalIgnoreCase))
-        {
-            await _next(context);
-            return;
-        }
-
         var correlationId = GetOrCreateCorrelationId(context);
         context.Items[HttpContextItemsKey] = correlationId;
         context.Response.Headers[CorrelationIdHeader] = correlationId;

@@ -6,7 +6,6 @@ IMAGE_TAG="20260619"
 IMAGE_NAME="ruoyu.doclibrary:${IMAGE_TAG}"
 CONTAINER_NAME="ruoyu-doclibrary"
 NETWORK_NAME="ruoyu-net"
-GRPC_PORT="5011"
 HTTP_PORT="5012"
 
 IDENTITY_GRPC_ENDPOINT="http://ruoyu-identity:5001"
@@ -54,7 +53,6 @@ docker run -d \
   --network "$NETWORK_NAME" \
   -p "${HTTP_PORT}:${HTTP_PORT}" \
   -e TZ=Asia/Shanghai \
-  -e Endpoints__Grpc="${GRPC_PORT}" \
   -e Endpoints__Http="${HTTP_PORT}" \
   -e ConnectionStrings__Default="${CONNECTION_STRING}" \
   -e Oss__Endpoint="${OSS_ENDPOINT}" \

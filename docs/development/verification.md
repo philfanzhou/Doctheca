@@ -153,13 +153,13 @@ curl -X DELETE http://localhost:5012/admin/documents/by-title/Test%20Document
 Requires OpenSearch (or database fallback) to be available:
 
 ```bash
-curl "http://localhost:5012/admin/documents/search-test?query=algebra&pageSize=5"
+curl "http://localhost:5012/admin/documents/search?query=algebra&pageSize=5"
 ```
 
 With filters:
 
 ```bash
-curl "http://localhost:5012/admin/documents/search-test?query=algebra&subject=English&grade=G10&pageSize=5"
+curl "http://localhost:5012/admin/documents/search?query=algebra&subject=English&grade=G10&pageSize=5"
 ```
 
 Query parameters: `query` (required), `phrase` (boolean, default false), `pageSize` (1-100, default 20), `pageToken` (optional cursor), `subject`, `grade`, `year`, `documentTitle` (optional filters).

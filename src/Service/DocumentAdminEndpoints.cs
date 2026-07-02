@@ -48,7 +48,7 @@ public static class DocumentAdminEndpoints
         group.MapDelete("/{id:guid}", DeleteDocumentById);
         group.MapDelete("/by-title/{title}", DeleteDocument);
         group.MapPut("/{title}/metadata", UpdateMetadata);
-        group.MapGet("/search-test", SearchTest);
+        group.MapGet("/search", Search);
         group.MapPost("/{id:guid}/retry", RetryIngestion);
         group.MapPost("/{id:guid}/cancel", CancelIngestion);
         group.MapGet("/{id:guid}/segments", GetDocumentSegments);
@@ -444,7 +444,7 @@ public static class DocumentAdminEndpoints
         }
     }
 
-    private static async Task<IResult> SearchTest(
+    private static async Task<IResult> Search(
         ISearchDomainService searchService,
         [FromServices] ILoggerFactory loggerFactory,
         [FromQuery] string query,
@@ -459,7 +459,10 @@ public static class DocumentAdminEndpoints
         var logger = loggerFactory.CreateLogger("DocumentAdminEndpoints");
 
         if (string.IsNullOrWhiteSpace(query))
-            return Results.BadRequest(new { success = false, message = "Query cannot be empty" });
+            return Results.BadRequest(new { success = false, message = "Query cannot be empty", errorCode = "DOCLIBRARY_QUERY_REQUIRED" });
+
+        if (query.Length > 200)
+            return Results.BadRequest(new { success = false, message = "Query exceeds 200 characters", errorCode = "DOCLIBRARY_QUERY_TOO_LONG" });
 
         pageSize = Math.Min(Math.Max(pageSize, 1), 100);
 

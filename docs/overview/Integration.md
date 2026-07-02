@@ -4,20 +4,11 @@
 
 | 目标 | 协议 | 方向 | 用途 | 降级策略 |
 |------|------|------|------|---------|
-| **Admin UI** | HTTP | 入 | 文档管理 API | 无降级（用户直接操作） |
-| **其他服务** | gRPC | 入 | ExactSearch | 无降级（同步返回结果） |
-| **PostgreSQL** | TCP | 出 | 文档 CRUD + 倒排索引搜索 | 无可降级，返回 gRPC 错误 |
+| **Admin UI / HTTP 客户端** | HTTP | 入 | 文档管理 API + 搜索 | 无降级（用户直接操作） |
+| **PostgreSQL** | TCP | 出 | 文档 CRUD + 倒排索引搜索 | 无可降级，返回 500 错误 |
 | **MinIO/SeaweedFS** | S3 | 出 | 文件上传下载 | 上游返回错误，上传/解析失败 |
 | **OpenSearch** | HTTP | 出 | 全文搜索索引写/查 | 索引失败不阻塞主流程，搜索回退到数据库 |
 | **QuantumZhou.Identity** | gRPC | 出 | JWT 签发（GetToken） | 登录/刷新失败返回 401/503 |
-
-## gRPC 接口（入方向）
-
-定义在 [doclibrary.proto](../../src/Contract/Protos/doclibrary.proto)：
-
-| RPC | 请求 | 响应 | 说明 |
-|-----|------|------|------|
-| `ExactSearch` | `ExactSearchRequest` | `SearchResponse` | 精确关键词搜索 |
 
 ## HTTP API（入方向）
 
@@ -50,7 +41,7 @@
 | DELETE | `/admin/documents/{id}` | 按 ID 删除文档 |
 | DELETE | `/admin/documents/by-title/{title}` | 按标题删除文档 |
 | PUT | `/admin/documents/{title}/metadata` | 更新文档元数据 |
-| GET | `/admin/documents/search-test` | 搜索测试（支持 subject/grade/year/documentTitle 过滤） |
+| GET | `/admin/documents/search` | 精确关键词搜索（支持 subject/grade/year/documentTitle 过滤） |
 | GET | `/health` | 健康检查 |
 
 ## 失败语义

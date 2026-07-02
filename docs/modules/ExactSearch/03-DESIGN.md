@@ -14,13 +14,12 @@ src/services/ruoyu.doclibrary/
 │   │       ├── ISearchIndexService.cs             # 搜索索引接口 (ExactSearchAsync)
 │   │       └── IRepositories.cs                   # 各仓储接口定义 (IDocumentRepository, IDocumentSegmentRepository, IQuestionSegmentRepository, IDocumentPageRepository 等)
 │   ├── Service/
-│   │   ├── DocumentLibraryServiceImpl.cs        # gRPC 实现 (ExactSearch)
+│   │   ├── DocumentAdminEndpoints.cs              # HTTP 端点实现 (Search)
 │   │   └── OpenSearchIndexService.cs              # OpenSearch 索引服务实现
 │   ├── Database/
 │   │   └── Repositories/                          # 仓储实现
-│   └── Contract/Protos/
-│       ├── doclibrary.proto                     # gRPC 服务定义
-│       └── doclibrary.common.proto              # 公共消息定义
+│   └── Middleware/
+│       └── CorrelationIdMiddleware.cs             # HTTP 相关 ID 中间件
 ├── test/
 │   └── Ruoyu.Study.DocLibrary.Tests/
 │       └── SearchDomainServiceTests.cs            # 单元测试
@@ -35,43 +34,39 @@ src/services/ruoyu.doclibrary/
 
 ## 关键接口签名和数据结构定义
 
-### gRPC 接口
+### HTTP 搜索端点
 
-```protobuf
-// src/Contract/Protos/doclibrary.proto
-rpc ExactSearch(ExactSearchRequest) returns (SearchResponse);
+```
+GET /admin/documents/search
+```
 
-// src/Contract/Protos/doclibrary.common.proto
-message ExactSearchRequest {
-  string query = 1;
-  bool phrase = 2;
-  SearchFilter filter = 3;
-  int32 page_size = 4;
-  string page_token = 5;
+| 参数 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `query` | string | (必填) | 搜索关键词 |
+| `phrase` | bool | `false` | 是否短语匹配 |
+| `pageSize` | int | `20` | 每页结果数（1-100，超过 100 静默截断） |
+| `pageToken` | string? | `null` | 游标分页 token |
+| `subject` | string? | `null` | 按学科筛选 |
+| `grade` | string? | `null` | 按年级筛选 |
+| `year` | string? | `null` | 按年份筛选 |
+| `documentTitle` | string? | `null` | 按文档标题筛选 |
+
+成功响应 (200 OK)：
+```json
+{
+  "success": true,
+  "results": [...],
+  "total_count": 42,
+  "next_page_token": "..."
 }
+```
 
-message SearchFilter {
-  string document_title = 1;
-  string subject = 2;
-  string grade = 3;
-  string year = 4;
-}
-
-message SearchResponse {
-  repeated SearchResult results = 1;
-  string next_page_token = 2;
-  int32 total_count = 3;
-}
-
-message SearchResult {
-  string document_name = 1;
-  int32 page_number = 2;
-  string associated_text = 3;
-  double score = 4;
-  string match_type = 5;
-  string segment_id = 6;
-  int32 start_offset = 7;
-  int32 end_offset = 8;
+校验失败响应 (400 Bad Request)：
+```json
+{
+  "success": false,
+  "message": "DOCLIBRARY_QUERY_REQUIRED: 查询词不能为空",
+  "errorCode": "DOCLIBRARY_QUERY_REQUIRED"
 }
 ```
 
@@ -119,13 +114,20 @@ public class SearchFilterModel
 }
 ```
 
-### gRPC 服务实现
+### HTTP 端点实现
 
 ```csharp
-// src/Service/DocumentLibraryServiceImpl.cs
-public DocumentLibraryServiceImpl(
+// src/Service/DocumentAdminEndpoints.cs
+private static async Task<IResult> Search(
     ISearchDomainService searchService,
-    ILogger<DocumentLibraryServiceImpl> logger)
+    [FromQuery] string query,
+    [FromQuery] bool phrase = false,
+    [FromQuery] int pageSize = 20,
+    [FromQuery] string? pageToken = null,
+    [FromQuery] string? subject = null,
+    [FromQuery] string? grade = null,
+    [FromQuery] string? year = null,
+    [FromQuery] string? documentTitle = null)
 ```
 
 ### 注入的外部依赖
@@ -149,42 +151,21 @@ public SearchDomainService(
 
 ## 数据流描述（步骤序列）
 
-### HTTP Admin 搜索测试端点
+### HTTP 搜索端点流程
 
-```
-GET /admin/documents/search-test?query=...&phrase=false&pageSize=20&subject=English&grade=G10&year=2024&documentTitle=...
-```
-
-```csharp
-// src/Service/DocumentAdminEndpoints.cs
-private static async Task<IResult> SearchTest(
-    ISearchDomainService searchService,
-    [FromQuery] string query,
-    [FromQuery] bool phrase = false,
-    [FromQuery] int pageSize = 20,
-    [FromQuery] string? pageToken = null,
-    [FromQuery] string? subject = null,
-    [FromQuery] string? grade = null,
-    [FromQuery] string? year = null,
-    [FromQuery] string? documentTitle = null)
-```
-
-- 当 `subject`、`grade`、`year`、`documentTitle` 任一非空时，构造 `SearchFilterModel` 并传入 `searchService.ExactSearchAsync`；否则 `filter` 为 `null`。
-- `pageSize` 修正为 `Math.Min(Math.Max(pageSize, 1), 100)`。
-- `query` 为空时返回 400 Bad Request。
+1. HTTP 层接收 `GET /admin/documents/search` 请求，`DocumentAdminEndpoints.Search` 处理。
+2. 参数校验：`query` 为空 → 返回 HTTP 400 `{ success: false, errorCode: "DOCLIBRARY_QUERY_REQUIRED" }`；`query` 长度 > 200 → 返回 HTTP 400 `{ success: false, errorCode: "DOCLIBRARY_QUERY_TOO_LONG" }`。
+3. 当 `subject`、`grade`、`year`、`documentTitle` 任一非空时，构造 `SearchFilterModel`；否则 `filter` 为 `null`。
+4. `pageSize` 修正：`pageSize = Math.Min(Math.Max(pageSize, 1), 100)`；`pageSize <= 0` 时使用默认值 20。
+5. 调用 `SearchDomainService.ExactSearchAsync(query, phrase, filter, pageSize, pageToken)`。
 
 ### ExactSearch 完整流程
 
-1. gRPC 层接收 `ExactSearchRequest`，调用 `ValidateSearchRequest` 校验参数。
-2. 参数校验：`query` 为空 → `INVALID_ARGUMENT (DOCLIBRARY_QUERY_REQUIRED)`；`query` 长度 > 200 → `INVALID_ARGUMENT (DOCLIBRARY_QUERY_TOO_LONG)`；`page_size` > 100 → `INVALID_ARGUMENT (DOCLIBRARY_PAGE_SIZE_INVALID)`。
-3. `MapFilter` 将 `SearchFilter` 中空字符串字段转为 `null`。
-4. `pageSize` 修正：`pageSize = request.PageSize > 0 ? Math.Min(request.PageSize, 100) : 50`。
-5. 调用 `SearchDomainService.ExactSearchAsync(query, phrase, filter, pageSize, pageToken)`。
-6. 领域服务检查 `_searchIndexService` 是否可用：
+1. 领域服务检查 `_searchIndexService` 是否可用：
    - **可用**：调用 `ISearchIndexService.ExactSearchAsync`，返回 OpenSearch BM25 结果。
    - **不可用或异常**：捕获异常，LogWarning 记录，回退 `DatabaseSearchAsync`。
-7. 返回 `(Results, TotalCount, NextToken)`。
-8. gRPC 层构建 `SearchResponse`：填充 `results`、`total_count`、`next_page_token`。
+2. 返回 `(Results, TotalCount, NextToken)`。
+3. HTTP 层构建 JSON 响应：填充 `results`、`total_count`、`next_page_token`。
 
 ### 数据库回退搜索流程 (DatabaseSearchAsync)
 
@@ -209,7 +190,7 @@ private static async Task<IResult> SearchTest(
 
 ## 错误处理策略
 
-- **参数校验**：在 gRPC 层前置校验，无效参数直接抛出 `RpcException(StatusCode.InvalidArgument)`。
+- **参数校验**：在 HTTP 端点层前置校验，无效参数直接返回 HTTP 400 Bad Request，响应体为 `{ success: false, message: "...", errorCode: "..." }`。
 - **OpenSearch 回退**：`SearchDomainService` 捕获 OpenSearch 异常，LogWarning 后回退数据库搜索。
 - **page_token 解码失败**：`DatabaseSearchAsync` 中 catch 解码异常，`skip` 默认为 0。
 - **空结果**：返回空 `results` 列表，`total_count = 0`，`next_page_token = ""`。

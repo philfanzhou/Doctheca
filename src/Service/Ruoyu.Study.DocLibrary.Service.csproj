@@ -7,7 +7,6 @@
 
   <ItemGroup>
     <PackageReference Include="DocumentFormat.OpenXml" Version="3.2.0" />
-    <PackageReference Include="Grpc.AspNetCore" Version="2.62.0" />
     <PackageReference Include="Mapster" Version="10.0.6" />
     <PackageReference Include="Markdig" Version="0.39.1" />
     <PackageReference Include="Microsoft.Extensions.Options" Version="8.0.2" />
@@ -21,6 +20,10 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
 
   <ItemGroup>
     <InternalsVisibleTo Include="Ruoyu.Study.DocLibrary.Tests" />

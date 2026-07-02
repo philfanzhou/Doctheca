@@ -240,7 +240,7 @@ class DocApiClient {
     pageSize: number = 20,
     pageToken?: string
   ): Promise<{ results: SearchResult[]; totalCount: number; nextPageToken: string }> {
-    const response = await this.client.get('/admin/documents/search-test', {
+    const response = await this.client.get('/admin/documents/search', {
       params: { query, phrase, pageSize, pageToken }
     })
     return response.data

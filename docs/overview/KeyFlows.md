@@ -50,9 +50,9 @@
 ## 2. 精确搜索 (ExactSearch)
 
 ```
-  Client             DocLibrary           PostgreSQL              OpenSearch
+  Admin UI / HTTP Client  DocLibrary           PostgreSQL              OpenSearch
     │                    │                       │                      │
-    │ ExactSearch(query) │                       │                      │
+    │ GET /admin/documents/search?query=... │                     │                      │
     │───────────────────►│                       │                      │
     │                    │ OpenSearch 是否可用?   │                      │
     │                    │──────────────────────────────────────────────►
@@ -68,7 +68,7 @@
     │◄───────────────────│                       │                      │
 ```
 
-**触发条件**：gRPC 调用 `ExactSearch`
+**触发条件**：HTTP GET `/admin/documents/search`
 **降级**：OpenSearch 不可用时回退到 `document_occurrences` 倒排索引（token_text 匹配）
 
 ---

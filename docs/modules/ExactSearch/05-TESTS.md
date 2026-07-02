@@ -1,32 +1,32 @@
 # ExactSearch — 测试计划 (TESTS)
 
-测试工具：`xUnit + Moq`。现有测试文件：`test/Ruoyu.Study.DocLibrary.Tests/SearchDomainServiceTests.cs`、`test/Ruoyu.Study.DocLibrary.Tests/DocumentLibraryServiceImplTests.cs`。
+测试工具：`xUnit + Moq`。现有测试文件：`test/Ruoyu.Study.DocLibrary.Tests/SearchDomainServiceTests.cs`、`test/Ruoyu.Study.DocLibrary.Tests/DocumentAdminEndpointsTests.cs`。
 
 ## 单元测试 — Given-When-Then 格式
 
 ### UT-01 查询词为空（验证 SPEC FR-01）
 
-- **Given**：`ExactSearchRequest { Query = "", Phrase = false, PageSize = 10 }`。
-- **When**：调用 `ExactSearch`。
-- **Then**：抛出 `RpcException`，`StatusCode == InvalidArgument`，消息包含 `DOCLIBRARY_QUERY_REQUIRED`。
+- **Given**：请求 `GET /admin/documents/search?query=&phrase=false&pageSize=10`。
+- **When**：调用 `DocumentAdminEndpoints.Search`。
+- **Then**：返回 HTTP 400 Bad Request，响应体 `{ success: false, message: "...DOCLIBRARY_QUERY_REQUIRED...", errorCode: "DOCLIBRARY_QUERY_REQUIRED" }`。
 
 ### UT-02 查询词超过 200 字符（验证 SPEC FR-02）
 
-- **Given**：`ExactSearchRequest { Query = "a".PadLeft(201, 'a'), Phrase = false, PageSize = 10 }`。
-- **When**：调用 `ExactSearch`。
-- **Then**：抛出 `RpcException`，`StatusCode == InvalidArgument`，消息包含 `DOCLIBRARY_QUERY_TOO_LONG`。
+- **Given**：请求 `GET /admin/documents/search?query=<201字符>&phrase=false&pageSize=10`。
+- **When**：调用 `DocumentAdminEndpoints.Search`。
+- **Then**：返回 HTTP 400 Bad Request，响应体 `{ success: false, message: "...DOCLIBRARY_QUERY_TOO_LONG...", errorCode: "DOCLIBRARY_QUERY_TOO_LONG" }`。
 
-### UT-03 page_size 超过 100（验证 SPEC FR-03）
+### UT-03 page_size 超过 100 静默截断（验证 SPEC FR-03）
 
-- **Given**：`ExactSearchRequest { Query = "test", PageSize = 101 }`。
-- **When**：调用 `ExactSearch`。
-- **Then**：抛出 `RpcException`，`StatusCode == InvalidArgument`，消息包含 `DOCLIBRARY_PAGE_SIZE_INVALID`。
+- **Given**：请求 `GET /admin/documents/search?query=test&pageSize=101`。
+- **When**：调用 `DocumentAdminEndpoints.Search`。
+- **Then**：领域服务收到 `pageSize = 100`（静默截断），请求正常处理，不返回错误。
 
 ### UT-04 page_size 默认值和修正（验证 SPEC FR-04）
 
-- **Given**：`ExactSearchRequest { Query = "test", PageSize = 0 }`。
-- **When**：调用 `ExactSearch`。
-- **Then**：领域服务收到 `pageSize = 50`。
+- **Given**：请求 `GET /admin/documents/search?query=test&pageSize=0`。
+- **When**：调用 `DocumentAdminEndpoints.Search`。
+- **Then**：领域服务收到 `pageSize = 20`。
 
 ### UT-05 OpenSearch 正常返回（验证 SPEC FR-05）
 
@@ -216,9 +216,9 @@
 
 | 测试方法 | 验证 SPEC 项 |
 | --- | --- |
-| `ExactSearch_EmptyQuery_ThrowsInvalidArgument` | FR-01 |
-| `ExactSearch_QueryTooLong_ThrowsInvalidArgument` | FR-02 |
-| `ExactSearch_PageSizeTooLarge_ThrowsInvalidArgument` | FR-03 |
+| `ExactSearch_EmptyQuery_Returns400BadRequest` | FR-01 |
+| `ExactSearch_QueryTooLong_Returns400BadRequest` | FR-02 |
+| `ExactSearch_PageSizeOver100_SilentlyCapped` | FR-03 |
 | `ExactSearch_DefaultPageSize` | FR-04 |
 | `ExactSearchAsync_OpenSearchAvailable` | FR-05 |
 | `ExactSearchAsync_FallbackToDatabase` | FR-06 |

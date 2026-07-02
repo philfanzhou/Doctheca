@@ -7,8 +7,8 @@
   {
     "id": "REVIEW-01",
     "depends_on": [],
-    "action": "评审 DocumentLibraryServiceImpl.cs 中 ExactSearch 方法：确认参数校验逻辑（query 为空/过长、page_size 超限）、pageSize 默认值和上限修正、MapFilter 空字符串转 null 逻辑与 SPEC 一致。",
-    "files": ["src/Service/DocumentLibraryServiceImpl.cs"],
+    "action": "评审 DocumentAdminEndpoints.cs 中 Search 方法：确认参数校验逻辑（query 为空/过长、pageSize 超限静默截断）、pageSize 默认值和上限修正、MapFilter 空字符串转 null 逻辑与 SPEC 一致。",
+    "files": ["src/Service/DocumentAdminEndpoints.cs"],
     "acceptance": "代码阅读签名与注释一致；编译通过 dotnet build。",
     "notes": "ValidateSearchRequest 方法被 ExactSearch 共用。"
   },
@@ -39,10 +39,10 @@
   {
     "id": "TEST-01",
     "depends_on": ["REVIEW-01", "REVIEW-02", "REVIEW-03"],
-    "action": "执行参数校验测试：验证查询词为空、查询词超过 200 字符、page_size 超过 100 时均抛出 RpcException(StatusCode.InvalidArgument)。",
-    "files": ["test/Ruoyu.Study.DocLibrary.Tests/DocumentLibraryServiceImplTests.cs"],
+    "action": "执行参数校验测试：验证查询词为空、查询词超过 200 字符时返回 HTTP 400 Bad Request；pageSize 超过 100 时静默截断。",
+    "files": ["test/Ruoyu.Study.DocLibrary.Tests/DocumentAdminEndpointsTests.cs"],
     "acceptance": "dotnet test --filter FullyQualifiedName~ExactSearch_InvalidArgument",
-    "notes": "三个错误码：DOCLIBRARY_QUERY_REQUIRED、DOCLIBRARY_QUERY_TOO_LONG、DOCLIBRARY_PAGE_SIZE_INVALID。"
+    "notes": "两个错误码：DOCLIBRARY_QUERY_REQUIRED、DOCLIBRARY_QUERY_TOO_LONG。pageSize 超限不再报错，静默截断为 100。"
   },
   {
     "id": "TEST-02",
@@ -72,7 +72,7 @@
     "id": "TEST-05",
     "depends_on": ["REVIEW-01"],
     "action": "执行 MapFilter 测试：验证 SearchFilter 空字符串字段转为 null、非空字段保留原值。",
-    "files": ["test/Ruoyu.Study.DocLibrary.Tests/DocumentLibraryServiceImplTests.cs"],
+    "files": ["test/Ruoyu.Study.DocLibrary.Tests/DocumentAdminEndpointsTests.cs"],
     "acceptance": "dotnet test --filter FullyQualifiedName~MapFilter",
     "notes": ""
   },

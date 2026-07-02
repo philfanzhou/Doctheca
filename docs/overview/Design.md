@@ -5,13 +5,12 @@
 ```
 ┌─────────────────────────────────────────────────┐
 │  Host (Ruoyu.Study.DocLibrary.Host)           │
-│  Program.cs: DI, Kestrel, gRPC, HTTP            │
+│  Program.cs: DI, Kestrel, HTTP                  │
 │  appsettings.json: 配置管理                      │
 └───────────────┬─────────────────────────────────┘
                 │
 ┌───────────────▼─────────────────────────────────┐
 │  Service (Ruoyu.Study.DocLibrary.Service)     │
-│  DocumentLibraryServiceImpl.cs: gRPC 实现     │
 │  DocumentAdminEndpoints.cs: HTTP Admin API      │
 │  IngestionWorker.cs: 后台导入任务                │
 │  OpenSearchIndexService.cs: 搜索索引            │
@@ -37,21 +36,17 @@
 │  Repositories/: Repository 实现                  │
 │  DocLibraryDbContext.cs: EF DbContext          │
 │  DatabaseInitializer.cs: SQL 初始化              │
-└───────────────┬─────────────────────────────────┘
-                │
-┌───────────────▼─────────────────────────────────┐
-│  Contract (Ruoyu.Study.DocLibrary.Contract)   │
-│  Protos/doclibrary.proto: gRPC 服务定义       │
-│  Protos/doclibrary.common.proto: 公共消息      │
 └─────────────────────────────────────────────────┘
 ```
+
+> **注**: Contract 层（gRPC proto 定义）已于 2026-07 移除。搜索功能已迁移至 HTTP 端点 `GET /admin/documents/search`。
 
 ## 技术栈
 
 | 组件 | 技术 | 说明 |
 |------|------|------|
-| 框架 | .NET 8 | ASP.NET Core gRPC + HTTP |
-| 通信 | gRPC (protobuf) | DocumentLibrary 服务 |
+| 框架 | .NET 8 | ASP.NET Core HTTP |
+| 通信 | HTTP REST (JSON) | Admin API + 搜索 |
 | ORM | EF Core 8.0 | Npgsql + SQLite |
 | 数据库 | PostgreSQL / SQLite | 双数据库切换 |
 | 对象映射 | Mapster 10.0 | Entity ↔ Model 映射 |
@@ -122,19 +117,18 @@ DocLibrary 的 Admin API 通过 JWT Bearer Token 进行认证，Token 由 Quantu
 | OSS 支持 LocalFile / S3 切换 | 环境变量 `USE_LOCAL_OSS` 控制 |
 | JWT Bearer 认证（Identity 签发） | 统一认证中心，微服务间标准方案 |
 | MinerU Precision API 在线解析 | 含图片输出，Token 认证，每日 1000 页免费额度 |
+| 移除 gRPC，统一使用 HTTP REST | DocLibrary 为低并发管理服务，gRPC 无性能优势且增加维护成本；无外部 gRPC 消费者 |
 
 ##### 关键源文件
 
 | 文件 | 用途 |
 |------|------|
 | [Program.cs](../../src/Host/Program.cs) | 服务启动配置 + `AddIdentityClient()` 调用 |
-| [doclibrary.proto](../../src/Contract/Protos/doclibrary.proto) | gRPC 契约 |
 | [IDocumentDomainService.cs](../../src/Domain/Services/IDocumentDomainService.cs) | 文档领域接口 |
 | [DocumentDomainService.cs](../../src/Domain/Services/DocumentDomainService.cs) | 文档领域实现 |
 | [SearchDomainService.cs](../../src/Domain/Services/SearchDomainService.cs) | 搜索领域逻辑 |
-| [DocumentLibraryServiceImpl.cs](../../src/Service/DocumentLibraryServiceImpl.cs) | gRPC 实现 |
 | [IngestionWorker.cs](../../src/Service/IngestionWorker.cs) | 后台导入 |
-| [DocumentAdminEndpoints.cs](../../src/Service/DocumentAdminEndpoints.cs) | HTTP API |
+| [DocumentAdminEndpoints.cs](../../src/Service/DocumentAdminEndpoints.cs) | HTTP API（含搜索） |
 | [MinerUAgentClient.cs](../../src/Service/MinerUAgentClient.cs) | MinerU Agent API 客户端（降级方案，无图片） |
 | [MinerUPrecisionClient.cs](../../src/Service/MinerUPrecisionClient.cs) | MinerU Precision API 客户端（含图片） |
 | [DatabaseInitializer.cs](../../src/Database/DatabaseInitializer.cs) | 表初始化 |

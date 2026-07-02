@@ -13,7 +13,6 @@ RUN npm run build
 FROM mcr.microsoft.com/dotnet/sdk:8.0 AS backend-build
 WORKDIR /src
 
-COPY src/services/ruoyu.doclibrary/src/Contract/Ruoyu.Study.DocLibrary.Contract.csproj ./src/services/ruoyu.doclibrary/src/Contract/
 COPY src/services/ruoyu.doclibrary/src/Database/Ruoyu.Study.DocLibrary.Database.csproj ./src/services/ruoyu.doclibrary/src/Database/
 COPY src/services/ruoyu.doclibrary/src/Domain/Ruoyu.Study.DocLibrary.Domain.csproj ./src/services/ruoyu.doclibrary/src/Domain/
 COPY src/services/ruoyu.doclibrary/src/Service/Ruoyu.Study.DocLibrary.Service.csproj ./src/services/ruoyu.doclibrary/src/Service/
@@ -44,8 +43,7 @@ RUN sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list.d/debia
 WORKDIR /app
 COPY --from=backend-build /app/publish .
 
-EXPOSE 5011 5012
-ENV Endpoints__Grpc=5011
+EXPOSE 5012
 ENV Endpoints__Http=5012
 
 ENTRYPOINT ["dotnet", "Ruoyu.Study.DocLibrary.Host.dll"]
