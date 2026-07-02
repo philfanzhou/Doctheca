@@ -17,7 +17,7 @@ export default defineConfig({
     outDir: '../wwwroot',
     chunkSizeWarningLimit: 600,
     rolldownOptions: {
-      onLog(level, log) {
+      onLog(_level, log) {
         if (log.code === 'INVALID_ANNOTATION') return
       }
     }
