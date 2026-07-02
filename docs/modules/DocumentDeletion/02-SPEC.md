@@ -2,7 +2,7 @@
 
 ## 1. 功能概述
 
-DocumentDeletion 模块负责删除指定文档及其全部关联数据。其核心职责是：**按标题删除文档，级联清理数据库记录、搜索索引和 OSS 文件，保证数据一致性，且操作幂等**。
+DocumentDeletion 模块负责删除指定文档及其全部关联数据。其核心职责是：**按 ID 删除文档，级联清理数据库记录、搜索索引和 OSS 文件，保证数据一致性，且操作幂等**。
 
 模块提供 1 类能力：
 
@@ -21,10 +21,9 @@ DocumentDeletion 模块负责删除指定文档及其全部关联数据。其核
 - [x] **REQ-DEL-03**：文档不存在时返回 true（幂等）。
 - [x] **REQ-DEL-04**：搜索索引清理在 SaveChanges 之后执行，失败仅记 Error 日志，不影响返回结果。
 - [x] **REQ-DEL-05**：Admin 端点先删数据库再删 OSS 文件，OSS 删除失败仅记 Warning 日志。
-- [x] **REQ-DEL-06**：Admin 端点返回 `{ success: true, data: { title, deleted: document != null } }`。
+- [x] **REQ-DEL-06**：Admin 端点返回 `{ success: true, data: { id, title, deleted: document != null } }`。
 - [x] **REQ-DEL-07**：仅管理员可调用此接口（通过部署层网络隔离实现，仅内网可访问 `/admin/` 路径；应用层不做鉴权中间件）。
 - [x] **REQ-DEL-08**：Admin 端点支持按文档 ID 删除：`DELETE /admin/documents/{id}` 返回 `{ success: true, data: { id, title, deleted: true } }`。
-- [x] **REQ-DEL-09**：原有 `DELETE /admin/documents/{title}` 端点调整为 `DELETE /admin/documents/by-title/{title}`（保留作为备选入口）。
 
 ---
 
@@ -54,18 +53,17 @@ DocumentDeletion 模块负责删除指定文档及其全部关联数据。其核
 
 **场景 C：删除存在的文档（含 OSS 文件）**
 - 给定 `title = "English Test 2024"`，文档存在且 `FilePath` 非空
-- 当调用 `DELETE /admin/documents/by-title/{title}` 或 `DELETE /admin/documents/{id}`
-- 则先获取文档信息（按标题端点调用 `GetDocumentByTitleAsync`，按 ID 端点调用 `GetByIdAsync`）
+- 当调用 `DELETE /admin/documents/{id}`
+- 则先获取文档信息（调用 `GetByIdAsync`）
 - 且调用 `DeleteDocumentAsync` 删除数据库记录
 - 且调用 `ossService.DeleteAsync(document.FilePath)` 删除 OSS 文件
-- 且按标题端点返回 `{ success: true, data: { title: "English Test 2024", deleted: true } }`
-- 且按 ID 端点返回 `{ success: true, data: { id, title: "English Test 2024", deleted: true } }`
+- 且返回 `{ success: true, data: { id, title: "English Test 2024", deleted: true } }`
 
 **场景 D：删除文档但无 OSS 文件**
 - 给定文档存在但 `FilePath` 为空
-- 当调用 `DELETE /admin/documents/by-title/{title}`
+- 当调用 `DELETE /admin/documents/{id}`
 - 则不调用 `ossService.DeleteAsync`
-- 且返回 `{ success: true, data: { title: "...", deleted: true } }`
+- 且返回 `{ success: true, data: { id, title: "...", deleted: true } }`
 
 ### 3.3 索引清理容错
 
@@ -79,9 +77,9 @@ DocumentDeletion 模块负责删除指定文档及其全部关联数据。其核
 
 **场景 G：OSS 删除失败**
 - 给定 `ossService.DeleteAsync` 抛出异常
-- 当调用 `DELETE /admin/documents/by-title/{title}`
+- 当调用 `DELETE /admin/documents/{id}`
 - 则异常被捕获，仅记 Warning 日志
-- 且返回 `{ success: true, data: { title: "...", deleted: true } }`
+- 且返回 `{ success: true, data: { id, title: "...", deleted: true } }`
 
 ---
 

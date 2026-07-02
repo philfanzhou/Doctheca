@@ -6,6 +6,6 @@ public interface IDocumentFileService
 {
     Task<DocumentFileModel> CreateAsync(DocumentFileModel model);
     Task<DocumentFileModel?> GetByIdAsync(Guid id);
-    Task<(List<DocumentFileModel> Items, int TotalCount)> GetListAsync(int page, int size);
+    Task<(List<DocumentFileModel> Items, int TotalCount)> GetListAsync(int page, int size, string? fileName = null);
     Task<bool> DeleteAsync(Guid id);
 }

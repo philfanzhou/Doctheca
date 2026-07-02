@@ -84,7 +84,7 @@ public class DocumentFileServiceTests
             new() { Id = Guid.NewGuid(), FileName = "a.pdf" },
             new() { Id = Guid.NewGuid(), FileName = "b.pdf" },
         };
-        _fileRepoMock.Setup(r => r.GetListAsync(1, 20))
+        _fileRepoMock.Setup(r => r.GetListAsync(1, 20, null))
             .ReturnsAsync((items, 2));
 
         // Act

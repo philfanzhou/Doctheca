@@ -8,5 +8,4 @@
 | DocumentParsing | [DocumentParsing](./DocumentParsing/01-FEATURE.md) |
 | DocumentUpload | [DocumentUpload](./DocumentUpload/01-FEATURE.md) |
 | ExactSearch | [ExactSearch](./ExactSearch/01-FEATURE.md) |
-| SegmentRefinement | [SegmentRefinement](./SegmentRefinement/01-FEATURE.md) |
 | MinerUAgentParsing | [MinerUAgentParsing](./MinerUAgentParsing/01-FEATURE.md) |

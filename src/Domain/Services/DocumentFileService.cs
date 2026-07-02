@@ -31,9 +31,9 @@ public class DocumentFileService : IDocumentFileService
         return await _fileRepository.GetByIdAsync(id);
     }
 
-    public async Task<(List<DocumentFileModel> Items, int TotalCount)> GetListAsync(int page, int size)
+    public async Task<(List<DocumentFileModel> Items, int TotalCount)> GetListAsync(int page, int size, string? fileName = null)
     {
-        return await _fileRepository.GetListAsync(page, size);
+        return await _fileRepository.GetListAsync(page, size, fileName);
     }
 
     public async Task<bool> DeleteAsync(Guid id)

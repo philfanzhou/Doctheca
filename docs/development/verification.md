@@ -136,16 +136,8 @@ curl -X PUT http://localhost:5012/admin/documents/Test%20Document/metadata \
 
 ## Delete Document
 
-By ID (recommended):
-
 ```bash
 curl -X DELETE http://localhost:5012/admin/documents/{id}
-```
-
-By title (alternative):
-
-```bash
-curl -X DELETE http://localhost:5012/admin/documents/by-title/Test%20Document
 ```
 
 ## Search Test Endpoint

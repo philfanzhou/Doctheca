@@ -33,7 +33,7 @@ src/services/ruoyu.doclibrary/
 │   │       ├── DocumentRepository.cs            # DeleteAsync, GetByTitleAsync 实现
 │   │       └── UnitOfWork.cs                    # SaveChangesAsync 实现
 │   └── Service/
-│       └── DocumentAdminEndpoints.cs       # DELETE /admin/documents/{id} & DELETE /admin/documents/by-title/{title} 端点
+│       └── DocumentAdminEndpoints.cs       # DELETE /admin/documents/{id} 端点
 ```
 
 ### 1.1 文件职责精确到每个文件
@@ -42,7 +42,7 @@ src/services/ruoyu.doclibrary/
 |------|------|--------------------|
 | `IDocumentDomainService.cs` | 领域服务接口，定义级联删除 → SaveChanges → 索引清理流程 | `DeleteDocumentAsync(string title)` 签名 |
 | `DocumentDomainService.cs` | 领域服务实现，编排级联删除 → SaveChanges → 索引清理流程 | `DeleteDocumentAsync(string title)` 签名 |
-| `DocumentAdminEndpoints.cs` | Admin HTTP 端点，编排获取文档 → 删数据库 → 删 OSS 流程 | `DELETE /admin/documents/{id}` 和 `DELETE /admin/documents/by-title/{title}` 路由 |
+| `DocumentAdminEndpoints.cs` | Admin HTTP 端点，编排获取文档 → 删数据库 → 删 OSS 流程 | `DELETE /admin/documents/{id}` 路由 |
 | `DocumentOccurrenceRepository.cs` | 实现 `DeleteByDocumentIdAsync`，删除指定文档的 occurrence 记录 | `DeleteByDocumentIdAsync` 签名 |
 | `QuestionSegmentRepository.cs` | 实现 `DeleteByDocumentIdAsync`，删除指定文档的 question 记录 | `DeleteByDocumentIdAsync` 签名 |
 | `DocumentSegmentRepository.cs` | 实现 `DeleteByDocumentIdAsync`，删除指定文档的 segment 记录 | `DeleteByDocumentIdAsync` 签名 |
@@ -69,22 +69,6 @@ DELETE /admin/documents/{id}
   "success": true,
   "data": {
     "id": "...",
-    "title": "English Test 2024",
-    "deleted": true
-  }
-}
-```
-
-```
-DELETE /admin/documents/by-title/{title}
-```
-
-**响应**：
-
-```json
-{
-  "success": true,
-  "data": {
     "title": "English Test 2024",
     "deleted": true
   }
@@ -200,30 +184,7 @@ DocumentDomainService.DeleteDocumentAsync(title)
           └─ return true
 ```
 
-### 3.2 DeleteDocument（Admin 端点层 — 按标题）
-
-```
-[Caller: HTTP Client]
-    │
-    ▼
-DocumentAdminEndpoints.DeleteDocumentByTitle(title, documentService, ossService, logger)
-    │
-    ├─ 1. 获取文档信息（用于后续删 OSS）
-    │     └─ documentService.GetDocumentByTitleAsync(title)
-    │
-    ├─ 2. 删除数据库记录 + 索引
-    │     └─ documentService.DeleteDocumentAsync(title)
-    │
-    ├─ 3. 删除 OSS 文件（try/catch 容错）
-    │     ├─ document != null && !string.IsNullOrEmpty(document.FilePath)
-    │     │   └─ ossService.DeleteAsync(document.FilePath)
-    │     └─ 异常被捕获 → logger.LogWarning
-    │
-    └─ 4. 返回结果
-          └─ { success: true, data: { title, deleted: document != null } }
-```
-
-### 3.3 DeleteDocumentById（Admin 端点层 — 按 ID）
+### 3.2 DeleteDocumentById（Admin 端点层 — 按 ID）
 
 ```
 [Caller: HTTP Client]

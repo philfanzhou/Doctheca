@@ -28,9 +28,12 @@ public class DocumentFileRepository : IDocumentFileRepository
         return entity != null ? MapToModel(entity) : null;
     }
 
-    public async Task<(List<DocumentFileModel> Items, int TotalCount)> GetListAsync(int page, int size)
+    public async Task<(List<DocumentFileModel> Items, int TotalCount)> GetListAsync(int page, int size, string? fileName = null)
     {
         var query = _context.DocumentFiles.AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(fileName))
+            query = query.Where(e => e.FileName.ToLower().Contains(fileName.ToLower()));
 
         var total = await query.CountAsync();
         var items = await query

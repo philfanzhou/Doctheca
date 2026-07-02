@@ -39,7 +39,6 @@
 | GET | `/admin/documents/{id}` | 获取文档详情 |
 | GET | `/admin/documents/{id}/status` | 查询文档解析状态 |
 | DELETE | `/admin/documents/{id}` | 按 ID 删除文档 |
-| DELETE | `/admin/documents/by-title/{title}` | 按标题删除文档 |
 | PUT | `/admin/documents/{title}/metadata` | 更新文档元数据 |
 | GET | `/admin/documents/search` | 精确关键词搜索（支持 subject/grade/year/documentTitle 过滤） |
 | GET | `/health` | 健康检查 |
