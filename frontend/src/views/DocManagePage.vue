@@ -10,11 +10,13 @@ const fileList = ref<DocumentFile[]>([])
 const fileTotal = ref(0)
 const filePage = ref(1)
 const filePageSize = ref(20)
+const fileNameSearch = ref('')
 const selectedFileDetail = ref<DocumentFileDetail | null>(null)
 const fileUploadInput = ref<HTMLInputElement | null>(null)
 const fileUploading = ref(false)
 const fileUploadProgress = ref(0)
-const filePollTimer = ref<number | null>(null)
+const parseFileParsing = ref(false)
+const pollTimer = ref<number | null>(null)
 
 const fileTotalPages = computed(() => Math.ceil(fileTotal.value / filePageSize.value))
 
@@ -24,7 +26,12 @@ function renderMarkdown(content: string): string {
 
 async function loadFileList() {
   try {
-    const response = await client.listDocumentFiles(filePage.value, filePageSize.value)
+    const response = await client.listDocumentFiles(
+      filePage.value,
+      filePageSize.value,
+      undefined,
+      fileNameSearch.value || undefined
+    )
     fileList.value = response.data as DocumentFile[]
     fileTotal.value = response.total
   } catch (e) {
@@ -32,7 +39,7 @@ async function loadFileList() {
   }
 }
 
-function handleFilePageChange(newPage: number) {
+function handlePageChange(newPage: number) {
   filePage.value = newPage
   loadFileList()
 }
@@ -57,6 +64,7 @@ async function handleFileUploadChange(event: Event) {
     })
 
     filePage.value = 1
+    fileNameSearch.value = ''
     await loadFileList()
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : 'Upload failed'
@@ -67,6 +75,20 @@ async function handleFileUploadChange(event: Event) {
   }
 
   input.value = ''
+}
+
+async function handleParseFile(id: string) {
+  parseFileParsing.value = true
+  try {
+    await client.parseDocumentFile(id)
+    await loadFileList()
+    startPolling()
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : 'Parse request failed'
+    alert(msg)
+  } finally {
+    parseFileParsing.value = false
+  }
 }
 
 async function handleViewFile(id: string) {
@@ -94,45 +116,49 @@ async function handleDeleteFile(id: string) {
   }
 }
 
-function startFilePolling() {
-  if (filePollTimer.value !== null) return
-  filePollTimer.value = window.setInterval(async () => {
+function startPolling() {
+  if (pollTimer.value !== null) return
+  pollTimer.value = window.setInterval(async () => {
     await loadFileList()
     const hasActive = fileList.value.some(f => f.parseStatus === 'pending' || f.parseStatus === 'parsing')
     if (!hasActive) {
-      stopFilePolling()
+      stopPolling()
     }
   }, 5000)
 }
 
-function stopFilePolling() {
-  if (filePollTimer.value !== null) {
-    clearInterval(filePollTimer.value)
-    filePollTimer.value = null
+function stopPolling() {
+  if (pollTimer.value !== null) {
+    clearInterval(pollTimer.value)
+    pollTimer.value = null
   }
 }
 
 onMounted(async () => {
   await loadFileList()
   const hasActive = fileList.value.some(f => f.parseStatus === 'pending' || f.parseStatus === 'parsing')
-  if (hasActive) startFilePolling()
+  if (hasActive) startPolling()
 })
 
 onUnmounted(() => {
-  stopFilePolling()
+  stopPolling()
 })
 </script>
 
 <template>
   <div class="page-header">
-    <h1 class="page-title">文件管理</h1>
-    <p class="page-subtitle">上传文件到 S3，管理文件和解析状态</p>
+    <h1 class="page-title">文档管理</h1>
+    <p class="page-subtitle">管理文档的上传、解析和预览</p>
   </div>
 
   <div class="card">
     <div class="card-header">
-      <span>文件列表</span>
-      <div style="display: flex; align-items: center; gap: 12px">
+      <span>文档列表</span>
+      <div class="card-header-actions">
+        <div class="input-wrap" style="width: 200px">
+          <input v-model="fileNameSearch" type="text" placeholder="搜索文件名..." @keyup.enter="filePage = 1; loadFileList()" />
+        </div>
+        <button class="btn btn-secondary btn-small" @click="filePage = 1; loadFileList()">搜索</button>
         <button class="btn btn-primary btn-small" :disabled="fileUploading" @click="triggerFileUpload">
           {{ fileUploading ? '上传中...' : '上传文件' }}
         </button>
@@ -171,7 +197,22 @@ onUnmounted(() => {
               <span class="status-badge" :class="getFileStatusClass(f.parseStatus)">{{ getFileStatusLabel(f.parseStatus) }}</span>
             </td>
             <td>
-              <button class="btn btn-secondary btn-small" style="color: var(--danger)" @click="handleDeleteFile(f.id)">删除</button>
+              <div class="table-actions">
+                <button
+                  v-if="f.parseStatus === null || f.parseStatus === 'unparsed' || f.parseStatus === 'failed'"
+                  class="btn btn-primary btn-small"
+                  @click="handleParseFile(f.id)"
+                  :disabled="parseFileParsing"
+                >
+                  {{ f.parseStatus === 'failed' ? '重新解析' : '解析' }}
+                </button>
+                <span v-else-if="f.parseStatus === 'pending' || f.parseStatus === 'parsing'" style="font-size: 12px; color: var(--text-muted)">
+                  {{ getFileStatusLabel(f.parseStatus) }}
+                </span>
+                <button v-else-if="f.parseStatus === 'parsed'" class="btn btn-primary btn-small" @click="handleParseFile(f.id)" :disabled="parseFileParsing">重新解析</button>
+                <button class="btn btn-secondary btn-small" @click="handleViewFile(f.id)">查看</button>
+                <button class="btn btn-secondary btn-small" style="color: var(--danger)" @click="handleDeleteFile(f.id)">删除</button>
+              </div>
             </td>
           </tr>
         </tbody>
@@ -180,11 +221,11 @@ onUnmounted(() => {
 
       <div v-if="fileTotal > filePageSize" class="pagination-bar">
         <span class="pagination-info">共 {{ fileTotal }} 条</span>
-        <button class="page-btn" :disabled="filePage <= 1" @click="handleFilePageChange(filePage - 1)">
+        <button class="page-btn" :disabled="filePage <= 1" @click="handlePageChange(filePage - 1)">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6" /></svg>
         </button>
-        <button v-for="p in fileTotalPages" :key="p" class="page-btn" :class="{ active: filePage === p }" @click="handleFilePageChange(p)">{{ p }}</button>
-        <button class="page-btn" :disabled="filePage >= fileTotalPages" @click="handleFilePageChange(filePage + 1)">
+        <button v-for="p in fileTotalPages" :key="p" class="page-btn" :class="{ active: filePage === p }" @click="handlePageChange(p)">{{ p }}</button>
+        <button class="page-btn" :disabled="filePage >= fileTotalPages" @click="handlePageChange(filePage + 1)">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6" /></svg>
         </button>
       </div>

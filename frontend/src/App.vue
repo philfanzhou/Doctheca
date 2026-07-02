@@ -2,14 +2,13 @@
 import { ref, computed, onMounted } from 'vue'
 import { authService } from './services/authService'
 import LoginPage from './components/LoginPage.vue'
-import DocumentParsePage from './views/DocumentParsePage.vue'
+import DocManagePage from './views/DocManagePage.vue'
 import MarkdownDataPage from './views/MarkdownDataPage.vue'
 import SearchPage from './views/SearchPage.vue'
-import FileManagementPage from './views/FileManagementPage.vue'
 
 const isAuthenticated = ref(false)
 const appTitle = ref('DocLibrary Admin')
-const activeTab = ref('parses')
+const activeTab = ref('documents')
 
 const sidebarOpen = ref(false)
 const sidebarCollapsed = ref(localStorage.getItem('docSidebarCollapsed') === 'true')
@@ -20,8 +19,8 @@ const displayName = computed(() => currentUser.value?.username ?? '管理员')
 
 const navItems = [
   {
-    key: 'parses',
-    label: '文档解析',
+    key: 'documents',
+    label: '文档管理',
     icon: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>'
   },
   {
@@ -33,21 +32,15 @@ const navItems = [
     key: 'search',
     label: '检索测试',
     icon: '<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>'
-  },
-  {
-    key: 'files',
-    label: '文件管理',
-    icon: '<path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/>'
   }
 ]
 
 const currentNavLabel = computed(() => navItems.find((n) => n.key === activeTab.value)?.label ?? '')
 
 const componentMap: Record<string, any> = {
-  parses: DocumentParsePage,
+  documents: DocManagePage,
   markdown: MarkdownDataPage,
   search: SearchPage,
-  files: FileManagementPage,
 }
 
 const currentComponent = computed(() => componentMap[activeTab.value])

@@ -14,6 +14,12 @@ export default defineConfig({
     }
   },
   build: {
-    outDir: '../wwwroot'
+    outDir: '../wwwroot',
+    chunkSizeWarningLimit: 600,
+    rolldownOptions: {
+      onLog(level, log) {
+        if (log.code === 'INVALID_ANNOTATION') return
+      }
+    }
   }
 })
