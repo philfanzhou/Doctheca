@@ -6,7 +6,12 @@
 src/services/ruoyu.doclibrary/
 ├── src/
 │   ├── Service/
-│   │   ├── DocumentAdminEndpoints.cs              # 端点（文件 + 解析 + 导出）
+│   │   ├── Endpoints/
+│   │   │   ├── DocumentFileEndpoints.cs           # 文件管理端点（上传/列表/详情/解析/删除）
+│   │   │   ├── DocumentParseEndpoints.cs          # 解析记录端点（列表/删除）
+│   │   │   ├── DocumentExportEndpoints.cs         # 导出端点（MD ZIP/HTML，按文件ID或解析ID）
+│   │   │   └── DocumentSearchEndpoints.cs         # 搜索端点
+│   │   ├── MarkdownExportHelper.cs                # 共享导出逻辑（图片路径替换/ZIP构建/HTML构建）
 │   │   ├── MinerUPrecisionClient.cs               # MinerU API 客户端（复用）
 │   │   ├── MinerUFileParseWorker.cs               # MinerU 文件解析后台 Worker
 │   │   └── ImageMetadata.cs                       # 图片元数据 record

@@ -195,7 +195,10 @@ app.UseStaticFiles();
 
 // Web Admin API endpoints
 app.MapIdentityAuthEndpoints();
-app.MapDocumentAdminEndpoints();
+app.MapDocumentFileEndpoints();
+app.MapDocumentParseEndpoints();
+app.MapDocumentExportEndpoints();
+app.MapDocumentSearchEndpoints();
 
 app.MapGet("/health", () => Results.Ok(new { status = "healthy", timestamp = DateTimeOffset.UtcNow }));
 app.MapFallbackToFile("index.html");
