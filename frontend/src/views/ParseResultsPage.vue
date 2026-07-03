@@ -74,6 +74,32 @@ async function openHtmlPreview(parseId: string) {
   }
 }
 
+// Open content_list.json in new tab
+async function openJson(_parseId: string, fileId: string) {
+  try {
+    const response = await client.getDocumentFile(fileId)
+    const detail = response.data
+    if (!detail.parse?.contentList) {
+      alert('该解析结果没有结构化 JSON 数据（content_list.json）')
+      return
+    }
+    let formatted: string
+    try {
+      formatted = JSON.stringify(JSON.parse(detail.parse.contentList), null, 2)
+    } catch {
+      formatted = detail.parse.contentList
+    }
+    const w = window.open('', '_blank')
+    if (w) {
+      w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${escHtml(detail.fileName)} - JSON</title>
+<style>body{font-family:'SF Mono',Menlo,Monaco,Consolas,monospace;max-width:1200px;margin:0 auto;padding:24px;line-height:1.5;color:#333;background:#fafafa}pre{white-space:pre-wrap;word-break:break-word;background:#fff;padding:16px;border-radius:6px;font-size:12px;border:1px solid #e0e0e0}h1{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}</style></head><body><h1>${escHtml(detail.fileName)} - content_list.json</h1><pre>${escHtml(formatted)}</pre></body></html>`)
+      w.document.close()
+    }
+  } catch (e) {
+    alert(e instanceof Error ? e.message : 'Failed to load JSON data')
+  }
+}
+
 // Open Layout PDF in new tab
 async function openLayoutPdf(fileId: string) {
   try {
@@ -193,6 +219,7 @@ onMounted(() => {
               <div v-if="p.status === 'parsed'" style="display: flex; gap: 6px; flex-wrap: wrap">
                 <button class="btn btn-primary btn-small" @click="openMarkdown(p.id, p.fileId)">MD</button>
                 <button class="btn btn-secondary btn-small" @click="openHtmlPreview(p.id)">HTML</button>
+                <button class="btn btn-secondary btn-small" @click="openJson(p.id, p.fileId)">JSON</button>
                 <button class="btn btn-secondary btn-small" @click="openLayoutPdf(p.fileId)">Layout</button>
                 <button class="btn btn-secondary btn-small" @click="openImages(p.fileId)">图片</button>
                 <button class="btn btn-secondary btn-small" @click="exportMarkdown(p.id)">导出MD</button>

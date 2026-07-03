@@ -221,6 +221,7 @@ public static class DocumentFileEndpoints
                     id = parse.Id.ToString(),
                     status = parse.Status,
                     markdownContent,
+                    contentList = parse.ContentList,
                     errorMessage = parse.ErrorMessage,
                     layoutPdfUrl = await MarkdownExportHelper.GetLayoutPdfPresignedUrlAsync(parse, ossService, logger),
                     parsedAt = parse.ParsedAt?.UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'"),
