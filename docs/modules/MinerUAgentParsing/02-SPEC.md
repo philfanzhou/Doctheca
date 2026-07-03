@@ -107,10 +107,7 @@
 - 响应：`{ success, data: { id, fileName, contentType, createdAt, parses: [...] } }`
 - `parses` 数组包含该文件所有解析记录，每项：`{ id, modelVersion, status, markdownContent, contentList, contentListV2, modelJson, layoutJson, errorMessage, parsedAt, images: [...] }`
 - `markdownContent` 中的图片路径已替换为 S3 presigned URL
-- `contentList` 仅 pipeline 模型有值，vlm 为 null
-- `contentListV2` 仅 pipeline 模型有值，vlm 为 null
-- `modelJson` pipeline 模型有值（含 bbox 坐标和版面分类），vlm 也可能有值
-- `layoutJson` 仅 pipeline 模型有值（含每页版面 bbox 坐标），vlm 为 null
+- `contentList` / `contentListV2` / `modelJson` / `layoutJson`：vlm 和 pipeline 模式均可能有值（视 MinerU 版本和 ZIP 内容而定，代码按模式无关方式存储所有找到的字段）
 - `images` 数组包含每张图片的 `id, imageName, imageUrl`（presigned URL）
 - 无解析记录时 `parses` 为空数组
 
@@ -334,23 +331,23 @@
 - **When** 点击"预览"按钮
 - **Then** 在新浏览器 tab 中打开自包含 HTML 页面，展示解析后的文档内容
 
-### AC-LAYOUT-01：查看 Layout JSON（pipeline 模型）
+### AC-LAYOUT-01：查看 Layout JSON
 
-- **Given** 文件有 pipeline 解析记录（status=parsed），且 layout_json 非空
+- **Given** 文件有解析记录（status=parsed，vlm 或 pipeline 均可），且 layout_json 非空
 - **When** 前端展示该解析记录
 - **Then** 显示 Layout 按钮，点击可在新窗口查看格式化的 layout.json 数据
 
-### AC-LAYOUT-02：VLM 模型无 Layout/Model 数据
+### AC-LAYOUT-02：解析记录无 Layout/Model 数据
 
-- **Given** 文件有 vlm 解析记录（status=parsed）
+- **Given** 文件有解析记录（status=parsed，vlm 或 pipeline 均可），但 layout_json / model_json / content_list_v2 为空
 - **When** 前端展示该解析记录
-- **Then** 不显示 Layout 和 Content List V2 按钮；Model 按钮仅在 modelJson 有值时显示
+- **Then** 对应字段无值时，点击按钮提示暂无数据（按钮始终显示，不按 modelVersion 过滤）
 
-### AC-LAYOUT-03：Pipeline 模型无 Layout JSON
+### AC-LAYOUT-03：解析记录有 Layout JSON 但点击查看
 
-- **Given** 文件有 pipeline 解析记录（status=parsed），但 layout_json 为空
-- **When** 前端展示该解析记录
-- **Then** 显示 Layout 按钮但点击提示暂无数据
+- **Given** 文件有解析记录（status=parsed），layout_json 非空
+- **When** 点击 Layout 按钮
+- **Then** 在新窗口查看格式化的 layout.json 数据
 
 ### AC-PREVIEW-02：预览未解析记录
 

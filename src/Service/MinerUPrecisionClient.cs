@@ -328,6 +328,6 @@ public class MinerUOptions
     /// <summary>Base URL for MinerU API.</summary>
     public string? BaseUrl { get; set; } = "https://mineru.net";
 
-    /// <summary>Model version: "vlm" (recommended, default) or "pipeline" (produces layout.json + content_list_v2.json).</summary>
+    /// <summary>Model version: "vlm" (default) or "pipeline". Both modes may produce layout.json/content_list_v2.json/model.json depending on MinerU API version.</summary>
     public string? ModelVersion { get; set; }
 }
