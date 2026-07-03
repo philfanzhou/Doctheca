@@ -128,6 +128,8 @@ public class DocLibraryDbContext : DbContext
             entity.HasIndex(e => e.Status);
             entity.HasIndex(e => e.DocumentFileId);
 
+            entity.Property(e => e.ContentList).HasColumnType("jsonb");
+
             entity.HasOne(e => e.DocumentFile)
                 .WithMany()
                 .HasForeignKey(e => e.DocumentFileId)
@@ -149,6 +151,8 @@ public class DocLibraryDbContext : DbContext
             entity.HasIndex(e => new { e.ParseId, e.PageId, e.SortIndex });
             entity.HasIndex(e => e.BlockType);
             entity.HasIndex(e => e.ImageId);
+
+            entity.Property(e => e.BlockData).HasColumnType("jsonb");
 
             entity.HasOne(e => e.Parse)
                 .WithMany()
