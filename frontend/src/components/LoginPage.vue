@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { ElMessage } from 'element-plus'
 import { authService } from '../services/authService'
 
 const emit = defineEmits<{
@@ -11,16 +10,31 @@ const username = ref('')
 const password = ref('')
 const loading = ref(false)
 
+function showToast(msg: string, type: 'success' | 'error' | 'warning' = 'success') {
+  const el = document.createElement('div')
+  const colors: Record<string, string> = {
+    success: '#10b981',
+    error: '#ef4444',
+    warning: '#f59e0b'
+  }
+  el.textContent = msg
+  el.style.cssText = `position:fixed;top:16px;left:50%;transform:translateX(-50%);z-index:9999;padding:10px 18px;border-radius:6px;background:${colors[type]};color:#fff;font-size:13px;font-weight:500;box-shadow:0 4px 12px rgba(0,0,0,.15);`
+  document.body.appendChild(el)
+  setTimeout(() => {
+    el.remove()
+  }, 3000)
+}
+
 async function handleLogin() {
   if (!username.value.trim() || !password.value) {
-    ElMessage.warning('请输入用户名和密码')
+    showToast('请输入用户名和密码', 'warning')
     return
   }
 
   loading.value = true
   try {
     await authService.login(username.value.trim(), password.value)
-    ElMessage.success('登录成功')
+    showToast('登录成功', 'success')
     emit('loginSuccess')
   } catch (error: unknown) {
     const msg = error && typeof error === 'object' && 'response' in error
@@ -28,7 +42,7 @@ async function handleLogin() {
         ? '用户名或密码错误'
         : '登录失败，请检查网络连接'
       : '登录失败'
-    ElMessage.error(msg)
+    showToast(msg, 'error')
   } finally {
     loading.value = false
   }
@@ -39,7 +53,7 @@ async function handleLogin() {
   <div class="login-page">
     <div class="login-card">
       <div class="login-header">
-        <div class="login-logo">DR</div>
+        <div class="login-logo">DL</div>
         <h1 class="login-title">DocLibrary Admin</h1>
         <p class="login-subtitle">文档检索管理后台</p>
       </div>
@@ -86,12 +100,12 @@ async function handleLogin() {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--bg-primary, #f5f7fa);
+  background: var(--bg-color);
 }
 
 .login-card {
   width: 400px;
-  background: var(--bg-card, #fff);
+  background: var(--card-bg);
   border-radius: 12px;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
   padding: 40px 32px;
@@ -106,7 +120,7 @@ async function handleLogin() {
   width: 56px;
   height: 56px;
   border-radius: 12px;
-  background: var(--primary-color, #409eff);
+  background: var(--primary-color);
   color: #fff;
   font-size: 20px;
   font-weight: 700;
@@ -119,13 +133,13 @@ async function handleLogin() {
 .login-title {
   font-size: 22px;
   font-weight: 600;
-  color: var(--text-primary, #303133);
+  color: var(--text-primary);
   margin: 0 0 4px;
 }
 
 .login-subtitle {
   font-size: 14px;
-  color: var(--text-secondary, #909399);
+  color: var(--text-secondary);
   margin: 0;
 }
 
@@ -137,7 +151,7 @@ async function handleLogin() {
   display: block;
   font-size: 13px;
   font-weight: 500;
-  color: var(--text-primary, #303133);
+  color: var(--text-primary);
   margin-bottom: 6px;
 }
 

@@ -138,24 +138,24 @@ onUnmounted(() => {
     <div class="card-header">
       <span>文档列表</span>
       <div class="card-header-actions">
-        <div class="input-wrap" style="width: 200px">
+        <div class="input-wrap w-200">
           <input v-model="fileNameSearch" type="text" placeholder="搜索文件名..." @keyup.enter="filePage = 1; loadFileList()" />
         </div>
         <button class="btn btn-secondary btn-small" @click="filePage = 1; loadFileList()">搜索</button>
         <button class="btn btn-primary btn-small" :disabled="fileUploading" @click="triggerFileUpload">
           {{ fileUploading ? '上传中...' : '上传文件' }}
         </button>
-        <input ref="fileUploadInput" type="file" accept=".pdf,.docx,.doc,.pptx,.ppt" style="display: none" @change="handleFileUploadChange" />
+        <input ref="fileUploadInput" type="file" accept=".pdf,.docx,.doc,.pptx,.ppt" hidden @change="handleFileUploadChange" />
       </div>
     </div>
     <div class="card-body">
-      <div v-if="fileUploading" style="margin-bottom: 16px">
-        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px">
-          <span style="font-size: 12px; color: var(--text-secondary)">上传中...</span>
-          <span style="font-size: 12px; color: var(--primary)">{{ fileUploadProgress }}%</span>
+      <div v-if="fileUploading" class="upload-progress">
+        <div class="progress-header">
+          <span class="text-muted-sm">上传中...</span>
+          <span class="text-muted-sm progress-percent">{{ fileUploadProgress }}%</span>
         </div>
-        <div style="height: 6px; background: var(--bg-secondary); border-radius: 3px; overflow: hidden">
-          <div style="height: 100%; background: var(--primary); border-radius: 3px; transition: width 0.3s" :style="{ width: fileUploadProgress + '%' }"></div>
+        <div class="progress-track">
+          <div class="progress-fill" :style="{ width: fileUploadProgress + '%' }"></div>
         </div>
       </div>
 
@@ -183,20 +183,22 @@ onUnmounted(() => {
                   <button class="btn btn-primary btn-small" @click="handleParseFile(f.id, 'vlm')" :disabled="parseFileParsing">VLM 解析</button>
                   <button class="btn btn-secondary btn-small" @click="handleParseFile(f.id, 'pipeline')" :disabled="parseFileParsing">Pipeline 解析</button>
                 </template>
-                <span v-else-if="f.parseStatus === 'pending' || f.parseStatus === 'parsing'" style="font-size: 12px; color: var(--text-muted)">
+                <span v-else-if="f.parseStatus === 'pending' || f.parseStatus === 'parsing'" class="text-muted-sm">
                   {{ getFileStatusLabel(f.parseStatus) }}
                 </span>
                 <template v-else-if="f.parseStatus === 'parsed'">
                   <button class="btn btn-primary btn-small" @click="handleParseFile(f.id, 'vlm')" :disabled="parseFileParsing">VLM 重新解析</button>
                   <button class="btn btn-secondary btn-small" @click="handleParseFile(f.id, 'pipeline')" :disabled="parseFileParsing">Pipeline 重新解析</button>
                 </template>
-                <button class="btn btn-secondary btn-small" style="color: var(--danger)" @click="handleDeleteFile(f.id)">删除</button>
+                <button class="btn btn-secondary btn-small btn-text-danger" @click="handleDeleteFile(f.id)">删除</button>
               </div>
             </td>
           </tr>
         </tbody>
       </table>
-      <div v-else style="text-align: center; padding: 40px; color: var(--text-muted)">暂无文件，点击上方按钮上传</div>
+      <div v-else class="empty-state">
+        <div class="empty-state-text">暂无文件，点击上方按钮上传</div>
+      </div>
 
       <div v-if="fileTotal > filePageSize" class="pagination-bar">
         <span class="pagination-info">共 {{ fileTotal }} 条</span>
@@ -211,3 +213,9 @@ onUnmounted(() => {
     </div>
   </div>
 </template>
+
+<style scoped>
+.progress-percent {
+  color: var(--primary-color);
+}
+</style>

@@ -83,7 +83,7 @@ async function openJson(parseId: string, fileId: string) {
     const parse = detail.parses?.find(p => p.id === parseId)
     const rawContent = parse?.contentList
     if (!rawContent || rawContent === '[]' || rawContent === 'null') {
-      alert('该解析结果没有结构化 JSON 数据。Pipeline 模型的解析结果才包含 content_list.json。')
+      alert('该解析结果没有结构化 JSON 数据(content_list.json)。')
       return
     }
     openJsonInNewWindow(detail.fileName, 'content_list.json', rawContent)
@@ -134,7 +134,7 @@ async function openLayoutJson(parseId: string, fileId: string) {
     const parse = detail.parses?.find(p => p.id === parseId)
     const rawContent = parse?.layoutJson
     if (!rawContent || rawContent === 'null') {
-      alert('该解析结果没有 layout.json 数据。Pipeline 模型的解析结果才包含版面分析数据。')
+      alert('该解析结果没有 layout.json 数据（版面分析数据）。')
       return
     }
     openJsonInNewWindow(detail.fileName, 'layout.json', rawContent)
@@ -239,8 +239,8 @@ onMounted(() => {
   <div class="card">
     <div class="card-header">
       <span>解析记录</span>
-      <div style="display: flex; align-items: center; gap: 8px">
-        <div class="input-wrap" style="width: 200px">
+      <div class="card-header-actions">
+        <div class="input-wrap w-200">
           <input v-model="parseSearch" type="text" placeholder="搜索文档名..." @keyup.enter="parsePage = 1; loadParseList()" />
         </div>
         <button class="btn btn-secondary btn-small" @click="parsePage = 1; loadParseList()">搜索</button>
@@ -262,7 +262,7 @@ onMounted(() => {
           <tr v-for="p in parseList" :key="p.id">
             <td>{{ p.fileName }}</td>
             <td>
-              <span class="status-badge" :class="p.modelVersion === 'pipeline' ? 'status-parsed' : 'status-parsing'">
+              <span class="status-badge" :class="p.modelVersion === 'pipeline' ? 'status-success' : 'status-processing'">
                 {{ p.modelVersion === 'pipeline' ? 'Pipeline' : 'VLM' }}
               </span>
             </td>
@@ -270,27 +270,29 @@ onMounted(() => {
               <span class="status-badge" :class="getFileStatusClass(p.status)">{{ getFileStatusLabel(p.status) }}</span>
             </td>
             <td>{{ p.parsedAt ? formatTime(p.parsedAt) : '-' }}</td>
-            <td style="max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap" :title="p.errorMessage || ''">{{ p.errorMessage || '-' }}</td>
+            <td class="text-ellipsis" :style="{ maxWidth: '200px' }" :title="p.errorMessage || ''">{{ p.errorMessage || '-' }}</td>
             <td>
-              <div v-if="p.status === 'parsed'" style="display: flex; gap: 6px; flex-wrap: wrap">
+              <div v-if="p.status === 'parsed'" class="action-group">
                 <button class="btn btn-primary btn-small" @click="openMarkdown(p.id, p.fileId)">MD</button>
                 <button class="btn btn-secondary btn-small" @click="openHtmlPreview(p.id)">HTML</button>
-                <button v-if="p.modelVersion === 'pipeline'" class="btn btn-secondary btn-small" @click="openJson(p.id, p.fileId)">JSON</button>
-                <button v-if="p.modelVersion === 'pipeline'" class="btn btn-secondary btn-small" @click="openContentListV2(p.id, p.fileId)">V2</button>
+                <button class="btn btn-secondary btn-small" @click="openJson(p.id, p.fileId)">JSON</button>
+                <button class="btn btn-secondary btn-small" @click="openContentListV2(p.id, p.fileId)">V2</button>
                 <button class="btn btn-secondary btn-small" @click="openModelJson(p.id, p.fileId)">Model</button>
-                <button v-if="p.modelVersion === 'pipeline'" class="btn btn-secondary btn-small" @click="openLayoutJson(p.id, p.fileId)">Layout</button>
+                <button class="btn btn-secondary btn-small" @click="openLayoutJson(p.id, p.fileId)">Layout</button>
                 <button class="btn btn-secondary btn-small" @click="openImages(p.id, p.fileId)">图片</button>
                 <button class="btn btn-secondary btn-small" @click="exportMarkdown(p.id)">导出MD</button>
                 <button class="btn btn-secondary btn-small" @click="exportHtml(p.id)">导出HTML</button>
               </div>
-              <button class="btn btn-secondary btn-small" style="color: var(--danger)" :disabled="parseDeleting === p.id" @click="handleDeleteParse(p.id)">
+              <button class="btn btn-secondary btn-small btn-text-danger" :disabled="parseDeleting === p.id" @click="handleDeleteParse(p.id)">
                 {{ parseDeleting === p.id ? '删除中...' : '删除' }}
               </button>
             </td>
           </tr>
         </tbody>
       </table>
-      <div v-else style="text-align: center; padding: 40px; color: var(--text-muted)">暂无解析记录</div>
+      <div v-else class="empty-state">
+        <div class="empty-state-text">暂无解析记录</div>
+      </div>
 
       <div v-if="parseTotal > parsePageSize" class="pagination-bar">
         <span class="pagination-info">共 {{ parseTotal }} 条</span>

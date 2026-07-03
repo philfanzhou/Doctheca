@@ -51,11 +51,11 @@ function clearSearch() {
       <span>检索测试</span>
     </div>
     <div class="card-body">
-      <div style="display: flex; gap: 12px; margin-bottom: 16px; align-items: center">
-        <div class="input-wrap" style="flex: 1">
+      <div class="toolbar">
+        <div class="input-wrap input-flex">
           <input v-model="searchQuery" type="text" placeholder="输入单词或短语进行检索..." @keyup.enter="handleSearch" />
         </div>
-        <label style="display: flex; align-items: center; gap: 4px; font-size: 13px; white-space: nowrap">
+        <label class="inline-check">
           <input v-model="searchPhrase" type="checkbox" />
           短语查询
         </label>
@@ -64,41 +64,41 @@ function clearSearch() {
         </button>
       </div>
 
-      <div v-if="searchResults.length > 0" style="margin-bottom: 12px; font-size: 13px; color: var(--text-secondary); display: flex; align-items: center; justify-content: space-between">
-        <span>共 {{ searchTotalCount }} 条结果，关键词: <strong style="color: var(--text-primary)">{{ searchQuery }}</strong></span>
+      <div v-if="searchResults.length > 0" class="result-meta">
+        <span>共 {{ searchTotalCount }} 条结果，关键词: <strong>{{ searchQuery }}</strong></span>
         <button class="btn btn-link btn-small" @click="clearSearch">清空</button>
       </div>
 
-      <div v-if="searchResults.length > 0" style="overflow-x: auto">
-        <table style="width: 100%; border-collapse: collapse; font-size: 13px">
+      <div v-if="searchResults.length > 0" class="table-scroll">
+        <table class="data-table">
           <thead>
-            <tr style="background: var(--bg-secondary); text-align: left">
-              <th style="padding: 8px 12px; border-bottom: 2px solid var(--border-light); white-space: nowrap">#</th>
-              <th style="padding: 8px 12px; border-bottom: 2px solid var(--border-light); white-space: nowrap">文档标题</th>
-              <th style="padding: 8px 12px; border-bottom: 2px solid var(--border-light); white-space: nowrap">页码</th>
-              <th style="padding: 8px 12px; border-bottom: 2px solid var(--border-light); white-space: nowrap">匹配类型</th>
-              <th style="padding: 8px 12px; border-bottom: 2px solid var(--border-light); white-space: nowrap">相关度</th>
-              <th style="padding: 8px 12px; border-bottom: 2px solid var(--border-light)">匹配文本</th>
-              <th style="padding: 8px 12px; border-bottom: 2px solid var(--border-light); white-space: nowrap">Segment ID</th>
-              <th style="padding: 8px 12px; border-bottom: 2px solid var(--border-light); white-space: nowrap">偏移量</th>
-              <th style="padding: 8px 12px; border-bottom: 2px solid var(--border-light); white-space: nowrap">创建时间</th>
+            <tr>
+              <th>#</th>
+              <th>文档标题</th>
+              <th>页码</th>
+              <th>匹配类型</th>
+              <th>相关度</th>
+              <th>匹配文本</th>
+              <th>Segment ID</th>
+              <th>偏移量</th>
+              <th>创建时间</th>
             </tr>
           </thead>
           <tbody>
-            <tr v-for="(result, idx) in searchResults" :key="idx" style="border-bottom: 1px solid var(--border-light)">
-              <td style="padding: 8px 12px; color: var(--text-muted)">{{ idx + 1 }}</td>
-              <td style="padding: 8px 12px; font-weight: 500; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap" :title="result.documentName">{{ result.documentName }}</td>
-              <td style="padding: 8px 12px"><span class="tag tag-info" style="font-size: 11px">P{{ result.pageNumber }}</span></td>
-              <td style="padding: 8px 12px">
-                <span class="tag" :class="result.matchType === 'exact_phrase' ? 'tag-success' : result.matchType === 'exact_word' ? 'tag-info' : 'tag-warning'" style="font-size: 11px">
+            <tr v-for="(result, idx) in searchResults" :key="idx">
+              <td class="text-muted-sm">{{ idx + 1 }}</td>
+              <td class="text-ellipsis" :style="{ maxWidth: '200px' }" :title="result.documentName">{{ result.documentName }}</td>
+              <td><span class="tag tag-info">P{{ result.pageNumber }}</span></td>
+              <td>
+                <span class="tag" :class="result.matchType === 'exact_phrase' ? 'tag-success' : result.matchType === 'exact_word' ? 'tag-info' : 'tag-warning'">
                   {{ result.matchType === 'exact_phrase' ? '精确短语' : result.matchType === 'exact_word' ? '精确词' : result.matchType === 'stem_match' ? '词干匹配' : result.matchType }}
                 </span>
               </td>
-              <td style="padding: 8px 12px; font-family: monospace">{{ result.score.toFixed(2) }}</td>
-              <td style="padding: 8px 12px; max-width: 400px; line-height: 1.5; color: var(--text-secondary); white-space: pre-wrap; word-break: break-word">{{ result.associatedText }}</td>
-              <td style="padding: 8px 12px; font-family: monospace; font-size: 11px; color: var(--text-muted); max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap" :title="result.segmentId">{{ result.segmentId }}</td>
-              <td style="padding: 8px 12px; font-family: monospace; font-size: 11px; color: var(--text-muted); white-space: nowrap">{{ result.startOffset }}–{{ result.endOffset }}</td>
-              <td style="padding: 8px 12px; font-size: 12px; color: var(--text-muted); white-space: nowrap">{{ result.createdAt ? formatDate(result.createdAt) : '-' }}</td>
+              <td class="text-mono">{{ result.score.toFixed(2) }}</td>
+              <td class="match-text" :style="{ maxWidth: '400px' }">{{ result.associatedText }}</td>
+              <td class="text-mono text-muted-sm text-ellipsis" :style="{ maxWidth: '150px' }" :title="result.segmentId">{{ result.segmentId }}</td>
+              <td class="text-mono text-muted-sm">{{ result.startOffset }}–{{ result.endOffset }}</td>
+              <td class="text-muted-sm">{{ result.createdAt ? formatDate(result.createdAt) : '-' }}</td>
             </tr>
           </tbody>
         </table>
@@ -110,3 +110,12 @@ function clearSearch() {
     </div>
   </div>
 </template>
+
+<style scoped>
+.match-text {
+  line-height: 1.5;
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+</style>

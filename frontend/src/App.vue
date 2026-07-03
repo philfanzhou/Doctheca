@@ -12,7 +12,6 @@ const activeTab = ref('documents')
 
 const sidebarOpen = ref(false)
 const sidebarCollapsed = ref(localStorage.getItem('docSidebarCollapsed') === 'true')
-const lastRefreshTime = ref('')
 
 const currentUser = computed(() => authService.getUser())
 const displayName = computed(() => currentUser.value?.username ?? '管理员')
@@ -76,7 +75,7 @@ onMounted(async () => {
   <div v-else class="admin-layout">
     <aside class="sidebar" :class="{ open: sidebarOpen, collapsed: sidebarCollapsed }">
       <div class="sidebar-header">
-        <div class="sidebar-logo">DR</div>
+        <div class="sidebar-logo">DL</div>
         <span class="sidebar-title">{{ appTitle }}</span>
         <button class="sidebar-toggle" @click="toggleSidebar">
           <svg v-if="sidebarCollapsed" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -104,7 +103,7 @@ onMounted(async () => {
           <div class="sidebar-footer-info">
             <div class="sidebar-footer-name">{{ displayName }}</div>
             <div class="sidebar-footer-status">
-              {{ lastRefreshTime ? `上次同步 ${lastRefreshTime}` : '会话活跃' }}
+              会话活跃
             </div>
           </div>
           <button class="sidebar-logout-btn" title="登出" @click="handleLogout">
