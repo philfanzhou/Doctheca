@@ -39,6 +39,7 @@ public static class DocumentParseEndpoints
             data.Add(new
             {
                 id = p.Id.ToString(),
+                fileId = p.DocumentFileId.ToString(),
                 fileName = file?.FileName ?? "Unknown",
                 status = p.Status,
                 parsedAt = p.ParsedAt?.UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'"),

@@ -60,6 +60,7 @@ export interface DocumentFileDetail {
 
 export interface DocumentParse {
   id: string
+  fileId: string
   fileName: string
   status: string
   parsedAt: string | null

@@ -1,29 +1,14 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, provide } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { authService } from './services/authService'
 import LoginPage from './components/LoginPage.vue'
 import DocManagePage from './views/DocManagePage.vue'
 import MarkdownDataPage from './views/MarkdownDataPage.vue'
 import SearchPage from './views/SearchPage.vue'
-import LayoutPdfPage from './views/LayoutPdfPage.vue'
 
 const isAuthenticated = ref(false)
 const appTitle = ref('DocLibrary Admin')
 const activeTab = ref('documents')
-const selectedFileIdForLayout = ref<string | null>(null)
-
-function viewLayoutPdf(fileId: string) {
-  if (fileId) {
-    selectedFileIdForLayout.value = fileId
-    activeTab.value = 'layout'
-  } else {
-    selectedFileIdForLayout.value = null
-    activeTab.value = 'documents'
-  }
-}
-
-provide('selectedFileIdForLayout', selectedFileIdForLayout)
-provide('viewLayoutPdf', viewLayoutPdf)
 
 const sidebarOpen = ref(false)
 const sidebarCollapsed = ref(localStorage.getItem('docSidebarCollapsed') === 'true')
@@ -39,9 +24,9 @@ const navItems = [
     icon: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>'
   },
   {
-    key: 'markdown',
-    label: 'Markdown 数据',
-    icon: '<path d="M15.5 13.333l1.533 1.322c.645.555.967.833.967 1.178s-.322.623-.967 1.179L15.5 18.333m-3.333-5l-1.534 1.322c-.644.555-.966.833-.966 1.178s.322.623.966 1.179l1.534 1.321"/><path d="M17.167 10.836v-4.32c0-1.41 0-2.117-.224-2.68-.359-.906-1.118-1.621-2.08-1.96-.599-.21-1.349-.21-2.848-.21-2.623 0-3.935 0-4.983.369-1.684.591-3.013 1.842-3.641 3.428C3 6.449 3 7.684 3 10.154v2.122c0 2.558 0 3.838.706 4.726q.306.383.713.671c.76.536 1.79.64 3.581.66"/>'
+    key: 'results',
+    label: '解析结果',
+    icon: '<path d="M15.5 13.333l1.533 1.322c.645.555.967.833.967 1.178s-.322.623-.967 1.179L15.5 18.333m-3.333-5l-1.534 1.322c-.644.555-.966.833-.966 1.178s.322.623.966 1.179l1.534 1.321"/><path d="M17.167 10.836v-4.32c0-1.41 0-2.117-.224-2.68-.359-.906-1.118-1.621-2.08-1.96-.599-.21-1.349-.21-2.848-.21-2.623 0-3.935 0-4.983.369-1.684.591-3.013 1.842-3.641 3.428C3 6.449 3 7.684 3 10.154v2.122c0 2.558 0 3.838.706 4.726q.306.383.713.671c.76.536 1.79.64 3.581.64"/>'
   },
   {
     key: 'search',
@@ -54,9 +39,8 @@ const currentNavLabel = computed(() => navItems.find((n) => n.key === activeTab.
 
 const componentMap: Record<string, any> = {
   documents: DocManagePage,
-  markdown: MarkdownDataPage,
+  results: MarkdownDataPage,
   search: SearchPage,
-  layout: LayoutPdfPage,
 }
 
 const currentComponent = computed(() => componentMap[activeTab.value])
