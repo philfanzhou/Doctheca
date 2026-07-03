@@ -27,6 +27,13 @@ public class DocumentParseEntity
     [Column("markdown_content")]
     public string? MarkdownContent { get; set; }
 
+    [Column("content_list")]
+    public string? ContentList { get; set; }
+
+    [Column("zip_path")]
+    [MaxLength(500)]
+    public string? ZipPath { get; set; }
+
     [Column("error_message")]
     public string? ErrorMessage { get; set; }
 

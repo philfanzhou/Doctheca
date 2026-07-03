@@ -19,6 +19,7 @@ public class DocLibraryDbContext : DbContext
     public DbSet<DocumentFileEntity> DocumentFiles { get; set; } = null!;
     public DbSet<DocumentParseEntity> DocumentParses { get; set; } = null!;
     public DbSet<DocumentParseImageEntity> DocumentParseImages { get; set; } = null!;
+    public DbSet<DocumentParseBlockEntity> DocumentParseBlocks { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -141,6 +142,23 @@ public class DocLibraryDbContext : DbContext
                 .WithMany()
                 .HasForeignKey(e => e.ParseId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<DocumentParseBlockEntity>(entity =>
+        {
+            entity.HasIndex(e => new { e.ParseId, e.PageId, e.SortIndex });
+            entity.HasIndex(e => e.BlockType);
+            entity.HasIndex(e => e.ImageId);
+
+            entity.HasOne(e => e.Parse)
+                .WithMany()
+                .HasForeignKey(e => e.ParseId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.Image)
+                .WithMany()
+                .HasForeignKey(e => e.ImageId)
+                .OnDelete(DeleteBehavior.SetNull);
         });
     }
 }

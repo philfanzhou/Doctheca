@@ -42,7 +42,14 @@ public class DocumentParseService : IDocumentParseService
         return await _parseRepository.GetLatestByFileIdAsync(documentFileId);
     }
 
-    public async Task<DocumentParseModel> UpdateStatusAsync(Guid id, string status, string? errorMessage = null, string? markdownContent = null, string? externalTaskId = null)
+    public async Task<DocumentParseModel> UpdateStatusAsync(
+        Guid id,
+        string status,
+        string? errorMessage = null,
+        string? markdownContent = null,
+        string? externalTaskId = null,
+        string? contentList = null,
+        string? zipPath = null)
     {
         var model = await _parseRepository.GetByIdAsync(id)
             ?? throw new KeyNotFoundException($"Document parse not found: {id}");
@@ -52,6 +59,8 @@ public class DocumentParseService : IDocumentParseService
         if (errorMessage != null) model.ErrorMessage = errorMessage;
         if (markdownContent != null) model.MarkdownContent = markdownContent;
         if (externalTaskId != null) model.ExternalTaskId = externalTaskId;
+        if (contentList != null) model.ContentList = contentList;
+        if (zipPath != null) model.ZipPath = zipPath;
         if (status == DocumentParseStatus.Parsed) model.ParsedAt = DateTimeOffset.UtcNow;
 
         var result = await _parseRepository.UpdateAsync(model);
@@ -94,5 +103,10 @@ public class DocumentParseService : IDocumentParseService
 
         _logger.LogInformation("Document parse deleted: {ParseId}", parseId);
         return true;
+    }
+
+    public async Task<List<DocumentParseModel>> GetByFileIdAsync(Guid documentFileId)
+    {
+        return await _parseRepository.GetByFileIdAsync(documentFileId);
     }
 }

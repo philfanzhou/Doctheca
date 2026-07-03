@@ -144,11 +144,11 @@ public class MinerUPrecisionClient
     }
 
     /// <summary>
-    /// Download ZIP, extract Markdown and images, upload images to OSS,
-    /// replace relative image paths in Markdown with S3 paths.
-    /// Returns the processed Markdown content and image metadata list.
+    /// Download ZIP, extract Markdown + content_list.json + images + layout.pdf,
+    /// upload images to OSS, replace relative image paths in Markdown with S3 paths.
+    /// Returns the full parse result (markdown + content_list JSON + images + raw ZIP + layout.pdf).
     /// </summary>
-    public async Task<(string Markdown, List<ImageMetadata> Images)> DownloadAndProcessZipAsync(
+    public async Task<MinerUParseResult> DownloadAndProcessZipAsync(
         string zipUrl, string taskId, IOssService ossService, CancellationToken ct = default)
     {
         _logger.LogInformation("Downloading ZIP from MinerU: {Url}", zipUrl);
@@ -174,59 +174,101 @@ public class MinerUPrecisionClient
             markdown = await mdReader.ReadToEndAsync(ct);
         }
 
+        // Read content_list.json (structured per-block data)
+        var contentListJson = ReadZipEntryAsString(archive, "content_list.json") ?? "[]";
+        if (contentListJson == "[]")
+        {
+            _logger.LogWarning("ZIP does not contain content_list.json, structured data unavailable for task {TaskId}", taskId);
+        }
+
+        // Read layout.pdf (annotated PDF with layout boxes) — optional
+        byte[]? layoutPdf = ReadZipEntryAsBytes(archive, "layout.pdf");
+        if (layoutPdf == null)
+        {
+            _logger.LogDebug("ZIP does not contain layout.pdf for task {TaskId}", taskId);
+        }
+
         // Collect image entries
         var imageEntries = archive.Entries
             .Where(e => e.FullName.StartsWith("images/") && e.Length > 0)
             .ToList();
 
-        _logger.LogInformation("ZIP contains {ImageCount} images", imageEntries.Count);
+        _logger.LogInformation("ZIP contains {ImageCount} images, contentList={ContentListBytes}B, layoutPdf={HasLayout}",
+            imageEntries.Count, contentListJson.Length, layoutPdf != null ? "yes" : "no");
 
-        if (imageEntries.Count == 0)
-        {
-            return (markdown, []);
-        }
-
-        // Upload images to OSS and build replacement map (relative path -> S3 path)
-        var imageFolder = $"mineru/{taskId}";
-        var replacementMap = new Dictionary<string, string>();
         var imageMetadataList = new List<ImageMetadata>();
-
-        foreach (var imgEntry in imageEntries)
+        if (imageEntries.Count > 0)
         {
-            var imgName = imgEntry.Name; // e.g., "abc123.jpg"
+            // Upload images to OSS and build replacement map (relative path -> S3 path)
+            var replacementMap = new Dictionary<string, string>();
 
-            using var imgStream = imgEntry.Open();
-            using var ms = new MemoryStream();
-            await imgStream.CopyToAsync(ms, ct);
-            var imgBytes = ms.ToArray();
+            foreach (var imgEntry in imageEntries)
+            {
+                var imgName = imgEntry.Name;
 
-            var contentType = imgName.EndsWith(".png", StringComparison.OrdinalIgnoreCase)
-                ? "image/png"
-                : "image/jpeg";
+                using var imgStream = imgEntry.Open();
+                using var ms = new MemoryStream();
+                await imgStream.CopyToAsync(ms, ct);
+                var imgBytes = ms.ToArray();
 
-            var ossPath = await ossService.UploadAsync(imgBytes, imgName, contentType, OssBucket.Documents, $"mineru/{taskId}");
+                var contentType = imgName.EndsWith(".png", StringComparison.OrdinalIgnoreCase)
+                    ? "image/png"
+                    : "image/jpeg";
 
-            // Map relative path to S3 path (not presigned URL)
-            replacementMap[$"images/{imgName}"] = ossPath;
+                var ossPath = await ossService.UploadAsync(imgBytes, imgName, contentType, OssBucket.Documents, $"mineru/{taskId}");
 
-            imageMetadataList.Add(new ImageMetadata(imgName, ossPath, contentType, imgBytes.Length));
+                replacementMap[$"images/{imgName}"] = ossPath;
+                imageMetadataList.Add(new ImageMetadata(imgName, ossPath, contentType, imgBytes.Length));
 
-            _logger.LogDebug("Image uploaded: {Name} -> {Path}", imgName, ossPath);
+                _logger.LogDebug("Image uploaded: {Name} -> {Path}", imgName, ossPath);
+            }
+
+            // Replace relative image paths in Markdown with S3 paths
+            foreach (var (relativePath, s3Path) in replacementMap)
+            {
+                // Match: ![alt](images/xxx.jpg) or <img src="images/xxx.jpg"/>
+                markdown = markdown.Replace($"({relativePath})", $"({s3Path})");
+                markdown = markdown.Replace($"src=\"{relativePath}\"", $"src=\"{s3Path}\"");
+            }
         }
 
-        // Replace relative image paths in Markdown with S3 paths
-        foreach (var (relativePath, s3Path) in replacementMap)
-        {
-            // Match: ![alt](images/xxx.jpg) or <img src="images/xxx.jpg"/>
-            markdown = markdown.Replace($"({relativePath})", $"({s3Path})");
-            markdown = markdown.Replace($"src=\"{relativePath}\"", $"src=\"{s3Path}\"");
-        }
+        return new MinerUParseResult(
+            ZipBytes: zipBytes,
+            Markdown: markdown,
+            ContentListJson: contentListJson,
+            Images: imageMetadataList,
+            LayoutPdf: layoutPdf);
+    }
 
-        _logger.LogInformation("Markdown processed: {ImageCount} images replaced with S3 paths", replacementMap.Count);
+    private static string? ReadZipEntryAsString(ZipArchive archive, string entryName)
+    {
+        var entry = archive.GetEntry(entryName);
+        if (entry == null) return null;
+        using var stream = entry.Open();
+        using var reader = new StreamReader(stream);
+        return reader.ReadToEnd();
+    }
 
-        return (markdown, imageMetadataList);
+    private static byte[]? ReadZipEntryAsBytes(ZipArchive archive, string entryName)
+    {
+        var entry = archive.GetEntry(entryName);
+        if (entry == null) return null;
+        using var stream = entry.Open();
+        using var ms = new MemoryStream();
+        stream.CopyTo(ms);
+        return ms.ToArray();
     }
 }
+
+/// <summary>
+/// All parsed artifacts from a single MinerU task ZIP.
+/// </summary>
+public record MinerUParseResult(
+    byte[] ZipBytes,
+    string Markdown,
+    string ContentListJson,
+    List<ImageMetadata> Images,
+    byte[]? LayoutPdf);
 
 /// <summary>
 /// Configuration options for MinerU Precision API.

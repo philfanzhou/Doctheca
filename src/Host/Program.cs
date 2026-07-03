@@ -91,6 +91,8 @@ builder.Services.AddScoped<IDocumentIngestionJobRepository, DocumentIngestionJob
 builder.Services.AddScoped<IDocumentFileRepository, DocumentFileRepository>();
 builder.Services.AddScoped<IDocumentParseRepository, DocumentParseRepository>();
 builder.Services.AddScoped<IDocumentParseImageRepository, DocumentParseImageRepository>();
+builder.Services.AddScoped<IDocumentParseBlockRepository, DocumentParseBlockRepository>();
+builder.Services.AddScoped<IDocumentParseBlockService, DocumentParseBlockService>();
 builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
 
 // Domain Services

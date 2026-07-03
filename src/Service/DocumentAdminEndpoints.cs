@@ -367,37 +367,59 @@ public static class DocumentAdminEndpoints
         if (file == null)
             return Results.NotFound(new { success = false, message = "File not found", errorCode = "DOCLIBRARY_FILE_NOT_FOUND" });
 
-        // Delete associated images from S3
-        var images = await parseService.GetImagesByFileIdAsync(id);
-        foreach (var img in images)
+        // Step 1: Collect all OSS paths to clean up (from DB, including new MinerU artifacts)
+        var ossPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        ossPaths.Add(file.FilePath);
+
+        var allParses = await parseService.GetByFileIdAsync(id);
+        foreach (var parse in allParses)
+        {
+            if (!string.IsNullOrEmpty(parse.ZipPath)) ossPaths.Add(parse.ZipPath);
+
+            // layout.pdf: not yet stored as a separate column; would go here if added
+            // (tracked in zipPath for now since it's a sub-file)
+
+            var images = await parseService.GetImagesByParseIdAsync(parse.Id);
+            foreach (var img in images)
+            {
+                if (!string.IsNullOrEmpty(img.ImagePath)) ossPaths.Add(img.ImagePath);
+            }
+        }
+
+        // Step 2: Delete database records (cascade: parses → blocks + images, then file)
+        await fileService.DeleteAsync(id);
+
+        // Step 3: Best-effort OSS cleanup
+        var failedPaths = new List<string>();
+        foreach (var path in ossPaths)
         {
             try
             {
-                await ossService.DeleteAsync(img.ImagePath);
+                await ossService.DeleteAsync(path);
             }
             catch (Exception ex)
             {
-                logger.LogWarning(ex, "Failed to delete image from OSS: {ImagePath}", img.ImagePath);
+                logger.LogWarning(ex, "Failed to delete OSS path: {Path}", path);
+                failedPaths.Add(path);
             }
         }
 
-        // Delete source file from S3
-        try
+        if (failedPaths.Count > 0)
         {
-            await ossService.DeleteAsync(file.FilePath);
+            logger.LogWarning("Document file {FileId} deleted but {Count} OSS paths remain: {Paths}",
+                id, failedPaths.Count, string.Join(", ", failedPaths));
         }
-        catch (Exception ex)
-        {
-            logger.LogWarning(ex, "Failed to delete file from OSS: {FilePath}", file.FilePath);
-        }
-
-        // Delete database records (cascade: images and parses via FK, then file)
-        await fileService.DeleteAsync(id);
 
         return Results.Ok(new
         {
             success = true,
-            data = new { id = id.ToString(), deleted = true }
+            data = new
+            {
+                id = id.ToString(),
+                deleted = true,
+                ossDeleted = ossPaths.Count - failedPaths.Count,
+                ossFailed = failedPaths.Count,
+            }
         });
     }
 

@@ -7,6 +7,8 @@ public class DocumentParseModel
     public string Status { get; set; } = DocumentParseStatus.Pending;
     public string? ExternalTaskId { get; set; }
     public string? MarkdownContent { get; set; }
+    public string? ContentList { get; set; }
+    public string? ZipPath { get; set; }
     public string? ErrorMessage { get; set; }
     public DateTimeOffset? ParsedAt { get; set; }
 }

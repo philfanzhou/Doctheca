@@ -37,3 +37,6 @@
 | 删除 document_page | CASCADE 到 segments, question_segments；SET NULL occurrences 的外键 |
 | 删除 segment | SET NULL 对应 occurrences 的 segment_id |
 | 删除 question_segment | SET NULL 对应 occurrences 的 question_segment_id |
+| 删除 document_file | CASCADE 到 parses、parse_blocks、parse_images |
+| 删除 document_parse | CASCADE 到 parse_blocks、parse_images |
+| 删除 document_parse_image | SET NULL parse_blocks 的 image_id |

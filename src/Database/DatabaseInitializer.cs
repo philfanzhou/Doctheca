@@ -26,7 +26,10 @@ public static class DatabaseInitializer
             "ALTER TABLE document_segments DROP COLUMN IF EXISTS block_id",
             "ALTER TABLE documents ADD COLUMN IF NOT EXISTS created_by uuid NULL",
             "ALTER TABLE document_ingestion_jobs ADD COLUMN IF NOT EXISTS progress integer NOT NULL DEFAULT 0",
-            "ALTER TABLE document_ingestion_jobs ADD COLUMN IF NOT EXISTS progress_stage character varying(50) NULL"
+            "ALTER TABLE document_ingestion_jobs ADD COLUMN IF NOT EXISTS progress_stage character varying(50) NULL",
+            // document_parses: 新增 content_list + zip_path（阶段 2）
+            "ALTER TABLE document_parses ADD COLUMN IF NOT EXISTS content_list jsonb NULL",
+            "ALTER TABLE document_parses ADD COLUMN IF NOT EXISTS zip_path character varying(500) NULL"
         };
 
         foreach (var sql in alterStatements)
@@ -41,6 +44,32 @@ public static class DatabaseInitializer
                 logger.LogDebug(ex, "Column migration statement skipped: {Sql}", sql);
             }
         }
+
+        // Create document_parse_blocks table for legacy DBs that predate this table
+        await context.Database.ExecuteSqlRawAsync(@"
+            CREATE TABLE IF NOT EXISTS document_parse_blocks (
+                id uuid NOT NULL,
+                parse_id uuid NOT NULL,
+                page_id integer NOT NULL,
+                sort_index integer NOT NULL,
+                block_type character varying(20) NOT NULL,
+                text_content text NULL,
+                image_id uuid NULL,
+                block_data jsonb NOT NULL,
+                created_at timestamp with time zone NOT NULL DEFAULT NOW(),
+                CONSTRAINT PK_document_parse_blocks PRIMARY KEY (id),
+                CONSTRAINT FK_blocks_parse_parse_id
+                    FOREIGN KEY (parse_id) REFERENCES document_parses(id) ON DELETE CASCADE,
+                CONSTRAINT FK_blocks_image_image_id
+                    FOREIGN KEY (image_id) REFERENCES document_parse_images(id) ON DELETE SET NULL
+            );
+            CREATE INDEX IF NOT EXISTS IX_document_parse_blocks_parse_id_page_id_sort_index
+                ON document_parse_blocks (parse_id, page_id, sort_index);
+            CREATE INDEX IF NOT EXISTS IX_document_parse_blocks_block_type
+                ON document_parse_blocks (block_type);
+            CREATE INDEX IF NOT EXISTS IX_document_parse_blocks_image_id
+                ON document_parse_blocks (image_id);
+        ");
 
         // Create backup table if not exists
         await context.Database.ExecuteSqlRawAsync(@"
@@ -194,6 +223,30 @@ public static class DatabaseInitializer
                         FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE
                 );
                 CREATE INDEX IF NOT EXISTS IX_document_segment_backups_document_id ON document_segment_backups (document_id);",
+
+            "document_parse_blocks" => @"
+                CREATE TABLE IF NOT EXISTS document_parse_blocks (
+                    id uuid NOT NULL,
+                    parse_id uuid NOT NULL,
+                    page_id integer NOT NULL,
+                    sort_index integer NOT NULL,
+                    block_type character varying(20) NOT NULL,
+                    text_content text NULL,
+                    image_id uuid NULL,
+                    block_data jsonb NOT NULL,
+                    created_at timestamp with time zone NOT NULL DEFAULT NOW(),
+                    CONSTRAINT PK_document_parse_blocks PRIMARY KEY (id),
+                    CONSTRAINT FK_blocks_parse_parse_id
+                        FOREIGN KEY (parse_id) REFERENCES document_parses(id) ON DELETE CASCADE,
+                    CONSTRAINT FK_blocks_image_image_id
+                        FOREIGN KEY (image_id) REFERENCES document_parse_images(id) ON DELETE SET NULL
+                );
+                CREATE INDEX IF NOT EXISTS IX_document_parse_blocks_parse_id_page_id_sort_index
+                    ON document_parse_blocks (parse_id, page_id, sort_index);
+                CREATE INDEX IF NOT EXISTS IX_document_parse_blocks_block_type
+                    ON document_parse_blocks (block_type);
+                CREATE INDEX IF NOT EXISTS IX_document_parse_blocks_image_id
+                    ON document_parse_blocks (image_id);",
 
             _ => null
         };

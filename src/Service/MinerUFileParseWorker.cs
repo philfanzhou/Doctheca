@@ -1,3 +1,9 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Text.Json;
+using System.Threading.Tasks;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.DependencyInjection;
@@ -47,7 +53,7 @@ public class MinerUFileParseWorker : BackgroundService
 
                     try
                     {
-                        await ProcessFileAsync(job, fileService, parseService, minerUClient, ossService, pdfSplitService, fileConversionService, stoppingToken);
+                        await ProcessFileAsync(job, fileService, parseService, minerUClient, ossService, pdfSplitService, fileConversionService, scope.ServiceProvider, stoppingToken);
                     }
                     catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
                     {
@@ -89,6 +95,7 @@ public class MinerUFileParseWorker : BackgroundService
         IOssService ossService,
         IPdfSplitService pdfSplitService,
         IFileConversionService fileConversionService,
+        IServiceProvider scopeProvider,
         CancellationToken ct)
     {
         // Step 1: Update status to parsing
@@ -137,6 +144,9 @@ public class MinerUFileParseWorker : BackgroundService
             pdfStream = sourceStream;
         }
 
+        // Block service from scope (scoped lifetime)
+        var blockService = scopeProvider.GetRequiredService<IDocumentParseBlockService>();
+
         try
         {
             // Step 5: Check PDF page count
@@ -146,12 +156,12 @@ public class MinerUFileParseWorker : BackgroundService
             if (pageCount <= MaxPagesPerChunk)
             {
                 // Small file: process directly
-                await ProcessSingleFileAsync(parse, file, ossService, minerUClient, parseService, ct);
+                await ProcessSingleFileAsync(parse, file, ossService, minerUClient, parseService, blockService, ct);
             }
             else
             {
                 // Large file: split, parse each chunk, merge results
-                await ProcessSplitFileAsync(parse, file, pdfStream, pageCount, pdfSplitService, ossService, minerUClient, parseService, ct);
+                await ProcessSplitFileAsync(parse, file, pdfStream, pageCount, pdfSplitService, ossService, minerUClient, parseService, blockService, ct);
             }
         }
         finally
@@ -169,6 +179,7 @@ public class MinerUFileParseWorker : BackgroundService
         IOssService ossService,
         MinerUPrecisionClient minerUClient,
         IDocumentParseService parseService,
+        IDocumentParseBlockService blockService,
         CancellationToken ct)
     {
         var presignedUrl = await ossService.GetPresignedUrlAsync(file.FilePath, 3600);
@@ -180,22 +191,93 @@ public class MinerUFileParseWorker : BackgroundService
 
         await parseService.UpdateStatusAsync(parse.Id, DocumentParseStatus.Parsing, externalTaskId: taskId);
 
-        var (markdown, imageMetadataList) = await PollAndDownloadAsync(taskId, minerUClient, ossService, ct);
-        _logger.LogInformation("MinerU ZIP processed: FileId={FileId}, Images={ImageCount}", file.Id, imageMetadataList.Count);
+        var result = await PollAndDownloadAsync(taskId, minerUClient, ossService, ct);
+        _logger.LogInformation("MinerU ZIP processed: FileId={FileId}, Images={ImageCount}", file.Id, result.Images.Count);
 
-        foreach (var img in imageMetadataList)
+        await PersistParseResultAsync(parse, file, result, ossService, parseService, blockService, ct);
+    }
+
+    /// <summary>
+    /// Persist the full MinerU parse result: upload ZIP + layout.pdf to OSS,
+    /// insert images, parse and insert blocks, then mark the parse as Parsed.
+    /// </summary>
+    private async Task PersistParseResultAsync(
+        DocumentParseModel parse,
+        DocumentFileModel file,
+        MinerUParseResult result,
+        IOssService ossService,
+        IDocumentParseService parseService,
+        IDocumentParseBlockService blockService,
+        CancellationToken ct)
+    {
+        // 1. Upload the full ZIP to OSS (兜底 raw data)
+        string? zipPath = null;
+        try
         {
-            await parseService.AddImageAsync(new DocumentParseImageModel
+            zipPath = await ossService.UploadAsync(
+                result.ZipBytes,
+                "mineru-output.zip",
+                "application/zip",
+                OssBucket.Documents,
+                $"mineru/{parse.DocumentFileId}");
+            _logger.LogInformation("Full ZIP uploaded: {Path} ({Size} bytes)", zipPath, result.ZipBytes.Length);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to upload full ZIP for parse {ParseId}", parse.Id);
+        }
+
+        // 2. Upload layout.pdf (if present)
+        string? layoutPdfPath = null;
+        if (result.LayoutPdf != null && result.LayoutPdf.Length > 0)
+        {
+            try
+            {
+                layoutPdfPath = await ossService.UploadAsync(
+                    result.LayoutPdf,
+                    "layout.pdf",
+                    "application/pdf",
+                    OssBucket.Documents,
+                    $"mineru/{parse.DocumentFileId}");
+                _logger.LogInformation("Layout PDF uploaded: {Path} ({Size} bytes)", layoutPdfPath, result.LayoutPdf.Length);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to upload layout.pdf for parse {ParseId}", parse.Id);
+            }
+        }
+
+        // 3. Insert images and build the name -> id map for block referencing
+        var imageNameToId = new Dictionary<string, Guid>();
+        foreach (var img in result.Images)
+        {
+            var imageModel = new DocumentParseImageModel
             {
                 ParseId = parse.Id,
                 ImageName = img.ImageName,
                 ImagePath = img.S3Path,
                 ContentType = img.ContentType,
-            });
+            };
+            await parseService.AddImageAsync(imageModel);
+            imageNameToId[img.ImageName] = imageModel.Id;
+        }
+        _logger.LogInformation("Inserted {ImageCount} images for parse {ParseId}", result.Images.Count, parse.Id);
+
+        // 4. Parse content_list.json and insert blocks
+        if (!string.IsNullOrWhiteSpace(result.ContentListJson) && result.ContentListJson != "[]")
+        {
+            await blockService.InsertBlocksFromContentListAsync(parse.Id, result.ContentListJson, imageNameToId);
         }
 
-        await parseService.UpdateStatusAsync(parse.Id, DocumentParseStatus.Parsed, markdownContent: markdown);
-        _logger.LogInformation("MinerU parse completed: ParseId={ParseId}, FileId={FileId}", parse.Id, file.Id);
+        // 5. Update parse with markdown, content_list, and OSS paths
+        await parseService.UpdateStatusAsync(
+            parse.Id,
+            DocumentParseStatus.Parsed,
+            markdownContent: result.Markdown,
+            contentList: result.ContentListJson,
+            zipPath: zipPath);
+        _logger.LogInformation("MinerU parse completed: ParseId={ParseId}, FileId={FileId}, LayoutPdf={HasLayout}",
+            parse.Id, file.Id, layoutPdfPath != null);
     }
 
     /// <summary>
@@ -210,6 +292,7 @@ public class MinerUFileParseWorker : BackgroundService
         IOssService ossService,
         MinerUPrecisionClient minerUClient,
         IDocumentParseService parseService,
+        IDocumentParseBlockService blockService,
         CancellationToken ct)
     {
         _logger.LogInformation("Large file detected: {PageCount} pages, splitting into chunks of {MaxPages}", pageCount, MaxPagesPerChunk);
@@ -218,6 +301,7 @@ public class MinerUFileParseWorker : BackgroundService
         sourceStream.Position = 0;
         var chunks = pdfSplitService.SplitPdf(sourceStream, MaxPagesPerChunk);
         var chunkS3Paths = new List<string>();
+        var chunkResults = new List<MinerUParseResult>();
 
         try
         {
@@ -238,8 +322,6 @@ public class MinerUFileParseWorker : BackgroundService
             }
 
             // Step 3: Submit each chunk to MinerU and collect results
-            var allMarkdown = new List<string>();
-            var allImages = new List<ImageMetadata>();
             var errors = new List<string>();
 
             for (int i = 0; i < chunkS3Paths.Count; i++)
@@ -253,19 +335,9 @@ public class MinerUFileParseWorker : BackgroundService
                     var taskId = await minerUClient.SubmitUrlAsync(chunkPresignedUrl, dataId, ct);
                     _logger.LogInformation("Chunk {Index} submitted: TaskId={TaskId}", i, taskId);
 
-                    var (markdown, images) = await PollAndDownloadAsync(taskId, minerUClient, ossService, ct);
-
-                    // Prefix image names with chunk index to avoid collisions
-                    var prefixedMarkdown = markdown;
-                    foreach (var img in images)
-                    {
-                        var prefixedImageName = $"chunk{i}_{img.ImageName}";
-                        prefixedMarkdown = prefixedMarkdown.Replace(img.ImageName, prefixedImageName);
-                        allImages.Add(img with { ImageName = prefixedImageName });
-                    }
-
-                    allMarkdown.Add(prefixedMarkdown);
-                    _logger.LogInformation("Chunk {Index} processed: {ImageCount} images", i, images.Count);
+                    var chunkResult = await PollAndDownloadAsync(taskId, minerUClient, ossService, ct);
+                    chunkResults.Add(chunkResult);
+                    _logger.LogInformation("Chunk {Index} processed: {ImageCount} images", i, chunkResult.Images.Count);
                 }
                 catch (Exception ex)
                 {
@@ -279,49 +351,22 @@ public class MinerUFileParseWorker : BackgroundService
             {
                 var errorMsg = $"Split parse partially failed ({errors.Count}/{chunks.Count} chunks): {string.Join("; ", errors)}";
 
-                // Save images from successful chunks
-                foreach (var img in allImages)
+                if (chunkResults.Count == 0)
                 {
-                    await parseService.AddImageAsync(new DocumentParseImageModel
-                    {
-                        ParseId = parse.Id,
-                        ImageName = img.ImageName,
-                        ImagePath = img.S3Path,
-                        ContentType = img.ContentType,
-                    });
-                }
-
-                // If all chunks failed, mark as failed
-                if (allMarkdown.Count == 0)
-                {
+                    // All chunks failed
                     await parseService.UpdateStatusAsync(parse.Id, DocumentParseStatus.Failed, errorMessage: errorMsg);
                     return;
                 }
 
                 // Some chunks succeeded — save partial results but mark as failed
-                var mergedMarkdown = string.Join("\n\n---\n\n", allMarkdown);
-                await parseService.UpdateStatusAsync(parse.Id, DocumentParseStatus.Failed,
-                    errorMessage: errorMsg, markdownContent: mergedMarkdown);
+                await PersistMergedChunkResultsAsync(parse, file, chunkResults, ossService, parseService, blockService, errorMsg, status: DocumentParseStatus.Failed);
                 return;
             }
 
-            // Step 5: Merge all results
-            var finalMarkdown = string.Join("\n\n---\n\n", allMarkdown);
-
-            foreach (var img in allImages)
-            {
-                await parseService.AddImageAsync(new DocumentParseImageModel
-                {
-                    ParseId = parse.Id,
-                    ImageName = img.ImageName,
-                    ImagePath = img.S3Path,
-                    ContentType = img.ContentType,
-                });
-            }
-
-            await parseService.UpdateStatusAsync(parse.Id, DocumentParseStatus.Parsed, markdownContent: finalMarkdown);
-            _logger.LogInformation("Split parse completed: ParseId={ParseId}, FileId={FileId}, Chunks={ChunkCount}, Images={ImageCount}",
-                parse.Id, file.Id, chunks.Count, allImages.Count);
+            // Step 5: All chunks succeeded — merge and persist
+            await PersistMergedChunkResultsAsync(parse, file, chunkResults, ossService, parseService, blockService, errorMsg: null, status: DocumentParseStatus.Parsed);
+            _logger.LogInformation("Split parse completed: ParseId={ParseId}, FileId={FileId}, Chunks={ChunkCount}",
+                parse.Id, file.Id, chunks.Count);
         }
         finally
         {
@@ -347,9 +392,137 @@ public class MinerUFileParseWorker : BackgroundService
     }
 
     /// <summary>
+    /// Persist merged results from multiple chunks: combine markdown/content_list/blocks across chunks,
+    /// prefix image names with chunk index to avoid collisions, and persist all artifacts.
+    /// </summary>
+    private async Task PersistMergedChunkResultsAsync(
+        DocumentParseModel parse,
+        DocumentFileModel file,
+        List<MinerUParseResult> chunkResults,
+        IOssService ossService,
+        IDocumentParseService parseService,
+        IDocumentParseBlockService blockService,
+        string? errorMsg,
+        string status)
+    {
+        // Concatenate markdown with separator
+        var allMarkdown = string.Join("\n\n---\n\n", chunkResults.Select(r => r.Markdown));
+
+        // Concatenate content_list JSON arrays
+        var mergedContentList = MergeContentListArrays(chunkResults);
+
+        // Prefix image names with chunk index to avoid collisions across chunks
+        var prefixedImages = new List<ImageMetadata>();
+        for (int i = 0; i < chunkResults.Count; i++)
+        {
+            foreach (var img in chunkResults[i].Images)
+            {
+                var prefixedName = $"chunk{i}_{img.ImageName}";
+                prefixedImages.Add(img with { ImageName = prefixedName });
+            }
+        }
+
+        // Upload first chunk's ZIP as the canonical "mineru-output.zip" (covers all pages)
+        // (For split files, the user can also see individual chunk ZIPs in splits/ folder)
+        var firstZip = chunkResults[0].ZipBytes;
+        string? zipPath = null;
+        try
+        {
+            zipPath = await ossService.UploadAsync(
+                firstZip,
+                "mineru-output.zip",
+                "application/zip",
+                OssBucket.Documents,
+                $"mineru/{parse.DocumentFileId}");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to upload ZIP for split parse {ParseId}", parse.Id);
+        }
+
+        // Upload first chunk's layout.pdf (covers all pages if MinerU returned one per chunk)
+        var firstLayoutPdf = chunkResults.FirstOrDefault(r => r.LayoutPdf != null)?.LayoutPdf;
+        string? layoutPdfPath = null;
+        if (firstLayoutPdf != null && firstLayoutPdf.Length > 0)
+        {
+            try
+            {
+                layoutPdfPath = await ossService.UploadAsync(
+                    firstLayoutPdf,
+                    "layout.pdf",
+                    "application/pdf",
+                    OssBucket.Documents,
+                    $"mineru/{parse.DocumentFileId}");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to upload layout.pdf for split parse {ParseId}", parse.Id);
+            }
+        }
+
+        // Insert images (with prefixed names so they map to prefixed blocks)
+        var imageNameToId = new Dictionary<string, Guid>();
+        foreach (var img in prefixedImages)
+        {
+            var imageModel = new DocumentParseImageModel
+            {
+                ParseId = parse.Id,
+                ImageName = img.ImageName,
+                ImagePath = img.S3Path,
+                ContentType = img.ContentType,
+            };
+            await parseService.AddImageAsync(imageModel);
+            imageNameToId[img.ImageName] = imageModel.Id;
+        }
+
+        // Insert blocks (block service handles overwriting)
+        if (!string.IsNullOrEmpty(mergedContentList) && mergedContentList != "[]")
+        {
+            await blockService.InsertBlocksFromContentListAsync(parse.Id, mergedContentList, imageNameToId);
+        }
+
+        await parseService.UpdateStatusAsync(
+            parse.Id,
+            status,
+            errorMessage: errorMsg,
+            markdownContent: allMarkdown,
+            contentList: mergedContentList,
+            zipPath: zipPath);
+    }
+
+    /// <summary>
+    /// Merge multiple content_list.json arrays (one per chunk) into a single JSON array.
+    /// Block page_id is preserved; sort_index is recomputed in DocumentParseBlockService.
+    /// </summary>
+    private static string MergeContentListArrays(List<MinerUParseResult> chunkResults)
+    {
+        var allBlocks = new List<JsonElement>();
+        foreach (var chunk in chunkResults)
+        {
+            if (string.IsNullOrWhiteSpace(chunk.ContentListJson) || chunk.ContentListJson == "[]") continue;
+            try
+            {
+                using var doc = JsonDocument.Parse(chunk.ContentListJson);
+                if (doc.RootElement.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var el in doc.RootElement.EnumerateArray())
+                    {
+                        allBlocks.Add(el.Clone());
+                    }
+                }
+            }
+            catch
+            {
+                // Skip malformed chunk's content_list
+            }
+        }
+        return JsonSerializer.Serialize(allBlocks);
+    }
+
+    /// <summary>
     /// Poll MinerU task status until done, then download and process the ZIP.
     /// </summary>
-    private async Task<(string Markdown, List<ImageMetadata> Images)> PollAndDownloadAsync(
+    private async Task<MinerUParseResult> PollAndDownloadAsync(
         string taskId,
         MinerUPrecisionClient minerUClient,
         IOssService ossService,

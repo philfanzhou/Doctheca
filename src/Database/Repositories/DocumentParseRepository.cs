@@ -46,6 +46,8 @@ public class DocumentParseRepository : IDocumentParseRepository
         entity.Status = model.Status;
         entity.ExternalTaskId = model.ExternalTaskId;
         entity.MarkdownContent = model.MarkdownContent;
+        entity.ContentList = model.ContentList;
+        entity.ZipPath = model.ZipPath;
         entity.ErrorMessage = model.ErrorMessage;
         entity.ParsedAt = model.ParsedAt;
 
@@ -95,6 +97,15 @@ public class DocumentParseRepository : IDocumentParseRepository
         }
     }
 
+    public async Task<List<DocumentParseModel>> GetByFileIdAsync(Guid documentFileId)
+    {
+        return await _context.DocumentParses
+            .Where(e => e.DocumentFileId == documentFileId)
+            .OrderByDescending(e => e.Id)
+            .Select(e => MapToModel(e))
+            .ToListAsync();
+    }
+
     private static DocumentParseEntity MapToEntity(DocumentParseModel model) => new()
     {
         Id = model.Id,
@@ -102,6 +113,8 @@ public class DocumentParseRepository : IDocumentParseRepository
         Status = model.Status,
         ExternalTaskId = model.ExternalTaskId,
         MarkdownContent = model.MarkdownContent,
+        ContentList = model.ContentList,
+        ZipPath = model.ZipPath,
         ErrorMessage = model.ErrorMessage,
         ParsedAt = model.ParsedAt,
     };
@@ -113,6 +126,8 @@ public class DocumentParseRepository : IDocumentParseRepository
         Status = entity.Status,
         ExternalTaskId = entity.ExternalTaskId,
         MarkdownContent = entity.MarkdownContent,
+        ContentList = entity.ContentList,
+        ZipPath = entity.ZipPath,
         ErrorMessage = entity.ErrorMessage,
         ParsedAt = entity.ParsedAt,
     };

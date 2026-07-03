@@ -6,12 +6,16 @@
 
 | 表名 | 说明 | 文档 |
 |------|------|------|
-| `documents` | 文档主表 | [tables/documents.md](tables/documents.md) |
-| `document_pages` | 文档页面表 | [tables/document_pages.md](tables/document_pages.md) |
-| `document_segments` | 文本片段表 | [tables/document_segments.md](tables/document_segments.md) |
-| `question_segments` | 题目片段表 | [tables/question_segments.md](tables/question_segments.md) |
-| `document_occurrences` | 词元出现位置表 | [tables/document_occurrences.md](tables/document_occurrences.md) |
-| `document_ingestion_jobs` | 文档导入任务表 | [tables/document_ingestion_jobs.md](tables/document_ingestion_jobs.md) |
+| `documents` | 文档主表（旧管线） | [tables/documents.md](tables/documents.md) |
+| `document_pages` | 文档页面表（旧管线） | [tables/document_pages.md](tables/document_pages.md) |
+| `document_segments` | 文本片段表（旧管线） | [tables/document_segments.md](tables/document_segments.md) |
+| `question_segments` | 题目片段表（旧管线） | [tables/question_segments.md](tables/question_segments.md) |
+| `document_occurrences` | 词元出现位置表（旧管线） | [tables/document_occurrences.md](tables/document_occurrences.md) |
+| `document_ingestion_jobs` | 文档导入任务表（旧管线） | [tables/document_ingestion_jobs.md](tables/document_ingestion_jobs.md) |
+| `document_files` | 文档文件表（新 MinerU 管线） | [tables/document_files.md](tables/document_files.md) |
+| `document_parses` | 解析记录表（新 MinerU 管线） | [tables/document_parses.md](tables/document_parses.md) |
+| `document_parse_blocks` | 解析 block 表（新 MinerU 管线） | [tables/document_parse_blocks.md](tables/document_parse_blocks.md) |
+| `document_parse_images` | 解析图片表（新 MinerU 管线） | [tables/document_parse_images.md](tables/document_parse_images.md) |
 
 ## 实体关系
 
