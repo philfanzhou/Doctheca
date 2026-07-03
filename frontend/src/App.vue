@@ -3,7 +3,7 @@ import { ref, computed, onMounted } from 'vue'
 import { authService } from './services/authService'
 import LoginPage from './components/LoginPage.vue'
 import DocManagePage from './views/DocManagePage.vue'
-import MarkdownDataPage from './views/MarkdownDataPage.vue'
+import ParseResultsPage from './views/ParseResultsPage.vue'
 import SearchPage from './views/SearchPage.vue'
 
 const isAuthenticated = ref(false)
@@ -39,7 +39,7 @@ const currentNavLabel = computed(() => navItems.find((n) => n.key === activeTab.
 
 const componentMap: Record<string, any> = {
   documents: DocManagePage,
-  results: MarkdownDataPage,
+  results: ParseResultsPage,
   search: SearchPage,
 }
 
