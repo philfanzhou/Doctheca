@@ -186,7 +186,7 @@ public class MinerUFileParseWorker : BackgroundService
         _logger.LogInformation("Generated presigned URL for file {FileId}", file.Id);
 
         var dataId = parse.DocumentFileId.ToString("N")[..16];
-        var taskId = await minerUClient.SubmitUrlAsync(presignedUrl, dataId, ct);
+        var taskId = await minerUClient.SubmitUrlAsync(presignedUrl, dataId, modelVersion: parse.ModelVersion, ct);
         _logger.LogInformation("MinerU task submitted: FileId={FileId}, TaskId={TaskId}", file.Id, taskId);
 
         await parseService.UpdateStatusAsync(parse.Id, DocumentParseStatus.Parsing, externalTaskId: taskId);
@@ -333,7 +333,7 @@ public class MinerUFileParseWorker : BackgroundService
                 {
                     var chunkPresignedUrl = await ossService.GetPresignedUrlAsync(chunkS3Paths[i], 3600);
                     var dataId = $"{parse.DocumentFileId:N}"[..16] + $"_chunk{i}";
-                    var taskId = await minerUClient.SubmitUrlAsync(chunkPresignedUrl, dataId, ct);
+                    var taskId = await minerUClient.SubmitUrlAsync(chunkPresignedUrl, dataId, modelVersion: parse.ModelVersion, ct);
                     _logger.LogInformation("Chunk {Index} submitted: TaskId={TaskId}", i, taskId);
 
                     var chunkResult = await PollAndDownloadAsync(taskId, minerUClient, ossService, ct);

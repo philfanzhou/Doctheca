@@ -43,8 +43,9 @@ export interface DocumentFileDetail {
   fileName: string
   contentType: string
   createdAt: string
-  parse: {
+  parses: Array<{
     id: string
+    modelVersion: string
     status: string
     markdownContent: string | null
     contentList: string | null
@@ -56,13 +57,14 @@ export interface DocumentFileDetail {
       imageName: string
       imageUrl: string
     }>
-  } | null
+  }>
 }
 
 export interface DocumentParse {
   id: string
   fileId: string
   fileName: string
+  modelVersion: string   // 'vlm' or 'pipeline'
   status: string
   parsedAt: string | null
   errorMessage: string | null
@@ -120,8 +122,10 @@ class DocApiClient {
     return response.data
   }
 
-  async parseDocumentFile(id: string): Promise<ApiResponse<{ id: string; status: string }>> {
-    const response = await this.client.post(`/admin/document-files/${id}/parse`)
+  async parseDocumentFile(id: string, modelVersion: string = 'vlm'): Promise<ApiResponse<{ id: string; status: string; modelVersion: string }>> {
+    const response = await this.client.post(`/admin/document-files/${id}/parse`, null, {
+      params: { modelVersion }
+    })
     return response.data
   }
 

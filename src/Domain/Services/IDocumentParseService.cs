@@ -4,9 +4,10 @@ namespace Ruoyu.Study.DocLibrary.Domain.Services;
 
 public interface IDocumentParseService
 {
-    Task<DocumentParseModel> CreateAsync(Guid documentFileId);
+    Task<DocumentParseModel> CreateAsync(Guid documentFileId, string modelVersion = "vlm");
     Task<DocumentParseModel?> GetByIdAsync(Guid id);
     Task<DocumentParseModel?> GetLatestByFileIdAsync(Guid documentFileId);
+    Task<DocumentParseModel?> GetLatestByFileIdAndModelAsync(Guid documentFileId, string modelVersion);
     Task<DocumentParseModel> UpdateStatusAsync(
         Guid id,
         string status,

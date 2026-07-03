@@ -15,6 +15,11 @@ public class DocumentParseEntity
     [Required]
     public Guid DocumentFileId { get; set; }
 
+    [Column("model_version")]
+    [Required]
+    [MaxLength(20)]
+    public string ModelVersion { get; set; } = "vlm";
+
     [Column("status")]
     [Required]
     [MaxLength(30)]

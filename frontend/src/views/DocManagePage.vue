@@ -71,10 +71,10 @@ async function handleFileUploadChange(event: Event) {
   input.value = ''
 }
 
-async function handleParseFile(id: string) {
+async function handleParseFile(id: string, modelVersion: string) {
   parseFileParsing.value = true
   try {
-    await client.parseDocumentFile(id)
+    await client.parseDocumentFile(id, modelVersion)
     await loadFileList()
     startPolling()
   } catch (e: unknown) {
@@ -179,18 +179,17 @@ onUnmounted(() => {
             </td>
             <td>
               <div class="table-actions">
-                <button
-                  v-if="f.parseStatus === null || f.parseStatus === 'unparsed' || f.parseStatus === 'failed'"
-                  class="btn btn-primary btn-small"
-                  @click="handleParseFile(f.id)"
-                  :disabled="parseFileParsing"
-                >
-                  {{ f.parseStatus === 'failed' ? '重新解析' : '解析' }}
-                </button>
+                <template v-if="f.parseStatus === null || f.parseStatus === 'unparsed' || f.parseStatus === 'failed'">
+                  <button class="btn btn-primary btn-small" @click="handleParseFile(f.id, 'vlm')" :disabled="parseFileParsing">VLM 解析</button>
+                  <button class="btn btn-secondary btn-small" @click="handleParseFile(f.id, 'pipeline')" :disabled="parseFileParsing">Pipeline 解析</button>
+                </template>
                 <span v-else-if="f.parseStatus === 'pending' || f.parseStatus === 'parsing'" style="font-size: 12px; color: var(--text-muted)">
                   {{ getFileStatusLabel(f.parseStatus) }}
                 </span>
-                <button v-else-if="f.parseStatus === 'parsed'" class="btn btn-primary btn-small" @click="handleParseFile(f.id)" :disabled="parseFileParsing">重新解析</button>
+                <template v-else-if="f.parseStatus === 'parsed'">
+                  <button class="btn btn-primary btn-small" @click="handleParseFile(f.id, 'vlm')" :disabled="parseFileParsing">VLM 重新解析</button>
+                  <button class="btn btn-secondary btn-small" @click="handleParseFile(f.id, 'pipeline')" :disabled="parseFileParsing">Pipeline 重新解析</button>
+                </template>
                 <button class="btn btn-secondary btn-small" style="color: var(--danger)" @click="handleDeleteFile(f.id)">删除</button>
               </div>
             </td>

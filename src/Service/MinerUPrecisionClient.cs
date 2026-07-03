@@ -60,6 +60,7 @@ public class MinerUPrecisionClient
     public async Task<string> SubmitUrlAsync(
         string fileUrl,
         string? dataId = null,
+        string? modelVersion = null,
         CancellationToken ct = default)
     {
         if (string.IsNullOrEmpty(_options.ApiToken))
@@ -70,7 +71,7 @@ public class MinerUPrecisionClient
         var payload = new Dictionary<string, object>
         {
             ["url"] = fileUrl,
-            ["model_version"] = _options.ModelVersion ?? "vlm",
+            ["model_version"] = modelVersion ?? _options.ModelVersion ?? "vlm",
             ["is_ocr"] = true,
             ["enable_formula"] = true,
             ["enable_table"] = true,

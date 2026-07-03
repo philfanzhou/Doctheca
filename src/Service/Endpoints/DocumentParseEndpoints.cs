@@ -41,6 +41,7 @@ public static class DocumentParseEndpoints
                 id = p.Id.ToString(),
                 fileId = p.DocumentFileId.ToString(),
                 fileName = file?.FileName ?? "Unknown",
+                modelVersion = p.ModelVersion,
                 status = p.Status,
                 parsedAt = p.ParsedAt?.UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'"),
                 errorMessage = p.ErrorMessage,

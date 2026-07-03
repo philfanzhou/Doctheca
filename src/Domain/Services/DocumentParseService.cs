@@ -20,11 +20,12 @@ public class DocumentParseService : IDocumentParseService
         _logger = logger;
     }
 
-    public async Task<DocumentParseModel> CreateAsync(Guid documentFileId)
+    public async Task<DocumentParseModel> CreateAsync(Guid documentFileId, string modelVersion = "vlm")
     {
         var model = new DocumentParseModel
         {
             DocumentFileId = documentFileId,
+            ModelVersion = modelVersion,
             Status = DocumentParseStatus.Pending,
         };
         var result = await _parseRepository.AddAsync(model);
@@ -40,6 +41,11 @@ public class DocumentParseService : IDocumentParseService
     public async Task<DocumentParseModel?> GetLatestByFileIdAsync(Guid documentFileId)
     {
         return await _parseRepository.GetLatestByFileIdAsync(documentFileId);
+    }
+
+    public async Task<DocumentParseModel?> GetLatestByFileIdAndModelAsync(Guid documentFileId, string modelVersion)
+    {
+        return await _parseRepository.GetLatestByFileIdAndModelAsync(documentFileId, modelVersion);
     }
 
     public async Task<DocumentParseModel> UpdateStatusAsync(

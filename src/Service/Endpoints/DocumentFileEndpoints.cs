@@ -175,36 +175,49 @@ public static class DocumentFileEndpoints
         if (file == null)
             return Results.NotFound(new { success = false, message = "File not found", errorCode = "DOCLIBRARY_FILE_NOT_FOUND" });
 
-        // Get latest parse record
-        var parse = await parseService.GetLatestByFileIdAsync(id);
+        var allParses = await parseService.GetByFileIdAsync(id);
+        var parseResults = new List<object>();
 
-        // Get associated images
-        var images = parse != null
-            ? await parseService.GetImagesByParseIdAsync(parse.Id)
-            : new List<DocumentParseImageModel>();
-
-        // Replace markdown image paths with presigned URLs
-        var markdownContent = parse?.MarkdownContent;
-        if (!string.IsNullOrEmpty(markdownContent))
+        foreach (var parse in allParses)
         {
-            markdownContent = await MarkdownExportHelper.ReplaceImagePathsPresignedAsync(
-                markdownContent, images, ossService, logger);
-        }
+            var images = await parseService.GetImagesByParseIdAsync(parse.Id);
 
-        // Build image list with presigned URLs
-        var imageList = new List<object>();
-        foreach (var img in images)
-        {
-            try
+            var markdownContent = parse.MarkdownContent;
+            if (!string.IsNullOrEmpty(markdownContent))
             {
-                var presignedUrl = await ossService.GetPresignedUrlAsync(img.ImagePath, 3600);
-                imageList.Add(new { id = img.Id.ToString(), imageName = img.ImageName, imageUrl = presignedUrl });
+                markdownContent = await MarkdownExportHelper.ReplaceImagePathsPresignedAsync(
+                    markdownContent, images, ossService, logger);
             }
-            catch (Exception ex)
+
+            var imageList = new List<object>();
+            foreach (var img in images)
             {
-                logger.LogWarning(ex, "Failed to generate presigned URL for image: {ImagePath}", img.ImagePath);
-                imageList.Add(new { id = img.Id.ToString(), imageName = img.ImageName, imageUrl = img.ImagePath });
+                try
+                {
+                    var presignedUrl = await ossService.GetPresignedUrlAsync(img.ImagePath, 3600);
+                    imageList.Add(new { id = img.Id.ToString(), imageName = img.ImageName, imageUrl = presignedUrl });
+                }
+                catch (Exception ex)
+                {
+                    logger.LogWarning(ex, "Failed to generate presigned URL for image: {ImagePath}", img.ImagePath);
+                    imageList.Add(new { id = img.Id.ToString(), imageName = img.ImageName, imageUrl = img.ImagePath });
+                }
             }
+
+            var layoutPdfUrl = await MarkdownExportHelper.GetLayoutPdfPresignedUrlAsync(parse, ossService, logger);
+
+            parseResults.Add(new
+            {
+                id = parse.Id.ToString(),
+                modelVersion = parse.ModelVersion,
+                status = parse.Status,
+                markdownContent,
+                contentList = parse.ContentList,
+                layoutPdfUrl,
+                errorMessage = parse.ErrorMessage,
+                parsedAt = parse.ParsedAt?.UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'"),
+                images = imageList,
+            });
         }
 
         return Results.Ok(new
@@ -216,17 +229,7 @@ public static class DocumentFileEndpoints
                 fileName = file.FileName,
                 contentType = file.ContentType,
                 createdAt = file.CreatedAt.UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'"),
-                parse = parse != null ? new
-                {
-                    id = parse.Id.ToString(),
-                    status = parse.Status,
-                    markdownContent,
-                    contentList = parse.ContentList,
-                    errorMessage = parse.ErrorMessage,
-                    layoutPdfUrl = await MarkdownExportHelper.GetLayoutPdfPresignedUrlAsync(parse, ossService, logger),
-                    parsedAt = parse.ParsedAt?.UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'"),
-                    images = imageList,
-                } : null,
+                parses = parseResults,
             }
         });
     }
@@ -236,29 +239,34 @@ public static class DocumentFileEndpoints
         IDocumentFileService fileService,
         IDocumentParseService parseService,
         [FromServices] IOptions<MinerUOptions> minerUOptions,
-        [FromServices] ILoggerFactory loggerFactory)
+        [FromServices] ILoggerFactory loggerFactory,
+        [FromQuery] string modelVersion = "vlm")
     {
         var logger = loggerFactory.CreateLogger(nameof(DocumentFileEndpoints));
+
+        // Validate modelVersion
+        if (modelVersion != "vlm" && modelVersion != "pipeline")
+            return Results.BadRequest(new { success = false, message = "modelVersion must be 'vlm' or 'pipeline'", errorCode = "DOCLIBRARY_INVALID_MODEL_VERSION" });
 
         var file = await fileService.GetByIdAsync(id);
         if (file == null)
             return Results.NotFound(new { success = false, message = "File not found", errorCode = "DOCLIBRARY_FILE_NOT_FOUND" });
 
-        // Check if there's an active parse (pending or parsing)
-        var latestParse = await parseService.GetLatestByFileIdAsync(id);
+        // Check in-progress per model version
+        var latestParse = await parseService.GetLatestByFileIdAndModelAsync(id, modelVersion);
         if (latestParse != null && (latestParse.Status == DocumentParseStatus.Pending || latestParse.Status == DocumentParseStatus.Parsing))
-            return Results.Json(new { success = false, message = "File is not in a parseable state", errorCode = "DOCLIBRARY_PARSE_IN_PROGRESS" }, statusCode: StatusCodes.Status422UnprocessableEntity);
+            return Results.Json(new { success = false, message = $"File already has a {modelVersion} parse in progress", errorCode = "DOCLIBRARY_PARSE_IN_PROGRESS" }, statusCode: StatusCodes.Status422UnprocessableEntity);
 
         if (string.IsNullOrEmpty(minerUOptions.Value.ApiToken))
             return Results.Json(new { success = false, message = "MinerU API Token not configured", errorCode = "DOCLIBRARY_MINERU_NOT_CONFIGURED" }, statusCode: StatusCodes.Status503ServiceUnavailable);
 
-        var parse = await parseService.CreateAsync(id);
-        logger.LogInformation("Document file parse requested: {Id}, ParseId={ParseId}", id, parse.Id);
+        var parse = await parseService.CreateAsync(id, modelVersion);
+        logger.LogInformation("Document file parse requested: {Id}, ParseId={ParseId}, ModelVersion={ModelVersion}", id, parse.Id, modelVersion);
 
         return Results.Ok(new
         {
             success = true,
-            data = new { id = id.ToString(), parseId = parse.Id.ToString(), status = parse.Status }
+            data = new { id = id.ToString(), parseId = parse.Id.ToString(), status = parse.Status, modelVersion }
         });
     }
 

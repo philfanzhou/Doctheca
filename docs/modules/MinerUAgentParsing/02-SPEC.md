@@ -32,12 +32,13 @@
 |------|------|------|
 | id | uuid | 主键 |
 | document_file_id | uuid | FK → document_files（级联删除） |
+| model_version | varchar(20) | 解析模型版本：vlm / pipeline |
 | status | varchar(30) | pending / parsing / parsed / failed |
 | external_task_id | varchar(100) | MinerU 任务 ID |
 | markdown_content | text | 解析后的 MD（图片路径为 S3 路径） |
-| content_list | jsonb | MinerU 输出的 content_list.json（结构化块数据） |
+| content_list | jsonb | MinerU 输出的 content_list.json（仅 pipeline 模型产出） |
 | zip_path | varchar(500) | 完整 ZIP 包的 OSS 路径 |
-| layout_pdf_path | varchar(500) | layout 标注 PDF 的 OSS 路径 |
+| layout_pdf_path | varchar(500) | layout 标注 PDF 的 OSS 路径（仅 pipeline 模型产出） |
 | error_message | text | 失败原因 |
 | parsed_at | timestamptz | 解析完成时间 |
 
@@ -91,19 +92,23 @@
 
 `POST /admin/document-files/{id}/parse`
 
-- 前置条件：文件存在，且无进行中的解析（最新 parse status 不为 pending/parsing）
-- 响应：`{ success, data: { id, parseId, status } }`
+- 请求参数（query）：`modelVersion`（必填，`vlm` 或 `pipeline`）
+- 前置条件：文件存在，且该 modelVersion 无进行中的解析
+- 同一文件可以同时拥有 vlm 和 pipeline 两种解析结果
+- 响应：`{ success, data: { id, parseId, status, modelVersion } }`
 - 错误码：`DOCLIBRARY_FILE_NOT_FOUND`、`DOCLIBRARY_PARSE_IN_PROGRESS`、`DOCLIBRARY_MINERU_NOT_CONFIGURED`
 
-### API-4：获取文件详情（含 MD）
+### API-4：获取文件详情（含解析列表）
 
 `GET /admin/document-files/{id}`
 
-- 响应：`{ success, data: { id, fileName, contentType, createdAt, parse: { id, status, markdownContent, layoutPdfUrl, errorMessage, parsedAt, images: [...] } } }`
+- 响应：`{ success, data: { id, fileName, contentType, createdAt, parses: [...] } }`
+- `parses` 数组包含该文件所有解析记录，每项：`{ id, modelVersion, status, markdownContent, contentList, layoutPdfUrl, errorMessage, parsedAt, images: [...] }`
 - `markdownContent` 中的图片路径已替换为 S3 presigned URL
-- `layoutPdfUrl` 为 Layout PDF 的 presigned URL（仅 parse.status=parsed 且 layout_pdf_path 非空时返回），有效期 1 小时
+- `contentList` 仅 pipeline 模型有值，vlm 为 null
+- `layoutPdfUrl` 仅 pipeline 模型且 layout_pdf_path 非空时有值，为 presigned URL（有效期 1 小时）
 - `images` 数组包含每张图片的 `id, imageName, imageUrl`（presigned URL）
-- 无解析记录时 `parse` 为 null
+- 无解析记录时 `parses` 为空数组
 
 ### API-5：删除文件
 
@@ -138,7 +143,7 @@
 `GET /admin/document-parses?page=1&pageSize=20&search=`
 
 - 响应：`{ success, data: [...], total, page, pageSize, totalPages }`
-- 每项包含：`id, fileName, status, parsedAt, errorMessage`
+- 每项包含：`id, fileId, fileName, modelVersion, status, parsedAt, errorMessage`
 - `fileName` 来自关联的 document_files.file_name
 - 查询参数 `search`（可选）：按文档名模糊匹配
 - 按 parsed_at DESC 排序（最新解析在前）
@@ -195,15 +200,21 @@
 
 ### AC-PARSE-01：正常解析
 
-- **Given** 文件存在，无进行中的解析，MinerU Token 已配置
-- **When** 调用 `POST /admin/document-files/{id}/parse`
-- **Then** 新建 document_parses 记录，status=pending，Worker 接管后续流程
+- **Given** 文件存在，该 modelVersion 无进行中的解析，MinerU Token 已配置
+- **When** 调用 `POST /admin/document-files/{id}/parse?modelVersion=vlm`
+- **Then** 新建 document_parses 记录（model_version='vlm'），status=pending，Worker 接管后续流程
+
+### AC-PARSE-01b：Pipeline 解析
+
+- **Given** 同上
+- **When** 调用 `POST /admin/document-files/{id}/parse?modelVersion=pipeline`
+- **Then** 新建 document_parses 记录（model_version='pipeline'），status=pending
 
 ### AC-PARSE-02：解析完成
 
 - **Given** MinerU 解析成功
 - **When** Worker 完成 ZIP 下载、图片上传、MD 替换
-- **Then** parse status=parsed，markdown_content 非空，document_parse_images 有记录
+- **Then** parse status=parsed，markdown_content 非空，document_parse_images 有记录；pipeline 模式下 content_list 和 layout_pdf_path 有值
 
 ### AC-PARSE-03：解析失败
 
@@ -211,16 +222,22 @@
 - **When** Worker 捕获错误
 - **Then** parse status=failed，error_message 非空
 
-### AC-PARSE-04：重复解析
+### AC-PARSE-04：重复解析（同模型）
 
-- **Given** 文件最新 parse status=failed 或 parsed
-- **When** 调用解析 API
+- **Given** 文件最新 parse（同 modelVersion）status=failed 或 parsed
+- **When** 调用解析 API（同 modelVersion）
 - **Then** 新建 parse 记录，status=pending（保留历史记录）
 
-### AC-PARSE-05：解析进行中
+### AC-PARSE-04b：不同模型可同时解析
 
-- **Given** 文件最新 parse status=pending 或 parsing
-- **When** 调用解析 API
+- **Given** 文件已有 vlm 的 parsed 解析
+- **When** 调用解析 API（modelVersion=pipeline）
+- **Then** 新建 parse 记录（model_version='pipeline'），与 vlm 记录并存
+
+### AC-PARSE-05：解析进行中（同模型）
+
+- **Given** 文件最新 parse（同 modelVersion）status=pending 或 parsing
+- **When** 调用解析 API（同 modelVersion）
 - **Then** 返回 422，`DOCLIBRARY_PARSE_IN_PROGRESS`
 
 ### AC-PARSE-06：Token 未配置
@@ -313,23 +330,23 @@
 - **When** 点击"预览"按钮
 - **Then** 在新浏览器 tab 中打开自包含 HTML 页面，展示解析后的文档内容
 
-### AC-LAYOUT-01：查看 Layout PDF
+### AC-LAYOUT-01：查看 Layout PDF（pipeline 模型）
 
-- **Given** 文件已解析（status=parsed），且 layout_pdf_path 非空
-- **When** 调用 `GET /admin/document-files/{id}` 获取文件详情
-- **Then** 返回 `layoutPdfUrl`（presigned URL），前端可内嵌展示或新窗口打开
+- **Given** 文件有 pipeline 解析记录（status=parsed），且 layout_pdf_path 非空
+- **When** 前端展示该解析记录
+- **Then** 显示 Layout PDF 按钮，点击可打开 presigned URL
 
-### AC-LAYOUT-02：Layout PDF 不存在
+### AC-LAYOUT-02：VLM 模型无 Layout PDF
 
-- **Given** 文件已解析（status=parsed），但 layout_pdf_path 为空
-- **When** 调用 `GET /admin/document-files/{id}` 获取文件详情
-- **Then** `layoutPdfUrl` 为 null，前端不显示 Layout PDF 入口
+- **Given** 文件有 vlm 解析记录（status=parsed）
+- **When** 前端展示该解析记录
+- **Then** 不显示 Layout PDF 和 JSON 按钮
 
-### AC-LAYOUT-03：未解析文件无 Layout PDF
+### AC-LAYOUT-03：Pipeline 模型无 Layout PDF
 
-- **Given** 文件未解析或解析失败
-- **When** 调用 `GET /admin/document-files/{id}` 获取文件详情
-- **Then** parse 为 null 或 status 非 parsed，无 Layout PDF 入口
+- **Given** 文件有 pipeline 解析记录（status=parsed），但 layout_pdf_path 为空
+- **When** 前端展示该解析记录
+- **Then** 显示 Layout PDF 按钮但点击提示暂无数据
 
 ### AC-PREVIEW-02：预览未解析记录
 

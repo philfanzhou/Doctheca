@@ -31,7 +31,9 @@ public static class DatabaseInitializer
             "ALTER TABLE document_parses ADD COLUMN IF NOT EXISTS content_list jsonb NULL",
             "ALTER TABLE document_parses ADD COLUMN IF NOT EXISTS zip_path character varying(500) NULL",
             // document_parses: layout_pdf_path（layout 标注 PDF 的 OSS 路径）
-            "ALTER TABLE document_parses ADD COLUMN IF NOT EXISTS layout_pdf_path character varying(500) NULL"
+            "ALTER TABLE document_parses ADD COLUMN IF NOT EXISTS layout_pdf_path character varying(500) NULL",
+            // document_parses: model_version (解析模型版本 vlm/pipeline)
+            "ALTER TABLE document_parses ADD COLUMN IF NOT EXISTS model_version character varying(20) NOT NULL DEFAULT 'vlm'"
         };
 
         foreach (var sql in alterStatements)
@@ -260,6 +262,7 @@ public static class DatabaseInitializer
                 CREATE TABLE IF NOT EXISTS document_parses (
                     id uuid NOT NULL,
                     document_file_id uuid NOT NULL,
+                    model_version character varying(20) NOT NULL DEFAULT 'vlm',
                     status character varying(30) NOT NULL DEFAULT 'pending',
                     external_task_id character varying(100) NULL,
                     markdown_content text NULL,
@@ -273,7 +276,8 @@ public static class DatabaseInitializer
                         FOREIGN KEY (document_file_id) REFERENCES document_files(id) ON DELETE CASCADE
                 );
                 CREATE INDEX IF NOT EXISTS IX_document_parses_status ON document_parses (status);
-                CREATE INDEX IF NOT EXISTS IX_document_parses_document_file_id ON document_parses (document_file_id);",
+                CREATE INDEX IF NOT EXISTS IX_document_parses_document_file_id ON document_parses (document_file_id);
+                CREATE INDEX IF NOT EXISTS IX_document_parses_model_version ON document_parses (model_version);",
 
             "document_parse_images" => @"
                 CREATE TABLE IF NOT EXISTS document_parse_images (

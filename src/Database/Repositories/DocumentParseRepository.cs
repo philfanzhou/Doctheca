@@ -44,6 +44,7 @@ public class DocumentParseRepository : IDocumentParseRepository
             ?? throw new KeyNotFoundException($"Document parse not found: {model.Id}");
 
         entity.Status = model.Status;
+        entity.ModelVersion = model.ModelVersion;
         entity.ExternalTaskId = model.ExternalTaskId;
         entity.MarkdownContent = model.MarkdownContent;
         entity.ContentList = model.ContentList;
@@ -98,6 +99,15 @@ public class DocumentParseRepository : IDocumentParseRepository
         }
     }
 
+    public async Task<DocumentParseModel?> GetLatestByFileIdAndModelAsync(Guid documentFileId, string modelVersion)
+    {
+        var entity = await _context.DocumentParses
+            .Where(e => e.DocumentFileId == documentFileId && e.ModelVersion == modelVersion)
+            .OrderByDescending(e => e.Id)
+            .FirstOrDefaultAsync();
+        return entity != null ? MapToModel(entity) : null;
+    }
+
     public async Task<List<DocumentParseModel>> GetByFileIdAsync(Guid documentFileId)
     {
         return await _context.DocumentParses
@@ -111,6 +121,7 @@ public class DocumentParseRepository : IDocumentParseRepository
     {
         Id = model.Id,
         DocumentFileId = model.DocumentFileId,
+        ModelVersion = model.ModelVersion,
         Status = model.Status,
         ExternalTaskId = model.ExternalTaskId,
         MarkdownContent = model.MarkdownContent,
@@ -124,6 +135,7 @@ public class DocumentParseRepository : IDocumentParseRepository
     {
         Id = entity.Id,
         DocumentFileId = entity.DocumentFileId,
+        ModelVersion = entity.ModelVersion,
         Status = entity.Status,
         ExternalTaskId = entity.ExternalTaskId,
         MarkdownContent = entity.MarkdownContent,

@@ -44,18 +44,19 @@ async function handleDeleteParse(parseId: string) {
 }
 
 // Open Markdown view in new tab — fetches file detail, writes markdown to new window
-async function openMarkdown(_parseId: string, fileId: string) {
+async function openMarkdown(parseId: string, fileId: string) {
   try {
     const response = await client.getDocumentFile(fileId)
     const detail = response.data
-    if (!detail.parse?.markdownContent) {
+    const parse = detail.parses?.find(p => p.id === parseId)
+    if (!parse?.markdownContent) {
       alert('该解析结果没有 Markdown 内容')
       return
     }
     const w = window.open('', '_blank')
     if (w) {
       w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${escHtml(detail.fileName)} - Markdown</title>
-<style>body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:900px;margin:0 auto;padding:24px;line-height:1.7;color:#333}pre{white-space:pre-wrap;word-break:break-word;background:#f4f4f4;padding:16px;border-radius:6px;font-size:13px}</style></head><body><h1>${escHtml(detail.fileName)}</h1><pre>${escHtml(detail.parse.markdownContent)}</pre></body></html>`)
+<style>body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:900px;margin:0 auto;padding:24px;line-height:1.7;color:#333}pre{white-space:pre-wrap;word-break:break-word;background:#f4f4f4;padding:16px;border-radius:6px;font-size:13px}</style></head><body><h1>${escHtml(detail.fileName)}</h1><pre>${escHtml(parse.markdownContent)}</pre></body></html>`)
       w.document.close()
     }
   } catch (e) {
@@ -75,20 +76,21 @@ async function openHtmlPreview(parseId: string) {
 }
 
 // Open content_list.json in new tab
-async function openJson(_parseId: string, fileId: string) {
+async function openJson(parseId: string, fileId: string) {
   try {
     const response = await client.getDocumentFile(fileId)
     const detail = response.data
-    const rawContent = detail.parse?.contentList
+    const parse = detail.parses?.find(p => p.id === parseId)
+    const rawContent = parse?.contentList
     if (!rawContent || rawContent === '[]' || rawContent === 'null') {
-      alert('该解析结果没有结构化 JSON 数据。MinerU 返回的 ZIP 中未包含 content_list.json，请检查 MinerU 模型版本和任务状态。')
+      alert('该解析结果没有结构化 JSON 数据。Pipeline 模型的解析结果才包含 content_list.json。')
       return
     }
     let formatted: string
     try {
       const parsed = JSON.parse(rawContent)
       if (Array.isArray(parsed) && parsed.length === 0) {
-        alert('该解析结果的结构化数据为空数组。MinerU 返回的 ZIP 中未包含有效的 content_list.json。')
+        alert('该解析结果的结构化数据为空数组。Pipeline 模型的解析结果才包含有效的 content_list.json。')
         return
       }
       formatted = JSON.stringify(parsed, null, 2)
@@ -107,32 +109,34 @@ async function openJson(_parseId: string, fileId: string) {
 }
 
 // Open Layout PDF in new tab
-async function openLayoutPdf(fileId: string) {
+async function openLayoutPdf(parseId: string, fileId: string) {
   try {
     const response = await client.getDocumentFile(fileId)
     const detail = response.data
-    if (!detail.parse?.layoutPdfUrl) {
-      alert('该解析结果没有 Layout PDF。当前 MinerU 模型（vlm）不生成 layout.pdf，如需此功能请切换为 pipeline 模型。')
+    const parse = detail.parses?.find(p => p.id === parseId)
+    if (!parse?.layoutPdfUrl) {
+      alert('该解析结果没有 Layout PDF。Pipeline 模型的解析结果才包含 layout.pdf。')
       return
     }
-    window.open(detail.parse.layoutPdfUrl, '_blank')
+    window.open(parse.layoutPdfUrl, '_blank')
   } catch (e) {
     alert(e instanceof Error ? e.message : 'Failed to load Layout PDF')
   }
 }
 
 // Open images gallery in new tab
-async function openImages(fileId: string) {
+async function openImages(parseId: string, fileId: string) {
   try {
     const response = await client.getDocumentFile(fileId)
     const detail = response.data
-    if (!detail.parse?.images?.length) {
+    const parse = detail.parses?.find(p => p.id === parseId)
+    if (!parse?.images?.length) {
       alert('该解析结果没有图片')
       return
     }
     const w = window.open('', '_blank')
     if (w) {
-      const images = detail.parse.images
+      const images = parse.images
       w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${escHtml(detail.fileName)} - Images</title>
 <style>body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;padding:24px;background:#f9f9f9}.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px}.card{border:1px solid #ddd;border-radius:6px;overflow:hidden;background:#fff}.card img{width:100%;aspect-ratio:3/4;object-fit:cover}.card .name{padding:8px;font-size:11px;word-break:break-all;color:#666}</style></head><body><h1>${escHtml(detail.fileName)} - 提取图片 (${images.length})</h1><div class="grid">${images.map(img => `<div class="card"><a href="${escAttr(img.imageUrl)}" target="_blank"><img src="${escAttr(img.imageUrl)}" alt="${escAttr(img.imageName)}" /></a><div class="name">${escHtml(img.imageName)}</div></div>`).join('')}</div></body></html>`)
       w.document.close()
@@ -207,6 +211,7 @@ onMounted(() => {
         <thead>
           <tr>
             <th>文件名</th>
+            <th>模型</th>
             <th>状态</th>
             <th>解析时间</th>
             <th>错误信息</th>
@@ -217,6 +222,11 @@ onMounted(() => {
           <tr v-for="p in parseList" :key="p.id">
             <td>{{ p.fileName }}</td>
             <td>
+              <span class="status-badge" :class="p.modelVersion === 'pipeline' ? 'status-parsed' : 'status-parsing'">
+                {{ p.modelVersion === 'pipeline' ? 'Pipeline' : 'VLM' }}
+              </span>
+            </td>
+            <td>
               <span class="status-badge" :class="getFileStatusClass(p.status)">{{ getFileStatusLabel(p.status) }}</span>
             </td>
             <td>{{ p.parsedAt ? formatTime(p.parsedAt) : '-' }}</td>
@@ -225,9 +235,9 @@ onMounted(() => {
               <div v-if="p.status === 'parsed'" style="display: flex; gap: 6px; flex-wrap: wrap">
                 <button class="btn btn-primary btn-small" @click="openMarkdown(p.id, p.fileId)">MD</button>
                 <button class="btn btn-secondary btn-small" @click="openHtmlPreview(p.id)">HTML</button>
-                <button class="btn btn-secondary btn-small" @click="openJson(p.id, p.fileId)">JSON</button>
-                <button class="btn btn-secondary btn-small" @click="openLayoutPdf(p.fileId)">Layout</button>
-                <button class="btn btn-secondary btn-small" @click="openImages(p.fileId)">图片</button>
+                <button v-if="p.modelVersion === 'pipeline'" class="btn btn-secondary btn-small" @click="openJson(p.id, p.fileId)">JSON</button>
+                <button v-if="p.modelVersion === 'pipeline'" class="btn btn-secondary btn-small" @click="openLayoutPdf(p.id, p.fileId)">Layout</button>
+                <button class="btn btn-secondary btn-small" @click="openImages(p.id, p.fileId)">图片</button>
                 <button class="btn btn-secondary btn-small" @click="exportMarkdown(p.id)">导出MD</button>
                 <button class="btn btn-secondary btn-small" @click="exportHtml(p.id)">导出HTML</button>
               </div>

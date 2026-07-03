@@ -147,6 +147,54 @@ public class DocumentParseServiceTests
     }
 
     [Fact]
+    public async Task CreateAsync_SetsModelVersion_ToVlm_ByDefault()
+    {
+        // Arrange
+        var fileId = Guid.NewGuid();
+        _parseRepoMock.Setup(r => r.AddAsync(It.IsAny<DocumentParseModel>()))
+            .Callback<DocumentParseModel>(m => { m.Id = Guid.NewGuid(); })
+            .ReturnsAsync((DocumentParseModel m) => m);
+
+        // Act
+        var result = await _service.CreateAsync(fileId);
+
+        // Assert
+        result.ModelVersion.Should().Be("vlm");
+    }
+
+    [Fact]
+    public async Task CreateAsync_SetsModelVersion_ToPipeline_WhenSpecified()
+    {
+        // Arrange
+        var fileId = Guid.NewGuid();
+        _parseRepoMock.Setup(r => r.AddAsync(It.IsAny<DocumentParseModel>()))
+            .Callback<DocumentParseModel>(m => { m.Id = Guid.NewGuid(); })
+            .ReturnsAsync((DocumentParseModel m) => m);
+
+        // Act
+        var result = await _service.CreateAsync(fileId, "pipeline");
+
+        // Assert
+        result.ModelVersion.Should().Be("pipeline");
+    }
+
+    [Fact]
+    public async Task GetLatestByFileIdAndModelAsync_ReturnsParseForSpecificModel()
+    {
+        // Arrange
+        var fileId = Guid.NewGuid();
+        var model = new DocumentParseModel { Id = Guid.NewGuid(), DocumentFileId = fileId, ModelVersion = "pipeline" };
+        _parseRepoMock.Setup(r => r.GetLatestByFileIdAndModelAsync(fileId, "pipeline")).ReturnsAsync(model);
+
+        // Act
+        var result = await _service.GetLatestByFileIdAndModelAsync(fileId, "pipeline");
+
+        // Assert
+        result.Should().NotBeNull();
+        result!.ModelVersion.Should().Be("pipeline");
+    }
+
+    [Fact]
     public async Task GetByIdAsync_ReturnsModel_WhenExists()
     {
         // Arrange
