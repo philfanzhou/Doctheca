@@ -1,14 +1,29 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, provide } from 'vue'
 import { authService } from './services/authService'
 import LoginPage from './components/LoginPage.vue'
 import DocManagePage from './views/DocManagePage.vue'
 import MarkdownDataPage from './views/MarkdownDataPage.vue'
 import SearchPage from './views/SearchPage.vue'
+import LayoutPdfPage from './views/LayoutPdfPage.vue'
 
 const isAuthenticated = ref(false)
 const appTitle = ref('DocLibrary Admin')
 const activeTab = ref('documents')
+const selectedFileIdForLayout = ref<string | null>(null)
+
+function viewLayoutPdf(fileId: string) {
+  if (fileId) {
+    selectedFileIdForLayout.value = fileId
+    activeTab.value = 'layout'
+  } else {
+    selectedFileIdForLayout.value = null
+    activeTab.value = 'documents'
+  }
+}
+
+provide('selectedFileIdForLayout', selectedFileIdForLayout)
+provide('viewLayoutPdf', viewLayoutPdf)
 
 const sidebarOpen = ref(false)
 const sidebarCollapsed = ref(localStorage.getItem('docSidebarCollapsed') === 'true')
@@ -41,6 +56,7 @@ const componentMap: Record<string, any> = {
   documents: DocManagePage,
   markdown: MarkdownDataPage,
   search: SearchPage,
+  layout: LayoutPdfPage,
 }
 
 const currentComponent = computed(() => componentMap[activeTab.value])

@@ -9,6 +9,7 @@ public class DocumentParseModel
     public string? MarkdownContent { get; set; }
     public string? ContentList { get; set; }
     public string? ZipPath { get; set; }
+    public string? LayoutPdfPath { get; set; }
     public string? ErrorMessage { get; set; }
     public DateTimeOffset? ParsedAt { get; set; }
 }

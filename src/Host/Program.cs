@@ -40,16 +40,11 @@ builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(optio
     options.MultipartBodyLengthLimit = 200 * 1024 * 1024;
 });
 
-var connectionString = builder.Configuration.GetConnectionString("Default");
-var isPostgreSql = !string.IsNullOrWhiteSpace(connectionString)
-    && (connectionString.Contains("Host=", StringComparison.OrdinalIgnoreCase)
-        || connectionString.Contains("Server=", StringComparison.OrdinalIgnoreCase));
+var connectionString = builder.Configuration.GetConnectionString("Default")
+    ?? throw new InvalidOperationException("ConnectionStrings:Default is not configured");
 builder.Services.AddDbContext<DocLibraryDbContext>(options =>
 {
-    if (isPostgreSql)
-        options.UseNpgsql(connectionString);
-    else
-        options.UseSqlite(connectionString ?? "Data Source=data/sqlite/ruoyu_study_doclibrary.db");
+    options.UseNpgsql(connectionString);
 });
 
 var useLocalOss = Environment.GetEnvironmentVariable("USE_LOCAL_OSS") == "1";
@@ -124,14 +119,9 @@ var app = builder.Build();
 
 app.Logger.LogInformation("DocLibrary Service starting");
 app.Logger.LogInformation("Endpoints: HTTP={HttpPort}", httpPort);
-if (isPostgreSql && !string.IsNullOrEmpty(connectionString))
 {
     var csb = new DbConnectionStringBuilder { ConnectionString = connectionString };
     app.Logger.LogInformation("Database: PostgreSQL {Host}:{Port}/{Database}", csb["Host"], csb.TryGetValue("Port", out var dbPort) ? dbPort : "5432", csb["Database"]);
-}
-else
-{
-    app.Logger.LogInformation("Database: SQLite");
 }
 app.Logger.LogInformation("OSS: {OssType}", useLocalOss ? "local" : "S3");
 app.Logger.LogInformation("OpenSearch: {Url}", builder.Configuration["OpenSearch:Url"] ?? "(not configured)");

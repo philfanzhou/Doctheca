@@ -29,7 +29,9 @@ public static class DatabaseInitializer
             "ALTER TABLE document_ingestion_jobs ADD COLUMN IF NOT EXISTS progress_stage character varying(50) NULL",
             // document_parses: 新增 content_list + zip_path（阶段 2）
             "ALTER TABLE document_parses ADD COLUMN IF NOT EXISTS content_list jsonb NULL",
-            "ALTER TABLE document_parses ADD COLUMN IF NOT EXISTS zip_path character varying(500) NULL"
+            "ALTER TABLE document_parses ADD COLUMN IF NOT EXISTS zip_path character varying(500) NULL",
+            // document_parses: layout_pdf_path（layout 标注 PDF 的 OSS 路径）
+            "ALTER TABLE document_parses ADD COLUMN IF NOT EXISTS layout_pdf_path character varying(500) NULL"
         };
 
         foreach (var sql in alterStatements)
@@ -84,6 +86,23 @@ public static class DatabaseInitializer
                     FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE
             );
             CREATE INDEX IF NOT EXISTS IX_document_segment_backups_document_id ON document_segment_backups (document_id);
+        ");
+
+        // Create trigger for auto-updating document_files.updated_at
+        await context.Database.ExecuteSqlRawAsync(@"
+            CREATE OR REPLACE FUNCTION set_document_files_updated_at()
+            RETURNS TRIGGER AS $$
+            BEGIN
+                NEW.updated_at = NOW();
+                RETURN NEW;
+            END;
+            $$ LANGUAGE plpgsql;
+
+            DROP TRIGGER IF EXISTS set_document_files_updated_at ON document_files;
+            CREATE TRIGGER set_document_files_updated_at
+                BEFORE UPDATE ON document_files
+                FOR EACH ROW
+                EXECUTE FUNCTION set_document_files_updated_at();
         ");
 
         logger.LogInformation("Column migration check completed");
@@ -223,6 +242,51 @@ public static class DatabaseInitializer
                         FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE
                 );
                 CREATE INDEX IF NOT EXISTS IX_document_segment_backups_document_id ON document_segment_backups (document_id);",
+
+            "document_files" => @"
+                CREATE TABLE IF NOT EXISTS document_files (
+                    id uuid NOT NULL,
+                    file_name character varying(500) NOT NULL,
+                    file_path character varying(500) NOT NULL,
+                    content_type character varying(100) NOT NULL,
+                    created_by uuid NULL,
+                    created_at timestamp with time zone NOT NULL DEFAULT NOW(),
+                    updated_at timestamp with time zone NULL DEFAULT NOW(),
+                    CONSTRAINT PK_document_files PRIMARY KEY (id)
+                );
+                CREATE INDEX IF NOT EXISTS IX_document_files_file_name ON document_files (file_name);",
+
+            "document_parses" => @"
+                CREATE TABLE IF NOT EXISTS document_parses (
+                    id uuid NOT NULL,
+                    document_file_id uuid NOT NULL,
+                    status character varying(30) NOT NULL DEFAULT 'pending',
+                    external_task_id character varying(100) NULL,
+                    markdown_content text NULL,
+                    content_list jsonb NULL,
+                    zip_path character varying(500) NULL,
+                    layout_pdf_path character varying(500) NULL,
+                    error_message text NULL,
+                    parsed_at timestamp with time zone NULL,
+                    CONSTRAINT PK_document_parses PRIMARY KEY (id),
+                    CONSTRAINT FK_parses_file_document_file_id
+                        FOREIGN KEY (document_file_id) REFERENCES document_files(id) ON DELETE CASCADE
+                );
+                CREATE INDEX IF NOT EXISTS IX_document_parses_status ON document_parses (status);
+                CREATE INDEX IF NOT EXISTS IX_document_parses_document_file_id ON document_parses (document_file_id);",
+
+            "document_parse_images" => @"
+                CREATE TABLE IF NOT EXISTS document_parse_images (
+                    id uuid NOT NULL,
+                    parse_id uuid NOT NULL,
+                    image_name character varying(200) NOT NULL,
+                    image_path character varying(500) NOT NULL,
+                    content_type character varying(50) NOT NULL DEFAULT 'image/jpeg',
+                    CONSTRAINT PK_document_parse_images PRIMARY KEY (id),
+                    CONSTRAINT FK_images_parse_parse_id
+                        FOREIGN KEY (parse_id) REFERENCES document_parses(id) ON DELETE CASCADE
+                );
+                CREATE INDEX IF NOT EXISTS IX_document_parse_images_parse_id ON document_parse_images (parse_id);",
 
             "document_parse_blocks" => @"
                 CREATE TABLE IF NOT EXISTS document_parse_blocks (

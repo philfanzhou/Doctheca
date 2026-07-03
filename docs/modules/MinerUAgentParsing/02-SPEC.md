@@ -8,8 +8,8 @@
 
 | 菜单 | Key | 功能 |
 |------|-----|------|
-| 文档管理 | documents | 上传文件、搜索文件名、触发解析/重新解析、删除文件（含关联解析和图片） |
-| Markdown 数据 | markdown | 查看所有解析记录、按文档名搜索、删除解析记录（仅删解析和图片，不删原始文件）、导出 HTML/MD、在线预览 MD |
+| 文档管理 | documents | 上传文件、搜索文件名、触发解析/重新解析、删除文件（含关联解析和图片）、查看 Layout PDF |
+| Markdown 数据 | markdown | 查看所有解析记录、按文档名搜索、删除解析记录（仅删解析和图片，不删原始文件）、导出 HTML/MD、在线预览 MD、查看 Layout PDF |
 | 检索测试 | search | 保留现有功能 |
 
 ## 数据模型
@@ -35,8 +35,25 @@
 | status | varchar(30) | pending / parsing / parsed / failed |
 | external_task_id | varchar(100) | MinerU 任务 ID |
 | markdown_content | text | 解析后的 MD（图片路径为 S3 路径） |
+| content_list | jsonb | MinerU 输出的 content_list.json（结构化块数据） |
+| zip_path | varchar(500) | 完整 ZIP 包的 OSS 路径 |
+| layout_pdf_path | varchar(500) | layout 标注 PDF 的 OSS 路径 |
 | error_message | text | 失败原因 |
 | parsed_at | timestamptz | 解析完成时间 |
+
+### document_parse_blocks — 解析内容块
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| id | uuid | 主键 |
+| parse_id | uuid | FK → document_parses（级联删除） |
+| page_id | integer | 页码（从 0 开始） |
+| sort_index | integer | 页内排序序号 |
+| block_type | varchar(20) | 块类型：text / image / table / equation / title 等 |
+| text_content | text | 提取的文本内容 |
+| image_id | uuid | FK → document_parse_images（SET NULL） |
+| block_data | jsonb | 原始块 JSON 数据（来自 content_list.json） |
+| created_at | timestamptz | 创建时间 |
 
 ### document_parse_images — 解析产出的图片
 
@@ -82,8 +99,9 @@
 
 `GET /admin/document-files/{id}`
 
-- 响应：`{ success, data: { id, fileName, contentType, createdAt, parse: { id, status, markdownContent, errorMessage, parsedAt, images: [...] } } }`
+- 响应：`{ success, data: { id, fileName, contentType, createdAt, parse: { id, status, markdownContent, layoutPdfUrl, errorMessage, parsedAt, images: [...] } } }`
 - `markdownContent` 中的图片路径已替换为 S3 presigned URL
+- `layoutPdfUrl` 为 Layout PDF 的 presigned URL（仅 parse.status=parsed 且 layout_pdf_path 非空时返回），有效期 1 小时
 - `images` 数组包含每张图片的 `id, imageName, imageUrl`（presigned URL）
 - 无解析记录时 `parse` 为 null
 
@@ -294,6 +312,24 @@
 - **Given** 解析记录存在且 status=parsed
 - **When** 点击"预览"按钮
 - **Then** 在新浏览器 tab 中打开自包含 HTML 页面，展示解析后的文档内容
+
+### AC-LAYOUT-01：查看 Layout PDF
+
+- **Given** 文件已解析（status=parsed），且 layout_pdf_path 非空
+- **When** 调用 `GET /admin/document-files/{id}` 获取文件详情
+- **Then** 返回 `layoutPdfUrl`（presigned URL），前端可内嵌展示或新窗口打开
+
+### AC-LAYOUT-02：Layout PDF 不存在
+
+- **Given** 文件已解析（status=parsed），但 layout_pdf_path 为空
+- **When** 调用 `GET /admin/document-files/{id}` 获取文件详情
+- **Then** `layoutPdfUrl` 为 null，前端不显示 Layout PDF 入口
+
+### AC-LAYOUT-03：未解析文件无 Layout PDF
+
+- **Given** 文件未解析或解析失败
+- **When** 调用 `GET /admin/document-files/{id}` 获取文件详情
+- **Then** parse 为 null 或 status 非 parsed，无 Layout PDF 入口
 
 ### AC-PREVIEW-02：预览未解析记录
 

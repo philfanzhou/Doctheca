@@ -316,6 +316,7 @@ public static class DocumentAdminEndpoints
                     status = parse.Status,
                     markdownContent,
                     errorMessage = parse.ErrorMessage,
+                    layoutPdfUrl = await GetLayoutPdfPresignedUrlAsync(parse, ossService, logger),
                     parsedAt = parse.ParsedAt?.UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'"),
                     images = imageList,
                 } : null,
@@ -779,5 +780,24 @@ public static class DocumentAdminEndpoints
         var htmlBytes = System.Text.Encoding.UTF8.GetBytes(html.ToString());
         var htmlStream = new MemoryStream(htmlBytes);
         return Results.Stream(htmlStream, "text/html", htmlFileName);
+    }
+
+    private static async Task<string?> GetLayoutPdfPresignedUrlAsync(
+        DocumentParseModel parse,
+        IOssService ossService,
+        ILogger logger)
+    {
+        if (parse.Status != DocumentParseStatus.Parsed || string.IsNullOrEmpty(parse.LayoutPdfPath))
+            return null;
+
+        try
+        {
+            return await ossService.GetPresignedUrlAsync(parse.LayoutPdfPath, 3600);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Failed to generate presigned URL for layout PDF: {Path}", parse.LayoutPdfPath);
+            return null;
+        }
     }
 }

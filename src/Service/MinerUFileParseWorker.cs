@@ -487,7 +487,8 @@ public class MinerUFileParseWorker : BackgroundService
             errorMessage: errorMsg,
             markdownContent: allMarkdown,
             contentList: mergedContentList,
-            zipPath: zipPath);
+            zipPath: zipPath,
+            layoutPdfPath: layoutPdfPath);
     }
 
     /// <summary>

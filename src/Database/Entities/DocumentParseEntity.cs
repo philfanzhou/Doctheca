@@ -34,6 +34,10 @@ public class DocumentParseEntity
     [MaxLength(500)]
     public string? ZipPath { get; set; }
 
+    [Column("layout_pdf_path")]
+    [MaxLength(500)]
+    public string? LayoutPdfPath { get; set; }
+
     [Column("error_message")]
     public string? ErrorMessage { get; set; }
 

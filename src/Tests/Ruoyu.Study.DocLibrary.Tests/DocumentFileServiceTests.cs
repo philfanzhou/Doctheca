@@ -245,6 +245,46 @@ public class DocumentParseServiceTests
     }
 
     [Fact]
+    public async Task UpdateStatusAsync_SetsLayoutPdfPath_WhenProvided()
+    {
+        // Arrange
+        var id = Guid.NewGuid();
+        var model = new DocumentParseModel { Id = id, Status = DocumentParseStatus.Parsing };
+        _parseRepoMock.Setup(r => r.GetByIdAsync(id)).ReturnsAsync(model);
+        _parseRepoMock.Setup(r => r.UpdateAsync(It.IsAny<DocumentParseModel>())).ReturnsAsync(model);
+
+        // Act
+        var result = await _service.UpdateStatusAsync(
+            id, DocumentParseStatus.Parsed,
+            markdownContent: "# Hello",
+            layoutPdfPath: "documents/mineru/abc/layout.pdf");
+
+        // Assert
+        result.LayoutPdfPath.Should().Be("documents/mineru/abc/layout.pdf");
+    }
+
+    [Fact]
+    public async Task UpdateStatusAsync_DoesNotOverwriteLayoutPdfPath_WhenNull()
+    {
+        // Arrange
+        var id = Guid.NewGuid();
+        var model = new DocumentParseModel
+        {
+            Id = id,
+            Status = DocumentParseStatus.Parsing,
+            LayoutPdfPath = "documents/mineru/existing/layout.pdf"
+        };
+        _parseRepoMock.Setup(r => r.GetByIdAsync(id)).ReturnsAsync(model);
+        _parseRepoMock.Setup(r => r.UpdateAsync(It.IsAny<DocumentParseModel>())).ReturnsAsync(model);
+
+        // Act
+        var result = await _service.UpdateStatusAsync(id, DocumentParseStatus.Parsed, markdownContent: "# Hello");
+
+        // Assert
+        result.LayoutPdfPath.Should().Be("documents/mineru/existing/layout.pdf");
+    }
+
+    [Fact]
     public async Task GetPendingJobsAsync_ReturnsOnlyPendingJobs()
     {
         // Arrange

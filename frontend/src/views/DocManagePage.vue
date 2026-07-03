@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, inject } from 'vue'
 import { createDocApiClient, type DocumentFile } from '../services/docApi'
 import { formatTime, getFileStatusLabel, getFileStatusClass } from '../utils/format'
 
 const client = createDocApiClient()
+const viewLayoutPdf = inject<(fileId: string) => void>('viewLayoutPdf', () => {})
 
 const fileList = ref<DocumentFile[]>([])
 const fileTotal = ref(0)
@@ -191,6 +192,7 @@ onUnmounted(() => {
                   {{ getFileStatusLabel(f.parseStatus) }}
                 </span>
                 <button v-else-if="f.parseStatus === 'parsed'" class="btn btn-primary btn-small" @click="handleParseFile(f.id)" :disabled="parseFileParsing">重新解析</button>
+                <button v-if="f.parseStatus === 'parsed'" class="btn btn-secondary btn-small" @click="viewLayoutPdf(f.id)">Layout</button>
                 <button class="btn btn-secondary btn-small" style="color: var(--danger)" @click="handleDeleteFile(f.id)">删除</button>
               </div>
             </td>

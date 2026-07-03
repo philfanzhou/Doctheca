@@ -49,7 +49,8 @@ public class DocumentParseService : IDocumentParseService
         string? markdownContent = null,
         string? externalTaskId = null,
         string? contentList = null,
-        string? zipPath = null)
+        string? zipPath = null,
+        string? layoutPdfPath = null)
     {
         var model = await _parseRepository.GetByIdAsync(id)
             ?? throw new KeyNotFoundException($"Document parse not found: {id}");
@@ -61,6 +62,7 @@ public class DocumentParseService : IDocumentParseService
         if (externalTaskId != null) model.ExternalTaskId = externalTaskId;
         if (contentList != null) model.ContentList = contentList;
         if (zipPath != null) model.ZipPath = zipPath;
+        if (layoutPdfPath != null) model.LayoutPdfPath = layoutPdfPath;
         if (status == DocumentParseStatus.Parsed) model.ParsedAt = DateTimeOffset.UtcNow;
 
         var result = await _parseRepository.UpdateAsync(model);
