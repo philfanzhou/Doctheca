@@ -79,15 +79,21 @@ async function openJson(_parseId: string, fileId: string) {
   try {
     const response = await client.getDocumentFile(fileId)
     const detail = response.data
-    if (!detail.parse?.contentList) {
-      alert('该解析结果没有结构化 JSON 数据（content_list.json）')
+    const rawContent = detail.parse?.contentList
+    if (!rawContent || rawContent === '[]' || rawContent === 'null') {
+      alert('该解析结果没有结构化 JSON 数据。MinerU 返回的 ZIP 中未包含 content_list.json，请检查 MinerU 模型版本和任务状态。')
       return
     }
     let formatted: string
     try {
-      formatted = JSON.stringify(JSON.parse(detail.parse.contentList), null, 2)
+      const parsed = JSON.parse(rawContent)
+      if (Array.isArray(parsed) && parsed.length === 0) {
+        alert('该解析结果的结构化数据为空数组。MinerU 返回的 ZIP 中未包含有效的 content_list.json。')
+        return
+      }
+      formatted = JSON.stringify(parsed, null, 2)
     } catch {
-      formatted = detail.parse.contentList
+      formatted = rawContent
     }
     const w = window.open('', '_blank')
     if (w) {

@@ -48,6 +48,7 @@ public class DocumentParseRepository : IDocumentParseRepository
         entity.MarkdownContent = model.MarkdownContent;
         entity.ContentList = model.ContentList;
         entity.ZipPath = model.ZipPath;
+        entity.LayoutPdfPath = model.LayoutPdfPath;
         entity.ErrorMessage = model.ErrorMessage;
         entity.ParsedAt = model.ParsedAt;
 
