@@ -48,8 +48,10 @@ public class DocumentParseRepository : IDocumentParseRepository
         entity.ExternalTaskId = model.ExternalTaskId;
         entity.MarkdownContent = model.MarkdownContent;
         entity.ContentList = model.ContentList;
+        entity.ContentListV2 = model.ContentListV2;
+        entity.ModelJson = model.ModelJson;
+        entity.LayoutJson = model.LayoutJson;
         entity.ZipPath = model.ZipPath;
-        entity.LayoutPdfPath = model.LayoutPdfPath;
         entity.ErrorMessage = model.ErrorMessage;
         entity.ParsedAt = model.ParsedAt;
 
@@ -126,8 +128,10 @@ public class DocumentParseRepository : IDocumentParseRepository
         ExternalTaskId = model.ExternalTaskId,
         MarkdownContent = model.MarkdownContent,
         ContentList = model.ContentList,
+        ContentListV2 = model.ContentListV2,
+        ModelJson = model.ModelJson,
+        LayoutJson = model.LayoutJson,
         ZipPath = model.ZipPath,
-        LayoutPdfPath = model.LayoutPdfPath,
         ErrorMessage = model.ErrorMessage,
         ParsedAt = model.ParsedAt,
     };
@@ -141,8 +145,10 @@ public class DocumentParseRepository : IDocumentParseRepository
         ExternalTaskId = entity.ExternalTaskId,
         MarkdownContent = entity.MarkdownContent,
         ContentList = entity.ContentList,
+        ContentListV2 = entity.ContentListV2,
+        ModelJson = entity.ModelJson,
+        LayoutJson = entity.LayoutJson,
         ZipPath = entity.ZipPath,
-        LayoutPdfPath = entity.LayoutPdfPath,
         ErrorMessage = entity.ErrorMessage,
         ParsedAt = entity.ParsedAt,
     };

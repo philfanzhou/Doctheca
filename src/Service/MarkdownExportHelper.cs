@@ -165,26 +165,4 @@ internal static class MarkdownExportHelper
         var htmlStream = new MemoryStream(htmlBytes);
         return htmlStream;
     }
-
-    /// <summary>
-    /// Generate presigned URL for Layout PDF, returns null if not available.
-    /// </summary>
-    public static async Task<string?> GetLayoutPdfPresignedUrlAsync(
-        DocumentParseModel parse,
-        IOssService ossService,
-        ILogger logger)
-    {
-        if (parse.Status != DocumentParseStatus.Parsed || string.IsNullOrEmpty(parse.LayoutPdfPath))
-            return null;
-
-        try
-        {
-            return await ossService.GetPresignedUrlAsync(parse.LayoutPdfPath, 3600);
-        }
-        catch (Exception ex)
-        {
-            logger.LogWarning(ex, "Failed to generate presigned URL for layout PDF: {Path}", parse.LayoutPdfPath);
-            return null;
-        }
-    }
 }

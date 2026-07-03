@@ -204,8 +204,6 @@ public static class DocumentFileEndpoints
                 }
             }
 
-            var layoutPdfUrl = await MarkdownExportHelper.GetLayoutPdfPresignedUrlAsync(parse, ossService, logger);
-
             parseResults.Add(new
             {
                 id = parse.Id.ToString(),
@@ -213,7 +211,9 @@ public static class DocumentFileEndpoints
                 status = parse.Status,
                 markdownContent,
                 contentList = parse.ContentList,
-                layoutPdfUrl,
+                contentListV2 = parse.ContentListV2,
+                modelJson = parse.ModelJson,
+                layoutJson = parse.LayoutJson,
                 errorMessage = parse.ErrorMessage,
                 parsedAt = parse.ParsedAt?.UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'"),
                 images = imageList,
@@ -291,9 +291,6 @@ public static class DocumentFileEndpoints
         foreach (var parse in allParses)
         {
             if (!string.IsNullOrEmpty(parse.ZipPath)) ossPaths.Add(parse.ZipPath);
-
-            // layout.pdf: not yet stored as a separate column; would go here if added
-            // (tracked in zipPath for now since it's a sub-file)
 
             var images = await parseService.GetImagesByParseIdAsync(parse.Id);
             foreach (var img in images)

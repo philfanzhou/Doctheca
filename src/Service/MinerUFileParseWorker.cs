@@ -198,7 +198,7 @@ public class MinerUFileParseWorker : BackgroundService
     }
 
     /// <summary>
-    /// Persist the full MinerU parse result: upload ZIP + layout.pdf to OSS,
+    /// Persist the full MinerU parse result: upload ZIP to OSS,
     /// insert images, parse and insert blocks, then mark the parse as Parsed.
     /// </summary>
     private async Task PersistParseResultAsync(
@@ -210,7 +210,7 @@ public class MinerUFileParseWorker : BackgroundService
         IDocumentParseBlockService blockService,
         CancellationToken ct)
     {
-        // 1. Upload the full ZIP to OSS (兜底 raw data)
+        // 1. Upload the full ZIP to OSS (raw data backup)
         string? zipPath = null;
         try
         {
@@ -227,27 +227,7 @@ public class MinerUFileParseWorker : BackgroundService
             _logger.LogError(ex, "Failed to upload full ZIP for parse {ParseId}", parse.Id);
         }
 
-        // 2. Upload layout.pdf (if present)
-        string? layoutPdfPath = null;
-        if (result.LayoutPdf != null && result.LayoutPdf.Length > 0)
-        {
-            try
-            {
-                layoutPdfPath = await ossService.UploadAsync(
-                    result.LayoutPdf,
-                    "layout.pdf",
-                    "application/pdf",
-                    OssBucket.Documents,
-                    $"mineru/{parse.DocumentFileId}");
-                _logger.LogInformation("Layout PDF uploaded: {Path} ({Size} bytes)", layoutPdfPath, result.LayoutPdf.Length);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to upload layout.pdf for parse {ParseId}", parse.Id);
-            }
-        }
-
-        // 3. Insert images and build the name -> id map for block referencing
+        // 2. Insert images and build the name -> id map for block referencing
         var imageNameToId = new Dictionary<string, Guid>();
         foreach (var img in result.Images)
         {
@@ -263,22 +243,28 @@ public class MinerUFileParseWorker : BackgroundService
         }
         _logger.LogInformation("Inserted {ImageCount} images for parse {ParseId}", result.Images.Count, parse.Id);
 
-        // 4. Parse content_list.json and insert blocks
+        // 3. Parse content_list.json and insert blocks
         if (!string.IsNullOrWhiteSpace(result.ContentListJson) && result.ContentListJson != "[]")
         {
             await blockService.InsertBlocksFromContentListAsync(parse.Id, result.ContentListJson, imageNameToId);
         }
 
-        // 5. Update parse with markdown, content_list, and OSS paths
+        // 4. Update parse with markdown, content_list, and new JSON fields
         await parseService.UpdateStatusAsync(
             parse.Id,
             DocumentParseStatus.Parsed,
             markdownContent: result.Markdown,
             contentList: result.ContentListJson,
-            zipPath: zipPath,
-            layoutPdfPath: layoutPdfPath);
-        _logger.LogInformation("MinerU parse completed: ParseId={ParseId}, FileId={FileId}, LayoutPdf={HasLayout}",
-            parse.Id, file.Id, layoutPdfPath != null);
+            contentListV2: result.ContentListV2Json,
+            modelJson: result.ModelJson,
+            layoutJson: result.LayoutJson,
+            zipPath: zipPath);
+        _logger.LogInformation("MinerU parse completed: ParseId={ParseId}, FileId={FileId}, " +
+            "contentListV2={HasV2}, modelJson={HasModel}, layoutJson={HasLayout}",
+            parse.Id, file.Id,
+            result.ContentListV2Json != null ? "yes" : "no",
+            result.ModelJson != null ? "yes" : "no",
+            result.LayoutJson != null ? "yes" : "no");
     }
 
     /// <summary>
@@ -424,7 +410,6 @@ public class MinerUFileParseWorker : BackgroundService
         }
 
         // Upload first chunk's ZIP as the canonical "mineru-output.zip" (covers all pages)
-        // (For split files, the user can also see individual chunk ZIPs in splits/ folder)
         var firstZip = chunkResults[0].ZipBytes;
         string? zipPath = null;
         try
@@ -441,25 +426,10 @@ public class MinerUFileParseWorker : BackgroundService
             _logger.LogError(ex, "Failed to upload ZIP for split parse {ParseId}", parse.Id);
         }
 
-        // Upload first chunk's layout.pdf (covers all pages if MinerU returned one per chunk)
-        var firstLayoutPdf = chunkResults.FirstOrDefault(r => r.LayoutPdf != null)?.LayoutPdf;
-        string? layoutPdfPath = null;
-        if (firstLayoutPdf != null && firstLayoutPdf.Length > 0)
-        {
-            try
-            {
-                layoutPdfPath = await ossService.UploadAsync(
-                    firstLayoutPdf,
-                    "layout.pdf",
-                    "application/pdf",
-                    OssBucket.Documents,
-                    $"mineru/{parse.DocumentFileId}");
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to upload layout.pdf for split parse {ParseId}", parse.Id);
-            }
-        }
+        // Use first chunk's layout.json and model.json if available
+        var firstLayoutJson = chunkResults.FirstOrDefault(r => r.LayoutJson != null)?.LayoutJson;
+        var firstModelJson = chunkResults.FirstOrDefault(r => r.ModelJson != null)?.ModelJson;
+        var firstContentListV2 = chunkResults.FirstOrDefault(r => r.ContentListV2Json != null)?.ContentListV2Json;
 
         // Insert images (with prefixed names so they map to prefixed blocks)
         var imageNameToId = new Dictionary<string, Guid>();
@@ -488,8 +458,10 @@ public class MinerUFileParseWorker : BackgroundService
             errorMessage: errorMsg,
             markdownContent: allMarkdown,
             contentList: mergedContentList,
-            zipPath: zipPath,
-            layoutPdfPath: layoutPdfPath);
+            contentListV2: firstContentListV2,
+            modelJson: firstModelJson,
+            layoutJson: firstLayoutJson,
+            zipPath: zipPath);
     }
 
     /// <summary>

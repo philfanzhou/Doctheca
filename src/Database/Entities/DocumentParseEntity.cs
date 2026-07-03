@@ -35,13 +35,18 @@ public class DocumentParseEntity
     [Column("content_list")]
     public string? ContentList { get; set; }
 
+    [Column("content_list_v2")]
+    public string? ContentListV2 { get; set; }
+
+    [Column("model_json")]
+    public string? ModelJson { get; set; }
+
+    [Column("layout_json")]
+    public string? LayoutJson { get; set; }
+
     [Column("zip_path")]
     [MaxLength(500)]
     public string? ZipPath { get; set; }
-
-    [Column("layout_pdf_path")]
-    [MaxLength(500)]
-    public string? LayoutPdfPath { get; set; }
 
     [Column("error_message")]
     public string? ErrorMessage { get; set; }

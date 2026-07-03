@@ -15,8 +15,10 @@ public interface IDocumentParseService
         string? markdownContent = null,
         string? externalTaskId = null,
         string? contentList = null,
-        string? zipPath = null,
-        string? layoutPdfPath = null);
+        string? contentListV2 = null,
+        string? modelJson = null,
+        string? layoutJson = null,
+        string? zipPath = null);
     Task<List<DocumentParseModel>> GetPendingJobsAsync();
     Task AddImageAsync(DocumentParseImageModel image);
     Task<List<DocumentParseImageModel>> GetImagesByParseIdAsync(Guid parseId);

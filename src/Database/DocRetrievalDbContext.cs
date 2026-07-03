@@ -129,6 +129,9 @@ public class DocLibraryDbContext : DbContext
             entity.HasIndex(e => e.DocumentFileId);
 
             entity.Property(e => e.ContentList).HasColumnType("jsonb");
+            entity.Property(e => e.ContentListV2).HasColumnType("jsonb");
+            entity.Property(e => e.ModelJson).HasColumnType("jsonb");
+            entity.Property(e => e.LayoutJson).HasColumnType("jsonb");
 
             entity.HasOne(e => e.DocumentFile)
                 .WithMany()

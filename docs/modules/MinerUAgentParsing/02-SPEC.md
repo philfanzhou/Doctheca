@@ -37,8 +37,10 @@
 | external_task_id | varchar(100) | MinerU 任务 ID |
 | markdown_content | text | 解析后的 MD（图片路径为 S3 路径） |
 | content_list | jsonb | MinerU 输出的 content_list.json（仅 pipeline 模型产出） |
+| content_list_v2 | jsonb | MinerU 输出的 content_list_v2.json（仅 pipeline 模型产出） |
+| model_json | jsonb | MinerU 输出的 model.json — 模型推理结果含 bbox 坐标和版面分类（pipeline 产出，vlm 也可能有） |
+| layout_json | jsonb | MinerU 输出的 layout.json — 版面分析数据含每页 bbox 坐标（仅 pipeline 模型产出） |
 | zip_path | varchar(500) | 完整 ZIP 包的 OSS 路径 |
-| layout_pdf_path | varchar(500) | layout 标注 PDF 的 OSS 路径（仅 pipeline 模型产出） |
 | error_message | text | 失败原因 |
 | parsed_at | timestamptz | 解析完成时间 |
 
@@ -103,10 +105,12 @@
 `GET /admin/document-files/{id}`
 
 - 响应：`{ success, data: { id, fileName, contentType, createdAt, parses: [...] } }`
-- `parses` 数组包含该文件所有解析记录，每项：`{ id, modelVersion, status, markdownContent, contentList, layoutPdfUrl, errorMessage, parsedAt, images: [...] }`
+- `parses` 数组包含该文件所有解析记录，每项：`{ id, modelVersion, status, markdownContent, contentList, contentListV2, modelJson, layoutJson, errorMessage, parsedAt, images: [...] }`
 - `markdownContent` 中的图片路径已替换为 S3 presigned URL
 - `contentList` 仅 pipeline 模型有值，vlm 为 null
-- `layoutPdfUrl` 仅 pipeline 模型且 layout_pdf_path 非空时有值，为 presigned URL（有效期 1 小时）
+- `contentListV2` 仅 pipeline 模型有值，vlm 为 null
+- `modelJson` pipeline 模型有值（含 bbox 坐标和版面分类），vlm 也可能有值
+- `layoutJson` 仅 pipeline 模型有值（含每页版面 bbox 坐标），vlm 为 null
 - `images` 数组包含每张图片的 `id, imageName, imageUrl`（presigned URL）
 - 无解析记录时 `parses` 为空数组
 
@@ -214,7 +218,7 @@
 
 - **Given** MinerU 解析成功
 - **When** Worker 完成 ZIP 下载、图片上传、MD 替换
-- **Then** parse status=parsed，markdown_content 非空，document_parse_images 有记录；pipeline 模式下 content_list 和 layout_pdf_path 有值
+- **Then** parse status=parsed，markdown_content 非空，document_parse_images 有记录；pipeline 模式下 content_list / content_list_v2 / model_json / layout_json 有值
 
 ### AC-PARSE-03：解析失败
 
@@ -330,23 +334,23 @@
 - **When** 点击"预览"按钮
 - **Then** 在新浏览器 tab 中打开自包含 HTML 页面，展示解析后的文档内容
 
-### AC-LAYOUT-01：查看 Layout PDF（pipeline 模型）
+### AC-LAYOUT-01：查看 Layout JSON（pipeline 模型）
 
-- **Given** 文件有 pipeline 解析记录（status=parsed），且 layout_pdf_path 非空
+- **Given** 文件有 pipeline 解析记录（status=parsed），且 layout_json 非空
 - **When** 前端展示该解析记录
-- **Then** 显示 Layout PDF 按钮，点击可打开 presigned URL
+- **Then** 显示 Layout 按钮，点击可在新窗口查看格式化的 layout.json 数据
 
-### AC-LAYOUT-02：VLM 模型无 Layout PDF
+### AC-LAYOUT-02：VLM 模型无 Layout/Model 数据
 
 - **Given** 文件有 vlm 解析记录（status=parsed）
 - **When** 前端展示该解析记录
-- **Then** 不显示 Layout PDF 和 JSON 按钮
+- **Then** 不显示 Layout 和 Content List V2 按钮；Model 按钮仅在 modelJson 有值时显示
 
-### AC-LAYOUT-03：Pipeline 模型无 Layout PDF
+### AC-LAYOUT-03：Pipeline 模型无 Layout JSON
 
-- **Given** 文件有 pipeline 解析记录（status=parsed），但 layout_pdf_path 为空
+- **Given** 文件有 pipeline 解析记录（status=parsed），但 layout_json 为空
 - **When** 前端展示该解析记录
-- **Then** 显示 Layout PDF 按钮但点击提示暂无数据
+- **Then** 显示 Layout 按钮但点击提示暂无数据
 
 ### AC-PREVIEW-02：预览未解析记录
 
@@ -440,26 +444,45 @@
 
 ## MinerU ZIP 解析逻辑
 
-MinerU API 返回的 ZIP 包含以下文件（pipeline 模式下）：
+MinerU API 返回的 ZIP 包含以下文件：
+
+### Pipeline 模式输出
 - `full.md` — 完整 Markdown 内容（必需）
 - `images/` 目录 — 所有提取的图片
-- `content_list.json` 或 `{filename}_content_list.json` — 结构化块数据（仅 pipeline）
-- `layout.pdf` 或 `{filename}_layout.pdf` 或子目录中的 `layout.pdf` — 版面标注 PDF（仅 pipeline）
+- `{uuid}_content_list.json` — 结构化内容块 v1（含文本/图片/表格/公式块）
+- `{uuid}_content_list_v2.json` — 结构化内容块 v2（增强版，字段更丰富）
+- `{uuid}_model.json` — 模型推理结果（含 bbox 坐标、版面分类、置信度）
+- `layout.json` — 版面分析数据（含每页所有 bbox 坐标和分类）
+- `{uuid}_origin.pdf` — 原始 PDF 副本
 
-ZIP 条目匹配规则：
+### VLM 模式输出
+- `full.md` — 完整 Markdown 内容
+- `images/` 目录 — 提取的图片
+- 可能包含 `{uuid}_model.json`（视 MinerU 版本而定）
+
+### ZIP 条目匹配规则
 1. **full.md**：精确匹配根目录的 `full.md`（找不到则抛异常）
 2. **content_list.json**：按优先级依次尝试：
    - 精确匹配 `content_list.json`
-   - 匹配任何以 `_content_list.json` 结尾的路径（如 `{filename}_content_list.json`）
-   - 匹配任何以 `/content_list.json` 结尾的路径（如 `{subdir}/content_list.json`）
+   - 匹配任何以 `_content_list.json` 结尾的路径（如 `{uuid}_content_list.json`）
+   - 匹配任何以 `/content_list.json` 结尾的路径
    - 以上均未找到时默认返回 `"[]"`
-3. **layout.pdf**：按优先级依次尝试：
-   - 精确匹配 `layout.pdf`
-   - 匹配任何以 `_layout.pdf` 结尾的路径
-   - 匹配任何等于 `layout.pdf` 或以 `/layout.pdf` 结尾的路径
-   - 未找到时输出 Warning 日志并返回 null
-4. **图片**：匹配所有以 `images/` 开头且长度 > 0 的条目
+3. **content_list_v2.json**：按优先级依次尝试：
+   - 精确匹配 `content_list_v2.json`
+   - 匹配任何以 `_content_list_v2.json` 结尾的路径
+   - 匹配任何以 `/content_list_v2.json` 结尾的路径
+   - 以上均未找到时默认返回 null
+4. **model.json**：按优先级依次尝试：
+   - 匹配任何以 `_model.json` 结尾的路径（如 `{uuid}_model.json`）
+   - 精确匹配 `model.json`
+   - 以上均未找到时默认返回 null
+5. **layout.json**：按优先级依次尝试：
+   - 精确匹配 `layout.json`
+   - 匹配任何以 `_layout.json` 结尾的路径
+   - 匹配任何以 `/layout.json` 结尾的路径
+   - 以上均未找到时默认返回 null
+6. **图片**：匹配所有以 `images/` 开头且长度 > 0 的条目
 
-调试日志：
+### 调试日志
 - 每次下载 ZIP 后会输出完整条目列表：`ZIP entries for task {TaskId}: {Entries}`
-- 找到 layout.pdf 时输出 Info 日志；未找到时输出 Warning 日志
+- 各 JSON 文件找到/未找到均输出相应级别日志

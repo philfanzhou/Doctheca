@@ -9,8 +9,10 @@ public class DocumentParseModel
     public string? ExternalTaskId { get; set; }
     public string? MarkdownContent { get; set; }
     public string? ContentList { get; set; }
+    public string? ContentListV2 { get; set; }
+    public string? ModelJson { get; set; }
+    public string? LayoutJson { get; set; }
     public string? ZipPath { get; set; }
-    public string? LayoutPdfPath { get; set; }
     public string? ErrorMessage { get; set; }
     public DateTimeOffset? ParsedAt { get; set; }
 }

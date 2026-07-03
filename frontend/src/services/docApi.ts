@@ -49,7 +49,9 @@ export interface DocumentFileDetail {
     status: string
     markdownContent: string | null
     contentList: string | null
-    layoutPdfUrl: string | null
+    contentListV2: string | null
+    modelJson: string | null
+    layoutJson: string | null
     errorMessage: string | null
     parsedAt: string | null
     images: Array<{

@@ -30,10 +30,14 @@ public static class DatabaseInitializer
             // document_parses: 新增 content_list + zip_path（阶段 2）
             "ALTER TABLE document_parses ADD COLUMN IF NOT EXISTS content_list jsonb NULL",
             "ALTER TABLE document_parses ADD COLUMN IF NOT EXISTS zip_path character varying(500) NULL",
-            // document_parses: layout_pdf_path（layout 标注 PDF 的 OSS 路径）
-            "ALTER TABLE document_parses ADD COLUMN IF NOT EXISTS layout_pdf_path character varying(500) NULL",
             // document_parses: model_version (解析模型版本 vlm/pipeline)
-            "ALTER TABLE document_parses ADD COLUMN IF NOT EXISTS model_version character varying(20) NOT NULL DEFAULT 'vlm'"
+            "ALTER TABLE document_parses ADD COLUMN IF NOT EXISTS model_version character varying(20) NOT NULL DEFAULT 'vlm'",
+            // document_parses: new jsonb columns for MinerU pipeline output
+            "ALTER TABLE document_parses ADD COLUMN IF NOT EXISTS content_list_v2 jsonb NULL",
+            "ALTER TABLE document_parses ADD COLUMN IF NOT EXISTS model_json jsonb NULL",
+            "ALTER TABLE document_parses ADD COLUMN IF NOT EXISTS layout_json jsonb NULL",
+            // document_parses: drop legacy layout_pdf_path column (replaced by layout_json)
+            "ALTER TABLE document_parses DROP COLUMN IF EXISTS layout_pdf_path"
         };
 
         foreach (var sql in alterStatements)
@@ -267,8 +271,10 @@ public static class DatabaseInitializer
                     external_task_id character varying(100) NULL,
                     markdown_content text NULL,
                     content_list jsonb NULL,
+                    content_list_v2 jsonb NULL,
+                    model_json jsonb NULL,
+                    layout_json jsonb NULL,
                     zip_path character varying(500) NULL,
-                    layout_pdf_path character varying(500) NULL,
                     error_message text NULL,
                     parsed_at timestamp with time zone NULL,
                     CONSTRAINT PK_document_parses PRIMARY KEY (id),

@@ -145,9 +145,9 @@ public class MinerUPrecisionClient
     }
 
     /// <summary>
-    /// Download ZIP, extract Markdown + content_list.json + images + layout.pdf,
-    /// upload images to OSS, replace relative image paths in Markdown with S3 paths.
-    /// Returns the full parse result (markdown + content_list JSON + images + raw ZIP + layout.pdf).
+    /// Download ZIP, extract Markdown + content_list.json + content_list_v2.json +
+    /// model.json + layout.json + images, upload images to OSS,
+    /// replace relative image paths in Markdown with S3 paths.
     /// </summary>
     public async Task<MinerUParseResult> DownloadAndProcessZipAsync(
         string zipUrl, string taskId, IOssService ossService, CancellationToken ct = default)
@@ -179,54 +179,51 @@ public class MinerUPrecisionClient
             markdown = await mdReader.ReadToEndAsync(ct);
         }
 
-        // Read content_list.json (structured per-block data)
-        // MinerU API returns {filename}_content_list.json, not just content_list.json
-        // Also check subdirectories: {subdir}/content_list.json or {subdir}/{filename}_content_list.json
-        var contentListJson = ReadZipEntryAsString(archive, "content_list.json")
-            ?? archive.Entries
-                .Where(e => e.FullName.EndsWith("_content_list.json", StringComparison.OrdinalIgnoreCase))
-                .Select(e => ReadZipEntryAsString(archive, e.FullName))
-                .FirstOrDefault()
-            ?? archive.Entries
-                .Where(e => e.FullName.EndsWith("/content_list.json", StringComparison.OrdinalIgnoreCase))
-                .Select(e => ReadZipEntryAsString(archive, e.FullName))
-                .FirstOrDefault()
-            ?? "[]";
+        // Read content_list.json (structured per-block data v1)
+        var contentListJson = FindAndReadJsonEntry(archive, "content_list.json",
+            suffixPattern: "_content_list.json",
+            subDirPattern: "/content_list.json",
+            fallback: "[]");
         if (contentListJson == "[]")
-        {
-            _logger.LogWarning("ZIP does not contain content_list.json, structured data unavailable for task {TaskId}", taskId);
-        }
+            _logger.LogWarning("ZIP does not contain content_list.json for task {TaskId}", taskId);
 
-        // Read layout.pdf (annotated PDF with layout boxes) — optional
-        // Note: layout.pdf is only produced by the "pipeline" model, not "vlm"
-        // Matching order: exact "layout.pdf" → any path ending with "_layout.pdf" →
-        // any path ending with "/layout.pdf" (MinerU may place it in a subdirectory)
-        var layoutPdf = ReadZipEntryAsBytes(archive, "layout.pdf")
-            ?? archive.Entries
-                .Where(e => e.FullName.EndsWith("_layout.pdf", StringComparison.OrdinalIgnoreCase))
-                .Select(e => ReadZipEntryAsBytes(archive, e.FullName))
-                .FirstOrDefault()
-            ?? archive.Entries
-                .Where(e => e.FullName.Equals("layout.pdf", StringComparison.OrdinalIgnoreCase)
-                         || e.FullName.EndsWith("/layout.pdf", StringComparison.OrdinalIgnoreCase))
-                .Select(e => ReadZipEntryAsBytes(archive, e.FullName))
-                .FirstOrDefault();
-        if (layoutPdf == null)
-        {
-            _logger.LogWarning("ZIP does not contain layout.pdf for task {TaskId} (model={ModelVersion})", taskId, "pipeline");
-        }
+        // Read content_list_v2.json (structured per-block data v2)
+        var contentListV2Json = FindAndReadJsonEntry(archive, "content_list_v2.json",
+            suffixPattern: "_content_list_v2.json",
+            subDirPattern: "/content_list_v2.json");
+        if (contentListV2Json != null)
+            _logger.LogInformation("content_list_v2.json found for task {TaskId}: {Size}B", taskId, contentListV2Json.Length);
         else
-        {
-            _logger.LogInformation("Layout PDF found in ZIP for task {TaskId}: {Size} bytes", taskId, layoutPdf.Length);
-        }
+            _logger.LogDebug("ZIP does not contain content_list_v2.json for task {TaskId}", taskId);
+
+        // Read model.json (model inference results with bbox coordinates)
+        var modelJson = FindAndReadJsonEntry(archive, "model.json",
+            suffixPattern: "_model.json",
+            subDirPattern: "/model.json");
+        if (modelJson != null)
+            _logger.LogInformation("model.json found for task {TaskId}: {Size}B", taskId, modelJson.Length);
+        else
+            _logger.LogDebug("ZIP does not contain model.json for task {TaskId}", taskId);
+
+        // Read layout.json (layout analysis data with per-page bbox coordinates)
+        var layoutJson = FindAndReadJsonEntry(archive, "layout.json",
+            suffixPattern: "_layout.json",
+            subDirPattern: "/layout.json");
+        if (layoutJson != null)
+            _logger.LogInformation("layout.json found for task {TaskId}: {Size}B", taskId, layoutJson.Length);
+        else
+            _logger.LogDebug("ZIP does not contain layout.json for task {TaskId}", taskId);
 
         // Collect image entries
         var imageEntries = archive.Entries
             .Where(e => e.FullName.StartsWith("images/") && e.Length > 0)
             .ToList();
 
-        _logger.LogInformation("ZIP contains {ImageCount} images, contentList={ContentListBytes}B, layoutPdf={HasLayout}",
-            imageEntries.Count, contentListJson.Length, layoutPdf != null ? "yes" : "no");
+        _logger.LogInformation("ZIP contains {ImageCount} images, contentList={ContentListBytes}B, contentListV2={HasV2}, modelJson={HasModel}, layoutJson={HasLayout}",
+            imageEntries.Count, contentListJson.Length,
+            contentListV2Json != null ? $"{contentListV2Json.Length}B" : "no",
+            modelJson != null ? $"{modelJson.Length}B" : "no",
+            layoutJson != null ? $"{layoutJson.Length}B" : "no");
 
         var imageMetadataList = new List<ImageMetadata>();
         if (imageEntries.Count > 0)
@@ -258,7 +255,6 @@ public class MinerUPrecisionClient
             // Replace relative image paths in Markdown with S3 paths
             foreach (var (relativePath, s3Path) in replacementMap)
             {
-                // Match: ![alt](images/xxx.jpg) or <img src="images/xxx.jpg"/>
                 markdown = markdown.Replace($"({relativePath})", $"({s3Path})");
                 markdown = markdown.Replace($"src=\"{relativePath}\"", $"src=\"{s3Path}\"");
             }
@@ -268,8 +264,33 @@ public class MinerUPrecisionClient
             ZipBytes: zipBytes,
             Markdown: markdown,
             ContentListJson: contentListJson,
-            Images: imageMetadataList,
-            LayoutPdf: layoutPdf);
+            ContentListV2Json: contentListV2Json,
+            ModelJson: modelJson,
+            LayoutJson: layoutJson,
+            Images: imageMetadataList);
+    }
+
+    /// <summary>
+    /// Find and read a JSON entry from the ZIP archive using priority-based matching.
+    /// Priority: exact name → suffix pattern → subdirectory pattern → fallback.
+    /// </summary>
+    private static string? FindAndReadJsonEntry(
+        ZipArchive archive,
+        string exactName,
+        string suffixPattern,
+        string subDirPattern,
+        string? fallback = null)
+    {
+        return ReadZipEntryAsString(archive, exactName)
+            ?? archive.Entries
+                .Where(e => e.FullName.EndsWith(suffixPattern, StringComparison.OrdinalIgnoreCase))
+                .Select(e => ReadZipEntryAsString(archive, e.FullName))
+                .FirstOrDefault()
+            ?? archive.Entries
+                .Where(e => e.FullName.EndsWith(subDirPattern, StringComparison.OrdinalIgnoreCase))
+                .Select(e => ReadZipEntryAsString(archive, e.FullName))
+                .FirstOrDefault()
+            ?? fallback;
     }
 
     private static string? ReadZipEntryAsString(ZipArchive archive, string entryName)
@@ -280,16 +301,6 @@ public class MinerUPrecisionClient
         using var reader = new StreamReader(stream);
         return reader.ReadToEnd();
     }
-
-    private static byte[]? ReadZipEntryAsBytes(ZipArchive archive, string entryName)
-    {
-        var entry = archive.GetEntry(entryName);
-        if (entry == null) return null;
-        using var stream = entry.Open();
-        using var ms = new MemoryStream();
-        stream.CopyTo(ms);
-        return ms.ToArray();
-    }
 }
 
 /// <summary>
@@ -299,8 +310,10 @@ public record MinerUParseResult(
     byte[] ZipBytes,
     string Markdown,
     string ContentListJson,
-    List<ImageMetadata> Images,
-    byte[]? LayoutPdf);
+    string? ContentListV2Json,
+    string? ModelJson,
+    string? LayoutJson,
+    List<ImageMetadata> Images);
 
 /// <summary>
 /// Configuration options for MinerU Precision API.
@@ -315,6 +328,6 @@ public class MinerUOptions
     /// <summary>Base URL for MinerU API.</summary>
     public string? BaseUrl { get; set; } = "https://mineru.net";
 
-    /// <summary>Model version: "vlm" (recommended, default), "pipeline" (produces layout.pdf), or "MinerU-HTML".</summary>
+    /// <summary>Model version: "vlm" (recommended, default) or "pipeline" (produces layout.json + content_list_v2.json).</summary>
     public string? ModelVersion { get; set; }
 }
