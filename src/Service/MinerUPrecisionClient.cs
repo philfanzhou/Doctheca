@@ -164,6 +164,10 @@ public class MinerUPrecisionClient
         using var zipStream = new MemoryStream(zipBytes);
         using var archive = new ZipArchive(zipStream, ZipArchiveMode.Read);
 
+        // Log all ZIP entries for diagnostics
+        _logger.LogInformation("ZIP entries for task {TaskId}: {Entries}",
+            taskId, string.Join(", ", archive.Entries.Select(e => $"{e.FullName}({e.Length}B)")));
+
         // Read full.md
         var mdEntry = archive.GetEntry("full.md")
             ?? throw new InvalidOperationException("ZIP does not contain full.md");
@@ -177,9 +181,14 @@ public class MinerUPrecisionClient
 
         // Read content_list.json (structured per-block data)
         // MinerU API returns {filename}_content_list.json, not just content_list.json
+        // Also check subdirectories: {subdir}/content_list.json or {subdir}/{filename}_content_list.json
         var contentListJson = ReadZipEntryAsString(archive, "content_list.json")
             ?? archive.Entries
                 .Where(e => e.FullName.EndsWith("_content_list.json", StringComparison.OrdinalIgnoreCase))
+                .Select(e => ReadZipEntryAsString(archive, e.FullName))
+                .FirstOrDefault()
+            ?? archive.Entries
+                .Where(e => e.FullName.EndsWith("/content_list.json", StringComparison.OrdinalIgnoreCase))
                 .Select(e => ReadZipEntryAsString(archive, e.FullName))
                 .FirstOrDefault()
             ?? "[]";
@@ -190,14 +199,25 @@ public class MinerUPrecisionClient
 
         // Read layout.pdf (annotated PDF with layout boxes) — optional
         // Note: layout.pdf is only produced by the "pipeline" model, not "vlm"
+        // Matching order: exact "layout.pdf" → any path ending with "_layout.pdf" →
+        // any path ending with "/layout.pdf" (MinerU may place it in a subdirectory)
         var layoutPdf = ReadZipEntryAsBytes(archive, "layout.pdf")
             ?? archive.Entries
                 .Where(e => e.FullName.EndsWith("_layout.pdf", StringComparison.OrdinalIgnoreCase))
                 .Select(e => ReadZipEntryAsBytes(archive, e.FullName))
+                .FirstOrDefault()
+            ?? archive.Entries
+                .Where(e => e.FullName.Equals("layout.pdf", StringComparison.OrdinalIgnoreCase)
+                         || e.FullName.EndsWith("/layout.pdf", StringComparison.OrdinalIgnoreCase))
+                .Select(e => ReadZipEntryAsBytes(archive, e.FullName))
                 .FirstOrDefault();
         if (layoutPdf == null)
         {
-            _logger.LogDebug("ZIP does not contain layout.pdf for task {TaskId}", taskId);
+            _logger.LogWarning("ZIP does not contain layout.pdf for task {TaskId} (model={ModelVersion})", taskId, "pipeline");
+        }
+        else
+        {
+            _logger.LogInformation("Layout PDF found in ZIP for task {TaskId}: {Size} bytes", taskId, layoutPdf.Length);
         }
 
         // Collect image entries

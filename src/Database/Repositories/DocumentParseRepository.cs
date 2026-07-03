@@ -127,6 +127,7 @@ public class DocumentParseRepository : IDocumentParseRepository
         MarkdownContent = model.MarkdownContent,
         ContentList = model.ContentList,
         ZipPath = model.ZipPath,
+        LayoutPdfPath = model.LayoutPdfPath,
         ErrorMessage = model.ErrorMessage,
         ParsedAt = model.ParsedAt,
     };

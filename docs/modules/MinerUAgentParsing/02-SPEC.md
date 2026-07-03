@@ -437,3 +437,29 @@
 - **文件与解析解耦**：文件可独立存在，解析为可选操作；未来可支持其他解析方式
 - **图片管理**：图片上传到 S3 的 `documents/mineru/{taskId}/{imageName}` 路径，MD 中存储 S3 路径，查看时替换为 presigned URL
 - **Presigned URL 有效期**：1 小时
+
+## MinerU ZIP 解析逻辑
+
+MinerU API 返回的 ZIP 包含以下文件（pipeline 模式下）：
+- `full.md` — 完整 Markdown 内容（必需）
+- `images/` 目录 — 所有提取的图片
+- `content_list.json` 或 `{filename}_content_list.json` — 结构化块数据（仅 pipeline）
+- `layout.pdf` 或 `{filename}_layout.pdf` 或子目录中的 `layout.pdf` — 版面标注 PDF（仅 pipeline）
+
+ZIP 条目匹配规则：
+1. **full.md**：精确匹配根目录的 `full.md`（找不到则抛异常）
+2. **content_list.json**：按优先级依次尝试：
+   - 精确匹配 `content_list.json`
+   - 匹配任何以 `_content_list.json` 结尾的路径（如 `{filename}_content_list.json`）
+   - 匹配任何以 `/content_list.json` 结尾的路径（如 `{subdir}/content_list.json`）
+   - 以上均未找到时默认返回 `"[]"`
+3. **layout.pdf**：按优先级依次尝试：
+   - 精确匹配 `layout.pdf`
+   - 匹配任何以 `_layout.pdf` 结尾的路径
+   - 匹配任何等于 `layout.pdf` 或以 `/layout.pdf` 结尾的路径
+   - 未找到时输出 Warning 日志并返回 null
+4. **图片**：匹配所有以 `images/` 开头且长度 > 0 的条目
+
+调试日志：
+- 每次下载 ZIP 后会输出完整条目列表：`ZIP entries for task {TaskId}: {Entries}`
+- 找到 layout.pdf 时输出 Info 日志；未找到时输出 Warning 日志
