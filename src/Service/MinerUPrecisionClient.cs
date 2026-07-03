@@ -70,7 +70,7 @@ public class MinerUPrecisionClient
         var payload = new Dictionary<string, object>
         {
             ["url"] = fileUrl,
-            ["model_version"] = "vlm",
+            ["model_version"] = _options.ModelVersion ?? "vlm",
             ["is_ocr"] = true,
             ["enable_formula"] = true,
             ["enable_table"] = true,
@@ -175,14 +175,25 @@ public class MinerUPrecisionClient
         }
 
         // Read content_list.json (structured per-block data)
-        var contentListJson = ReadZipEntryAsString(archive, "content_list.json") ?? "[]";
+        // MinerU API returns {filename}_content_list.json, not just content_list.json
+        var contentListJson = ReadZipEntryAsString(archive, "content_list.json")
+            ?? archive.Entries
+                .Where(e => e.FullName.EndsWith("_content_list.json", StringComparison.OrdinalIgnoreCase))
+                .Select(e => ReadZipEntryAsString(archive, e.FullName))
+                .FirstOrDefault()
+            ?? "[]";
         if (contentListJson == "[]")
         {
             _logger.LogWarning("ZIP does not contain content_list.json, structured data unavailable for task {TaskId}", taskId);
         }
 
         // Read layout.pdf (annotated PDF with layout boxes) — optional
-        byte[]? layoutPdf = ReadZipEntryAsBytes(archive, "layout.pdf");
+        // Note: layout.pdf is only produced by the "pipeline" model, not "vlm"
+        var layoutPdf = ReadZipEntryAsBytes(archive, "layout.pdf")
+            ?? archive.Entries
+                .Where(e => e.FullName.EndsWith("_layout.pdf", StringComparison.OrdinalIgnoreCase))
+                .Select(e => ReadZipEntryAsBytes(archive, e.FullName))
+                .FirstOrDefault();
         if (layoutPdf == null)
         {
             _logger.LogDebug("ZIP does not contain layout.pdf for task {TaskId}", taskId);
@@ -282,4 +293,7 @@ public class MinerUOptions
 
     /// <summary>Base URL for MinerU API.</summary>
     public string? BaseUrl { get; set; } = "https://mineru.net";
+
+    /// <summary>Model version: "vlm" (recommended, default), "pipeline" (produces layout.pdf), or "MinerU-HTML".</summary>
+    public string? ModelVersion { get; set; }
 }

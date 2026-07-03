@@ -275,7 +275,8 @@ public class MinerUFileParseWorker : BackgroundService
             DocumentParseStatus.Parsed,
             markdownContent: result.Markdown,
             contentList: result.ContentListJson,
-            zipPath: zipPath);
+            zipPath: zipPath,
+            layoutPdfPath: layoutPdfPath);
         _logger.LogInformation("MinerU parse completed: ParseId={ParseId}, FileId={FileId}, LayoutPdf={HasLayout}",
             parse.Id, file.Id, layoutPdfPath != null);
     }

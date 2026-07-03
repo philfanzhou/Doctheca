@@ -34,6 +34,7 @@ LLM_CONTEXT_LENGTH="128K"
 LLM_MAX_TOKENS="4K"
 
 MINERU_API_TOKEN=""
+MINERU_MODEL_VERSION="vlm"
 
 LOKI_URI="http://ruoyu-loki:3100"
 
@@ -69,6 +70,7 @@ docker run -d \
   -e LlmSegmentation__ContextLength="${LLM_CONTEXT_LENGTH:-128K}" \
   -e LlmSegmentation__MaxTokens="${LLM_MAX_TOKENS:-4096}" \
   -e MinerU__ApiToken="${MINERU_API_TOKEN}" \
+  -e MinerU__ModelVersion="${MINERU_MODEL_VERSION}" \
   -e LOKI_URI="${LOKI_URI}" \
   -e Logging__LogLevel__Microsoft_EntityFrameworkCore_Database_Command="Warning" \
   "$IMAGE_NAME"
