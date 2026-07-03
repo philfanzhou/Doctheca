@@ -36,10 +36,10 @@
 | status | varchar(30) | pending / parsing / parsed / failed |
 | external_task_id | varchar(100) | MinerU 任务 ID |
 | markdown_content | text | 解析后的 MD（图片路径为 S3 路径） |
-| content_list | jsonb | MinerU 输出的 content_list.json（仅 pipeline 模型产出） |
-| content_list_v2 | jsonb | MinerU 输出的 content_list_v2.json（仅 pipeline 模型产出） |
-| model_json | jsonb | MinerU 输出的 model.json — 模型推理结果含 bbox 坐标和版面分类（pipeline 产出，vlm 也可能有） |
-| layout_json | jsonb | MinerU 输出的 layout.json — 版面分析数据含每页 bbox 坐标（仅 pipeline 模型产出） |
+| content_list | jsonb | MinerU 输出的 content_list.json（vlm 和 pipeline 模型均会产出，视 MinerU 版本而定） |
+| content_list_v2 | jsonb | MinerU 输出的 content_list_v2.json（vlm 和 pipeline 模型均会产出，视 MinerU 版本而定） |
+| model_json | jsonb | MinerU 输出的 model.json — 模型推理结果含 bbox 坐标和版面分类（vlm 和 pipeline 模型均会产出，视 MinerU 版本而定） |
+| layout_json | jsonb | MinerU 输出的 layout.json — 版面分析数据含每页 bbox 坐标（vlm 和 pipeline 模型均会产出，视 MinerU 版本而定） |
 | zip_path | varchar(500) | 完整 ZIP 包的 OSS 路径 |
 | error_message | text | 失败原因 |
 | parsed_at | timestamptz | 解析完成时间 |
@@ -218,7 +218,7 @@
 
 - **Given** MinerU 解析成功
 - **When** Worker 完成 ZIP 下载、图片上传、MD 替换
-- **Then** parse status=parsed，markdown_content 非空，document_parse_images 有记录；pipeline 模式下 content_list / content_list_v2 / model_json / layout_json 有值
+- **Then** parse status=parsed，markdown_content 非空，document_parse_images 有记录；content_list / content_list_v2 / model_json / layout_json 视 MinerU 版本和 ZIP 内容而定（vlm 和 pipeline 模式均可能产出这些字段）
 
 ### AC-PARSE-03：解析失败
 
@@ -458,7 +458,12 @@ MinerU API 返回的 ZIP 包含以下文件：
 ### VLM 模式输出
 - `full.md` — 完整 Markdown 内容
 - `images/` 目录 — 提取的图片
-- 可能包含 `{uuid}_model.json`（视 MinerU 版本而定）
+- 视 MinerU 版本而定，可能包含与 pipeline 模式相同的完整结构化数据：
+  - `{uuid}_content_list.json` — 结构化内容块 v1
+  - `{uuid}_content_list_v2.json` — 结构化内容块 v2
+  - `{uuid}_model.json` — 模型推理结果
+  - `layout.json` — 版面分析数据
+- 注：当前 MinerU API 升级后，vlm 模式通常也会返回 content_list_v2 / model.json / layout.json，代码按模式无关的方式存储所有找到的字段
 
 ### ZIP 条目匹配规则
 1. **full.md**：精确匹配根目录的 `full.md`（找不到则抛异常）
