@@ -7,6 +7,9 @@ public class DocumentFileModel
     public string FilePath { get; set; } = string.Empty;
     public string ContentType { get; set; } = string.Empty;
     public Guid? CreatedBy { get; set; }
+    public string? Subject { get; set; }
+    public string? Grade { get; set; }
+    public string? Year { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset? UpdatedAt { get; set; }
 }

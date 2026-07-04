@@ -37,6 +37,7 @@ public static class DocumentFileEndpoints
         group.MapGet("/", ListDocumentFiles);
         group.MapGet("/{id:guid}", GetDocumentFile);
         group.MapPost("/{id:guid}/parse", ParseDocumentFile);
+        group.MapPut("/{id:guid}/metadata", UpdateDocumentFileMetadata);
         group.MapDelete("/{id:guid}", DeleteDocumentFile);
 
         return app;
@@ -267,6 +268,62 @@ public static class DocumentFileEndpoints
         });
     }
 
+    private static async Task<IResult> UpdateDocumentFileMetadata(
+        Guid id,
+        HttpRequest request,
+        IDocumentFileService fileService,
+        ISearchIndexService searchIndexService,
+        [FromServices] ILoggerFactory loggerFactory)
+    {
+        var logger = loggerFactory.CreateLogger(nameof(DocumentFileEndpoints));
+
+        UpdateMetadataRequest? body;
+        try
+        {
+            body = await request.ReadFromJsonAsync<UpdateMetadataRequest>();
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Failed to parse metadata update request for file {FileId}", id);
+            return Results.BadRequest(new { success = false, message = "Invalid request body" });
+        }
+
+        if (body == null)
+        {
+            return Results.BadRequest(new { success = false, message = "Request body is required" });
+        }
+
+        var updated = await fileService.UpdateMetadataAsync(id, body.Subject, body.Grade, body.Year);
+        if (updated == null)
+        {
+            return Results.NotFound(new { success = false, message = "File not found", errorCode = "DOCLIBRARY_FILE_NOT_FOUND" });
+        }
+
+        // Best-effort: sync OpenSearch index with new metadata
+        try
+        {
+            await searchIndexService.UpdateDocumentFileMetadataAsync(id, updated.Subject, updated.Grade, updated.Year);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Failed to sync OpenSearch metadata for file {FileId}", id);
+        }
+
+        return Results.Ok(new
+        {
+            success = true,
+            data = new
+            {
+                id = updated.Id.ToString(),
+                fileName = updated.FileName,
+                subject = updated.Subject,
+                grade = updated.Grade,
+                year = updated.Year,
+                updatedAt = updated.UpdatedAt
+            }
+        });
+    }
+
     private static async Task<IResult> DeleteDocumentFile(
         Guid id,
         IDocumentFileService fileService,
@@ -343,4 +400,15 @@ public static class DocumentFileEndpoints
             }
         });
     }
+}
+
+/// <summary>
+/// Request body for PUT /admin/document-files/{id}/metadata.
+/// All fields optional — null means "no change", empty string means "clear".
+/// </summary>
+public record UpdateMetadataRequest
+{
+    public string? Subject { get; init; }
+    public string? Grade { get; init; }
+    public string? Year { get; init; }
 }

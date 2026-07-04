@@ -199,6 +199,38 @@ public class LlmSegmentationService : ILlmSegmentationService
         }
     }
 
+    public async Task<DocumentMetadataAnalysis?> AnalyzeMetadataAsync(string textPreview, CancellationToken cancellationToken = default)
+    {
+        await InitializeAsync(cancellationToken);
+
+        if (string.IsNullOrWhiteSpace(textPreview))
+        {
+            _logger.LogWarning("Empty text preview provided for metadata analysis");
+            return null;
+        }
+
+        if (_options.ChunkSize <= 0 || _options.MaxTokensValue <= 0)
+        {
+            _logger.LogInformation("LLM metadata analysis skipped: LLM not initialized or disabled");
+            return null;
+        }
+
+        try
+        {
+            // Truncate to first 2000 chars — enough for title/subject/grade identification
+            var preview = textPreview.Length > 2000 ? textPreview[..2000] : textPreview;
+
+            var prompt = BuildMetadataAnalysisPrompt(preview);
+            var response = await CallLlmAsync(prompt, cancellationToken);
+            return ParseMetadataAnalysis(response);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "LLM metadata analysis failed, returning null");
+            return null;
+        }
+    }
+
     public async Task<List<SegmentResult>> SegmentTextAsync(string text, DocumentProfile profile, CancellationToken cancellationToken = default)
     {
         await InitializeAsync(cancellationToken);
@@ -316,6 +348,49 @@ public class LlmSegmentationService : ILlmSegmentationService
             ```
 
             文本片段：
+            ---
+            {{textPreview}}
+            ---
+            """;
+    }
+
+    /// <summary>
+    /// Build a focused prompt for metadata-only analysis (subject, grade, year).
+    /// Internal for unit testing.
+    /// </summary>
+    internal static string BuildMetadataAnalysisPrompt(string textPreview)
+    {
+        return $$"""
+            你是一个文档分析专家。分析以下文档内容，识别学科和年级。
+
+            学科类型：
+            - English：英语教材、阅读材料
+            - 语文：语文教材、文言文、现代文
+            - 数学：数学教材、习题集
+            - 物理：物理教材、实验报告
+            - 化学：化学教材、实验报告
+            - 生物：生物教材
+            - 其他：无法明确判断
+
+            年级（从标题或内容推断）：
+            - K：幼儿园/学前
+            - G1-G12：小学一年级到高三
+            - 无法判断时返回 null
+
+            年份（从标题、页眉、版权页等推断，4位数字）：
+            - 无法判断时返回 null
+
+            请分析以下文档内容并返回 JSON。只返回 JSON，不要有其他文字。
+
+            ```json
+            {
+              "subject": "学科或null",
+              "grade": "年级或null",
+              "year": "年份或null"
+            }
+            ```
+
+            文档内容：
             ---
             {{textPreview}}
             ---
@@ -643,6 +718,47 @@ public class LlmSegmentationService : ILlmSegmentationService
         }
     }
 
+    /// <summary>
+    /// Parse LLM metadata analysis response into DocumentMetadataAnalysis.
+    /// Returns null on parse failure. Internal for unit testing.
+    /// </summary>
+    internal DocumentMetadataAnalysis? ParseMetadataAnalysis(string response)
+    {
+        try
+        {
+            var json = ExtractJson(response);
+            var parsed = JsonSerializer.Deserialize<MetadataAnalysisResponse>(json, JsonOptions);
+
+            if (parsed == null)
+            {
+                _logger.LogWarning("Failed to parse LLM metadata analysis response");
+                return null;
+            }
+
+            // Treat empty strings as null (LLM may return "" instead of null)
+            var subject = string.IsNullOrWhiteSpace(parsed.Subject) ? null : parsed.Subject.Trim();
+            var grade = string.IsNullOrWhiteSpace(parsed.Grade) ? null : parsed.Grade.Trim();
+            var year = string.IsNullOrWhiteSpace(parsed.Year) ? null : parsed.Year.Trim();
+
+            // Skip "null" string literal that some LLMs return instead of JSON null
+            subject = subject == "null" ? null : subject;
+            grade = grade == "null" ? null : grade;
+            year = year == "null" ? null : year;
+
+            return new DocumentMetadataAnalysis
+            {
+                Subject = subject,
+                Grade = grade,
+                Year = year
+            };
+        }
+        catch (JsonException ex)
+        {
+            _logger.LogWarning(ex, "Failed to parse LLM metadata analysis response as JSON");
+            return null;
+        }
+    }
+
     private List<SegmentResult> ParseSegmentResults(string response, string originalText)
     {
         try
@@ -782,6 +898,22 @@ public class LlmSegmentationService : ILlmSegmentationService
 
         [JsonPropertyName("structure")]
         public StructureResponse? Structure { get; init; }
+    }
+
+    /// <summary>
+    /// LLM response for metadata-only analysis (subject, grade, year).
+    /// All fields nullable — LLM returns null when it cannot determine the value.
+    /// </summary>
+    private record MetadataAnalysisResponse
+    {
+        [JsonPropertyName("subject")]
+        public string? Subject { get; init; }
+
+        [JsonPropertyName("grade")]
+        public string? Grade { get; init; }
+
+        [JsonPropertyName("year")]
+        public string? Year { get; init; }
     }
 
     private record StructureResponse

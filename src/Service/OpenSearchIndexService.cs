@@ -387,6 +387,44 @@ public class OpenSearchIndexService : ISearchIndexService
         }
     }
 
+    public async Task UpdateDocumentFileMetadataAsync(Guid documentFileId, string? subject, string? grade, string? year)
+    {
+        var indexName = _options.IndexName;
+        var updateBody = new
+        {
+            query = new
+            {
+                term = new { document_file_id = documentFileId.ToString() }
+            },
+            script = new
+            {
+                source = "ctx._source.subject = params.subject; ctx._source.grade = params.grade; ctx._source.year = params.year",
+                @params = new
+                {
+                    subject = subject ?? string.Empty,
+                    grade = grade ?? string.Empty,
+                    year = year ?? string.Empty
+                }
+            }
+        };
+
+        var json = JsonSerializer.Serialize(updateBody);
+        var response = await _client.UpdateByQueryAsync<BytesResponse>(indexName, json);
+
+        if (response.Success && response.HttpStatusCode == 200)
+        {
+            _logger.LogInformation(
+                "Document file {FileId} search index metadata updated: Subject={Subject}, Grade={Grade}, Year={Year}",
+                documentFileId, subject ?? "(none)", grade ?? "(none)", year ?? "(none)");
+        }
+        else
+        {
+            _logger.LogWarning(
+                "Failed to update document file {FileId} search index metadata, status code: {StatusCode}",
+                documentFileId, response.HttpStatusCode);
+        }
+    }
+
     public async Task<(List<SearchResultModel> Results, int TotalCount, string? NextToken)> ExactSearchAsync(
         string query, bool phrase, SearchFilterModel? filter, int pageSize, string? pageToken)
     {

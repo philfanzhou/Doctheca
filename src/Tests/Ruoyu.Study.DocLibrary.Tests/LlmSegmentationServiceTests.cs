@@ -556,4 +556,247 @@ public class LlmSegmentationServiceTests
     }
 
     #endregion
+
+    #region AnalyzeMetadataAsync Tests
+
+    [Fact]
+    public async Task AnalyzeMetadataAsync_EmptyText_ReturnsNull()
+    {
+        var service = CreateService();
+        var result = await service.AnalyzeMetadataAsync("");
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public async Task AnalyzeMetadataAsync_ValidResponse_ReturnsMetadata()
+    {
+        var llmResponse = """
+        {
+            "subject": "English",
+            "grade": "G10",
+            "year": "2024"
+        }
+        """;
+
+        var service = CreateService(llmResponse);
+        var text = "# English Textbook Grade 10\n\nChapter 1: Introduction to Grammar";
+
+        var result = await service.AnalyzeMetadataAsync(text);
+
+        Assert.NotNull(result);
+        Assert.Equal("English", result.Subject);
+        Assert.Equal("G10", result.Grade);
+        Assert.Equal("2024", result.Year);
+    }
+
+    [Fact]
+    public async Task AnalyzeMetadataAsync_NullFieldsInResponse_ReturnsNullFields()
+    {
+        var llmResponse = """
+        {
+            "subject": "数学",
+            "grade": null,
+            "year": null
+        }
+        """;
+
+        var service = CreateService(llmResponse);
+        var text = "第一章 集合与函数\n\n1.1 集合的概念";
+
+        var result = await service.AnalyzeMetadataAsync(text);
+
+        Assert.NotNull(result);
+        Assert.Equal("数学", result.Subject);
+        Assert.Null(result.Grade);
+        Assert.Null(result.Year);
+    }
+
+    [Fact]
+    public async Task AnalyzeMetadataAsync_EmptyStringFieldsInResponse_ReturnsNullFields()
+    {
+        // Some LLMs return "" instead of null — parser should treat empty as null
+        var llmResponse = """
+        {
+            "subject": "",
+            "grade": "",
+            "year": ""
+        }
+        """;
+
+        var service = CreateService(llmResponse);
+        var text = "Some document content without clear subject indicators.";
+
+        var result = await service.AnalyzeMetadataAsync(text);
+
+        Assert.NotNull(result);
+        Assert.Null(result.Subject);
+        Assert.Null(result.Grade);
+        Assert.Null(result.Year);
+    }
+
+    [Fact]
+    public async Task AnalyzeMetadataAsync_NullStringLiteralInResponse_ReturnsNullFields()
+    {
+        // Some LLMs return the string "null" instead of JSON null
+        var llmResponse = """
+        {
+            "subject": "null",
+            "grade": "null",
+            "year": "null"
+        }
+        """;
+
+        var service = CreateService(llmResponse);
+        var text = "Some document content.";
+
+        var result = await service.AnalyzeMetadataAsync(text);
+
+        Assert.NotNull(result);
+        Assert.Null(result.Subject);
+        Assert.Null(result.Grade);
+        Assert.Null(result.Year);
+    }
+
+    [Fact]
+    public async Task AnalyzeMetadataAsync_InvalidJson_ReturnsNull()
+    {
+        var service = CreateService("This is not JSON at all");
+        var text = "Some document content.";
+
+        var result = await service.AnalyzeMetadataAsync(text);
+
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public async Task AnalyzeMetadataAsync_LlmCallFails_ReturnsNull()
+    {
+        var service = CreateService(statusCode: HttpStatusCode.InternalServerError);
+        var text = "Some document content for testing.";
+
+        var result = await service.AnalyzeMetadataAsync(text);
+
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public async Task AnalyzeMetadataAsync_LongText_TruncatesTo2000Chars()
+    {
+        // Verify that long text doesn't cause failure — service should truncate internally
+        var llmResponse = """
+        {
+            "subject": "English",
+            "grade": "G5",
+            "year": "2024"
+        }
+        """;
+
+        var service = CreateService(llmResponse);
+        var text = new string('a', 5000); // 5000 chars, should be truncated to 2000
+
+        var result = await service.AnalyzeMetadataAsync(text);
+
+        Assert.NotNull(result);
+        Assert.Equal("English", result.Subject);
+    }
+
+    #endregion
+
+    #region BuildMetadataAnalysisPrompt Tests
+
+    [Fact]
+    public void BuildMetadataAnalysisPrompt_ContainsSubjectInstructions()
+    {
+        var prompt = LlmSegmentationService.BuildMetadataAnalysisPrompt("test content");
+        Assert.Contains("学科", prompt);
+        Assert.Contains("English", prompt);
+        Assert.Contains("语文", prompt);
+        Assert.Contains("数学", prompt);
+    }
+
+    [Fact]
+    public void BuildMetadataAnalysisPrompt_ContainsGradeInstructions()
+    {
+        var prompt = LlmSegmentationService.BuildMetadataAnalysisPrompt("test content");
+        Assert.Contains("年级", prompt);
+        Assert.Contains("G1-G12", prompt);
+    }
+
+    [Fact]
+    public void BuildMetadataAnalysisPrompt_ContainsYearInstructions()
+    {
+        var prompt = LlmSegmentationService.BuildMetadataAnalysisPrompt("test content");
+        Assert.Contains("年份", prompt);
+    }
+
+    [Fact]
+    public void BuildMetadataAnalysisPrompt_DoesNotContainSegmentationStrategy()
+    {
+        // Metadata prompt should NOT ask for segmentation strategy (that's the legacy full analysis)
+        var prompt = LlmSegmentationService.BuildMetadataAnalysisPrompt("test content");
+        Assert.DoesNotContain("segment_strategy", prompt);
+        Assert.DoesNotContain("分段策略", prompt);
+        Assert.DoesNotContain("doc_type", prompt);
+    }
+
+    [Fact]
+    public void BuildMetadataAnalysisPrompt_ContainsTextInput()
+    {
+        var textPreview = "This is a test document about physics.";
+        var prompt = LlmSegmentationService.BuildMetadataAnalysisPrompt(textPreview);
+        Assert.Contains(textPreview, prompt);
+    }
+
+    #endregion
+
+    #region ParseMetadataAnalysis Tests (via AnalyzeMetadataAsync)
+
+    [Fact]
+    public async Task ParseMetadataAnalysis_MarkdownCodeBlockWrapper_ParsesCorrectly()
+    {
+        // LLM may wrap JSON in markdown code block
+        var llmResponse = """
+        ```json
+        {
+            "subject": "物理",
+            "grade": "G11",
+            "year": "2025"
+        }
+        ```
+        """;
+
+        var service = CreateService(llmResponse);
+        var text = "Physics textbook content";
+
+        var result = await service.AnalyzeMetadataAsync(text);
+
+        Assert.NotNull(result);
+        Assert.Equal("物理", result.Subject);
+        Assert.Equal("G11", result.Grade);
+        Assert.Equal("2025", result.Year);
+    }
+
+    [Fact]
+    public async Task ParseMetadataAnalysis_PartialFields_PreservesNulls()
+    {
+        var llmResponse = """
+        {
+            "subject": "化学",
+            "grade": "G9"
+        }
+        """;
+
+        var service = CreateService(llmResponse);
+        var text = "Chemistry content";
+
+        var result = await service.AnalyzeMetadataAsync(text);
+
+        Assert.NotNull(result);
+        Assert.Equal("化学", result.Subject);
+        Assert.Equal("G9", result.Grade);
+        // year is missing from JSON → should be null
+        Assert.Null(result.Year);
+    }
+
+    #endregion
 }

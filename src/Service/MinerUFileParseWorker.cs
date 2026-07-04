@@ -271,6 +271,9 @@ public class MinerUFileParseWorker : BackgroundService
 
         // 5. Index blocks to OpenSearch (best-effort, failure does not block parse)
         await IndexBlocksToSearchAsync(parse.Id, file.Id, file.FileName, scopeProvider);
+
+        // 6. Analyze metadata via LLM if missing (best-effort, failure does not block parse)
+        await AnalyzeMetadataIfMissingAsync(parse.DocumentFileId, result.Markdown, scopeProvider, ct);
     }
 
     /// <summary>
@@ -286,6 +289,102 @@ public class MinerUFileParseWorker : BackgroundService
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Failed to index parse {ParseId} to OpenSearch", parseId);
+        }
+    }
+
+    /// <summary>
+    /// Analyze document metadata (subject/grade/year) via LLM if any field is missing.
+    /// Best-effort: failures are logged but do not block the parse workflow.
+    /// Skips if all three fields are already set, or if LLM is not configured.
+    /// </summary>
+    private async Task AnalyzeMetadataIfMissingAsync(
+        Guid documentFileId,
+        string? markdownContent,
+        IServiceProvider scopeProvider,
+        CancellationToken ct)
+    {
+        try
+        {
+            var fileService = scopeProvider.GetRequiredService<IDocumentFileService>();
+            var file = await fileService.GetByIdAsync(documentFileId);
+            if (file == null)
+            {
+                _logger.LogWarning("Document file not found for metadata analysis: {FileId}", documentFileId);
+                return;
+            }
+
+            // Skip if all metadata fields are already set (by human or previous LLM analysis)
+            if (!string.IsNullOrWhiteSpace(file.Subject)
+                && !string.IsNullOrWhiteSpace(file.Grade)
+                && !string.IsNullOrWhiteSpace(file.Year))
+            {
+                _logger.LogInformation(
+                    "Metadata already set for file {FileId}, skip LLM analysis (Subject={Subject}, Grade={Grade}, Year={Year})",
+                    documentFileId, file.Subject, file.Grade, file.Year);
+                return;
+            }
+
+            // LLM service is optional (registered only when ApiKey is configured)
+            var llmService = scopeProvider.GetService<ILlmSegmentationService>();
+            if (llmService == null)
+            {
+                _logger.LogInformation("LLM not configured, skip metadata analysis for file {FileId}", documentFileId);
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(markdownContent))
+            {
+                _logger.LogInformation("No markdown content for file {FileId}, skip metadata analysis", documentFileId);
+                return;
+            }
+
+            // Extract first 2000 chars of markdown (human-readable, not JSON)
+            var textPreview = markdownContent.Length > 2000 ? markdownContent[..2000] : markdownContent;
+
+            _logger.LogInformation("Starting LLM metadata analysis for file {FileId}", documentFileId);
+            var analysis = await llmService.AnalyzeMetadataAsync(textPreview, ct);
+
+            if (analysis == null)
+            {
+                _logger.LogWarning("LLM metadata analysis returned null for file {FileId}", documentFileId);
+                return;
+            }
+
+            // Only fill in fields that are currently empty (don't overwrite existing values)
+            var newSubject = string.IsNullOrWhiteSpace(file.Subject) ? analysis.Subject : file.Subject;
+            var newGrade = string.IsNullOrWhiteSpace(file.Grade) ? analysis.Grade : file.Grade;
+            var newYear = string.IsNullOrWhiteSpace(file.Year) ? analysis.Year : file.Year;
+
+            // Check if anything actually changed
+            if (newSubject == file.Subject && newGrade == file.Grade && newYear == file.Year)
+            {
+                _logger.LogInformation("LLM did not provide any missing metadata for file {FileId}", documentFileId);
+                return;
+            }
+
+            await fileService.UpdateMetadataAsync(documentFileId, newSubject, newGrade, newYear);
+            _logger.LogInformation(
+                "Metadata updated by LLM for file {FileId}: Subject={Subject}, Grade={Grade}, Year={Year}",
+                documentFileId, newSubject ?? "(none)", newGrade ?? "(none)", newYear ?? "(none)");
+
+            // Sync OpenSearch index with new metadata (best-effort)
+            try
+            {
+                var searchIndexService = scopeProvider.GetRequiredService<ISearchIndexService>();
+                await searchIndexService.UpdateDocumentFileMetadataAsync(documentFileId, newSubject, newGrade, newYear);
+            }
+            catch (Exception syncEx)
+            {
+                _logger.LogWarning(syncEx, "Failed to sync OpenSearch metadata for file {FileId}", documentFileId);
+            }
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "LLM metadata analysis failed for file {FileId}", documentFileId);
         }
     }
 
@@ -369,12 +468,12 @@ public class MinerUFileParseWorker : BackgroundService
                 }
 
                 // Some chunks succeeded — save partial results but mark as failed
-                await PersistMergedChunkResultsAsync(parse, file, chunkResults, ossService, parseService, blockService, scopeProvider, errorMsg, status: DocumentParseStatus.Failed);
+                await PersistMergedChunkResultsAsync(parse, file, chunkResults, ossService, parseService, blockService, scopeProvider, errorMsg, status: DocumentParseStatus.Failed, ct);
                 return;
             }
 
             // Step 5: All chunks succeeded — merge and persist
-            await PersistMergedChunkResultsAsync(parse, file, chunkResults, ossService, parseService, blockService, scopeProvider, errorMsg: null, status: DocumentParseStatus.Parsed);
+            await PersistMergedChunkResultsAsync(parse, file, chunkResults, ossService, parseService, blockService, scopeProvider, errorMsg: null, status: DocumentParseStatus.Parsed, ct);
             _logger.LogInformation("Split parse completed: ParseId={ParseId}, FileId={FileId}, Chunks={ChunkCount}",
                 parse.Id, file.Id, chunks.Count);
         }
@@ -414,7 +513,8 @@ public class MinerUFileParseWorker : BackgroundService
         IDocumentParseBlockService blockService,
         IServiceProvider scopeProvider,
         string? errorMsg,
-        string status)
+        string status,
+        CancellationToken ct)
     {
         // Concatenate markdown with separator
         var allMarkdown = string.Join("\n\n---\n\n", chunkResults.Select(r => r.Markdown));
@@ -491,6 +591,9 @@ public class MinerUFileParseWorker : BackgroundService
         if (status == DocumentParseStatus.Parsed)
         {
             await IndexBlocksToSearchAsync(parse.Id, file.Id, file.FileName, scopeProvider);
+
+            // Analyze metadata via LLM if missing (best-effort, failure does not block parse)
+            await AnalyzeMetadataIfMissingAsync(parse.DocumentFileId, allMarkdown, scopeProvider, ct);
         }
     }
 

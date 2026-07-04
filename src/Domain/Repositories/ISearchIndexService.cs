@@ -45,6 +45,13 @@ public interface ISearchIndexService
     Task UpdateDocumentMetadataAsync(Guid documentId, string subject, string grade, string year);
 
     /// <summary>
+    /// Update subject/grade/year for all indexed blocks of a document file.
+    /// Used when metadata is set/updated after initial indexing (e.g., by LLM analysis or manual edit).
+    /// Best-effort: failures are logged but do not throw.
+    /// </summary>
+    Task UpdateDocumentFileMetadataAsync(Guid documentFileId, string? subject, string? grade, string? year);
+
+    /// <summary>
     /// Exact search (OpenSearch BM25)
     /// </summary>
     Task<(List<SearchResultModel> Results, int TotalCount, string? NextToken)> ExactSearchAsync(

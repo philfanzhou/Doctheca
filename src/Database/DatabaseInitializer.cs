@@ -37,7 +37,11 @@ public static class DatabaseInitializer
             "ALTER TABLE document_parses ADD COLUMN IF NOT EXISTS model_json jsonb NULL",
             "ALTER TABLE document_parses ADD COLUMN IF NOT EXISTS layout_json jsonb NULL",
             // document_parses: drop legacy layout_pdf_path column (replaced by layout_json)
-            "ALTER TABLE document_parses DROP COLUMN IF EXISTS layout_pdf_path"
+            "ALTER TABLE document_parses DROP COLUMN IF EXISTS layout_pdf_path",
+            // document_files: subject/grade/year metadata columns (DocumentMetadataAnalysis feature)
+            "ALTER TABLE document_files ADD COLUMN IF NOT EXISTS subject character varying(50) NULL",
+            "ALTER TABLE document_files ADD COLUMN IF NOT EXISTS grade character varying(20) NULL",
+            "ALTER TABLE document_files ADD COLUMN IF NOT EXISTS year character varying(10) NULL"
         };
 
         foreach (var sql in alterStatements)
@@ -258,6 +262,9 @@ public static class DatabaseInitializer
                     created_by uuid NULL,
                     created_at timestamp with time zone NOT NULL DEFAULT NOW(),
                     updated_at timestamp with time zone NULL DEFAULT NOW(),
+                    subject character varying(50) NULL,
+                    grade character varying(20) NULL,
+                    year character varying(10) NULL,
                     CONSTRAINT PK_document_files PRIMARY KEY (id)
                 );
                 CREATE INDEX IF NOT EXISTS IX_document_files_file_name ON document_files (file_name);",

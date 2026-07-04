@@ -36,6 +36,26 @@ public class DocumentFileService : IDocumentFileService
         return await _fileRepository.GetListAsync(page, size, fileName);
     }
 
+    public async Task<DocumentFileModel?> UpdateMetadataAsync(Guid id, string? subject, string? grade, string? year)
+    {
+        var updated = await _fileRepository.UpdateMetadataAsync(id, subject, grade, year);
+        if (!updated)
+        {
+            _logger.LogWarning("Document file not found for metadata update: {Id}", id);
+            return null;
+        }
+
+        var model = await _fileRepository.GetByIdAsync(id);
+        if (model != null)
+        {
+            _logger.LogInformation(
+                "Document file metadata updated: {Id}, Subject={Subject}, Grade={Grade}, Year={Year}",
+                id, model.Subject ?? "(none)", model.Grade ?? "(none)", model.Year ?? "(none)");
+        }
+
+        return model;
+    }
+
     public async Task<bool> DeleteAsync(Guid id)
     {
         return await _fileRepository.DeleteAsync(id);

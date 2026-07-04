@@ -60,6 +60,21 @@ public class DocumentFileRepository : IDocumentFileRepository
         return true;
     }
 
+    public async Task<bool> UpdateMetadataAsync(Guid id, string? subject, string? grade, string? year)
+    {
+        var entity = await _context.DocumentFiles.FindAsync(id);
+        if (entity == null) return false;
+
+        // Only update fields that are non-null (null = no change)
+        if (subject != null) entity.Subject = subject;
+        if (grade != null) entity.Grade = grade;
+        if (year != null) entity.Year = year;
+        entity.UpdatedAt = DateTimeOffset.UtcNow;
+
+        await _context.SaveChangesAsync();
+        return true;
+    }
+
     public async Task<bool> DeleteAsync(Guid id)
     {
         var entity = await _context.DocumentFiles.FindAsync(id);
@@ -76,6 +91,9 @@ public class DocumentFileRepository : IDocumentFileRepository
         FilePath = model.FilePath,
         ContentType = model.ContentType,
         CreatedBy = model.CreatedBy,
+        Subject = model.Subject,
+        Grade = model.Grade,
+        Year = model.Year,
         CreatedAt = model.CreatedAt,
         UpdatedAt = model.UpdatedAt,
     };
@@ -87,6 +105,9 @@ public class DocumentFileRepository : IDocumentFileRepository
         FilePath = entity.FilePath,
         ContentType = entity.ContentType,
         CreatedBy = entity.CreatedBy,
+        Subject = entity.Subject,
+        Grade = entity.Grade,
+        Year = entity.Year,
         CreatedAt = entity.CreatedAt,
         UpdatedAt = entity.UpdatedAt,
     };

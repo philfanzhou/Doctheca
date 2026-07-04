@@ -9,6 +9,7 @@
 | **PostgreSQL** | TCP | 出 | 文档 CRUD + 倒排索引搜索 | 无可降级，返回 500 错误 |
 | **MinIO/SeaweedFS** | S3 | 出 | 文件上传下载 | 上游返回错误，上传/解析失败 |
 | **OpenSearch** | HTTP | 出 | 全文搜索索引写/查(MinerU blocks 索引源) | 索引失败不阻塞主流程,搜索回退到数据库 |
+| **LLM (OpenAI 兼容)** | HTTP | 出 | 文档解析完成后分析 subject/grade/year 元数据(best-effort) | LLM 未配置或调用失败时跳过,不影响解析与索引主流程 |
 
 > **访问控制**：DocLibrary 为内网管理后台，所有 `/admin/*` 端点 `AllowAnonymous`，不调用任何认证服务。访问控制由部署层网络隔离实现（仅内网可访问 `:5012` 端口）。
 
@@ -26,6 +27,7 @@
 | GET | `/admin/documents/{id}/status` | 查询文档解析状态 |
 | DELETE | `/admin/documents/{id}` | 按 ID 删除文档 |
 | PUT | `/admin/documents/{title}/metadata` | 更新文档元数据 |
+| PUT | `/admin/document-files/{id}/metadata` | 更新 document_files 元数据（subject/grade/year），并同步 OpenSearch 索引 |
 | GET | `/admin/documents/search` | 精确关键词搜索（支持 subject/grade/year/documentTitle 过滤） |
 | GET | `/health` | 健康检查 |
 
@@ -61,7 +63,7 @@
   - `DELETE /admin/document-files/{id}` → 按 `document_file_id` 删除索引
 - **索引字段**:`parse_id` / `document_file_id` / `file_name` / `block_id` / `block_type` / `text` / `page_number` / `sort_index` / `image_id` / `created_at`
 - **向后兼容**:旧索引数据(LLM 拆段链路)保留,搜索时优先读取新字段,回退到旧字段
-- **元数据**:`subject` / `grade` / `year` 当前留空(`document_files` 表暂无这些字段,后续补齐)
+- **元数据**:`subject` / `grade` / `year` 来源为 `document_files` 表(2026-07 新增 nullable 列)。可通过 `PUT /admin/document-files/{id}/metadata` 手动设置,或在 MinerU 解析完成后由 LLM 自动填充缺失字段(best-effort,详见 [DocumentMetadataAnalysis 模块](../modules/DocumentMetadataAnalysis/01-FEATURE.md))。OpenSearch 索引中文档级元数据随解析完成或手动更新同步刷新
 
 ### OSS 下载失败
 - 导入 Worker 下载文件失败：job 标记为 `failed`，记录 `error_message`

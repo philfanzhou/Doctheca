@@ -28,6 +28,18 @@ public class DocumentFileEntity
     [Column("created_by")]
     public Guid? CreatedBy { get; set; }
 
+    [Column("subject")]
+    [MaxLength(50)]
+    public string? Subject { get; set; }
+
+    [Column("grade")]
+    [MaxLength(20)]
+    public string? Grade { get; set; }
+
+    [Column("year")]
+    [MaxLength(10)]
+    public string? Year { get; set; }
+
     [Column("created_at")]
     [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
     public DateTimeOffset CreatedAt { get; set; }

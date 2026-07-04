@@ -19,6 +19,9 @@
 | `created_by` | `UUID` | NULL | | 上传者用户 ID |
 | `created_at` | `TIMESTAMP WITH TIME ZONE` | NOT NULL | | 创建时间 |
 | `updated_at` | `TIMESTAMP WITH TIME ZONE` | NULL | | 最后更新时间 |
+| `subject` | `VARCHAR(50)` | NULL | | 学科元数据（English/语文/数学/物理/化学/生物/其他）。可由 `PUT /admin/document-files/{id}/metadata` 手动设置，或在 MinerU 解析完成后由 LLM 自动填充缺失字段（best-effort）。详见 [DocumentMetadataAnalysis 模块](../../modules/DocumentMetadataAnalysis/01-FEATURE.md) |
+| `grade` | `VARCHAR(20)` | NULL | | 年级元数据（K/G1-G12）。来源同 `subject` |
+| `year` | `VARCHAR(10)` | NULL | | 年份元数据（4 位数字，如 2024）。来源同 `subject` |
 
 ## 索引
 
