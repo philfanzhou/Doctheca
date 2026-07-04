@@ -41,8 +41,9 @@ public class OpenSearchIndexService : ISearchIndexService
 
     /// <summary>
     /// Builds the OpenSearch index body (settings + mappings) for index creation.
+    /// Internal for unit testing field presence.
     /// </summary>
-    private static object BuildIndexBody()
+    internal static object BuildIndexBody()
     {
         return new
         {
@@ -81,15 +82,27 @@ public class OpenSearchIndexService : ISearchIndexService
             {
                 properties = new
                 {
+                    // Legacy fields (LLM segmentation pipeline, kept for backward compatibility)
                     document_id = new { type = "keyword" },
                     document_title = new { type = "keyword" },
+                    sentence_id = new { type = "keyword" },
+                    question_id = new { type = "keyword" },
+                    segment_type = new { type = "keyword" },
+                    start_offset = new { type = "integer" },
+                    end_offset = new { type = "integer" },
+                    // New fields (MinerU blocks pipeline)
+                    parse_id = new { type = "keyword" },
+                    document_file_id = new { type = "keyword" },
+                    file_name = new { type = "keyword" },
+                    block_id = new { type = "keyword" },
+                    block_type = new { type = "keyword" },
+                    sort_index = new { type = "integer" },
+                    image_id = new { type = "keyword" },
+                    // Shared fields (both pipelines)
                     subject = new { type = "keyword" },
                     grade = new { type = "keyword" },
                     year = new { type = "keyword" },
                     page_number = new { type = "integer" },
-                    sentence_id = new { type = "keyword" },
-                    question_id = new { type = "keyword" },
-                    segment_type = new { type = "keyword" },
                     text = new
                     {
                         type = "text",
@@ -100,8 +113,6 @@ public class OpenSearchIndexService : ISearchIndexService
                             keyword = new { type = "keyword", ignore_above = 256 }
                         }
                     },
-                    start_offset = new { type = "integer" },
-                    end_offset = new { type = "integer" },
                     created_at = new { type = "date" }
                 }
             }
@@ -236,6 +247,114 @@ public class OpenSearchIndexService : ISearchIndexService
         else
         {
             _logger.LogWarning("Failed to delete document {DocumentId} search index, status code: {StatusCode}", documentId, response.HttpStatusCode);
+        }
+    }
+
+    public async Task IndexParseBlocksAsync(Guid parseId, Guid documentFileId, string fileName, string? subject, string? grade, string? year)
+    {
+        var indexName = _options.IndexName;
+
+        using var scope = _serviceProvider.CreateScope();
+        var blockRepository = scope.ServiceProvider.GetRequiredService<IDocumentParseBlockRepository>();
+
+        var blocks = await blockRepository.GetByParseIdAsync(parseId);
+        if (blocks.Count == 0)
+        {
+            _logger.LogWarning("Parse {ParseId} has no blocks to index", parseId);
+            return;
+        }
+
+        var bulkOps = new List<object>();
+        foreach (var block in blocks)
+        {
+            // Skip blocks with null/empty text content (nothing to search)
+            if (string.IsNullOrWhiteSpace(block.TextContent))
+                continue;
+
+            bulkOps.Add(new { index = new { _index = indexName, _id = $"block_{block.Id}" } });
+            bulkOps.Add(new
+            {
+                parse_id = parseId.ToString(),
+                document_file_id = documentFileId.ToString(),
+                file_name = fileName,
+                subject = subject ?? string.Empty,
+                grade = grade ?? string.Empty,
+                year = year ?? string.Empty,
+                page_number = block.PageId,
+                block_id = block.Id.ToString(),
+                block_type = block.BlockType,
+                text = block.TextContent,
+                sort_index = block.SortIndex,
+                image_id = block.ImageId?.ToString() ?? string.Empty,
+                created_at = block.CreatedAt.ToString("o")
+            });
+        }
+
+        if (bulkOps.Count == 0)
+        {
+            _logger.LogWarning("Parse {ParseId} has no indexable blocks (all text_content empty)", parseId);
+            return;
+        }
+
+        var bulkJson = string.Join("\n", bulkOps.Select(op => JsonSerializer.Serialize(op))) + "\n";
+        var response = await _client.BulkAsync<BytesResponse>(PostData.String(bulkJson));
+
+        if (response.Success && (response.HttpStatusCode == 200 || response.HttpStatusCode == 201))
+        {
+            _logger.LogInformation("Parse {ParseId} indexed {BlockCount} blocks to OpenSearch (FileId={FileId})",
+                parseId, bulkOps.Count / 2, documentFileId);
+        }
+        else
+        {
+            _logger.LogWarning("Parse {ParseId} indexing failed, status code: {StatusCode}", parseId, response.HttpStatusCode);
+        }
+    }
+
+    public async Task DeleteParseIndexAsync(Guid parseId)
+    {
+        var indexName = _options.IndexName;
+        var deleteBody = new
+        {
+            query = new
+            {
+                term = new { parse_id = parseId.ToString() }
+            }
+        };
+
+        var json = JsonSerializer.Serialize(deleteBody);
+        var response = await _client.DeleteByQueryAsync<BytesResponse>(indexName, json);
+
+        if (response.Success && response.HttpStatusCode == 200)
+        {
+            _logger.LogInformation("Parse {ParseId} search index deleted", parseId);
+        }
+        else
+        {
+            _logger.LogWarning("Failed to delete parse {ParseId} search index, status code: {StatusCode}", parseId, response.HttpStatusCode);
+        }
+    }
+
+    public async Task DeleteDocumentFileIndexAsync(Guid documentFileId)
+    {
+        var indexName = _options.IndexName;
+        var deleteBody = new
+        {
+            query = new
+            {
+                term = new { document_file_id = documentFileId.ToString() }
+            }
+        };
+
+        var json = JsonSerializer.Serialize(deleteBody);
+        var response = await _client.DeleteByQueryAsync<BytesResponse>(indexName, json);
+
+        if (response.Success && response.HttpStatusCode == 200)
+        {
+            _logger.LogInformation("Document file {FileId} search index deleted", documentFileId);
+        }
+        else
+        {
+            _logger.LogWarning("Failed to delete document file {FileId} search index, status code: {StatusCode}", documentFileId, response.HttpStatusCode);
         }
     }
 
@@ -398,10 +517,20 @@ public class OpenSearchIndexService : ISearchIndexService
             foreach (var hit in hitArray.EnumerateArray())
             {
                 var source = hit.GetProperty("_source");
-                var segmentType = source.TryGetProperty("segment_type", out var stEl) ? stEl.GetString() ?? SegmentTypes.Sentence : SegmentTypes.Sentence;
-                var segmentId = segmentType == SegmentTypes.Question
-                    ? (source.TryGetProperty("question_id", out var qiEl) ? qiEl.GetString() ?? "" : "")
-                    : (source.TryGetProperty("sentence_id", out var siEl) ? siEl.GetString() ?? "" : "");
+
+                // Read segment_id: prefer new block_id, fall back to legacy sentence_id/question_id
+                string segmentId;
+                if (source.TryGetProperty("block_id", out var bidEl) && !string.IsNullOrEmpty(bidEl.GetString()))
+                {
+                    segmentId = bidEl.GetString()!;
+                }
+                else
+                {
+                    var segmentType = source.TryGetProperty("segment_type", out var stEl) ? stEl.GetString() ?? SegmentTypes.Sentence : SegmentTypes.Sentence;
+                    segmentId = segmentType == SegmentTypes.Question
+                        ? (source.TryGetProperty("question_id", out var qiEl) ? qiEl.GetString() ?? "" : "")
+                        : (source.TryGetProperty("sentence_id", out var siEl) ? siEl.GetString() ?? "" : "");
+                }
 
                 var associatedText = source.TryGetProperty("text", out var textEl) ? textEl.GetString() ?? "" : "";
 
@@ -416,16 +545,25 @@ public class OpenSearchIndexService : ISearchIndexService
 
                 var score = hit.TryGetProperty("_score", out var scoreEl) ? scoreEl.GetDouble() : 0;
 
+                // Read document_name: prefer new file_name, fall back to legacy document_title
+                var documentName = source.TryGetProperty("file_name", out var fnEl) && !string.IsNullOrEmpty(fnEl.GetString())
+                    ? fnEl.GetString()!
+                    : (source.TryGetProperty("document_title", out var dtEl) ? dtEl.GetString() ?? "" : "");
+
+                // Read offsets: new blocks data has no offsets, default to 0
+                var startOffset = source.TryGetProperty("start_offset", out var soEl) ? soEl.GetInt32() : 0;
+                var endOffset = source.TryGetProperty("end_offset", out var eoEl) ? eoEl.GetInt32() : 0;
+
                 results.Add(new SearchResultModel
                 {
-                    DocumentName = source.TryGetProperty("document_title", out var dtEl) ? dtEl.GetString() ?? "" : "",
+                    DocumentName = documentName,
                     PageNumber = source.TryGetProperty("page_number", out var pnEl) ? pnEl.GetInt32() : 0,
                     AssociatedText = associatedText,
                     Score = score,
                     MatchType = phrase ? SearchMatchType.ExactPhrase : SearchMatchType.Stemmed,
                     SegmentId = segmentId,
-                    StartOffset = source.TryGetProperty("start_offset", out var soEl) ? soEl.GetInt32() : 0,
-                    EndOffset = source.TryGetProperty("end_offset", out var eoEl) ? eoEl.GetInt32() : 0,
+                    StartOffset = startOffset,
+                    EndOffset = endOffset,
                     CreatedAt = source.TryGetProperty("created_at", out var caEl) && DateTimeOffset.TryParse(caEl.GetString(), out var ca) ? ca : null
                 });
 

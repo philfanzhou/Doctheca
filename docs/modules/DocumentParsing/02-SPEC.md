@@ -181,7 +181,9 @@ Scenario: 无 Token 时不写入
 
 ### REQ-PARSE-07：搜索索引同步
 
-**优先级**: P1 | **状态**: 已实现
+**优先级**: P1 | **状态**: 已实现（legacy，新代码不再调用）
+
+> **链路说明（2026-07 更新）**：本需求描述的是 LLM 拆段链路的索引同步，OpenSearch 索引源已切换到 MinerU 解析链路（`IndexParseBlocksAsync`），详见 [OpenSearchBlockIndexing](../OpenSearchBlockIndexing/01-FEATURE.md)。本方法保留以便清理旧数据，新代码不应调用。
 
 解析完成后，同步调用 `ISearchIndexService.IndexDocumentSegmentsAsync` 将文档 segments 写入 OpenSearch。
 

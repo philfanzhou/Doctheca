@@ -11,6 +11,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Ruoyu.Study.Common.Oss;
 using Ruoyu.Study.DocLibrary.Domain.Models;
+using Ruoyu.Study.DocLibrary.Domain.Repositories;
 using Ruoyu.Study.DocLibrary.Domain.Services;
 
 namespace Ruoyu.Study.DocLibrary.Service;
@@ -275,6 +276,7 @@ public static class DocumentFileEndpoints
         IDocumentFileService fileService,
         IDocumentParseService parseService,
         IOssService ossService,
+        ISearchIndexService searchIndexService,
         [FromServices] ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(DocumentFileEndpoints));
@@ -321,6 +323,16 @@ public static class DocumentFileEndpoints
         {
             logger.LogWarning("Document file {FileId} deleted but {Count} OSS paths remain: {Paths}",
                 id, failedPaths.Count, string.Join(", ", failedPaths));
+        }
+
+        // Step 4: Delete OpenSearch index for this document file (best-effort, does not block deletion)
+        try
+        {
+            await searchIndexService.DeleteDocumentFileIndexAsync(id);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Failed to delete OpenSearch index for document file {FileId}", id);
         }
 
         return Results.Ok(new

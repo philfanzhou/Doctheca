@@ -9,6 +9,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.DependencyInjection;
 using Ruoyu.Study.Common.Oss;
 using Ruoyu.Study.DocLibrary.Domain.Models;
+using Ruoyu.Study.DocLibrary.Domain.Repositories;
 using Ruoyu.Study.DocLibrary.Domain.Services;
 
 namespace Ruoyu.Study.DocLibrary.Service;
@@ -156,12 +157,12 @@ public class MinerUFileParseWorker : BackgroundService
             if (pageCount <= MaxPagesPerChunk)
             {
                 // Small file: process directly
-                await ProcessSingleFileAsync(parse, file, ossService, minerUClient, parseService, blockService, ct);
+                await ProcessSingleFileAsync(parse, file, ossService, minerUClient, parseService, blockService, scopeProvider, ct);
             }
             else
             {
                 // Large file: split, parse each chunk, merge results
-                await ProcessSplitFileAsync(parse, file, pdfStream, pageCount, pdfSplitService, ossService, minerUClient, parseService, blockService, ct);
+                await ProcessSplitFileAsync(parse, file, pdfStream, pageCount, pdfSplitService, ossService, minerUClient, parseService, blockService, scopeProvider, ct);
             }
         }
         finally
@@ -180,6 +181,7 @@ public class MinerUFileParseWorker : BackgroundService
         MinerUPrecisionClient minerUClient,
         IDocumentParseService parseService,
         IDocumentParseBlockService blockService,
+        IServiceProvider scopeProvider,
         CancellationToken ct)
     {
         var presignedUrl = await ossService.GetPresignedUrlAsync(file.FilePath, 3600);
@@ -194,7 +196,7 @@ public class MinerUFileParseWorker : BackgroundService
         var result = await PollAndDownloadAsync(taskId, minerUClient, ossService, ct);
         _logger.LogInformation("MinerU ZIP processed: FileId={FileId}, Images={ImageCount}", file.Id, result.Images.Count);
 
-        await PersistParseResultAsync(parse, file, result, ossService, parseService, blockService, ct);
+        await PersistParseResultAsync(parse, file, result, ossService, parseService, blockService, scopeProvider, ct);
     }
 
     /// <summary>
@@ -208,6 +210,7 @@ public class MinerUFileParseWorker : BackgroundService
         IOssService ossService,
         IDocumentParseService parseService,
         IDocumentParseBlockService blockService,
+        IServiceProvider scopeProvider,
         CancellationToken ct)
     {
         // 1. Upload the full ZIP to OSS (raw data backup)
@@ -265,6 +268,25 @@ public class MinerUFileParseWorker : BackgroundService
             result.ContentListV2Json != null ? "yes" : "no",
             result.ModelJson != null ? "yes" : "no",
             result.LayoutJson != null ? "yes" : "no");
+
+        // 5. Index blocks to OpenSearch (best-effort, failure does not block parse)
+        await IndexBlocksToSearchAsync(parse.Id, file.Id, file.FileName, scopeProvider);
+    }
+
+    /// <summary>
+    /// Index parse blocks to OpenSearch. Best-effort: failures are logged but do not block the parse workflow.
+    /// </summary>
+    private async Task IndexBlocksToSearchAsync(Guid parseId, Guid documentFileId, string fileName, IServiceProvider scopeProvider)
+    {
+        try
+        {
+            var searchIndexService = scopeProvider.GetRequiredService<ISearchIndexService>();
+            await searchIndexService.IndexParseBlocksAsync(parseId, documentFileId, fileName, null, null, null);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to index parse {ParseId} to OpenSearch", parseId);
+        }
     }
 
     /// <summary>
@@ -280,6 +302,7 @@ public class MinerUFileParseWorker : BackgroundService
         MinerUPrecisionClient minerUClient,
         IDocumentParseService parseService,
         IDocumentParseBlockService blockService,
+        IServiceProvider scopeProvider,
         CancellationToken ct)
     {
         _logger.LogInformation("Large file detected: {PageCount} pages, splitting into chunks of {MaxPages}", pageCount, MaxPagesPerChunk);
@@ -346,12 +369,12 @@ public class MinerUFileParseWorker : BackgroundService
                 }
 
                 // Some chunks succeeded — save partial results but mark as failed
-                await PersistMergedChunkResultsAsync(parse, file, chunkResults, ossService, parseService, blockService, errorMsg, status: DocumentParseStatus.Failed);
+                await PersistMergedChunkResultsAsync(parse, file, chunkResults, ossService, parseService, blockService, scopeProvider, errorMsg, status: DocumentParseStatus.Failed);
                 return;
             }
 
             // Step 5: All chunks succeeded — merge and persist
-            await PersistMergedChunkResultsAsync(parse, file, chunkResults, ossService, parseService, blockService, errorMsg: null, status: DocumentParseStatus.Parsed);
+            await PersistMergedChunkResultsAsync(parse, file, chunkResults, ossService, parseService, blockService, scopeProvider, errorMsg: null, status: DocumentParseStatus.Parsed);
             _logger.LogInformation("Split parse completed: ParseId={ParseId}, FileId={FileId}, Chunks={ChunkCount}",
                 parse.Id, file.Id, chunks.Count);
         }
@@ -389,6 +412,7 @@ public class MinerUFileParseWorker : BackgroundService
         IOssService ossService,
         IDocumentParseService parseService,
         IDocumentParseBlockService blockService,
+        IServiceProvider scopeProvider,
         string? errorMsg,
         string status)
     {
@@ -462,6 +486,12 @@ public class MinerUFileParseWorker : BackgroundService
             modelJson: firstModelJson,
             layoutJson: firstLayoutJson,
             zipPath: zipPath);
+
+        // Index blocks to OpenSearch only when parse succeeded (best-effort)
+        if (status == DocumentParseStatus.Parsed)
+        {
+            await IndexBlocksToSearchAsync(parse.Id, file.Id, file.FileName, scopeProvider);
+        }
     }
 
     /// <summary>

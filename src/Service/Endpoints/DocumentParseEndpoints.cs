@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using Ruoyu.Study.Common.Oss;
+using Ruoyu.Study.DocLibrary.Domain.Repositories;
 using Ruoyu.Study.DocLibrary.Domain.Services;
 
 namespace Ruoyu.Study.DocLibrary.Service;
@@ -64,6 +65,7 @@ public static class DocumentParseEndpoints
         IDocumentParseService parseService,
         IDocumentFileService fileService,
         IOssService ossService,
+        ISearchIndexService searchIndexService,
         [FromServices] ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(DocumentParseEndpoints));
@@ -88,6 +90,16 @@ public static class DocumentParseEndpoints
 
         // Delete parse record (cascade deletes images from DB)
         await parseService.DeleteParseAsync(parseId);
+
+        // Delete OpenSearch index for this parse (best-effort, does not block deletion)
+        try
+        {
+            await searchIndexService.DeleteParseIndexAsync(parseId);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Failed to delete OpenSearch index for parse {ParseId}", parseId);
+        }
 
         return Results.Ok(new
         {

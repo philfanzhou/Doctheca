@@ -425,4 +425,226 @@ public class OpenSearchIndexServiceTests
         totalCount.Should().Be(0);
         nextToken.Should().BeNull();
     }
+
+    // ==================== ParseSearchResponse — New Block Fields (UT-OBI-08) ====================
+
+    [Fact]
+    public void ParseSearchResponse_WithBlockFields_PrefersBlockIdAndFileName()
+    {
+        // New MinerU blocks pipeline data: file_name + block_id should take precedence
+        // over legacy document_title + sentence_id/question_id
+        var responseJson = @"{
+            ""hits"": {
+                ""total"": { ""value"": 1 },
+                ""hits"": [
+                    {
+                        ""_score"": 1.5,
+                        ""_source"": {
+                            ""file_name"": ""lecture.pdf"",
+                            ""page_number"": 5,
+                            ""text"": ""Newton's first law"",
+                            ""block_id"": ""blk-abc-123"",
+                            ""block_type"": ""text"",
+                            ""sort_index"": 7,
+                            ""image_id"": ""img-001"",
+                            ""parse_id"": ""parse-xyz"",
+                            ""document_file_id"": ""file-001"",
+                            ""document_title"": ""legacy.pdf"",
+                            ""sentence_id"": ""s-legacy"",
+                            ""question_id"": ""q-legacy"",
+                            ""segment_type"": ""sentence"",
+                            ""start_offset"": 100,
+                            ""end_offset"": 200
+                        },
+                        ""sort"": [1.5, ""file-001"", ""block""]
+                    }
+                ]
+            }
+        }";
+
+        var (results, _, _) = OpenSearchIndexService.ParseSearchResponse(
+            responseJson, phrase: false, pageSize: 10);
+
+        results.Should().HaveCount(1);
+        // segment_id prefers block_id over sentence_id/question_id
+        results[0].SegmentId.Should().Be("blk-abc-123");
+        // document_name prefers file_name over document_title
+        results[0].DocumentName.Should().Be("lecture.pdf");
+        results[0].PageNumber.Should().Be(5);
+        results[0].AssociatedText.Should().Be("Newton's first law");
+        results[0].Score.Should().Be(1.5);
+        results[0].MatchType.Should().Be(SearchMatchType.Stemmed);
+    }
+
+    [Fact]
+    public void ParseSearchResponse_WithBlockFields_PhraseSetsExactPhraseMatchType()
+    {
+        // Phrase query on new block data — matchType must be ExactPhrase
+        var responseJson = @"{
+            ""hits"": {
+                ""total"": { ""value"": 1 },
+                ""hits"": [
+                    {
+                        ""_score"": 2.5,
+                        ""_source"": {
+                            ""file_name"": ""exam.pdf"",
+                            ""page_number"": 1,
+                            ""text"": ""Hello world"",
+                            ""block_id"": ""blk-001"",
+                            ""block_type"": ""text""
+                        },
+                        ""sort"": [2.5, ""file-001"", ""block""]
+                    }
+                ]
+            }
+        }";
+
+        var (results, _, _) = OpenSearchIndexService.ParseSearchResponse(
+            responseJson, phrase: true, pageSize: 10);
+
+        results.Should().HaveCount(1);
+        results[0].MatchType.Should().Be(SearchMatchType.ExactPhrase);
+        results[0].SegmentId.Should().Be("blk-001");
+        results[0].DocumentName.Should().Be("exam.pdf");
+    }
+
+    // ==================== ParseSearchResponse — Field Fallback (UT-OBI-09) ====================
+
+    [Fact]
+    public void ParseSearchResponse_WithOnlyLegacyFields_FallsBackToLegacyIds()
+    {
+        // Pure legacy LLM pipeline data — no block_id/file_name, must fall back
+        var responseJson = @"{
+            ""hits"": {
+                ""total"": { ""value"": 1 },
+                ""hits"": [
+                    {
+                        ""_score"": 0.9,
+                        ""_source"": {
+                            ""document_title"": ""legacy-doc.pdf"",
+                            ""page_number"": 3,
+                            ""text"": ""photosynthesis"",
+                            ""segment_type"": ""question"",
+                            ""question_id"": ""q-legacy-001"",
+                            ""start_offset"": 0,
+                            ""end_offset"": 14
+                        },
+                        ""sort"": [0.9, ""doc-legacy"", ""question""]
+                    }
+                ]
+            }
+        }";
+
+        var (results, _, _) = OpenSearchIndexService.ParseSearchResponse(
+            responseJson, phrase: false, pageSize: 10);
+
+        results.Should().HaveCount(1);
+        // segment_id falls back to question_id (segment_type == question)
+        results[0].SegmentId.Should().Be("q-legacy-001");
+        // document_name falls back to document_title
+        results[0].DocumentName.Should().Be("legacy-doc.pdf");
+        results[0].PageNumber.Should().Be(3);
+        results[0].StartOffset.Should().Be(0);
+        results[0].EndOffset.Should().Be(14);
+    }
+
+    [Fact]
+    public void ParseSearchResponse_WithEmptyBlockId_FallsBackToLegacySentenceId()
+    {
+        // block_id present but empty — must fall back to sentence_id
+        var responseJson = @"{
+            ""hits"": {
+                ""total"": { ""value"": 1 },
+                ""hits"": [
+                    {
+                        ""_score"": 1.0,
+                        ""_source"": {
+                            ""file_name"": """",
+                            ""document_title"": ""fallback.pdf"",
+                            ""page_number"": 1,
+                            ""text"": ""text content"",
+                            ""block_id"": """",
+                            ""segment_type"": ""sentence"",
+                            ""sentence_id"": ""s-fallback""
+                        },
+                        ""sort"": [1.0, ""doc-1"", ""sentence""]
+                    }
+                ]
+            }
+        }";
+
+        var (results, _, _) = OpenSearchIndexService.ParseSearchResponse(
+            responseJson, phrase: false, pageSize: 10);
+
+        results.Should().HaveCount(1);
+        // block_id is empty, falls back to sentence_id
+        results[0].SegmentId.Should().Be("s-fallback");
+        // file_name is empty, falls back to document_title
+        results[0].DocumentName.Should().Be("fallback.pdf");
+    }
+
+    // ==================== BuildIndexBody — New Fields (UT-OBI-10) ====================
+
+    [Fact]
+    public void BuildIndexBody_IncludesNewBlockPipelineFields()
+    {
+        var body = OpenSearchIndexService.BuildIndexBody();
+        var json = JsonSerializer.Serialize(body);
+
+        // New MinerU blocks pipeline fields must be present in mapping
+        json.Should().Contain("\"parse_id\"");
+        json.Should().Contain("\"document_file_id\"");
+        json.Should().Contain("\"file_name\"");
+        json.Should().Contain("\"block_id\"");
+        json.Should().Contain("\"block_type\"");
+        json.Should().Contain("\"sort_index\"");
+        json.Should().Contain("\"image_id\"");
+
+        // Each new field must be mapped as keyword (block_id/file_name/parse_id/etc.)
+        json.Should().Contain("\"block_id\":{\"type\":\"keyword\"}");
+        json.Should().Contain("\"parse_id\":{\"type\":\"keyword\"}");
+        json.Should().Contain("\"document_file_id\":{\"type\":\"keyword\"}");
+        json.Should().Contain("\"file_name\":{\"type\":\"keyword\"}");
+        json.Should().Contain("\"block_type\":{\"type\":\"keyword\"}");
+        json.Should().Contain("\"image_id\":{\"type\":\"keyword\"}");
+        // sort_index is integer
+        json.Should().Contain("\"sort_index\":{\"type\":\"integer\"}");
+    }
+
+    [Fact]
+    public void BuildIndexBody_RetainsLegacyLLMPipelineFields()
+    {
+        var body = OpenSearchIndexService.BuildIndexBody();
+        var json = JsonSerializer.Serialize(body);
+
+        // Legacy LLM segmentation fields must be retained for backward compatibility
+        json.Should().Contain("\"document_id\"");
+        json.Should().Contain("\"document_title\"");
+        json.Should().Contain("\"sentence_id\"");
+        json.Should().Contain("\"question_id\"");
+        json.Should().Contain("\"segment_type\"");
+        json.Should().Contain("\"start_offset\"");
+        json.Should().Contain("\"end_offset\"");
+    }
+
+    [Fact]
+    public void BuildIndexBody_RetainsSharedFieldsAndAnalyzers()
+    {
+        var body = OpenSearchIndexService.BuildIndexBody();
+        var json = JsonSerializer.Serialize(body);
+
+        // Shared fields (both pipelines)
+        json.Should().Contain("\"subject\"");
+        json.Should().Contain("\"grade\"");
+        json.Should().Contain("\"year\"");
+        json.Should().Contain("\"page_number\"");
+        json.Should().Contain("\"created_at\"");
+
+        // Text field with custom analyzer + exact subfield
+        json.Should().Contain("\"english_custom\"");
+        json.Should().Contain("\"english_stemmer\"");
+        json.Should().Contain("\"english_stop\"");
+        json.Should().Contain("\"english_phrase\"");
+        json.Should().Contain("\"exact\"");
+    }
 }

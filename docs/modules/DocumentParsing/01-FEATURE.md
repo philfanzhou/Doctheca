@@ -1,5 +1,7 @@
 # 01-FEATURE — DocumentParsing 功能概述
 
+> **链路定位（2026-07 更新）**：本模块描述的是 **LLM 拆段链路**（`IngestionWorker` 驱动，写入 `documents` / `document_segments` / `question_segments`），为历史保留链路。OpenSearch 索引源已切换到 **MinerU 解析链路**（`MinerUFileParseWorker` 驱动，写入 `document_parse_blocks`），详见 [OpenSearchBlockIndexing](../OpenSearchBlockIndexing/01-FEATURE.md)。本模块的 `IndexDocumentSegmentsAsync` 调用仍保留但新代码不再调用（`ISearchIndexService` 已标注 legacy）。
+
 ## 功能名称
 
 **DocumentParsing** — 文档解析与结构化处理

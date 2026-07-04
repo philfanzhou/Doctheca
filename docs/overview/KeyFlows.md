@@ -45,6 +45,8 @@
 **参与服务**：Admin UI → DocLibrary → OSS → PostgreSQL；Worker → OpenSearch
 **数据流转**：OSS 文件 → 解析器 → 结构化数据写入 6 张表 → 搜索引擎索引
 
+> **链路说明（2026-07 更新）**：上图描述的是 **LLM 拆段链路**（`IngestionWorker`），为历史保留链路。当前 OpenSearch 索引源已切换到 **MinerU 解析链路**：`MinerUFileParseWorker` 解析 `document_files` 完成后，将 `document_parse_blocks` 索引到 OpenSearch（`IndexParseBlocksAsync`）。详见 [OpenSearchBlockIndexing](../modules/OpenSearchBlockIndexing/01-FEATURE.md)。LLM 链路的 `IndexDocumentSegmentsAsync` 保留但新代码不再调用。
+
 ---
 
 ## 2. 精确搜索 (ExactSearch)

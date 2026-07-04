@@ -9,4 +9,5 @@
 | DocumentUpload | [DocumentUpload](./DocumentUpload/01-FEATURE.md) |
 | ExactSearch | [ExactSearch](./ExactSearch/01-FEATURE.md) |
 | MinerUAgentParsing | [MinerUAgentParsing](./MinerUAgentParsing/01-FEATURE.md) |
+| OpenSearchBlockIndexing | [OpenSearchBlockIndexing](./OpenSearchBlockIndexing/01-FEATURE.md) |
 | QuestionBankImport | [QuestionBankImport](./QuestionBankImport/01-FEATURE.md) |
