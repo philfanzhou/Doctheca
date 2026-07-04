@@ -23,11 +23,11 @@ DocLibrary Admin 是文档库的管理后台前端,供本地管理员上传文�
 
 ## 3. 认证流程
 
-前端**不直接调用 Identity gRPC**,而是通过 DocLibrary 后端 BFF 代理:
+前端不直接持有 Identity 的 AppSecret,而是通过 DocLibrary 后端 BFF 代理登录:
 
 ```
 浏览器 → POST /admin/auth/login {username, password}
-       → DocLibrary 后端代理 → Identity gRPC GetToken(password grant)
+       → DocLibrary 后端代理 → Identity HTTP POST /api/auth/token (password grant)
        → 返回 { accessToken, refreshToken, userInfo }
 ```
 
@@ -38,7 +38,7 @@ DocLibrary Admin 是文档库的管理后台前端,供本地管理员上传文�
 
 Token 存储于 `localStorage`,axios 拦截器自动注入 `Authorization: Bearer` 头,401 时自动刷新。
 
-> **架构约束**:Identity 服务未暴露 HTTP JWT 登录端点(`GetToken` 仅 gRPC),且 AppSecret 是后端机密不可下发前端,因此前端必须经 DocLibrary 后端代理登录,不可绕过。
+> **架构约束**:Identity 已迁移到 HTTP API(`POST /api/auth/token`、`POST /api/auth/sms-code` 等),gRPC 已下线。但 AppSecret 是后端机密不可下发前端,因此前端必须经 DocLibrary 后端代理登录,不可绕过。
 
 ## 4. 页面结构
 

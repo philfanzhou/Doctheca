@@ -142,7 +142,7 @@ builder.Services.AddHttpClient("IdentityService", client =>
     var authority = builder.Configuration["IdentityService:Authority"] ?? "http://localhost:5002";
     client.BaseAddress = new Uri(authority);
     client.Timeout = TimeSpan.FromSeconds(10);
-});
+}).SetHandlerLifetime(TimeSpan.FromMinutes(5));
 
 var app = builder.Build();
 
