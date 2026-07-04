@@ -322,6 +322,25 @@ public static class DatabaseInitializer
                 CREATE INDEX IF NOT EXISTS IX_document_parse_blocks_image_id
                     ON document_parse_blocks (image_id);",
 
+            "document_parse_imports" => @"
+                CREATE TABLE IF NOT EXISTS document_parse_imports (
+                    id uuid NOT NULL,
+                    parse_id uuid NOT NULL,
+                    imported_by uuid NOT NULL,
+                    status character varying(20) NOT NULL,
+                    note text NULL,
+                    imported_question_ids text NULL,
+                    created_at timestamp with time zone NOT NULL DEFAULT NOW(),
+                    updated_at timestamp with time zone NULL,
+                    CONSTRAINT PK_document_parse_imports PRIMARY KEY (id),
+                    CONSTRAINT FK_imports_parse_parse_id
+                        FOREIGN KEY (parse_id) REFERENCES document_parses(id) ON DELETE CASCADE
+                );
+                CREATE UNIQUE INDEX IF NOT EXISTS IX_document_parse_imports_parse_id
+                    ON document_parse_imports (parse_id);
+                CREATE INDEX IF NOT EXISTS IX_document_parse_imports_status
+                    ON document_parse_imports (status);",
+
             _ => null
         };
     }
