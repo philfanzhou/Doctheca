@@ -66,7 +66,7 @@ else
 builder.Services.Configure<OpenSearchOptions>(builder.Configuration.GetSection("OpenSearch"));
 builder.Services.AddSingleton<ISearchIndexService, OpenSearchIndexService>();
 
-// LLM Segmentation Services (optional, falls back to rule-based if not configured)
+// LLM document analysis service (optional)
 var llmSection = builder.Configuration.GetSection(LlmSegmentationOptions.SectionName);
 if (llmSection.Exists() && !string.IsNullOrEmpty(llmSection["ApiKey"]))
 {
@@ -127,22 +127,20 @@ app.Logger.LogInformation("OSS: {OssType}", useLocalOss ? "local" : "S3");
 app.Logger.LogInformation("OpenSearch: {Url}", builder.Configuration["OpenSearch:Url"] ?? "(not configured)");
 
 // Log LLM configuration
-var llmApiKey = builder.Configuration["LlmSegmentation:ApiKey"];
-var llmBaseUrl = builder.Configuration["LlmSegmentation:BaseUrl"];
-var llmModel = builder.Configuration["LlmSegmentation:Model"];
-var llmContextLength = builder.Configuration["LlmSegmentation:ContextLength"];
-var llmMaxTokens = builder.Configuration["LlmSegmentation:MaxTokens"];
+var llmApiKey = builder.Configuration["LlmDocumentAnalysis:ApiKey"];
+var llmBaseUrl = builder.Configuration["LlmDocumentAnalysis:BaseUrl"];
+var llmModel = builder.Configuration["LlmDocumentAnalysis:Model"];
+var llmContextLength = builder.Configuration["LlmDocumentAnalysis:ContextLength"];
 var llmEnabled = !string.IsNullOrEmpty(llmApiKey);
 app.Logger.LogInformation(
-    "LLM Segmentation: Enabled={Enabled}, BaseUrl={BaseUrl}, Model={Model}, ContextLength={ContextLength}, MaxTokens={MaxTokens}, ApiKey={ApiKeyStatus}",
+    "LLM Document Analysis: Enabled={Enabled}, BaseUrl={BaseUrl}, Model={Model}, ContextLength={ContextLength}, ApiKey={ApiKeyStatus}",
     llmEnabled,
     llmBaseUrl ?? "(not configured)",
     llmModel ?? "(not configured)",
     llmContextLength ?? "(not configured)",
-    llmMaxTokens ?? "4K (default)",
     string.IsNullOrEmpty(llmApiKey) ? "(empty - service disabled)" : SensitiveDataMasker.MaskApiKey(llmApiKey));
 
-// Initialize LLM segmentation at startup (verify config, compute ChunkSize)
+// Initialize LLM document analysis at startup
 if (llmEnabled)
 {
     using var llmScope = app.Services.CreateScope();
@@ -155,7 +153,7 @@ if (llmEnabled)
         }
         catch (Exception ex)
         {
-            app.Logger.LogWarning(ex, "LLM segmentation initialization failed at startup");
+            app.Logger.LogWarning(ex, "LLM document analysis initialization failed at startup");
         }
     }
 }

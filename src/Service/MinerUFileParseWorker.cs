@@ -324,7 +324,7 @@ public class MinerUFileParseWorker : BackgroundService
                 return;
             }
 
-            // LLM service is optional (registered only when ApiKey is configured)
+            // LLM document analysis service is optional (registered only when ApiKey is configured)
             var llmService = scopeProvider.GetService<ILlmSegmentationService>();
             if (llmService == null)
             {

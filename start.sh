@@ -28,7 +28,6 @@ LLM_API_KEY=""
 LLM_BASE_URL="https://api.siliconflow.cn/v1"
 LLM_MODEL="Qwen/Qwen2.5-7B-Instruct"
 LLM_CONTEXT_LENGTH="128K"
-LLM_MAX_TOKENS="4K"
 
 MINERU_API_TOKEN=""
 
@@ -58,11 +57,10 @@ docker run -d \
   -e Oss__BucketName="${OSS_BUCKET}" \
   -e OpenSearch__Url="${OPENSEARCH_URL}" \
   -e OpenSearch__IndexName="${OPENSEARCH_INDEX}" \
-  -e LlmSegmentation__ApiKey="${LLM_API_KEY}" \
-  -e LlmSegmentation__BaseUrl="${LLM_BASE_URL}" \
-  -e LlmSegmentation__Model="${LLM_MODEL}" \
-  -e LlmSegmentation__ContextLength="${LLM_CONTEXT_LENGTH:-128K}" \
-  -e LlmSegmentation__MaxTokens="${LLM_MAX_TOKENS:-4096}" \
+  -e LlmDocumentAnalysis__ApiKey="${LLM_API_KEY}" \
+  -e LlmDocumentAnalysis__BaseUrl="${LLM_BASE_URL}" \
+  -e LlmDocumentAnalysis__Model="${LLM_MODEL}" \
+  -e LlmDocumentAnalysis__ContextLength="${LLM_CONTEXT_LENGTH:-128K}" \
   -e MinerU__ApiToken="${MINERU_API_TOKEN}" \
   -e LOKI_URI="${LOKI_URI}" \
   -e Logging__LogLevel__Microsoft_EntityFrameworkCore_Database_Command="Warning" \

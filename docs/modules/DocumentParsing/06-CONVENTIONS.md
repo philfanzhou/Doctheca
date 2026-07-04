@@ -348,26 +348,25 @@ public class DocumentParserService : IDocumentParserService
 
 ```csharp
 // 配置选项类
-public class LlmSegmentationOptions
+public class LlmDocumentAnalysisOptions
 {
-    public const string SectionName = "LlmSegmentation";
+    public const string SectionName = "LlmDocumentAnalysis";
 
     public string Model { get; set; } = string.Empty;
     public string ApiKey { get; set; } = string.Empty;
     public string BaseUrl { get; set; } = string.Empty;
     public string ContextLength { get; set; } = string.Empty;  // "128K", "1M" etc.
     public int ContextLengthTokens { get; set; }               // parsed at startup
-    public string MaxTokens { get; set; } = "4K";              // "4K", "128K" etc.
-    public int MaxTokensValue { get; set; }                    // parsed at startup
-    public int ChunkSize { get; set; }                         // computed at startup, capped at 5000
+    public int MaxTokensValue { get; set; }                    // internal reserved output tokens
+    public int ChunkSize { get; set; }                         // computed at startup
     public double Temperature => 0.1;
     public int MaxRetries => 3;
     public int TimeoutSeconds { get; set; } = 300;
 }
 
 // DI 注册
-services.Configure<LlmSegmentationOptions>(
-    configuration.GetSection(LlmSegmentationOptions.SectionName));
+services.Configure<LlmDocumentAnalysisOptions>(
+    configuration.GetSection(LlmDocumentAnalysisOptions.SectionName));
 
 // 支持环境变量覆盖
 // LLM_SEGMENTATION__PROVIDER=anthropic

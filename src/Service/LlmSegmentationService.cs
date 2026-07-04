@@ -63,8 +63,6 @@ public class LlmSegmentationService : ILlmSegmentationService
         try
         {
             var contextLength = ParseTokenCount(_options.ContextLength);
-            var maxTokens = ParseTokenCount(_options.MaxTokens);
-
             // If ContextLength not configured, try fetching from API
             if (contextLength <= 0)
             {
@@ -72,7 +70,7 @@ public class LlmSegmentationService : ILlmSegmentationService
             }
 
             _options.ContextLengthTokens = contextLength;
-            _options.MaxTokensValue = maxTokens > 0 ? maxTokens : 4096;
+            _options.MaxTokensValue = 4096;
 
             if (contextLength > 0)
             {
@@ -89,18 +87,18 @@ public class LlmSegmentationService : ILlmSegmentationService
                 _options.ChunkSize = Math.Min(calculatedChunkSize, maxChunkSize);
 
                 _logger.LogInformation(
-                    "LLM model initialized: Model={Model}, ContextLength={ContextLength}, MaxTokens={MaxTokens}, ChunkSize={ChunkSize}",
+                    "LLM document analysis initialized: Model={Model}, ContextLength={ContextLength}, ReservedOutputTokens={MaxTokens}, ChunkSize={ChunkSize}",
                     _options.Model, contextLength, _options.MaxTokensValue, _options.ChunkSize);
             }
             else
             {
-                // No context length available — disable LLM segmentation
+                // No context length available — disable LLM document analysis
                 _options.MaxTokensValue = 0;
                 _options.ChunkSize = 0;
 
                 _logger.LogWarning(
-                    "LLM segmentation disabled: ContextLength not configured and model info unavailable. " +
-                    "Set LlmSegmentation__ContextLength in config to enable. Model={Model}",
+                    "LLM document analysis disabled: ContextLength not configured and model info unavailable. " +
+                    "Set LlmDocumentAnalysis__ContextLength in config to enable. Model={Model}",
                     _options.Model);
             }
 
@@ -108,7 +106,7 @@ public class LlmSegmentationService : ILlmSegmentationService
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "LLM initialization failed, segmentation disabled");
+            _logger.LogWarning(ex, "LLM document analysis initialization failed");
             _options.MaxTokensValue = 0;
             _options.ChunkSize = 0;
             _initialized = true;

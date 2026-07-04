@@ -1,13 +1,12 @@
 namespace Ruoyu.Study.DocLibrary.Domain.Models;
 
 /// <summary>
-/// Configuration options for LLM segmentation service.
-/// Only ApiKey, BaseUrl, and Model need to be configured by user.
-/// Other parameters are dynamically calculated based on model capabilities.
+/// Configuration options for LLM document analysis.
+/// ApiKey, BaseUrl, Model, and ContextLength are the primary runtime settings.
 /// </summary>
 public class LlmSegmentationOptions
 {
-    public const string SectionName = "LlmSegmentation";
+    public const string SectionName = "LlmDocumentAnalysis";
 
     /// <summary>
     /// API key for the LLM provider (required)
@@ -26,7 +25,7 @@ public class LlmSegmentationOptions
 
     /// <summary>
     /// Model context length in tokens. Supports human-friendly formats: "128K", "1M", "256K".
-    /// If set, skips the /models API call. If not set and /models API also fails, LLM segmentation is disabled.
+    /// If set, skips the /models API call. If not set and /models API also fails, LLM document analysis is disabled.
     /// </summary>
     public string ContextLength { get; set; } = string.Empty;
 
@@ -36,13 +35,7 @@ public class LlmSegmentationOptions
     public int ContextLengthTokens { get; set; }
 
     /// <summary>
-    /// Maximum output tokens for LLM response. Supports human-friendly formats: "4K", "128K", "1M".
-    /// Configurable via LlmSegmentation__MaxTokens. Default "4K".
-    /// </summary>
-    public string MaxTokens { get; set; } = "4K";
-
-    /// <summary>
-    /// Parsed max output tokens. Set by InitializeAsync after parsing MaxTokens string.
+    /// Reserved max output tokens for LLM response. Set internally by InitializeAsync.
     /// </summary>
     public int MaxTokensValue { get; set; }
 
@@ -63,7 +56,7 @@ public class LlmSegmentationOptions
 
     /// <summary>
     /// Hard total timeout in seconds for a single LLM attempt (request + streaming read).
-    /// Configurable via LlmSegmentation__TimeoutSeconds. Default 1800s (30 minutes).
+    /// Configurable via LlmDocumentAnalysis__TimeoutSeconds. Default 1800s (30 minutes).
     /// Enforced via CancellationTokenSource per attempt; HttpClient.Timeout is disabled
     /// (InfiniteTimeSpan) so streaming responses are not prematurely canceled.
     /// This is a safety net; the primary streaming watchdog is StreamIdleTimeoutSeconds.
@@ -73,7 +66,7 @@ public class LlmSegmentationOptions
     /// <summary>
     /// Idle timeout in seconds while reading an SSE stream. If no SSE event is received
     /// within this window, the call is canceled and retried. Configurable via
-    /// LlmSegmentation__StreamIdleTimeoutSeconds. Default 60s.
+    /// LlmDocumentAnalysis__StreamIdleTimeoutSeconds. Default 60s.
     /// This is the primary timeout mechanism for streaming: as long as the LLM keeps
     /// sending tokens, the call stays alive regardless of total elapsed time.
     /// </summary>
@@ -81,7 +74,7 @@ public class LlmSegmentationOptions
 
     /// <summary>
     /// Maximum number of concurrent LLM calls during chunk segmentation.
-    /// Configurable via LlmSegmentation__MaxConcurrency. Default 2.
+    /// Configurable via LlmDocumentAnalysis__MaxConcurrency. Default 2.
     /// Value 1 = fully serial (safest for rate-limited providers).
     /// Value 2-3 = controlled parallelism (overlaps "thinking" time of reasoning models).
     /// Higher values risk provider-side rate limiting.
