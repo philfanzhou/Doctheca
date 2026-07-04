@@ -8,8 +8,9 @@ CONTAINER_NAME="ruoyu-doclibrary"
 NETWORK_NAME="ruoyu-net"
 HTTP_PORT="5012"
 
-IDENTITY_GRPC_ENDPOINT="http://ruoyu-identity:5001"
-IDENTITY_JWKS_ENDPOINT="http://ruoyu-identity:5002/.well-known/jwks"
+IDENTITY_AUTHORITY="http://ruoyu-identity:5002"
+IDENTITY_APP_ID="${IDENTITY_APP_ID:-}"
+IDENTITY_APP_SECRET="${IDENTITY_APP_SECRET:-}"
 
 OPENSEARCH_URL="http://ruoyu-opensearch:9200"
 OPENSEARCH_INDEX="doclibrary-segments"
@@ -61,8 +62,9 @@ docker run -d \
   -e Oss__BucketName="${OSS_BUCKET}" \
   -e OpenSearch__Url="${OPENSEARCH_URL}" \
   -e OpenSearch__IndexName="${OPENSEARCH_INDEX}" \
-  -e Identity__GrpcEndpoint="${IDENTITY_GRPC_ENDPOINT}" \
-  -e Identity__JwksEndpoint="${IDENTITY_JWKS_ENDPOINT}" \
+  -e IdentityService__Authority="${IDENTITY_AUTHORITY}" \
+  -e IdentityService__AppId="${IDENTITY_APP_ID}" \
+  -e IdentityService__AppSecret="${IDENTITY_APP_SECRET}" \
   -e LlmSegmentation__ApiKey="${LLM_API_KEY}" \
   -e LlmSegmentation__BaseUrl="${LLM_BASE_URL}" \
   -e LlmSegmentation__Model="${LLM_MODEL}" \

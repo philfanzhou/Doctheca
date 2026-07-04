@@ -1,6 +1,8 @@
 using System.Data.Common;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using Microsoft.IdentityModel.Tokens;
 using Ruoyu.Study.Common.Oss;
 using Ruoyu.Study.DocLibrary.Database;
 using Ruoyu.Study.DocLibrary.Database.Repositories;
@@ -9,8 +11,6 @@ using Ruoyu.Study.DocLibrary.Domain.Repositories;
 using Ruoyu.Study.DocLibrary.Domain.Services;
 using Ruoyu.Study.DocLibrary.Service;
 using Ruoyu.Study.DocLibrary.Host;
-using QuantumZhou.Identity.Client;
-using IHttpClientFactory = System.Net.Http.IHttpClientFactory;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -113,8 +113,36 @@ builder.Services.AddSingleton<IFileConversionService, LibreOfficeConversionServi
 builder.Services.AddHostedService<IngestionWorker>();
 builder.Services.AddHostedService<MinerUFileParseWorker>();
 
-// ========== Identity Client SDK ==========
-builder.Services.AddIdentityClient(builder.Configuration);
+// ========== Authentication & Authorization ==========
+// Identity 去 gRPC Phase 1: DocLibrary 不再引用 QuantumZhou.Identity.Client SDK。
+// JWT Bearer 使用 OIDC Authority 方式，自动从 Identity 的 /.well-known/openid-configuration 发现 JWKS 端点。
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        options.Authority = builder.Configuration["IdentityService:Authority"];
+        options.Audience = builder.Configuration["Jwt:Audience"] ?? "QuantumZhou.microservices";
+        options.RequireHttpsMetadata = false;
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidIssuer = builder.Configuration["Jwt:Issuer"] ?? "QuantumZhou.Identity",
+            ValidateAudience = true,
+            ValidateLifetime = true,
+            ValidateIssuerSigningKey = true,
+            ClockSkew = TimeSpan.FromSeconds(30)
+        };
+    });
+builder.Services.AddAuthorization();
+
+// ========== Identity HTTP Client ==========
+// 用于调用 Identity 的 HTTP 端点 POST /api/auth/token（login / refresh）。
+// AppId / AppSecret 在 AuthEndpoints 中按需通过 X-Admin-AppId / X-Admin-AppSecret 头传递。
+builder.Services.AddHttpClient("IdentityService", client =>
+{
+    var authority = builder.Configuration["IdentityService:Authority"] ?? "http://localhost:5002";
+    client.BaseAddress = new Uri(authority);
+    client.Timeout = TimeSpan.FromSeconds(10);
+});
 
 var app = builder.Build();
 
@@ -126,10 +154,8 @@ app.Logger.LogInformation("Endpoints: HTTP={HttpPort}", httpPort);
 }
 app.Logger.LogInformation("OSS: {OssType}", useLocalOss ? "local" : "S3");
 app.Logger.LogInformation("OpenSearch: {Url}", builder.Configuration["OpenSearch:Url"] ?? "(not configured)");
-
-var identityOptions = app.Services.GetRequiredService<IdentityClientOptions>();
-app.Logger.LogInformation("Identity: gRPC={GrpcEndpoint}, JWKS={JwksEndpoint}, RequireHttps={RequireHttps}",
-    identityOptions.GrpcEndpoint, identityOptions.JwksEndpoint, identityOptions.RequireHttpsForJwks);
+app.Logger.LogInformation("Identity: Authority={Authority}",
+    builder.Configuration["IdentityService:Authority"] ?? "(not configured)");
 
 // Log LLM configuration
 var llmApiKey = builder.Configuration["LlmSegmentation:ApiKey"];
@@ -189,13 +215,14 @@ using (var initScope = app.Services.CreateScope())
 }
 
 app.UseMiddleware<CorrelationIdMiddleware>();
-app.UseIdentityClient();
+app.UseAuthentication();
+app.UseAuthorization();
 
 app.UseDefaultFiles();
 app.UseStaticFiles();
 
 // Web Admin API endpoints
-app.MapIdentityAuthEndpoints();
+app.MapAuthEndpoints();
 app.MapDocumentFileEndpoints();
 app.MapDocumentParseEndpoints();
 app.MapQuestionBankImportEndpoints();

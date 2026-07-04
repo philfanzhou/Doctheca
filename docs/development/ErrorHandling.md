@@ -80,13 +80,14 @@ CorrelationId 适用于 HTTP 路径，便于在 Loki 中跨服务追踪请求链
 
 - HTTP 路径：由 `CorrelationIdMiddleware`（ASP.NET Core 中间件）从请求头 `x-correlation-id` 读取或新建，写入 `HttpContext.Items` 并通过 `BeginScope` 注入日志上下文；响应头回写 `x-correlation-id` 便于调用方关联。
 
-HTTP 控制器（`DocumentAdminEndpoints` / `MapIdentityAuthEndpoints`）必须在该中间件作用范围内。
+HTTP 控制器（`DocumentFileEndpoints` / `AuthEndpoints` 等）必须在该中间件作用范围内。
 
 中间件管道位置（`Program.cs` 中注册顺序）：
 
 ```
 UseMiddleware<CorrelationIdMiddleware>()   ← 必须在 Auth 之前
-  → UseIdentityClient()
+  → UseAuthentication()
+  → UseAuthorization()
   → UseDefaultFiles() / UseStaticFiles()
   → MapEndpoints
 ```

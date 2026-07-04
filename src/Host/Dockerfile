@@ -18,14 +18,10 @@ COPY src/services/ruoyu.doclibrary/src/Domain/Ruoyu.Study.DocLibrary.Domain.cspr
 COPY src/services/ruoyu.doclibrary/src/Service/Ruoyu.Study.DocLibrary.Service.csproj ./src/services/ruoyu.doclibrary/src/Service/
 COPY src/services/ruoyu.doclibrary/src/Host/Ruoyu.Study.DocLibrary.Host.csproj ./src/services/ruoyu.doclibrary/src/Host/
 COPY src/services/ruoyu.common/src/Ruoyu.Study.Common/Ruoyu.Study.Common.csproj ./src/services/ruoyu.common/src/Ruoyu.Study.Common/
-COPY src/services/QuantumZhou.Identity/backend/Client/QuantumZhou.Identity.Client.csproj ./src/services/QuantumZhou.Identity/backend/Client/
-COPY src/services/QuantumZhou.Identity/backend/Contract/QuantumZhou.Identity.Contract.csproj ./src/services/QuantumZhou.Identity/backend/Contract/
 RUN dotnet restore "src/services/ruoyu.doclibrary/src/Host/Ruoyu.Study.DocLibrary.Host.csproj"
 
 COPY src/services/ruoyu.doclibrary/src/ ./src/services/ruoyu.doclibrary/src/
 COPY src/services/ruoyu.common/src/Ruoyu.Study.Common/ ./src/services/ruoyu.common/src/Ruoyu.Study.Common/
-COPY src/services/QuantumZhou.Identity/backend/Client/ ./src/services/QuantumZhou.Identity/backend/Client/
-COPY src/services/QuantumZhou.Identity/backend/Contract/ ./src/services/QuantumZhou.Identity/backend/Contract/
 COPY --from=frontend-build /wwwroot ./src/services/ruoyu.doclibrary/src/Host/wwwroot
 RUN dotnet publish "src/services/ruoyu.doclibrary/src/Host/Ruoyu.Study.DocLibrary.Host.csproj" -c Release -o /app/publish /p:UseAppHost=false --no-restore
 

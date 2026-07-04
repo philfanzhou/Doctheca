@@ -8,29 +8,29 @@
 | **PostgreSQL** | TCP | 出 | 文档 CRUD + 倒排索引搜索 | 无可降级，返回 500 错误 |
 | **MinIO/SeaweedFS** | S3 | 出 | 文件上传下载 | 上游返回错误，上传/解析失败 |
 | **OpenSearch** | HTTP | 出 | 全文搜索索引写/查 | 索引失败不阻塞主流程，搜索回退到数据库 |
-| **QuantumZhou.Identity** | gRPC | 出 | JWT 签发（GetToken） | 登录/刷新失败返回 401/503 |
+| **QuantumZhou.Identity** | HTTP | 出 | JWT 签发（`POST /api/auth/token`，OAuth2 grant_type 模式）+ JWKS 公钥验证（OIDC discovery） | 登录/刷新失败返回 401/502 |
 
 ## HTTP API（入方向）
 
 ### 认证端点（AllowAnonymous）
 
-定义在 Identity.Client SDK（[AuthEndpoints.cs](../../../../QuantumZhou.Identity/backend/Client/AuthEndpoints.cs)）：
+定义在 [AuthEndpoints.cs](../../src/Service/Endpoints/AuthEndpoints.cs)，通过 `IHttpClientFactory` 调用 Identity HTTP API `POST /api/auth/token`：
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| POST | `/admin/auth/login` | 用户名密码登录，返回 JWT + RefreshToken |
-| POST | `/admin/auth/refresh` | 使用 RefreshToken 刷新 JWT |
+| POST | `/admin/auth/login` | 用户名密码登录（grant_type=password），返回 JWT + RefreshToken |
+| POST | `/admin/auth/refresh` | 使用 RefreshToken 刷新 JWT（grant_type=refresh_token） |
 
 ### 认证端点（需认证）
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| GET | `/admin/auth/me` | 获取当前用户信息 |
-| POST | `/admin/auth/logout` | 登出（吊销 RefreshToken） |
+| GET | `/admin/auth/me` | 获取当前用户信息（从 JWT claims 读取，不调用 Identity） |
+| POST | `/admin/auth/logout` | 登出（前端清除 Token，不调用 Identity） |
 
 ### 文档管理端点（需认证）
 
-定义在 [DocumentAdminEndpoints.cs](../../src/Service/DocumentAdminEndpoints.cs)：
+定义在 [DocumentFileEndpoints.cs](../../src/Service/Endpoints/DocumentFileEndpoints.cs) / [DocumentParseEndpoints.cs](../../src/Service/Endpoints/DocumentParseEndpoints.cs) / [DocumentSearchEndpoints.cs](../../src/Service/Endpoints/DocumentSearchEndpoints.cs) / [DocumentExportEndpoints.cs](../../src/Service/Endpoints/DocumentExportEndpoints.cs)：
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
