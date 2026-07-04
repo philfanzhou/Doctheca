@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Security.Claims;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -31,8 +30,7 @@ public static class DocumentFileEndpoints
 
     public static WebApplication MapDocumentFileEndpoints(this WebApplication app)
     {
-        var group = app.MapGroup("/admin/document-files")
-            .RequireAuthorization();
+        var group = app.MapGroup("/admin/document-files");
 
         group.MapPost("/upload", UploadDocumentFile)
             .WithMetadata(new RequestSizeLimitAttribute(200 * 1024 * 1024));
@@ -74,16 +72,14 @@ public static class DocumentFileEndpoints
             filePath = await ossService.UploadAsync(stream, objectName, file.ContentType, OssBucket.Documents, "doclibrary-files");
         }
 
-        var createdBy = Guid.TryParse(
-            request.HttpContext.User.FindFirst(ClaimTypes.NameIdentifier)?.Value,
-            out var uid) ? uid : (Guid?)null;
-
+        // DocLibrary 是内网管理后台，无应用层认证（2026-07-04 移除 JWT）。
+        // documents.created_by 字段保留为 null；后续接入审计场景时再恢复写入。
         var model = new DocumentFileModel
         {
             FileName = file.FileName,
             FilePath = filePath,
             ContentType = file.ContentType,
-            CreatedBy = createdBy,
+            CreatedBy = null,
         };
 
         var created = await fileService.CreateAsync(model);

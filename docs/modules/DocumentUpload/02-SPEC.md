@@ -23,7 +23,7 @@
 - [x] REQ-UPLOAD-12 能原子创建文档记录与导入任务：在同一 `SaveChangesAsync` 中写入 `documents` 和 `document_ingestion_jobs` 表。
 - [x] REQ-UPLOAD-13 能根据 MIME 类型推导 `sourceType`：PDF→`pdf`、Word→`word`、PPT→`ppt`。
 - [x] REQ-UPLOAD-14 能返回创建结果：包含 `documentId`、`title`、`jobId`、`status`。
-- [x] REQ-UPLOAD-15 上传时从 JWT 提取用户 ID（`ClaimTypes.NameIdentifier`），写入 `documents.created_by` 字段。未登录或 claim 缺失时 `created_by` 为 null。
+- [x] REQ-UPLOAD-15 上传时 `documents.created_by` 字段保留为 null（内网管理后台无应用层认证，2026-07-04 移除 JWT 后该字段不再有值；保留字段以备后续接入审计场景）。
 - [x] REQ-UPLOAD-16 AI 自动填充学科、年级和年份：文档解析时 LLM 分析前 2000 字符，自动识别 subject、grade 和 year，写入 `documents.subject`、`documents.grade` 和 `documents.year`。用户上传时手动指定的值优先于 AI 识别结果。
 
 ## 详细的验收标准（可自动验证）

@@ -56,7 +56,7 @@ src/services/ruoyu.doclibrary/
 
 ### 2.1 Admin HTTP 端点
 
-> ★ `/admin/documents/` 端点组通过 `.RequireAuthorization()` 要求 JWT Bearer 认证（Identity 签发，JWKS 验证），未认证请求返回 401。
+> ★ `/admin/documents/` 端点组无应用层认证（内网管理后台，访问控制由部署层网络隔离实现）。
 
 ```
 DELETE /admin/documents/{id}
@@ -213,7 +213,6 @@ DocumentAdminEndpoints.DeleteDocumentById(id, documentService, ossService, logge
 
 | 错误场景 | 处理方式 | 返回值 / 日志 |
 |----------|----------|----------------|
-| 未认证请求 | ASP.NET Core 中间件自动拦截 | 401 Unauthorized |
 | 文档不存在 | 直接返回 true | 无错误日志（幂等） |
 | 搜索索引清理异常 | `try/catch` 捕获 | `LogError(ex, "Failed to delete document search index: {Title}", title)` |
 | OSS 文件删除异常 | `try/catch` 捕获 | `LogWarning(ex, "Failed to delete document file: {FilePath}", document.FilePath)` |

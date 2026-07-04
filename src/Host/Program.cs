@@ -1,8 +1,6 @@
 using System.Data.Common;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
-using Microsoft.IdentityModel.Tokens;
 using Ruoyu.Study.Common.Oss;
 using Ruoyu.Study.DocLibrary.Database;
 using Ruoyu.Study.DocLibrary.Database.Repositories;
@@ -113,36 +111,9 @@ builder.Services.AddSingleton<IFileConversionService, LibreOfficeConversionServi
 builder.Services.AddHostedService<IngestionWorker>();
 builder.Services.AddHostedService<MinerUFileParseWorker>();
 
-// ========== Authentication & Authorization ==========
-// Identity 去 gRPC Phase 1: DocLibrary 不再引用 QuantumZhou.Identity.Client SDK。
-// JWT Bearer 使用 OIDC Authority 方式，自动从 Identity 的 /.well-known/openid-configuration 发现 JWKS 端点。
-builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-    .AddJwtBearer(options =>
-    {
-        options.Authority = builder.Configuration["IdentityService:Authority"];
-        options.Audience = builder.Configuration["Jwt:Audience"] ?? "QuantumZhou.microservices";
-        options.RequireHttpsMetadata = false;
-        options.TokenValidationParameters = new TokenValidationParameters
-        {
-            ValidateIssuer = true,
-            ValidIssuer = builder.Configuration["Jwt:Issuer"] ?? "QuantumZhou.Identity",
-            ValidateAudience = true,
-            ValidateLifetime = true,
-            ValidateIssuerSigningKey = true,
-            ClockSkew = TimeSpan.FromSeconds(30)
-        };
-    });
-builder.Services.AddAuthorization();
-
-// ========== Identity HTTP Client ==========
-// 用于调用 Identity 的 HTTP 端点 POST /api/auth/token（login / refresh）。
-// AppId / AppSecret 在 AuthEndpoints 中按需通过 X-Admin-AppId / X-Admin-AppSecret 头传递。
-builder.Services.AddHttpClient("IdentityService", client =>
-{
-    var authority = builder.Configuration["IdentityService:Authority"] ?? "http://localhost:5002";
-    client.BaseAddress = new Uri(authority);
-    client.Timeout = TimeSpan.FromSeconds(10);
-}).SetHandlerLifetime(TimeSpan.FromMinutes(5));
+// Note: DocLibrary 是内网管理后台，无应用层认证。
+// 所有 /admin/* 端点 AllowAnonymous，访问控制由部署层网络隔离实现。
+// 详见 docs/overview/Design.md "访问控制架构" 章节。
 
 var app = builder.Build();
 
@@ -154,8 +125,6 @@ app.Logger.LogInformation("Endpoints: HTTP={HttpPort}", httpPort);
 }
 app.Logger.LogInformation("OSS: {OssType}", useLocalOss ? "local" : "S3");
 app.Logger.LogInformation("OpenSearch: {Url}", builder.Configuration["OpenSearch:Url"] ?? "(not configured)");
-app.Logger.LogInformation("Identity: Authority={Authority}",
-    builder.Configuration["IdentityService:Authority"] ?? "(not configured)");
 
 // Log LLM configuration
 var llmApiKey = builder.Configuration["LlmSegmentation:ApiKey"];
@@ -215,14 +184,11 @@ using (var initScope = app.Services.CreateScope())
 }
 
 app.UseMiddleware<CorrelationIdMiddleware>();
-app.UseAuthentication();
-app.UseAuthorization();
 
 app.UseDefaultFiles();
 app.UseStaticFiles();
 
-// Web Admin API endpoints
-app.MapAuthEndpoints();
+// Web Admin API endpoints (no authentication — intranet admin service)
 app.MapDocumentFileEndpoints();
 app.MapDocumentParseEndpoints();
 app.MapQuestionBankImportEndpoints();

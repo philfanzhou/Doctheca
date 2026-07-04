@@ -22,7 +22,7 @@ DocLibrary                      QuestionBank
 ───────────                     ────────────
 document_files ──┐
 document_parses ─┼─► 4 类 HTTP 接口 ──► 拉取客户端 ──► 拆题入库
-parse_blocks ────┤   (JWT 鉴权)                      (PostgreSQL GIN 索引)
+parse_blocks ────┤   (内网直连,无鉴权)             (PostgreSQL GIN 索引)
 parse_images ────┘
 parse_imports ◄── POST /import-status (回写导入状态)
 ```
@@ -37,7 +37,7 @@ parse_imports ◄── POST /import-status (回写导入状态)
 
 | # | 验收条件 | 验证方式 |
 |---|---------|---------|
-| AC-1 | QuestionBank 携带有效 JWT 可调用全部 4 类接口；未认证请求返回 401 | 集成测试 + API 测试 |
+| AC-1 | QuestionBank 直接 HTTP 调用全部 4 类接口（内网直连，无鉴权） | 集成测试 + API 测试 |
 | AC-2 | `GET /admin/document-parses/importable` 仅返回 `status=parsed` 的记录，按 `parsed_at DESC` 排序，支持分页与文件名模糊搜索 | 单元测试 + 集成测试 |
 | AC-3 | 默认排除已有 `imported` 状态的 parse；通过 `includeImported=true` 可包含 | 单元测试 |
 | AC-4 | `GET /admin/document-parses/{parseId}/blocks` 返回该 parse 全部 `document_parse_blocks` 行，支持按 `pageId` / `blockType` 过滤与分页 | 单元测试 + 集成测试 |
@@ -46,7 +46,7 @@ parse_imports ◄── POST /import-status (回写导入状态)
 | AC-7 | `POST /admin/document-parses/{parseId}/import-status` 首次写入返回 200；同一 parseId 重复标记 `imported` 返回 422 + `DOCLIBRARY_PARSE_ALREADY_IMPORTED` | 单元测试 + 集成测试 |
 | AC-8 | `imported` 状态可被 `failed` 覆盖（允许重试）；`failed` 状态可被 `imported` 覆盖（重试成功） | 单元测试 |
 | AC-9 | 接口响应遵循 DocLibrary 统一封装 `{success, data, total, page, pageSize, totalPages}`；失败返回 `{success=false, message, errorCode}` | 集成测试 |
-| AC-10 | 所有接口路径以 `/admin/` 开头并强制 `RequireAuthorization()`，与现有端点风格一致 | 代码审查 |
+| AC-10 | 所有接口路径以 `/admin/` 开头，无应用层认证（内网直连） | 代码审查 |
 
 ## 范围内
 
@@ -65,7 +65,7 @@ parse_imports ◄── POST /import-status (回写导入状态)
 - 定时拉取调度与事件驱动（后续阶段）
 - DocLibrary 主动推送（架构已否决，保持拉模式）
 - 文档已存在 `document_segments` / `question_segments` 表的改造（属于 IngestionWorker 本地解析链路，与 MinerU 链路无关，不混用）
-- 服务间认证机制改造（沿用 JWT Bearer，不做服务账号专设）
+- 应用层鉴权（DocLibrary 作为内网管理后台，所有 `/admin/*` 端点 `AllowAnonymous`，由部署层网络隔离实现访问控制）
 
 ## 数据模型
 
@@ -119,7 +119,6 @@ parse_imports ◄── POST /import-status (回写导入状态)
 ## 配置项
 
 无新增配置项。复用现有：
-- `Jwt:Issuer` / `Jwt:Audience` / `Jwt:JwksEndpoint` — JWT 验证
 - `Oss:Bucket` / `Oss:Endpoint` — 图片存储访问
 
 ## 关键代码参考

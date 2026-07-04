@@ -111,7 +111,7 @@ public class DocLibraryValidationException : Exception
 
 ```csharp
 // src/Service/DocumentAdminEndpoints.cs
-// ★ /admin/documents/ 端点组通过 .RequireAuthorization() 要求 JWT Bearer 认证（Identity 签发，JWKS 验证）
+// ★ /admin/documents/ 端点组无应用层认证（内网管理后台，访问控制由部署层网络隔离实现）
 POST /admin/documents/upload (multipart/form-data: file, title, subject, grade, year, tags)
 
 // 内部逻辑流程：
@@ -279,7 +279,6 @@ pending ──IngestionWorker消费──▶ processing ──成功──▶ re
 
 | 错误场景 | 处理层 | 异常/返回 | HTTP 状态码 | 错误码 |
 | --- | --- | --- | --- | --- |
-| 未认证请求 | ASP.NET Core 中间件 | 自动拦截 | 401 | — |
 | 非 multipart/form-data | 端点 | `Results.BadRequest` | 400 | — |
 | 文件为空 | 端点 | `Results.BadRequest` | 400 | `DOCLIBRARY_FILE_REQUIRED` |
 | 文件大小超限 | 端点 | `Results.BadRequest` | 400 | — |

@@ -8,5 +8,4 @@ dist
 *.vue.js
 # Transpiled JS copies alongside TS sources
 src/main.js
-src/services/authService.js
 src/services/docApi.js

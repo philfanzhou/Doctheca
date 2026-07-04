@@ -10,8 +10,7 @@ HTTP 端点实现中必须使用标准的 HTTP 状态码，不得自定义状态
 | `404 Not Found` | 请求的资源不存在 | 学生不存在、错题不存在 |
 | `409 Conflict` | 资源已存在（创建时冲突） | 重复提交 |
 | `422 Unprocessable Entity` | 业务前置条件不满足 | 审核非待审核状态的错题 |
-| `403 Forbidden` | 权限不足 | 越权访问 |
-| `401 Unauthorized` | 认证失败 | Token 无效或过期 |
+| `403 Forbidden` | 权限不足 | 越权访问（保留以备后续接入细粒度权限） |
 | `500 Internal Server Error` | 服务内部错误 | 数据库异常、未预期的错误 |
 | `503 Service Unavailable` | 服务不可用 | 依赖服务宕机 |
 
@@ -80,16 +79,14 @@ CorrelationId 适用于 HTTP 路径，便于在 Loki 中跨服务追踪请求链
 
 - HTTP 路径：由 `CorrelationIdMiddleware`（ASP.NET Core 中间件）从请求头 `x-correlation-id` 读取或新建，写入 `HttpContext.Items` 并通过 `BeginScope` 注入日志上下文；响应头回写 `x-correlation-id` 便于调用方关联。
 
-HTTP 控制器（`DocumentFileEndpoints` / `AuthEndpoints` 等）必须在该中间件作用范围内。
+HTTP 控制器（`DocumentFileEndpoints` 等）必须在该中间件作用范围内。
 
 中间件管道位置（`Program.cs` 中注册顺序）：
 
 ```
-UseMiddleware<CorrelationIdMiddleware>()   ← 必须在 Auth 之前
-  → UseAuthentication()
-  → UseAuthorization()
+UseMiddleware<CorrelationIdMiddleware>()
   → UseDefaultFiles() / UseStaticFiles()
   → MapEndpoints
 ```
 
-`CorrelationIdMiddleware` 必须在认证之前注册，确保所有下游中间件（含认证失败响应）都在 CorrelationId scope 内。
+> 注：DocLibrary 作为内网管理后台，已移除 JWT Bearer 鉴权（2026-07-04），无 `UseAuthentication` / `UseAuthorization` 中间件。

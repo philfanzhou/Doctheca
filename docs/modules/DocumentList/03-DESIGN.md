@@ -74,7 +74,7 @@ public interface IDocumentRepository
 
 ### 2.3 Admin 端点
 
-> ★ `/admin/documents/` 端点组通过 `.RequireAuthorization()` 要求 JWT Bearer 认证（Identity 签发，JWKS 验证），未认证请求返回 401。
+> ★ `/admin/documents/` 端点组无应用层认证（内网管理后台，访问控制由部署层网络隔离实现）。
 
 ```csharp
 // src/Service/DocumentAdminEndpoints.cs
@@ -211,7 +211,6 @@ DocumentAdminEndpoints.GetDocument
 
 | 位置 | 可能异常 | 处理方式 | 日志级别 |
 |------|----------|----------|----------|
-| ASP.NET Core 中间件 | 未认证请求 | 自动拦截，返回 401 | — |
 | `GetDocumentListAsync` | 数据库连接失败等 | 异常向上抛出，由端点层或中间件统一处理 | `LogError` |
 | `ListDocuments` 端点 | `DocLibraryValidationException` | 当前列表查询不抛此异常 | - |
 | `ListDocuments` 端点 | 未预期异常 | ASP.NET Core 中间件统一捕获，返回 500 | `LogError` |

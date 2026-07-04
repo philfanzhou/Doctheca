@@ -1,20 +1,14 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
-import { authService } from './services/authService'
-import LoginPage from './components/LoginPage.vue'
+import { ref, computed } from 'vue'
 import DocManagePage from './views/DocManagePage.vue'
 import ParseResultsPage from './views/ParseResultsPage.vue'
 import SearchPage from './views/SearchPage.vue'
 
-const isAuthenticated = ref(false)
 const appTitle = ref('DocLibrary Admin')
 const activeTab = ref('documents')
 
 const sidebarOpen = ref(false)
 const sidebarCollapsed = ref(localStorage.getItem('docSidebarCollapsed') === 'true')
-
-const currentUser = computed(() => authService.getUser())
-const displayName = computed(() => currentUser.value?.username ?? '管理员')
 
 const navItems = [
   {
@@ -48,31 +42,10 @@ function toggleSidebar() {
   sidebarCollapsed.value = !sidebarCollapsed.value
   localStorage.setItem('docSidebarCollapsed', String(sidebarCollapsed.value))
 }
-
-function handleLoginSuccess() {
-  isAuthenticated.value = true
-}
-
-async function handleLogout() {
-  await authService.logout()
-  isAuthenticated.value = false
-}
-
-onMounted(async () => {
-  if (authService.isAuthenticated()) {
-    isAuthenticated.value = true
-  } else if (authService.canRefresh()) {
-    const newTokens = await authService.refresh()
-    if (newTokens) {
-      isAuthenticated.value = true
-    }
-  }
-})
 </script>
 
 <template>
-  <LoginPage v-if="!isAuthenticated" @login-success="handleLoginSuccess" />
-  <div v-else class="admin-layout">
+  <div class="admin-layout">
     <aside class="sidebar" :class="{ open: sidebarOpen, collapsed: sidebarCollapsed }">
       <div class="sidebar-header">
         <div class="sidebar-logo">DL</div>
@@ -97,24 +70,6 @@ onMounted(async () => {
           <span class="nav-label">{{ item.label }}</span>
         </div>
       </nav>
-      <div class="sidebar-footer">
-        <div class="sidebar-footer-user">
-          <div class="sidebar-footer-avatar">{{ displayName.charAt(0).toUpperCase() }}</div>
-          <div class="sidebar-footer-info">
-            <div class="sidebar-footer-name">{{ displayName }}</div>
-            <div class="sidebar-footer-status">
-              会话活跃
-            </div>
-          </div>
-          <button class="sidebar-logout-btn" title="登出" @click="handleLogout">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-              <polyline points="16 17 21 12 16 7" />
-              <line x1="21" y1="12" x2="9" y2="12" />
-            </svg>
-          </button>
-        </div>
-      </div>
     </aside>
 
     <div class="sidebar-overlay" :class="{ visible: sidebarOpen }" @click="sidebarOpen = false"></div>

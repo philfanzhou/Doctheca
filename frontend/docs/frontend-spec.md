@@ -18,27 +18,19 @@ DocLibrary Admin 是文档库的管理后台前端,供本地管理员上传文�
 | `axios` | HTTP 请求 | 必需 |
 
 **已移除的依赖(历史遗留,不再使用):**
-- `element-plus` / `@element-plus/icons-vue` — 仅 LoginPage 用了 `ElMessage`,已改为原生 toast 提示
+- `element-plus` / `@element-plus/icons-vue` — 已移除,改用原生 toast 提示
 - `marked` — 未使用(解析结果 Markdown 以 `<pre>` 原文展示,不渲染)
 
-## 3. 认证流程
+## 3. 访问控制
 
-前端不直接持有 Identity 的 AppSecret,而是通过 DocLibrary 后端 BFF 代理登录:
+DocLibrary 为**内网管理后台**,不实现应用层认证:
 
-```
-浏览器 → POST /admin/auth/login {username, password}
-       → DocLibrary 后端代理 → Identity HTTP POST /api/auth/token (password grant)
-       → 返回 { accessToken, refreshToken, userInfo }
-```
+- 部署层网络隔离:仅内网可访问 `:5012` 端口与 `/admin/*` 路径
+- 前端无登录页、无 Token 存储、无 axios 拦截器
+- 后端无 JWT Bearer、无 Authentication / Authorization 中间件、无 Identity 集成
+- 所有 `/admin/*` 端点 `AllowAnonymous`,直接接受请求
 
-- 登录端点:`POST /admin/auth/login`(匿名)
-- 刷新端点:`POST /admin/auth/refresh`(匿名)
-- 当前用户:`GET /admin/auth/me`(JWT 鉴权)
-- 登出端点:`POST /admin/auth/logout`(JWT 鉴权,无状态,前端清本地 token)
-
-Token 存储于 `localStorage`,axios 拦截器自动注入 `Authorization: Bearer` 头,401 时自动刷新。
-
-> **架构约束**:Identity 已迁移到 HTTP API(`POST /api/auth/token`、`POST /api/auth/sms-code` 等),gRPC 已下线。但 AppSecret 是后端机密不可下发前端,因此前端必须经 DocLibrary 后端代理登录,不可绕过。
+> **架构约束**:不再调用 QuantumZhou.Identity。原 AuthEndpoints / LoginPage / authService 已删除。
 
 ## 4. 页面结构
 
@@ -52,20 +44,14 @@ Token 存储于 `localStorage`,axios 拦截器自动注入 `Authorization: Beare
 │    文档管理│  (动态组件:DocManagePage /   │
 │    解析结果│   ParseResultsPage /         │
 │    检索测试│   SearchPage)                │
-│  - 用户  │                               │
 └─────────────────────────────────────────┘
 ```
 
 - 侧边栏可折叠(桌面)/ 抽屉式(移动端 <1200px)
 - 导航项:文档管理、解析结果、检索测试
+- 无登录页、无用户区域、无登出按钮
 
-### 4.2 LoginPage(登录页)
-
-- 居中卡片布局,Logo + 标题 + 用户名/密码表单
-- 错误提示:原生 toast(不依赖 UI 库)
-- Logo 文字:`DL`(DocLibrary)
-
-### 4.3 DocManagePage(文档管理)
+### 4.2 DocManagePage(文档管理)
 
 - 功能:上传文件(PDF/DOCX/PPT)、查看文件列表、触发解析(VLM/Pipeline)、删除文件
 - 上传进度条
@@ -73,14 +59,14 @@ Token 存储于 `localStorage`,axios 拦截器自动注入 `Authorization: Beare
 - 解析中状态自动轮询(5s 间隔,无活跃任务时停止)
 - 分页
 
-### 4.4 ParseResultsPage(解析结果)
+### 4.3 ParseResultsPage(解析结果)
 
 - 功能:查看所有解析记录、查看 Markdown/HTML/JSON/V2/Model/Layout/图片、导出 MD/HTML、删除解析
 - **VLM 和 Pipeline 模式统一显示所有按钮**(按钮不再按 modelVersion 过滤)
 - 按钮显示逻辑:status=parsed 时显示操作按钮;点击 JSON/V2/Model/Layout 按钮时,从详情接口获取数据,有值则新窗口展示,无值则 toast 提示
 - 分页
 
-### 4.5 SearchPage(检索测试)
+### 4.4 SearchPage(检索测试)
 
 - 功能:输入关键词/短语,调用精确检索 API,展示匹配结果
 - 结果表格:序号、文档标题、页码、匹配类型、相关度、匹配文本、Segment ID、偏移量、创建时间
@@ -152,11 +138,21 @@ Token 存储于 `localStorage`,axios 拦截器自动注入 `Authorization: Beare
 
 后端 UT 不受前端重构影响(前端重构不改变 API 契约)。
 
-## 8. 重构记录(2026-07-03)
+## 8. 重构记录
+
+### 2026-07-04: 移除 Identity 鉴权
+
+- 删除 `LoginPage.vue`、`authService.ts`(无登录页、无 Token 存储)
+- `App.vue` 移除登录检查、用户区域、登出按钮
+- `docApi.ts` 改用普通 axios,移除 `createAuthenticatedClient`
+- 后端移除 `AuthEndpoints.cs`、JWT Bearer 中间件、IdentityService HttpClient
+- `.gitignore` 移除 `authService.js` 条目
+- 详见后端 `docs/overview/Design.md` 与 `docs/overview/Integration.md`
+
+### 2026-07-03: UI 重构
 
 - 移除 element-plus / @element-plus/icons-vue / marked / @types/marked 依赖
 - main.ts 移除 ElementPlus 全局注册
-- LoginPage 改用原生 toast,Logo `DR`→`DL`
 - style.css 清理约 600 行死代码,统一 CSS 变量命名
 - SearchPage/DocManagePage/ParseResultsPage 消除所有内联样式
 - ParseResultsPage 修复 VLM 模式按钮显示(移除 modelVersion === 'pipeline' 限制)

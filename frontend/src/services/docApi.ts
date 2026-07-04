@@ -1,4 +1,4 @@
-import { createAuthenticatedClient } from './authService'
+import axios from 'axios'
 
 export interface DocPagedResponse<T> {
   success: boolean
@@ -73,11 +73,9 @@ export interface DocumentParse {
 }
 
 class DocApiClient {
-  private client: ReturnType<typeof createAuthenticatedClient>
-
-  constructor() {
-    this.client = createAuthenticatedClient()
-  }
+  private client = axios.create({
+    timeout: 30000
+  })
 
   async searchTest(
     query: string,

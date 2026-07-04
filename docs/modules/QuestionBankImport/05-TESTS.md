@@ -73,7 +73,7 @@
 | IT-QBI-06 | POST /import-status 首次 200 | AC-FR-10 | 无导入记录 | 200,data.importStatus=imported |
 | IT-QBI-07 | POST /import-status 重复 422 | AC-FR-11 | 已 imported | 422 + DOCLIBRARY_PARSE_ALREADY_IMPORTED |
 | IT-QBI-08 | POST /import-status 参数非法 400 | AC-FR-10 | status=invalid | 400 + DOCLIBRARY_IMPORT_STATUS_INVALID |
-| IT-QBI-09 | 未携带 JWT 401 | NFR-06 | 无 Authorization 头 | 401 Unauthorized |
+| IT-QBI-09 | 内网直连可访问 | NFR-06 | 内网调用方无 Authorization 头 | 200（无鉴权，访问控制由网络隔离实现） |
 | IT-QBI-10 | 并发写入 UNIQUE 约束 | NFR-08 | 并发 POST 同一 parseId | 最终仅一条记录,后到的转为 UPDATE 或 422 |
 
 ## 边界测试

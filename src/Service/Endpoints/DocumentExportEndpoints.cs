@@ -15,14 +15,12 @@ public static class DocumentExportEndpoints
 {
     public static WebApplication MapDocumentExportEndpoints(this WebApplication app)
     {
-        var fileGroup = app.MapGroup("/admin/document-files")
-            .RequireAuthorization();
+        var fileGroup = app.MapGroup("/admin/document-files");
 
         fileGroup.MapGet("/{id:guid}/export/markdown", ExportMarkdown);
         fileGroup.MapGet("/{id:guid}/export/html", ExportHtml);
 
-        var parseGroup = app.MapGroup("/admin/document-parses")
-            .RequireAuthorization();
+        var parseGroup = app.MapGroup("/admin/document-parses");
 
         parseGroup.MapGet("/{parseId:guid}/export/markdown", ExportParseMarkdown);
         parseGroup.MapGet("/{parseId:guid}/export/html", ExportParseHtml);

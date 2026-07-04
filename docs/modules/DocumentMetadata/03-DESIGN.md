@@ -110,7 +110,7 @@ public interface ISearchIndexService
 
 ### 2.4 Admin 端点
 
-> ★ `/admin/documents/` 端点组通过 `.RequireAuthorization()` 要求 JWT Bearer 认证（Identity 签发，JWKS 验证），未认证请求返回 401。
+> ★ `/admin/documents/` 端点组无应用层认证（内网管理后台，访问控制由部署层网络隔离实现）。
 
 ```csharp
 // src/Service/DocumentAdminEndpoints.cs
@@ -208,7 +208,6 @@ DocumentAdminEndpoints.UpdateMetadata
 
 | 位置 | 可能异常 | 处理方式 | 日志级别 |
 |------|----------|----------|----------|
-| ASP.NET Core 中间件 | 未认证请求 | 自动拦截，返回 401 | — |
 | `UpdateMetadata` 端点 | 请求体超过 10KB | 返回 413 Payload Too Large | - |
 | `UpdateMetadataAsync` | 文档不存在 | 抛 `DocLibraryValidationException("文档不存在")` | - |
 | `UpdateMetadataAsync` | 文档未就绪 | 抛 `DocLibraryValidationException("文档未就绪，不允许修改元数据")` | - |

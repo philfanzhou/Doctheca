@@ -292,8 +292,7 @@ public interface IPdfSplitService
 ### 文件管理端点组
 
 ```csharp
-var fileGroup = app.MapGroup("/admin/document-files")
-    .RequireAuthorization();
+var fileGroup = app.MapGroup("/admin/document-files");
 
 fileGroup.MapPost("/upload", UploadDocumentFile);
 fileGroup.MapGet("/", ListDocumentFiles);          // 新增 parseStatus 过滤参数
@@ -307,8 +306,7 @@ fileGroup.MapGet("/{id:guid}/export/html", ExportHtml);
 ### 解析记录端点组（新增）
 
 ```csharp
-var parseGroup = app.MapGroup("/admin/document-parses")
-    .RequireAuthorization();
+var parseGroup = app.MapGroup("/admin/document-parses");
 
 parseGroup.MapGet("/", ListDocumentParses);                // API-8
 parseGroup.MapDelete("/{parseId:guid}", DeleteDocumentParse); // API-9

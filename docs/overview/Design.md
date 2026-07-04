@@ -55,59 +55,20 @@
 | 搜索引擎 | OpenSearch 2.19 (Docker) / OpenSearch.Net 1.8 (NuGet) | 外部全文检索 |
 | 测试 | xUnit + Moq + FluentAssertions | 三层测试 |
 
-## 认证架构
+## 访问控制架构
 
-### 方案：JWT Bearer（QuantumZhou.Identity 签发，HTTP 调用）
+### 方案：内网管理后台，无应用层认证
 
-DocLibrary 的 Admin API 通过 JWT Bearer Token 进行认证，Token 由 QuantumZhou.Identity 服务签发。Identity 去 gRPC Phase 1 之后，DocLibrary 不再引用 `QuantumZhou.Identity.Client` SDK，自行通过 `IHttpClientFactory` 调用 Identity 的 HTTP 端点 `POST /api/auth/token`，JWT 验证使用标准 ASP.NET Core JWT Bearer 的 OIDC Authority 模式（自动从 `/.well-known/openid-configuration` 发现 JWKS 端点）。
+DocLibrary 作为内网管理后台运行，**不实现应用层认证**：
 
-```
-┌──────────┐  1. POST /admin/auth/login    ┌──────────────────┐
-│  Admin   │ ──────────────────────────────► │  DocLibrary    │
-│  前端    │                                 │  (AuthEndpoints) │
-│          │  2. 返回 JWT + RefreshToken     │                  │
-│          │ ◄────────────────────────────── │                  │
-│          │                                 │                  │
-│          │  3. Authorization: Bearer <JWT> │                  │
-│          │ ──────────────────────────────► │  .RequireAuthorization()  │
-│          │                                 │  JWT Bearer 验证   │
-└──────────┘                                 │  (OIDC discovery) │
-                                             └────────┬─────────┘
-                                                      │
-                                             4. HTTP POST /api/auth/token
-                                             (grant_type=password,
-                                              X-Admin-AppId/AppSecret 头)
-                                                      │
-                                                      ▼
-                                             ┌──────────────────┐
-                                             │  QuantumZhou     │
-                                             │  Identity        │
-                                             │  (HTTP :5002)    │
-                                             │                  │
-                                             │  /.well-known/   │
-                                             │  openid-         │
-                                             │  configuration   │
-                                             │  /.well-known/   │
-                                             │  jwks (公钥)     │
-                                             └──────────────────┘
-```
+- 所有 `/admin/*` 端点 `AllowAnonymous`，直接接受请求
+- 后端无 JWT Bearer 中间件、无 Authentication / Authorization 中间件、无 Identity 集成
+- 前端无登录页、无 Token 存储、无 axios 拦截器
+- 访问控制由**部署层网络隔离**实现：仅内网可访问 `:5012` 端口
 
-### 认证流程
+### 历史背景
 
-1. **登录**：前端发送用户名/密码到 `POST /admin/auth/login`，DocLibrary 后端通过 HTTP 调用 Identity 的 `POST /api/auth/token`（grant_type=password，AppId/AppSecret 通过 `X-Admin-AppId` / `X-Admin-AppSecret` 头传递），验证成功后将 JWT 和 RefreshToken 返回给前端
-2. **请求**：前端在每次 API 请求中携带 `Authorization: Bearer <JWT>`，ASP.NET Core JWT Bearer 中间件通过 OIDC discovery 自动从 Identity 的 `/.well-known/openid-configuration` 找到 JWKS 端点并验证 JWT 签名
-3. **刷新**：JWT 过期前，前端通过 `POST /admin/auth/refresh` 使用 RefreshToken 调用 Identity `POST /api/auth/token`（grant_type=refresh_token）获取新 JWT
-4. **登出**：前端清除本地 Token 存储，`POST /admin/auth/logout` 仅返回成功，不调用 Identity
-
-### 配置项
-
-| 配置键 | 说明 | 示例 |
-|--------|------|------|
-| `IdentityService:Authority` | Identity HTTP 服务地址，同时作为 JWT Bearer OIDC Authority | `http://localhost:5002` |
-| `IdentityService:AppId` | 应用标识，通过 `X-Admin-AppId` 头传递（可选，用于网关审计与回调） | （未配置则不带头） |
-| `IdentityService:AppSecret` | 应用密钥，通过 `X-Admin-AppSecret` 头传递 | （未配置则不带头） |
-| `Jwt:Issuer` | JWT 签发者（与 Identity 一致，用于 TokenValidationParameters.ValidIssuer） | `QuantumZhou.Identity` |
-| `Jwt:Audience` | JWT 受众（与 Identity 一致，用于 TokenValidationParameters.ValidAudience） | `QuantumZhou.microservices` |
+原实现通过 JWT Bearer Token 调用 QuantumZhou.Identity 进行认证。考虑到 DocLibrary 仅为内网管理页面，无高并发与外部访问需求，应用层认证增加复杂度而无实际收益，已于 2026-07-04 移除。`AuthEndpoints.cs`、`LoginPage.vue`、`authService.ts` 已删除。
 
 ## 关键设计决策
 
@@ -118,7 +79,7 @@ DocLibrary 的 Admin API 通过 JWT Bearer Token 进行认证，Token 由 Quantu
 | SQLite 支持本地开发 | 无需 PostgreSQL 即可本地运行 |
 | 原生 SQL 建表（非 Migration） | 简化部署，避免 Migration 版本冲突 |
 | OSS 支持 LocalFile / S3 切换 | 环境变量 `USE_LOCAL_OSS` 控制 |
-| JWT Bearer 认证（Identity 签发） | 统一认证中心，微服务间标准方案 |
+| 移除 Identity 鉴权，改为内网部署隔离 | 内网管理后台，应用层认证增加复杂度无实际收益 |
 | MinerU Precision API 在线解析 | 含图片输出，Token 认证，每日 1000 页免费额度 |
 | 移除 gRPC，统一使用 HTTP REST | DocLibrary 为低并发管理服务，gRPC 无性能优势且增加维护成本；无外部 gRPC 消费者 |
 
@@ -126,7 +87,7 @@ DocLibrary 的 Admin API 通过 JWT Bearer Token 进行认证，Token 由 Quantu
 
 | 文件 | 用途 |
 |------|------|
-| [Program.cs](../../src/Host/Program.cs) | 服务启动配置 + JWT Bearer (OIDC Authority) + `IHttpClientFactory` 注册 |
+| [Program.cs](../../src/Host/Program.cs) | 服务启动配置（无鉴权中间件） |
 | [IDocumentDomainService.cs](../../src/Domain/Services/IDocumentDomainService.cs) | 文档领域接口 |
 | [DocumentDomainService.cs](../../src/Domain/Services/DocumentDomainService.cs) | 文档领域实现 |
 | [SearchDomainService.cs](../../src/Domain/Services/SearchDomainService.cs) | 搜索领域逻辑 |

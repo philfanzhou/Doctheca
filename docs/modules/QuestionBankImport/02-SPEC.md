@@ -5,8 +5,8 @@
 **核心用户故事**：作为 QuestionBank 服务，我需要通过 HTTP API 拉取 DocLibrary 已完成的 MinerU 解析产出（可导入列表、结构化块、图片），并回写导入状态以避免重复处理，以便自主完成试卷到题库的拆分入库。
 
 **补充约束**：
-- 本功能仅面向已认证的服务调用方（QuestionBank 携带 JWT），不开放给前台用户。
-- 所有接口强制 `RequireAuthorization()`，与现有 DocLibrary Admin API 风格一致。
+- 本功能仅面向内网服务调用方（QuestionBank 内网直连 DocLibrary），不开放给前台用户。
+- 所有接口 `AllowAnonymous`，与现有 DocLibrary Admin API 风格一致（内网管理后台无应用层认证）。
 - 本模块只读 MinerU 链路数据（`document_parses` / `document_parse_blocks` / `document_parse_images`），不触碰 IngestionWorker 链路（`document_segments` / `question_segments` / `document_occurrences`）。
 - 元数据过滤（subject/grade/year）不在本次范围（`document_files` 表无这些字段，扩展超出范围外）。QuestionBank 拉取后可自行根据 `fileName` 或拉到的内容判断。
 
@@ -399,7 +399,7 @@ var blocks = await query
 | NFR-03 | 性能 | 图片访问首字节响应 ≤ 1s（OSS 下载延迟） |
 | NFR-04 | 数据量 | 可导入列表单页最大 100 条；结构化块单页最大 200 条 |
 | NFR-05 | 兼容性 | 遵循 DocLibrary 统一响应封装 `{success, data, total, page, pageSize, totalPages}` |
-| NFR-06 | 安全性 | 所有端点强制 `RequireAuthorization()`，沿用 JWT Bearer 认证 |
+| NFR-06 | 安全性 | 所有端点 `AllowAnonymous`，由部署层网络隔离实现访问控制（内网管理后台） |
 | NFR-07 | 可观测性 | 关键操作（导入状态回写、图片下载失败）记录日志；列表查询无额外日志 |
 | NFR-08 | 并发 | `document_parse_imports` 表 `parse_id` UNIQUE 约束保证并发写入安全（捕获 UniqueViolation 后转为 UPDATE） |
 | NFR-09 | 数据完整性 | `document_parse_imports.parse_id` ON DELETE CASCADE，parse 删除时联动清除导入记录 |
@@ -413,7 +413,7 @@ var blocks = await query
 | 单元测试 | `UpsertImportStatusAsync` | 验证首次插入、状态覆盖（imported↔failed）、重复 imported 抛异常、parseId 不存在抛异常 |
 | 单元测试 | `GetImageStreamAsync` | 验证 imageId 不存在返回 null、OSS 下载异常向上抛 |
 | 单元测试 | `blockData` JSON 解析 | 验证合法 JSON、空对象、非法 JSON（返回 null）、null 字符串 |
-| 集成测试 | `GET /admin/document-parses/importable` | 验证响应封装、分页字段、排序、JWT 鉴权（401） |
+| 集成测试 | `GET /admin/document-parses/importable` | 验证响应封装、分页字段、排序（无鉴权） |
 | 集成测试 | `GET /admin/document-parses/{parseId}/blocks` | 验证 200/404/422 三种响应、pageId=0 不被当作未传参 |
 | 集成测试 | `GET /admin/document-parses/images/{imageId}` | 验证 200（正确 Content-Type）/ 404 / 500（OSS 失败） |
 | 集成测试 | `POST /admin/document-parses/{parseId}/import-status` | 验证首次 200 / 重复 imported 422 / 状态覆盖 200 / 参数非法 400 / parseId 不存在 404 |
