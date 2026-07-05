@@ -11,15 +11,16 @@ using Ruoyu.Study.DocLibrary.Domain.Repositories;
 namespace Ruoyu.Study.DocLibrary.Service;
 
 /// <summary>
-/// LLM-based intelligent document segmentation service implementation.
-/// Uses OpenAI-compatible API (via shared OpenAiCompatibleClient) for document analysis and text segmentation.
+/// LLM-based intelligent document analysis service implementation.
+/// Uses OpenAI-compatible API (via shared OpenAiCompatibleClient) for document analysis,
+/// metadata extraction, and semantic text segmentation.
 /// Dynamically fetches model capabilities at startup to optimize parameters.
 /// </summary>
-public class LlmSegmentationService : ILlmSegmentationService
+public class DocumentAnalysisService : IDocumentAnalysisService
 {
     private readonly OpenAiCompatibleClient _client;
-    private readonly LlmSegmentationOptions _options;
-    private readonly ILogger<LlmSegmentationService> _logger;
+    private readonly DocumentAnalysisOptions _options;
+    private readonly ILogger<DocumentAnalysisService> _logger;
     private bool _initialized;
 
     public int ChunkSize => _options.ChunkSize;
@@ -31,10 +32,10 @@ public class LlmSegmentationService : ILlmSegmentationService
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
     };
 
-    public LlmSegmentationService(
+    public DocumentAnalysisService(
         OpenAiCompatibleClient client,
-        IOptions<LlmSegmentationOptions> options,
-        ILogger<LlmSegmentationService> logger)
+        IOptions<DocumentAnalysisOptions> options,
+        ILogger<DocumentAnalysisService> logger)
     {
         _client = client;
         _options = options.Value;

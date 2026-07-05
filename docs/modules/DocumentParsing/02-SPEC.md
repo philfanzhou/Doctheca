@@ -316,30 +316,30 @@ Scenario: 其它非 sentence 策略 LLM 失败触发任务级失败
 LLM 分段服务支持配置化，可通过配置文件或环境变量调整。
 
 - 配置项：
-  - `LlmSegmentation.ApiKey`：API 密钥（为空时禁用 LLM 分段）
-  - `LlmSegmentation.BaseUrl`：API 基础 URL
-  - `LlmSegmentation.Model`：模型 ID
-  - `LlmSegmentation.ContextLength`：上下文窗口，支持 "128K"、"1M" 格式
-  - `LlmSegmentation.MaxTokens`：最大输出 token，支持 "4K"、"128K" 格式
-  - `LlmSegmentation.TimeoutSeconds`：HTTP 超时秒数（默认 300）
+  - `LlmDocumentAnalysis:ApiKey`：API 密钥（为空时禁用 LLM 文档分析）
+  - `LlmDocumentAnalysis:BaseUrl`：API 基础 URL
+  - `LlmDocumentAnalysis:Model`：模型 ID
+  - `LlmDocumentAnalysis:ContextLength`：上下文窗口，支持 "128K"、"1M" 格式
+  - `LlmDocumentAnalysis:MaxTokens`：最大输出 token，支持 "4K"、"128K" 格式
+  - `LlmDocumentAnalysis:TimeoutSeconds`：HTTP 超时秒数（默认 300）
 - 支持通过环境变量覆盖配置
 
 **验收场景**:
 ```gherkin
 Scenario: 通过配置文件设置 LLM 参数
-  Given appsettings.json 中配置了 LlmSegmentation.Provider = "openai"
+  Given appsettings.json 中配置了 LlmDocumentAnalysis:Provider = "openai"
   When 服务启动
-  Then LlmSegmentationService 使用 openai 提供商
+  Then DocumentAnalysisService 使用 openai 提供商
 
 Scenario: 通过环境变量覆盖配置
-  Given 环境变量 LLM_SEGMENTATION__PROVIDER = "anthropic"
+  Given 环境变量 LlmDocumentAnalysis__Provider = "anthropic"
   When 服务启动
-  Then LlmSegmentationService 使用 anthropic 提供商
+  Then DocumentAnalysisService 使用 anthropic 提供商
 
 Scenario: 配置缺失时使用默认值
-  Given LlmSegmentation.Provider 未配置
+  Given LlmDocumentAnalysis:Provider 未配置
   When 服务启动
-  Then LlmSegmentationService 使用默认值（openai）
+  Then DocumentAnalysisService 使用默认值（openai）
 ```
 
 ---

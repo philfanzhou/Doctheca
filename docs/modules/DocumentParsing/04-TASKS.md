@@ -157,12 +157,12 @@
   {
     "id": "TASK-017",
     "title": "LLM 分段服务接口与模型定义",
-    "description": "定义 ILlmSegmentationService 接口、DocumentProfile 和 SegmentResult 模型",
+    "description": "定义 IDocumentAnalysisService 接口、DocumentProfile 和 SegmentResult 模型",
     "status": "pending",
     "priority": "P0",
     "requirement": "REQ-PARSE-10",
     "files": [
-      "src/Domain/Repositories/ILlmSegmentationService.cs",
+      "src/Domain/Repositories/IDocumentAnalysisService.cs",
       "src/Domain/Models/DocumentProfile.cs",
       "src/Domain/Models/SegmentResult.cs"
     ],
@@ -171,17 +171,17 @@
   {
     "id": "TASK-018",
     "title": "LLM 分段服务实现",
-    "description": "实现 LlmSegmentationService，包含文档分析（AnalyzeDocumentAsync）和智能分段（SegmentTextAsync），支持 OpenAI/Anthropic/本地模型",
+    "description": "实现 DocumentAnalysisService，包含文档分析（AnalyzeDocumentAsync）和智能分段（SegmentTextAsync），支持 OpenAI/Anthropic/本地模型",
     "status": "pending",
     "priority": "P0",
     "requirement": "REQ-PARSE-10",
-    "files": ["src/Service/LlmSegmentationService.cs"],
+    "files": ["src/Service/DocumentAnalysisService.cs"],
     "depends_on": ["TASK-017"]
   },
   {
     "id": "TASK-019",
     "title": "DocumentParserService 集成 LLM 分段",
-    "description": "修改 DocumentParserService，注入 ILlmSegmentationService，在 ParseAsync 中调用 LLM 分段，失败时回退到现有规则切割",
+    "description": "修改 DocumentParserService，注入 IDocumentAnalysisService，在 ParseAsync 中调用 LLM 分段，失败时回退到现有规则切割",
     "status": "pending",
     "priority": "P0",
     "requirement": "REQ-PARSE-10",
@@ -191,7 +191,7 @@
   {
     "id": "TASK-020",
     "title": "LLM 分段配置支持",
-    "description": "添加 LlmSegmentation 配置项（Provider/Model/ApiKey/BaseUrl 等），支持环境变量覆盖",
+    "description": "添加 LlmDocumentAnalysis 配置项（Provider/Model/ApiKey/BaseUrl 等），支持环境变量覆盖",
     "status": "pending",
     "priority": "P1",
     "requirement": "REQ-PARSE-11",
@@ -204,11 +204,11 @@
   {
     "id": "TASK-021",
     "title": "LLM 分段单元测试",
-    "description": "测试 LlmSegmentationService 的文档分析、智能分段、错误处理和回退机制",
+    "description": "测试 DocumentAnalysisService 的文档分析、智能分段、错误处理和回退机制",
     "status": "pending",
     "priority": "P0",
     "requirement": "REQ-PARSE-10",
-    "files": ["test/Ruoyu.Study.DocLibrary.Tests/LlmSegmentationServiceTests.cs"],
+    "files": ["test/Ruoyu.Study.DocLibrary.Tests/DocumentAnalysisServiceTests.cs"],
     "depends_on": ["TASK-018"]
   },
   {

@@ -8,11 +8,11 @@ namespace Ruoyu.Study.DocLibrary.Domain.Models;
 /// from AiClientOptions. Service-specific fields (ContextLength, ChunkSize, MaxConcurrency, etc.)
 /// are defined here.
 /// </summary>
-public class LlmSegmentationOptions : AiClientOptions
+public class DocumentAnalysisOptions : AiClientOptions
 {
     public const string SectionName = "LlmDocumentAnalysis";
 
-    public LlmSegmentationOptions()
+    public DocumentAnalysisOptions()
     {
         // Override base defaults: doclibrary LLM calls are long-running streaming calls
         // (segmentation of large documents) and benefit from a higher retry count and

@@ -1,4 +1,4 @@
-# 07-LLM-SEGMENTATION — LLM 智能文档分段设计
+# 07-DOCUMENT-ANALYSIS — LLM 智能文档分析设计
 
 ## 背景与动机
 
@@ -155,7 +155,7 @@
 ### 新增接口
 
 ```csharp
-public interface ILlmSegmentationService
+public interface IDocumentAnalysisService
 {
     /// <summary>
     /// 分析文档类型和结构特征
@@ -200,9 +200,9 @@ public record SegmentResult
 ```csharp
 public class DocumentParserService : IDocumentParserService
 {
-    private readonly ILlmSegmentationService _llmSegmentation;
+    private readonly IDocumentAnalysisService _documentAnalysis;
 
-    // 构造函数注入 ILlmSegmentationService
+    // 构造函数注入 IDocumentAnalysisService
 
     public async Task<ParsedDocument> ParseAsync(Stream fileStream, string sourceType, CancellationToken cancellationToken)
     {
@@ -220,29 +220,23 @@ public class DocumentParserService : IDocumentParserService
 ### LLM 调用实现
 
 ```csharp
-public class LlmSegmentationService : ILlmSegmentationService
+public class DocumentAnalysisService : IDocumentAnalysisService
 {
-    private readonly HttpClient _httpClient;
-    private readonly LlmOptions _options;
+    private readonly OpenAiCompatibleClient _client;
+    private readonly DocumentAnalysisOptions _options;
 
     public async Task<DocumentProfile> AnalyzeDocumentAsync(string textPreview, CancellationToken cancellationToken)
     {
         var prompt = BuildAnalysisPrompt(textPreview);
-        var response = await CallLlmAsync(prompt, cancellationToken);
+        var response = await _client.CallStreamingAsync(BuildRequestBody(prompt), cancellationToken);
         return ParseDocumentProfile(response);
     }
 
     public async Task<List<SegmentResult>> SegmentTextAsync(string text, DocumentProfile profile, CancellationToken cancellationToken)
     {
         var prompt = BuildSegmentationPrompt(text, profile);
-        var response = await CallLlmAsync(prompt, cancellationToken);
+        var response = await _client.CallStreamingAsync(BuildRequestBody(prompt), cancellationToken);
         return ParseSegmentResults(response);
-    }
-
-    private async Task<string> CallLlmAsync(string prompt, CancellationToken cancellationToken)
-    {
-        // 调用 LLM API（OpenAI/Claude/本地模型）
-        // 支持重试和超时处理
     }
 }
 ```
@@ -255,7 +249,7 @@ public class LlmSegmentationService : ILlmSegmentationService
 
 ```json
 {
-  "LlmSegmentation": {
+  "LlmDocumentAnalysis": {
     "ApiKey": "your-api-key",
     "BaseUrl": "https://api.xiaomimimo.com/v1",
     "Model": "mimo-v2.5-pro",

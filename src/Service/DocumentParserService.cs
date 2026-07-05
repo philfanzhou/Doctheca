@@ -19,7 +19,7 @@ namespace Ruoyu.Study.DocLibrary.Service;
 public partial class DocumentParserService : IDocumentParserService
 {
     private readonly ILogger<DocumentParserService> _logger;
-    private readonly ILlmSegmentationService? _llmSegmentation;
+    private readonly IDocumentAnalysisService? _documentAnalysis;
 
     // Abbreviation list, used to exclude false positives in sentence boundary detection
     private static readonly HashSet<string> Abbreviations =
@@ -207,10 +207,10 @@ public partial class DocumentParserService : IDocumentParserService
 
     public DocumentParserService(
         ILogger<DocumentParserService> logger,
-        ILlmSegmentationService? llmSegmentation = null)
+        IDocumentAnalysisService? documentAnalysis = null)
     {
         _logger = logger;
-        _llmSegmentation = llmSegmentation;
+        _documentAnalysis = documentAnalysis;
     }
 
     public async Task<ParsedDocument> ParseAsync(Stream fileStream, string sourceType, IProgress<ParsingProgress>? progress = null, CancellationToken cancellationToken = default)
@@ -254,7 +254,7 @@ public partial class DocumentParserService : IDocumentParserService
 
         // LLM analysis: determine document profile from first non-empty pages
         DocumentProfile? profile = null;
-        if (_llmSegmentation != null)
+        if (_documentAnalysis != null)
         {
             profile = await AnalyzeDocumentAsync(pageTexts, cancellationToken);
             progress?.Report(new ParsingProgress { Stage = "analyzing", CompletedSteps = 1, TotalSteps = 1 });
@@ -318,7 +318,7 @@ public partial class DocumentParserService : IDocumentParserService
 
         // LLM analysis from first page's content
         DocumentProfile? profile = null;
-        if (_llmSegmentation != null && pages.Count > 0)
+        if (_documentAnalysis != null && pages.Count > 0)
         {
             var previewBuilder = new StringBuilder();
             foreach (var (_, paras) in pages)
@@ -513,7 +513,7 @@ public partial class DocumentParserService : IDocumentParserService
 
         // LLM analysis
         DocumentProfile? profile = null;
-        if (_llmSegmentation != null)
+        if (_documentAnalysis != null)
         {
             var preview = string.Join("\n\n", slideTexts
                 .Where(s => s.Blocks.Count > 0)
@@ -567,7 +567,7 @@ public partial class DocumentParserService : IDocumentParserService
             if (preview.Length > 2000)
                 preview = preview[..2000];
 
-            var profile = await _llmSegmentation!.AnalyzeDocumentAsync(preview, cancellationToken);
+            var profile = await _documentAnalysis!.AnalyzeDocumentAsync(preview, cancellationToken);
             _logger.LogInformation("Document analysis completed: Subject={Subject}, DocType={DocType}, Strategy={Strategy}",
                 profile.Subject, profile.DocType, profile.SegmentStrategy);
             return profile;
@@ -603,8 +603,8 @@ public partial class DocumentParserService : IDocumentParserService
         if (nonEmptyPages.Count == 0) return;
 
         // Determine chunk size — if LLM is not available (ChunkSize <= 0), use rule-based fallback
-        var llmAvailable = _llmSegmentation != null && profile != null && _llmSegmentation.ChunkSize > 0;
-        var chunkSize = llmAvailable ? _llmSegmentation!.ChunkSize : 1500;
+        var llmAvailable = _documentAnalysis != null && profile != null && _documentAnalysis.ChunkSize > 0;
+        var chunkSize = llmAvailable ? _documentAnalysis!.ChunkSize : 1500;
 
         // 早检查：非 sentence 策略必须由 LLM 切分，规则切割会产生整段单条记录污染搜索结果
         if (profile != null && profile.SegmentStrategy != SegmentTypes.Sentence && !llmAvailable)
@@ -719,14 +719,14 @@ public partial class DocumentParserService : IDocumentParserService
     /// Returns whether each chunk used the fallback path (LLM was configured but failed),
     /// so the caller can decide whether to fail the document.
     ///
-    /// Concurrency is controlled by ILlmSegmentationService.MaxConcurrency:
+    /// Concurrency is controlled by IDocumentAnalysisService.MaxConcurrency:
     /// - 1 = fully serial (safest for rate-limited providers)
     /// - 2-3 = controlled parallelism (overlaps "thinking" time of reasoning models)
     /// </summary>
     private async Task<List<(TextChunk Chunk, List<SegmentWithOffset> Segments, bool LlmFailed)>> ProcessChunksAsync(
         List<TextChunk> chunks, bool llmAvailable, DocumentProfile? profile, IProgress<ParsingProgress>? progress, CancellationToken cancellationToken)
     {
-        var maxConcurrency = llmAvailable ? _llmSegmentation!.MaxConcurrency : 1;
+        var maxConcurrency = llmAvailable ? _documentAnalysis!.MaxConcurrency : 1;
         var results = new (TextChunk Chunk, List<SegmentWithOffset> Segments, bool LlmFailed)[chunks.Count];
         var completedChunks = 0;
 
@@ -791,7 +791,7 @@ public partial class DocumentParserService : IDocumentParserService
                     "Processing chunk {ChunkIndex}/{ChunkCount} at offset {GlobalStartOffset}",
                     index + 1, totalChunks, chunk.GlobalStartOffset);
 
-                var llmSegments = await _llmSegmentation!.SegmentTextAsync(chunk.Text, profile, cancellationToken);
+                var llmSegments = await _documentAnalysis!.SegmentTextAsync(chunk.Text, profile, cancellationToken);
                 if (llmSegments.Count > 0)
                 {
                     segments = llmSegments.Select(s => new SegmentWithOffset

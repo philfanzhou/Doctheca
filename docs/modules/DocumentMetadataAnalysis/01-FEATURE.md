@@ -75,7 +75,7 @@
 |-----|------|
 | NFR-01 | LLM 分析异步执行，不阻塞解析状态更新 |
 | NFR-02 | LLM 分析失败仅记日志，不影响任何后续流程 |
-| NFR-03 | LLM 调用使用现有 `LlmSegmentation` 配置（BaseUrl/ApiKey/Model） |
+| NFR-03 | LLM 调用使用现有 `LlmDocumentAnalysis` 配置（BaseUrl/ApiKey/Model） |
 | NFR-04 | LLM 输入为人类可读 Markdown（非 JSON），前 2000 字符 |
 | NFR-05 | 日志记录 fileId/parseId/分析结果/失败原因，ApiKey 脱敏 |
 
@@ -83,7 +83,7 @@
 
 - **LLM 输入**:`document_parses.markdown_content` 前 2000 字符
 - **元数据存储**:`document_files.subject` / `grade` / `year`
-- **LLM 配置**:`LlmSegmentation` 配置段（复用现有配置，不新增）
+- **LLM 配置**:`LlmDocumentAnalysis` 配置段（复用现有配置，不新增）
 
 ## 接口清单
 
@@ -93,7 +93,7 @@
 | `DocumentFileModel` | 新增 Subject/Grade/Year 字段 |
 | `IDocumentFileRepository` | 新增 `UpdateMetadataAsync` |
 | `IDocumentFileService` | 新增 `UpdateMetadataAsync` |
-| `ILlmSegmentationService` | 新增 `AnalyzeMetadataAsync` 方法 |
+| `IDocumentAnalysisService` | 新增 `AnalyzeMetadataAsync` 方法 |
 | `ISearchIndexService` | 新增 `UpdateDocumentFileMetadataAsync` 方法 |
 | `MinerUFileParseWorker` | 解析完成后调用 LLM 分析元数据 |
 | `DocumentFileEndpoints` | 新增 `PUT /{id}/metadata` 端点 |

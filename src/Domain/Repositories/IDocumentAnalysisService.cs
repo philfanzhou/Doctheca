@@ -3,9 +3,11 @@ using Ruoyu.Study.DocLibrary.Domain.Models;
 namespace Ruoyu.Study.DocLibrary.Domain.Repositories;
 
 /// <summary>
-/// LLM-based intelligent document segmentation service
+/// LLM-based intelligent document analysis service.
+/// Handles document profiling, metadata analysis, and semantic segmentation
+/// via OpenAI-compatible APIs.
 /// </summary>
-public interface ILlmSegmentationService
+public interface IDocumentAnalysisService
 {
     /// <summary>
     /// Maximum text chunk size in characters for LLM calls.

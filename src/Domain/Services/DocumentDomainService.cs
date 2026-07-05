@@ -24,7 +24,7 @@ public class DocumentDomainService : IDocumentDomainService
     private readonly IUnitOfWork _unitOfWork;
     private readonly ISearchIndexService? _searchIndexService;
     private readonly IOssService? _ossService;
-    private readonly ILlmSegmentationService? _llmSegmentation;
+    private readonly IDocumentAnalysisService? _documentAnalysis;
     private readonly ILogger<DocumentDomainService> _logger;
 
     public DocumentDomainService(
@@ -38,7 +38,7 @@ public class DocumentDomainService : IDocumentDomainService
         ILogger<DocumentDomainService> logger,
         ISearchIndexService? searchIndexService = null,
         IOssService? ossService = null,
-        ILlmSegmentationService? llmSegmentation = null)
+        IDocumentAnalysisService? documentAnalysis = null)
     {
         _documentRepository = documentRepository;
         _pageRepository = pageRepository;
@@ -49,7 +49,7 @@ public class DocumentDomainService : IDocumentDomainService
         _unitOfWork = unitOfWork;
         _searchIndexService = searchIndexService;
         _ossService = ossService;
-        _llmSegmentation = llmSegmentation;
+        _documentAnalysis = documentAnalysis;
         _logger = logger;
     }
 
@@ -348,7 +348,7 @@ public class DocumentDomainService : IDocumentDomainService
         if (document.Status != DocumentStatus.Ready)
             throw new DocLibraryValidationException("Document not ready, refinement not allowed");
 
-        if (_ossService == null || _llmSegmentation == null)
+        if (_ossService == null || _documentAnalysis == null)
             throw new DocLibraryValidationException("LLM segmentation service not configured");
 
         // 1. Get current segments for backup
@@ -394,7 +394,7 @@ public class DocumentDomainService : IDocumentDomainService
         originalProfile ??= new DocumentProfile();
 
         // 4. Call LLM refinement
-        var newProfile = await _llmSegmentation.RefineProfileAsync(textPreview, originalProfile, corrections, ct);
+        var newProfile = await _documentAnalysis.RefineProfileAsync(textPreview, originalProfile, corrections, ct);
         _logger.LogInformation("LLM profile refinement completed: Subject={Subject}, DocType={DocType}, Strategy={Strategy}",
             newProfile.Subject, newProfile.DocType, newProfile.SegmentStrategy);
 
@@ -418,7 +418,7 @@ public class DocumentDomainService : IDocumentDomainService
 
             try
             {
-                var newSegments = await _llmSegmentation.RefineSegmentTextAsync(pageText, newProfile, corrections, ct);
+                var newSegments = await _documentAnalysis.RefineSegmentTextAsync(pageText, newProfile, corrections, ct);
 
                 for (var i = 0; i < newSegments.Count; i++)
                 {

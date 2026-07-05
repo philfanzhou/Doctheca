@@ -52,7 +52,7 @@ Task<bool> UpdateMetadataAsync(Guid id, string? subject, string? grade, string? 
 Task<DocumentFileModel?> UpdateMetadataAsync(Guid id, string? subject, string? grade, string? year);
 ```
 
-### 2.3 ILlmSegmentationService
+### 2.3 IDocumentAnalysisService
 
 ```csharp
 /// <summary>
@@ -168,7 +168,7 @@ public record DocumentMetadataAnalysis
 
 ## 5. 实现规格
 
-### 5.1 LlmSegmentationService.AnalyzeMetadataAsync
+### 5.1 DocumentAnalysisService.AnalyzeMetadataAsync
 
 ```
 1. await InitializeAsync(ct)
@@ -194,7 +194,7 @@ AnalyzeMetadataIfMissingAsync(parse.DocumentFileId, result.Markdown, scopeProvid
 
 ```
 AnalyzeMetadataIfMissingAsync(documentFileId, markdownContent, scopeProvider, ct):
-1. resolve ILlmSegmentationService? from scope (may be null if not configured)
+1. resolve IDocumentAnalysisService? from scope (may be null if not configured)
 2. resolve IDocumentFileService from scope
 3. get document file by id
 4. if file not found → log warning, return
@@ -257,7 +257,7 @@ AnalyzeMetadataIfMissingAsync(documentFileId, markdownContent, scopeProvider, ct
 
 ### 7.1 单元测试 (UT)
 
-纯逻辑测试，不依赖 LLM HTTP 或数据库。共 15 个测试，位于 `LlmSegmentationServiceTests.cs`。
+纯逻辑测试，不依赖 LLM HTTP 或数据库。共 15 个测试，位于 `DocumentAnalysisServiceTests.cs`。
 
 | # | 测试方法 | 覆盖 |
 |---|---------|------|
@@ -295,11 +295,11 @@ AnalyzeMetadataIfMissingAsync(documentFileId, markdownContent, scopeProvider, ct
 | `document_files` 表 | 新增 3 列（nullable） |
 | `DocumentFileEndpoints` | 新增 PUT 端点 |
 | `MinerUFileParseWorker` | 解析完成后增加元数据分析步骤 |
-| `LlmSegmentationService` | 新增 AnalyzeMetadataAsync 方法（不修改现有方法） |
+| `DocumentAnalysisService` | 新增 AnalyzeMetadataAsync 方法（不修改现有方法） |
 | `OpenSearchIndexService` | 新增 UpdateDocumentFileMetadataAsync 方法 |
 | 前端管理页 | 后续可添加元数据显示/编辑（本期不实现） |
 | 部署脚本 | 无变更（复用现有 LLM 配置） |
 
 ## 9. 部署脚本
 
-**不修改**。现有 `start.sh` 中的 `LLM_API_KEY` / `LLM_BASE_URL` / `LLM_MODEL` 配置保留，`AnalyzeMetadataAsync` 复用同一套 `LlmSegmentation` 配置。
+**不修改**。现有 `start.sh` 中的 `LLM_API_KEY` / `LLM_BASE_URL` / `LLM_MODEL` 配置保留，`AnalyzeMetadataAsync` 复用同一套 `LlmDocumentAnalysis` 配置。

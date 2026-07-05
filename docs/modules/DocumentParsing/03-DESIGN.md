@@ -7,7 +7,7 @@ src/
 ├── Service/
 │   ├── IngestionWorker.cs              # 后台工作器，轮询 + 编排
 │   ├── DocumentParserService.cs        # 解析器实现（PDF/Word/PPT）
-│   ├── LlmSegmentationService.cs      # LLM 智能分段服务
+│   ├── DocumentAnalysisService.cs      # LLM 文档分析服务
 │   ├── OpenSearchIndexService.cs       # OpenSearch 搜索索引服务
 ├── Domain/
 │   ├── Models/
@@ -32,7 +32,7 @@ src/
 │   │   └── SegmentResult.cs             # LLM 分段结果模型
 │   ├── Repositories/
 │   │   ├── IDocumentParserService.cs     # 解析器接口
-│   │   ├── ILlmSegmentationService.cs   # LLM 分段服务接口
+│   │   ├── IDocumentAnalysisService.cs   # LLM 文档分析服务接口
 │   │   ├── ISearchIndexService.cs        # 搜索索引接口
 │   │   ├── IDocumentRepository.cs        # 文档仓储接口
 │   │   ├── IDocumentPageRepository.cs    # 文档页面仓储接口
@@ -369,7 +369,7 @@ ParsedToken (q)    → DocumentOccurrenceModel
 │  │  │         document.SourceType, progress, stoppingToken)        │     │
 │  │  │     parsedDocument.Pages.Count == 0 → LogWarning "解析结果为空" │  │
 │  │  │                                                              │     │
-│  │  │     注：ParseAsync 内部流程（详见 07-LLM-SEGMENTATION.md）：  │     │
+│  │  │     注：ParseAsync 内部流程（详见 07-DOCUMENT-ANALYSIS.md）：  │     │
 │  │  │     4b. LLM 文档分析 → DocumentProfile（学科+类型+策略）     │     │
 │  │  │         → progress.Report({Stage:"analyzing", 1/1})          │     │
 │  │  │         → UpdateJobProgressAsync(10~20, "analyzing")         │     │
@@ -493,7 +493,7 @@ ExecuteAsync
 | OpenXml SDK | DocumentFormat.OpenXml | Word/PPT 文本提取 |
 | LLM 分段服务 | - | 智能文档分段（替代规则切割） |
 
-> **注意**：LLM 分段服务的设计详见 [07-LLM-SEGMENTATION.md](./07-LLM-SEGMENTATION.md)
+> **注意**：LLM 文档分析服务的设计详见 [07-DOCUMENT-ANALYSIS.md](./07-DOCUMENT-ANALYSIS.md)
 
 ### 索引服务外部依赖
 

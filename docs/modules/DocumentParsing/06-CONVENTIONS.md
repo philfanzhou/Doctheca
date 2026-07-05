@@ -10,8 +10,8 @@
 | 领域服务 | `{Feature}DomainService` | `DocumentDomainService` |
 | 解析器接口 | `I{Feature}ParserService` | `IDocumentParserService` |
 | 解析器实现 | `{Feature}ParserService` | `DocumentParserService` |
-| LLM 分段服务接口 | `I{Feature}Service` | `ILlmSegmentationService` |
-| LLM 分段服务实现 | `{Feature}Service` | `LlmSegmentationService` |
+| LLM 文档分析服务接口 | `I{Feature}Service` | `IDocumentAnalysisService` |
+| LLM 文档分析服务实现 | `{Feature}Service` | `DocumentAnalysisService` |
 | 索引服务接口 | `I{Technology}Service` | `ISearchIndexService` |
 | 领域模型 | `{Entity}Model` | `DocumentModel`、`DocumentPageModel` |
 | 解析结果模型 | `Parsed{Entity}` | `ParsedDocument`、`ParsedPage`、`ParsedSegment` |
@@ -19,7 +19,7 @@
 | LLM 文档画像模型 | `{Entity}Profile` | `DocumentProfile` |
 | 数据库实体 | `{Entity}Entity` | `DocumentEntity`、`DocumentIngestionJobEntity` |
 | 仓储接口 | `I{Entity}Repository` | `IDocumentPageRepository` |
-| 配置选项 | `{Technology}Options` | `OpenSearchOptions`、`LlmSegmentationOptions` |
+| 配置选项 | `{Technology}Options` | `OpenSearchOptions`、`DocumentAnalysisOptions` |
 | 自定义异常 | `{Feature}ValidationException` | `DocLibraryValidationException` |
 
 ### 方法命名
@@ -269,55 +269,50 @@ public partial class DocumentParserService : IDocumentParserService
 }
 ```
 
-### LLM 分段代码模式
+### LLM 文档分析代码模式
 
 ```csharp
 // LLM 服务接口定义
-public interface ILlmSegmentationService
+public interface IDocumentAnalysisService
 {
     Task<DocumentProfile> AnalyzeDocumentAsync(string textPreview, CancellationToken cancellationToken = default);
     Task<List<SegmentResult>> SegmentTextAsync(string text, DocumentProfile profile, CancellationToken cancellationToken = default);
 }
 
 // LLM 服务实现 - 调用外部 API
-public class LlmSegmentationService : ILlmSegmentationService
+public class DocumentAnalysisService : IDocumentAnalysisService
 {
-    private readonly HttpClient _httpClient;
-    private readonly LlmSegmentationOptions _options;
-    private readonly ILogger<LlmSegmentationService> _logger;
+    private readonly OpenAiCompatibleClient _client;
+    private readonly DocumentAnalysisOptions _options;
+    private readonly ILogger<DocumentAnalysisService> _logger;
 
     public async Task<DocumentProfile> AnalyzeDocumentAsync(string textPreview, CancellationToken cancellationToken)
     {
         var prompt = BuildAnalysisPrompt(textPreview);
-        var response = await CallLlmAsync(prompt, cancellationToken);
+        var response = await _client.CallStreamingAsync(BuildRequestBody(prompt), cancellationToken);
         return ParseDocumentProfile(response);
     }
 
     public async Task<List<SegmentResult>> SegmentTextAsync(string text, DocumentProfile profile, CancellationToken cancellationToken)
     {
         var prompt = BuildSegmentationPrompt(text, profile);
-        var response = await CallLlmAsync(prompt, cancellationToken);
+        var response = await _client.CallStreamingAsync(BuildRequestBody(prompt), cancellationToken);
         return ParseSegmentResults(response);
-    }
-
-    private async Task<string> CallLlmAsync(string prompt, CancellationToken cancellationToken)
-    {
-        // 实现 LLM API 调用，支持重试和超时
     }
 }
 
-// DocumentParserService 集成 LLM 分段
+// DocumentParserService 集成 LLM 文档分析
 public class DocumentParserService : IDocumentParserService
 {
-    private readonly ILlmSegmentationService? _llmSegmentation;
+    private readonly IDocumentAnalysisService? _documentAnalysis;
 
     // 构造函数注入，可选依赖
     public DocumentParserService(
         ILogger<DocumentParserService> logger,
-        ILlmSegmentationService? llmSegmentation = null)
+        IDocumentAnalysisService? documentAnalysis = null)
     {
         _logger = logger;
-        _llmSegmentation = llmSegmentation;
+        _documentAnalysis = documentAnalysis;
     }
 
     private async Task<List<ParsedSegment>> SplitSentencesWithFallbackAsync(
@@ -326,7 +321,7 @@ public class DocumentParserService : IDocumentParserService
         CancellationToken cancellationToken)
     {
         // 优先使用 LLM 分段
-        if (_llmSegmentation != null && profile != null)
+        if (_documentAnalysis != null && profile != null)
         {
             try
             {

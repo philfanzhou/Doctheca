@@ -325,7 +325,7 @@ public class MinerUFileParseWorker : BackgroundService
             }
 
             // LLM document analysis service is optional (registered only when ApiKey is configured)
-            var llmService = scopeProvider.GetService<ILlmSegmentationService>();
+            var llmService = scopeProvider.GetService<IDocumentAnalysisService>();
             if (llmService == null)
             {
                 _logger.LogInformation("LLM not configured, skip metadata analysis for file {FileId}", documentFileId);

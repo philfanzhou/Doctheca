@@ -68,10 +68,10 @@ builder.Services.Configure<OpenSearchOptions>(builder.Configuration.GetSection("
 builder.Services.AddSingleton<ISearchIndexService, OpenSearchIndexService>();
 
 // LLM document analysis service (optional)
-var llmSection = builder.Configuration.GetSection(LlmSegmentationOptions.SectionName);
+var llmSection = builder.Configuration.GetSection(DocumentAnalysisOptions.SectionName);
 if (llmSection.Exists() && !string.IsNullOrEmpty(llmSection["ApiKey"]))
 {
-    builder.Services.Configure<LlmSegmentationOptions>(llmSection);
+    builder.Services.Configure<DocumentAnalysisOptions>(llmSection);
     // Register OpenAiCompatibleClient in streaming mode (HttpClient.Timeout disabled,
     // per-attempt timeout + SSE idle timeout enforced by the client/reader).
     // OpenAiCompatibleClient's constructor configures BaseAddress + Bearer auth on the
@@ -81,11 +81,11 @@ if (llmSection.Exists() && !string.IsNullOrEmpty(llmSection["ApiKey"]))
     {
         var httpClientFactory = sp.GetRequiredService<IHttpClientFactory>();
         var httpClient = httpClientFactory.CreateClient(nameof(OpenAiCompatibleClient));
-        var options = sp.GetRequiredService<IOptions<LlmSegmentationOptions>>().Value;
+        var options = sp.GetRequiredService<IOptions<DocumentAnalysisOptions>>().Value;
         var logger = sp.GetRequiredService<ILogger<OpenAiCompatibleClient>>();
         return new OpenAiCompatibleClient(httpClient, options, logger, options.StreamIdleTimeoutSeconds);
     });
-    builder.Services.AddTransient<ILlmSegmentationService, LlmSegmentationService>();
+    builder.Services.AddTransient<IDocumentAnalysisService, DocumentAnalysisService>();
 }
 
 // Repositories
@@ -111,7 +111,7 @@ builder.Services.AddScoped<IDocumentParseService, DocumentParseService>();
 builder.Services.AddScoped<IDocumentParserService>(sp =>
 {
     var logger = sp.GetRequiredService<ILogger<DocumentParserService>>();
-    var llmSegmentation = sp.GetService<ILlmSegmentationService>(); // Optional
+    var llmSegmentation = sp.GetService<IDocumentAnalysisService>(); // Optional
     return new DocumentParserService(logger, llmSegmentation);
 });
 
@@ -158,7 +158,7 @@ app.Logger.LogInformation(
 if (llmEnabled)
 {
     using var llmScope = app.Services.CreateScope();
-    var llmService = llmScope.ServiceProvider.GetService<ILlmSegmentationService>();
+    var llmService = llmScope.ServiceProvider.GetService<IDocumentAnalysisService>();
     if (llmService != null)
     {
         try
