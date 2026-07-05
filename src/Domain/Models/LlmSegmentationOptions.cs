@@ -1,27 +1,25 @@
+using Ruoyu.Study.Common.Ai;
+
 namespace Ruoyu.Study.DocLibrary.Domain.Models;
 
 /// <summary>
 /// Configuration options for LLM document analysis.
-/// ApiKey, BaseUrl, Model, and ContextLength are the primary runtime settings.
+/// Inherits common OpenAI-compatible API settings (ApiKey/BaseUrl/Model/TimeoutSeconds/MaxRetries/RetryDelayMs)
+/// from AiClientOptions. Service-specific fields (ContextLength, ChunkSize, MaxConcurrency, etc.)
+/// are defined here.
 /// </summary>
-public class LlmSegmentationOptions
+public class LlmSegmentationOptions : AiClientOptions
 {
     public const string SectionName = "LlmDocumentAnalysis";
 
-    /// <summary>
-    /// API key for the LLM provider (required)
-    /// </summary>
-    public string ApiKey { get; set; } = string.Empty;
-
-    /// <summary>
-    /// Base URL for the LLM API (required)
-    /// </summary>
-    public string BaseUrl { get; set; } = string.Empty;
-
-    /// <summary>
-    /// Model ID (required)
-    /// </summary>
-    public string Model { get; set; } = string.Empty;
+    public LlmSegmentationOptions()
+    {
+        // Override base defaults: doclibrary LLM calls are long-running streaming calls
+        // (segmentation of large documents) and benefit from a higher retry count and
+        // a much longer per-attempt timeout than the typical short VL call.
+        MaxRetries = 3;
+        TimeoutSeconds = 1800;
+    }
 
     /// <summary>
     /// Model context length in tokens. Supports human-friendly formats: "128K", "1M", "256K".
@@ -48,20 +46,6 @@ public class LlmSegmentationOptions
     /// Text chunk size in characters. Dynamically calculated by InitializeAsync from ContextLength.
     /// </summary>
     public int ChunkSize { get; set; }
-
-    /// <summary>
-    /// Maximum retry attempts (fixed at 3)
-    /// </summary>
-    public int MaxRetries => 3;
-
-    /// <summary>
-    /// Hard total timeout in seconds for a single LLM attempt (request + streaming read).
-    /// Configurable via LlmDocumentAnalysis__TimeoutSeconds. Default 1800s (30 minutes).
-    /// Enforced via CancellationTokenSource per attempt; HttpClient.Timeout is disabled
-    /// (InfiniteTimeSpan) so streaming responses are not prematurely canceled.
-    /// This is a safety net; the primary streaming watchdog is StreamIdleTimeoutSeconds.
-    /// </summary>
-    public int TimeoutSeconds { get; set; } = 1800;
 
     /// <summary>
     /// Idle timeout in seconds while reading an SSE stream. If no SSE event is received

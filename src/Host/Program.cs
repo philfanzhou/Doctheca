@@ -1,6 +1,7 @@
 using System.Data.Common;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using Ruoyu.Study.Common.Ai;
 using Ruoyu.Study.Common.Oss;
 using Ruoyu.Study.DocLibrary.Database;
 using Ruoyu.Study.DocLibrary.Database.Repositories;
@@ -71,7 +72,20 @@ var llmSection = builder.Configuration.GetSection(LlmSegmentationOptions.Section
 if (llmSection.Exists() && !string.IsNullOrEmpty(llmSection["ApiKey"]))
 {
     builder.Services.Configure<LlmSegmentationOptions>(llmSection);
-    builder.Services.AddHttpClient<ILlmSegmentationService, LlmSegmentationService>();
+    // Register OpenAiCompatibleClient in streaming mode (HttpClient.Timeout disabled,
+    // per-attempt timeout + SSE idle timeout enforced by the client/reader).
+    // OpenAiCompatibleClient's constructor configures BaseAddress + Bearer auth on the
+    // HttpClient, so AddHttpClient only needs to register the named client for pooling.
+    builder.Services.AddHttpClient(nameof(OpenAiCompatibleClient));
+    builder.Services.AddSingleton<OpenAiCompatibleClient>(sp =>
+    {
+        var httpClientFactory = sp.GetRequiredService<IHttpClientFactory>();
+        var httpClient = httpClientFactory.CreateClient(nameof(OpenAiCompatibleClient));
+        var options = sp.GetRequiredService<IOptions<LlmSegmentationOptions>>().Value;
+        var logger = sp.GetRequiredService<ILogger<OpenAiCompatibleClient>>();
+        return new OpenAiCompatibleClient(httpClient, options, logger, options.StreamIdleTimeoutSeconds);
+    });
+    builder.Services.AddTransient<ILlmSegmentationService, LlmSegmentationService>();
 }
 
 // Repositories

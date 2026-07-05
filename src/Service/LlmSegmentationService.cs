@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Ruoyu.Study.Common.Ai;
 using Ruoyu.Study.DocLibrary.Domain.Models;
 using Ruoyu.Study.DocLibrary.Domain.Repositories;
 
@@ -11,12 +12,12 @@ namespace Ruoyu.Study.DocLibrary.Service;
 
 /// <summary>
 /// LLM-based intelligent document segmentation service implementation.
-/// Uses OpenAI-compatible API for document analysis and text segmentation.
+/// Uses OpenAI-compatible API (via shared OpenAiCompatibleClient) for document analysis and text segmentation.
 /// Dynamically fetches model capabilities at startup to optimize parameters.
 /// </summary>
 public class LlmSegmentationService : ILlmSegmentationService
 {
-    private readonly HttpClient _httpClient;
+    private readonly OpenAiCompatibleClient _client;
     private readonly LlmSegmentationOptions _options;
     private readonly ILogger<LlmSegmentationService> _logger;
     private bool _initialized;
@@ -31,25 +32,13 @@ public class LlmSegmentationService : ILlmSegmentationService
     };
 
     public LlmSegmentationService(
-        HttpClient httpClient,
+        OpenAiCompatibleClient client,
         IOptions<LlmSegmentationOptions> options,
         ILogger<LlmSegmentationService> logger)
     {
-        _httpClient = httpClient;
+        _client = client;
         _options = options.Value;
         _logger = logger;
-
-        // Configure HttpClient - BaseUrl must end with / for relative path resolution
-        var baseUrl = _options.BaseUrl.TrimEnd('/');
-        _httpClient.BaseAddress = new Uri(baseUrl + "/");
-        // Disable HttpClient.Timeout so streaming responses are not prematurely canceled.
-        // Per-attempt timeout is enforced via CancellationTokenSource in CallLlmAsync.
-        _httpClient.Timeout = Timeout.InfiniteTimeSpan;
-        if (!string.IsNullOrEmpty(_options.ApiKey))
-        {
-            _httpClient.DefaultRequestHeaders.Authorization =
-                new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _options.ApiKey);
-        }
     }
 
     /// <summary>
@@ -145,13 +134,14 @@ public class LlmSegmentationService : ILlmSegmentationService
 
     /// <summary>
     /// Try to fetch model context length from API. Returns 0 if unavailable.
+    /// Uses OpenAiCompatibleClient.HttpClient so BaseAddress + Authorization are reused.
     /// </summary>
     private async Task<int> TryFetchContextLengthAsync(CancellationToken cancellationToken)
     {
         // Approach 1: GET /v1/models/{model}
         try
         {
-            var response = await _httpClient.GetAsync($"models/{_options.Model}", cancellationToken);
+            var response = await _client.HttpClient.GetAsync($"models/{_options.Model}", cancellationToken);
             if (response.IsSuccessStatusCode)
             {
                 var modelInfo = await response.Content.ReadFromJsonAsync<ModelInfoResponse>(JsonOptions, cancellationToken);
@@ -187,7 +177,7 @@ public class LlmSegmentationService : ILlmSegmentationService
             var preview = textPreview.Length > 2000 ? textPreview[..2000] : textPreview;
 
             var prompt = BuildAnalysisPrompt(preview);
-            var response = await CallLlmAsync(prompt, cancellationToken);
+            var response = await _client.CallStreamingAsync(BuildRequestBody(prompt), cancellationToken);
             return ParseDocumentProfile(response);
         }
         catch (Exception ex)
@@ -219,7 +209,7 @@ public class LlmSegmentationService : ILlmSegmentationService
             var preview = textPreview.Length > 2000 ? textPreview[..2000] : textPreview;
 
             var prompt = BuildMetadataAnalysisPrompt(preview);
-            var response = await CallLlmAsync(prompt, cancellationToken);
+            var response = await _client.CallStreamingAsync(BuildRequestBody(prompt), cancellationToken);
             return ParseMetadataAnalysis(response);
         }
         catch (Exception ex)
@@ -239,7 +229,7 @@ public class LlmSegmentationService : ILlmSegmentationService
         }
 
         var prompt = BuildSegmentationPrompt(text, profile);
-        var response = await CallLlmAsync(prompt, cancellationToken);
+        var response = await _client.CallStreamingAsync(BuildRequestBody(prompt), cancellationToken);
         return ParseSegmentResults(response, text);
     }
 
@@ -260,7 +250,7 @@ public class LlmSegmentationService : ILlmSegmentationService
         {
             var preview = textPreview.Length > 2000 ? textPreview[..2000] : textPreview;
             var prompt = BuildRefinementAnalysisPrompt(preview, originalProfile, corrections);
-            var response = await CallLlmAsync(prompt, cancellationToken);
+            var response = await _client.CallStreamingAsync(BuildRequestBody(prompt), cancellationToken);
             return ParseDocumentProfile(response);
         }
         catch (Exception ex)
@@ -284,7 +274,7 @@ public class LlmSegmentationService : ILlmSegmentationService
         }
 
         var prompt = BuildRefinementSegmentationPrompt(text, profile, corrections);
-        var response = await CallLlmAsync(prompt, cancellationToken);
+        var response = await _client.CallStreamingAsync(BuildRequestBody(prompt), cancellationToken);
         return ParseSegmentResults(response, text);
     }
 
@@ -535,134 +525,22 @@ public class LlmSegmentationService : ILlmSegmentationService
             .Replace("\t", "\\t");
     }
 
-    #endregion
-
-    #region LLM API Calls
-
-    private async Task<string> CallLlmAsync(string prompt, CancellationToken cancellationToken)
+    private object BuildRequestBody(string prompt)
     {
-        for (var attempt = 1; attempt <= _options.MaxRetries; attempt++)
+        return new
         {
-            var sw = System.Diagnostics.Stopwatch.StartNew();
-            // Per-attempt timeout: covers request send + streaming read. HttpClient.Timeout
-            // is disabled (InfiniteTimeSpan) so streaming tokens don't trigger an absolute
-            // timeout. Link with caller's token so external cancellation still works.
-            using var attemptCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            attemptCts.CancelAfter(TimeSpan.FromSeconds(_options.TimeoutSeconds));
-
-            try
+            model = _options.Model,
+            messages = new[]
             {
-                var request = new
-                {
-                    model = _options.Model,
-                    messages = new[]
-                    {
-                        new { role = "system", content = "直接返回JSON，不要解释。" },
-                        new { role = "user", content = prompt }
-                    },
-                    max_tokens = _options.MaxTokensValue,
-                    temperature = _options.Temperature,
-                    // Enable SSE streaming so tokens flow as they're generated, keeping the
-                    // connection active and avoiding idle-timeout on long LLM generations.
-                    stream = true
-                };
-
-                // PostAsJsonAsync buffers the full response, which defeats streaming.
-                // Use SendAsync with ResponseHeadersRead so we can read the SSE body
-                // incrementally as tokens arrive.
-                using var requestMessage = new HttpRequestMessage(HttpMethod.Post, "chat/completions")
-                {
-                    Content = JsonContent.Create(request, options: JsonOptions),
-                };
-                using var response = await _httpClient.SendAsync(
-                    requestMessage,
-                    HttpCompletionOption.ResponseHeadersRead,
-                    attemptCts.Token);
-                response.EnsureSuccessStatusCode();
-
-                var content = await ReadSseStreamAsync(response.Content, attemptCts.Token);
-
-                if (string.IsNullOrWhiteSpace(content))
-                {
-                    throw new InvalidOperationException("LLM returned empty response");
-                }
-
-                _logger.LogInformation("LLM call completed in {ElapsedMs}ms (streaming), output length={Length}",
-                    sw.ElapsedMilliseconds, content.Length);
-                return content;
-            }
-            catch (Exception ex) when (attempt < _options.MaxRetries && !cancellationToken.IsCancellationRequested)
-            {
-                _logger.LogWarning(ex, "LLM call attempt {Attempt}/{MaxRetries} failed after {ElapsedMs}ms, retrying",
-                    attempt, _options.MaxRetries, sw.ElapsedMilliseconds);
-                await Task.Delay(TimeSpan.FromSeconds(1 * attempt), cancellationToken);
-            }
-        }
-
-        throw new InvalidOperationException("LLM call failed after all retries");
-    }
-
-    /// <summary>
-    /// Read an OpenAI-compatible SSE stream and accumulate delta.content into a single string.
-    /// Each event line has the form "data: {json}". The stream ends with "data: [DONE]".
-    ///
-    /// Uses a per-read idle timeout: every ReadLineAsync gets its own linked token that
-    /// cancels if no SSE event arrives within StreamIdleTimeoutSeconds. As long as the
-    /// provider keeps sending tokens, the overall call can take much longer than the
-    /// hard total timeout.
-    /// </summary>
-    private async Task<string> ReadSseStreamAsync(HttpContent content, CancellationToken cancellationToken)
-    {
-        var contentBuilder = new StringBuilder();
-        await using var stream = await content.ReadAsStreamAsync(cancellationToken);
-        using var reader = new StreamReader(stream);
-        var idleTimeout = TimeSpan.FromSeconds(_options.StreamIdleTimeoutSeconds);
-
-        while (!reader.EndOfStream)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-
-            string? line;
-            using (var lineCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken))
-            {
-                lineCts.CancelAfter(idleTimeout);
-                try
-                {
-                    line = await reader.ReadLineAsync(lineCts.Token);
-                }
-                catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
-                {
-                    throw new TimeoutException(
-                        $"No SSE data received for {_options.StreamIdleTimeoutSeconds}s (idle timeout).");
-                }
-            }
-
-            if (string.IsNullOrEmpty(line)) continue;
-            if (!line.StartsWith("data: ", StringComparison.Ordinal)) continue;
-
-            var data = line["data: ".Length..];
-            if (data == "[DONE]") break;
-
-            StreamChunk? chunk;
-            try
-            {
-                chunk = JsonSerializer.Deserialize<StreamChunk>(data, JsonOptions);
-            }
-            catch (JsonException ex)
-            {
-                // Skip malformed chunks (e.g. keep-alive comments) but log for diagnostics
-                _logger.LogDebug(ex, "Skipping malformed SSE chunk: {Data}", data);
-                continue;
-            }
-
-            var delta = chunk?.Choices?.FirstOrDefault()?.Delta?.Content;
-            if (!string.IsNullOrEmpty(delta))
-            {
-                contentBuilder.Append(delta);
-            }
-        }
-
-        return contentBuilder.ToString();
+                new { role = "system", content = "直接返回JSON，不要解释。" },
+                new { role = "user", content = prompt }
+            },
+            max_tokens = _options.MaxTokensValue,
+            temperature = _options.Temperature,
+            // Enable SSE streaming so tokens flow as they're generated, keeping the
+            // connection active and avoiding idle-timeout on long LLM generations.
+            stream = true
+        };
     }
 
     #endregion
@@ -853,28 +731,6 @@ public class LlmSegmentationService : ILlmSegmentationService
 
         [JsonPropertyName("context_length")]
         public int ContextLength { get; init; }
-    }
-
-    /// <summary>
-    /// SSE stream chunk. Each "data: {...}" line deserializes to this shape.
-    /// Only delta.content is accumulated; other fields (finish_reason, usage) are ignored.
-    /// </summary>
-    private record StreamChunk
-    {
-        [JsonPropertyName("choices")]
-        public List<StreamChoice>? Choices { get; init; }
-    }
-
-    private record StreamChoice
-    {
-        [JsonPropertyName("delta")]
-        public StreamDelta? Delta { get; init; }
-    }
-
-    private record StreamDelta
-    {
-        [JsonPropertyName("content")]
-        public string? Content { get; init; }
     }
 
     private record AnalysisResponse

@@ -15,7 +15,6 @@
 │  IngestionWorker.cs: 后台导入任务                │
 │  OpenSearchIndexService.cs: 搜索索引            │
 │  DocumentParserService.cs: 文档解析             │
-│  MinerUAgentClient.cs: MinerU Agent API 客户端（降级）  │
 │  MinerUPrecisionClient.cs: MinerU Precision API 客户端  │
 └───────────────┬─────────────────────────────────┘
                 │
@@ -93,6 +92,5 @@ DocLibrary 作为内网管理后台运行，**不实现应用层认证**：
 | [SearchDomainService.cs](../../src/Domain/Services/SearchDomainService.cs) | 搜索领域逻辑 |
 | [IngestionWorker.cs](../../src/Service/IngestionWorker.cs) | 后台导入 |
 | [DocumentAdminEndpoints.cs](../../src/Service/DocumentAdminEndpoints.cs) | HTTP API（含搜索） |
-| [MinerUAgentClient.cs](../../src/Service/MinerUAgentClient.cs) | MinerU Agent API 客户端（降级方案，无图片） |
 | [MinerUPrecisionClient.cs](../../src/Service/MinerUPrecisionClient.cs) | MinerU Precision API 客户端（含图片） |
 | [DatabaseInitializer.cs](../../src/Database/DatabaseInitializer.cs) | 表初始化 |

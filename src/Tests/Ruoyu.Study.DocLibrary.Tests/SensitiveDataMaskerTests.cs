@@ -1,4 +1,4 @@
-using Ruoyu.Study.DocLibrary.Service;
+using Ruoyu.Study.Common.Ai;
 using Xunit;
 
 namespace Ruoyu.Study.DocLibrary.Tests;

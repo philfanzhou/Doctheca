@@ -69,7 +69,7 @@ Loki 地址通过短环境变量 `LOKI_URI` 注入，`Program.cs` 启动时读�
 | LLM ApiKey / MinerU ApiToken | 保留前 4 + 后 4，中间用 `****` 替换；长度不足 8 位时全部替换为 `****` | `sk-a****1b2c` |
 | OSS AccessKey / SecretKey | 完全不记录 | — |
 
-实现位置：`Ruoyu.Study.DocLibrary.Service.SensitiveDataMasker` 静态工具类。业务代码中使用 `_logger.LogInformation("... ApiKey={ApiKey}", SensitiveDataMasker.MaskApiKey(apiKey))` 形式调用。
+实现位置：`Ruoyu.Study.Common.Ai.SensitiveDataMasker` 静态工具类（位于共享库 `Ruoyu.Study.Ai.Shared`）。业务代码中使用 `_logger.LogInformation("... ApiKey={ApiKey}", SensitiveDataMasker.MaskApiKey(apiKey))` 形式调用。
 
 > 数据库字段不受此规则约束，仍按业务需要存储原始值；该规则仅约束日志输出。
 
