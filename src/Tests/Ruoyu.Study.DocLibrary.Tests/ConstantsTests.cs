@@ -120,46 +120,6 @@ public class ConstantsTests
 
     #endregion
 
-    #region DocumentModel Tests
-
-    [Fact]
-    public void DocumentModel_NewInstance_HasDefaultValues()
-    {
-        var model = new DocumentModel();
-        Assert.NotEqual(Guid.Empty, model.Id);
-        Assert.Equal("en", model.Language);
-        Assert.Equal(DocumentStatus.Pending, model.Status);
-        Assert.Equal(string.Empty, model.Title);
-    }
-
-    #endregion
-
-    #region DocumentStatus Constants
-
-    [Fact]
-    public void DocumentStatus_HasAllStatusValues()
-    {
-        Assert.Equal("pending", DocumentStatus.Pending);
-        Assert.Equal("processing", DocumentStatus.Processing);
-        Assert.Equal("ready", DocumentStatus.Ready);
-        Assert.Equal("success", DocumentStatus.Success);
-        Assert.Equal("failed", DocumentStatus.Failed);
-        Assert.Equal("cancelled", DocumentStatus.Cancelled);
-    }
-
-    #endregion
-
-    #region SegmentTypes Constants
-
-    [Fact]
-    public void SegmentTypes_HasSentenceAndQuestion()
-    {
-        Assert.Equal("sentence", SegmentTypes.Sentence);
-        Assert.Equal("question", SegmentTypes.Question);
-    }
-
-    #endregion
-
     #region SourceTypes Constants
 
     [Fact]
@@ -181,35 +141,6 @@ public class ConstantsTests
         Assert.Equal("exact_phrase", SearchMatchType.ExactPhrase);
         Assert.Equal("stemmed", SearchMatchType.Stemmed);
         Assert.Equal("exact_word", SearchMatchType.ExactWord);
-    }
-
-    #endregion
-
-    #region ParsedDocumentModel Tests
-
-    [Fact]
-    public void ParsedDocument_InitializesEmptyLists()
-    {
-        var doc = new ParsedDocument();
-        Assert.NotNull(doc.Pages);
-        Assert.Empty(doc.Pages);
-    }
-
-    [Fact]
-    public void ParsedPage_InitializesEmptyLists()
-    {
-        var page = new ParsedPage();
-        Assert.NotNull(page.Segments);
-        Assert.NotNull(page.Questions);
-        Assert.Empty(page.Segments);
-        Assert.Empty(page.Questions);
-    }
-
-    [Fact]
-    public void ParsedSegment_HasDefaultSegmentType()
-    {
-        var segment = new ParsedSegment();
-        Assert.Equal("sentence", segment.SegmentType);
     }
 
     #endregion

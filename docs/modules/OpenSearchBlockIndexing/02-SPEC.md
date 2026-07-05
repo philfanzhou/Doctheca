@@ -23,19 +23,16 @@ Task DeleteParseIndexAsync(Guid parseId);
 Task DeleteDocumentFileIndexAsync(Guid documentFileId);
 ```
 
-### 1.2 保留的旧方法(向后兼容)
+### 1.2 保留的方法
 
-| 方法 | 状态 | 说明 |
-|------|------|------|
-| `EnsureIndexAsync` | 保留 | 启动时调用,mapping 新增字段 |
-| `IndexDocumentSegmentsAsync` | 保留(不再调用) | LLM 链路索引方法,新代码不调用,但保留以便清理旧数据 |
-| `DeleteDocumentIndexAsync` | 保留 | 按 `document_id` 删除旧索引数据 |
-| `UpdateDocumentMetadataAsync` | 保留(不再调用) | LLM 链路元数据更新,新代码不调用 |
-| `ExactSearchAsync` | 保留 | 搜索逻辑不变,兼容新旧字段 |
+| 方法 | 说明 |
+|------|------|
+| `EnsureIndexAsync` | 启动时调用，创建/更新 mapping |
+| `ExactSearchAsync` | 搜索逻辑，基于 blocks 索引字段 |
 
-## 2. OpenSearch Mapping 变更
+## 2. OpenSearch Mapping
 
-### 2.1 新增字段
+### 2.1 索引字段
 
 ```json
 {
@@ -45,23 +42,11 @@ Task DeleteDocumentFileIndexAsync(Guid documentFileId);
   "block_id": { "type": "keyword" },
   "block_type": { "type": "keyword" },
   "sort_index": { "type": "integer" },
-  "image_id": { "type": "keyword" }
-}
-```
-
-### 2.2 保留的旧字段
-
-```json
-{
-  "document_id": { "type": "keyword" },
-  "document_title": { "type": "keyword" },
+  "image_id": { "type": "keyword" },
   "subject": { "type": "keyword" },
   "grade": { "type": "keyword" },
   "year": { "type": "keyword" },
   "page_number": { "type": "integer" },
-  "sentence_id": { "type": "keyword" },
-  "question_id": { "type": "keyword" },
-  "segment_type": { "type": "keyword" },
   "text": {
     "type": "text",
     "analyzer": "english_custom",
@@ -70,18 +55,15 @@ Task DeleteDocumentFileIndexAsync(Guid documentFileId);
       "keyword": { "type": "keyword", "ignore_above": 256 }
     }
   },
-  "start_offset": { "type": "integer" },
-  "end_offset": { "type": "integer" },
   "created_at": { "type": "date" }
 }
 ```
 
-### 2.3 索引兼容策略
+### 2.2 索引策略
 
-- OpenSearch mapping 是动态的,新增字段会自动添加到已有索引
-- `EnsureIndexAsync` 创建索引时使用新 mapping(含新旧字段)
-- 已有索引(LLM 链路数据)保留,新数据(blocks)使用新字段
-- 搜索时 `ParseSearchResponse` 优先读取新字段,回退到旧字段
+- OpenSearch mapping 是动态的，`EnsureIndexAsync` 创建索引时使用上述 mapping
+- 索引数据来源为 `document_parse_blocks` 表（MinerU 解析链路）
+- 搜索时 `ParseSearchResponse` 直接读取上述字段
 
 ## 3. IndexParseBlocksAsync 实现规格
 
@@ -164,27 +146,26 @@ Task DeleteDocumentFileIndexAsync(Guid documentFileId);
 
 同 DeleteParseIndexAsync。
 
-## 6. ParseSearchResponse 兼容性变更
+## 6. ParseSearchResponse 字段映射
 
-### 6.1 字段读取优先级
+### 6.1 字段读取
 
-| 响应字段 | 优先读取(新) | 回退(旧) |
-|---------|-------------|----------|
-| `DocumentName` | `file_name` | `document_title` |
-| `PageNumber` | `page_number` | `page_number` |
-| `SegmentId` | `block_id` | `sentence_id` / `question_id` |
-| `MatchType` | phrase ? `exact_phrase` : `stemmed` | 同左 |
-| `AssociatedText` | `text`(高亮) | `text`(高亮) |
-| `StartOffset` | 0(新数据无 offset) | `start_offset` |
-| `EndOffset` | 0(新数据无 offset) | `end_offset` |
-| `Score` | `_score` | `_score` |
-| `CreatedAt` | `created_at` | `created_at` |
+| 响应字段 | 读取字段 |
+|---------|----------|
+| `DocumentName` | `file_name` |
+| `PageNumber` | `page_number` |
+| `SegmentId` | `block_id` |
+| `MatchType` | phrase ? `exact_phrase` : `stemmed` |
+| `AssociatedText` | `text`(高亮优先) |
+| `StartOffset` | 0（blocks 无 offset） |
+| `EndOffset` | 0（blocks 无 offset） |
+| `Score` | `_score` |
+| `CreatedAt` | `created_at` |
 
-### 6.2 segment_type 兼容
+### 6.2 block_type 取值
 
-- 新数据:`block_type`(text/image/table/equation/list/code)
-- 旧数据:`segment_type`(sentence/question/word_entry/concept/knowledge_point)
-- 搜索响应 `matchType` 不受影响(由 `phrase` 参数决定)
+- `block_type` 取值：text/image/table/equation/list/code
+- 搜索响应 `matchType` 不受 `block_type` 影响（由 `phrase` 参数决定）
 
 ## 7. MinerUFileParseWorker 变更
 
@@ -264,12 +245,9 @@ catch (Exception ex)
 
 | # | 测试方法 | 覆盖 |
 |---|---------|------|
-| UT-OBI-08a | `ParseSearchResponse_WithBlockFields_PrefersBlockIdAndFileName` — 优先读取 `block_id` / `file_name` | FR-06 / FR-07 / AC-06 |
-| UT-OBI-08b | `ParseSearchResponse_WithBlockFields_PhraseSetsExactPhraseMatchType` — phrase 查询在新字段上仍返回 `ExactPhrase` | FR-06 / AC-06 |
-| UT-OBI-09a | `ParseSearchResponse_WithOnlyLegacyFields_FallsBackToLegacyIds` — 纯旧字段时回退到 `question_id` / `document_title` | FR-07 |
-| UT-OBI-09b | `ParseSearchResponse_WithEmptyBlockId_FallsBackToLegacySentenceId` — `block_id` 为空时回退到 `sentence_id` | FR-07 |
-| UT-OBI-10a | `BuildIndexBody_IncludesNewBlockPipelineFields` — 新字段(`parse_id`/`document_file_id`/`file_name`/`block_id`/`block_type`/`sort_index`/`image_id`)在 mapping 中且类型正确 | FR-05 |
-| UT-OBI-10b | `BuildIndexBody_RetainsLegacyLLMPipelineFields` — 旧字段(`document_id`/`document_title`/`sentence_id`/`question_id`/`segment_type`/`start_offset`/`end_offset`)保留 | FR-07 |
+| UT-OBI-08a | `ParseSearchResponse_WithBlockFields_ReadsBlockIdAndFileName` — 读取 `block_id` / `file_name` | FR-06 / FR-07 / AC-06 |
+| UT-OBI-08b | `ParseSearchResponse_WithBlockFields_PhraseSetsExactPhraseMatchType` — phrase 查询返回 `ExactPhrase` | FR-06 / AC-06 |
+| UT-OBI-10a | `BuildIndexBody_IncludesBlockPipelineFields` — 索引字段(`parse_id`/`document_file_id`/`file_name`/`block_id`/`block_type`/`sort_index`/`image_id`)在 mapping 中且类型正确 | FR-05 |
 | UT-OBI-10c | `BuildIndexBody_RetainsSharedFieldsAndAnalyzers` — 共享字段和分析器(`english_custom`/`english_stemmer`/`english_stop`/`english_phrase`/`exact`)保留 | FR-05 / FR-07 |
 
 ### 11.2 单元测试覆盖说明
@@ -301,15 +279,14 @@ UT-OBI-01~07(原规划 `IndexParseBlocksAsync` / `DeleteParseIndexAsync` / `Dele
 | 文件 | 修改 |
 |------|------|
 | `ISearchIndexService.cs` | 新增 3 个方法签名 |
-| `OpenSearchIndexService.cs` | 实现新方法;`BuildIndexBody` 新增字段;`ParseSearchResponse` 兼容新旧字段 |
+| `OpenSearchIndexService.cs` | 实现新方法;`BuildIndexBody` 索引字段;`ParseSearchResponse` 读取 blocks 字段 |
 | `MinerUFileParseWorker.cs` | `PersistParseResultAsync` / `PersistMergedChunkResultsAsync` 新增索引调用 |
 | `DocumentParseEndpoints.cs` | `DeleteDocumentParse` 新增索引删除 |
 | `DocumentFileEndpoints.cs` | `DeleteDocumentFile` 新增索引删除 |
 
 ### 12.3 不受影响
 
-- `SearchDomainService.cs` — 搜索逻辑不变(OpenSearch 优先 + 数据库回退)
+- `SearchDomainService.cs` — 搜索逻辑不变(OpenSearch 检索，不可用时返回空结果)
 - `DocumentSearchEndpoints.cs` — 响应字段不变
 - 前端 `SearchPage.vue` — 无需改动
 - QuestionBank 拉模式 — 无影响(基于 blocks 表,与索引独立)
-- LLM 拆段链路 — 不删除(旧索引数据保留,新代码不再索引)

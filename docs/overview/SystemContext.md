@@ -18,20 +18,18 @@
 │           DocLibrary                  │
 │                                         │
 │  ┌─────────────────────────────────┐    │       ┌──────────────────┐
-│  │  HTTP: ExactSearch              │    │──────►│  OpenSearch      │
-│  │  HTTP: UploadDocument           │    │       │  (搜索索引)      │
-│  │  HTTP: ListDocuments            │    │       └──────────────────┘
-│  │  HTTP: DeleteDocument           │    │
-│  │  HTTP: UpdateDocumentMetadata   │    │       ┌──────────────────┐
-│  │  HTTP: GetDocumentStatus        │    │──────►│  MinIO / SeaweedFS│
-│  │  HTTP: QuestionBankImport       │    │       │  LocalFile (OSS) │
-│  │  Worker: IngestionWorker        │    │       └──────────────────┘
-│  └─────────────────────────────────┘    │
-│                                         │
+│  │  HTTP: DocumentFileEndpoints    │    │──────►│  OpenSearch      │
+│  │  HTTP: DocumentParseEndpoints   │    │       │  (搜索索引)      │
+│  │  HTTP: DocumentSearchEndpoints  │    │       └──────────────────┘
+│  │  HTTP: DocumentExportEndpoints  │    │
+│  │  HTTP: QuestionBankImport       │    │       ┌──────────────────┐
+│  │  Worker: MinerUFileParseWorker  │    │──────►│  MinIO / SeaweedFS│
+│  └─────────────────────────────────┘    │       │  LocalFile (OSS) │
+│                                         │       └──────────────────┘
 │  ┌─────────────────────────────────┐    │
 │  │  PostgreSQL                     │    │
 │  │  ruoyu_study_doclibrary         │    │
-│  │  (文档 + 倒排索引)              │    │
+│  │  (文档 + 解析数据)              │    │
 │  └─────────────────────────────────┘    │
 └─────────────────────────────────────────┘
 ```
@@ -40,7 +38,7 @@
 
 | 调用方 | 协议 | 用途 |
 |--------|------|------|
-| Admin UI 前端 | HTTP (5012) | 文档上传、列表、删除、元数据更新 |
+| Admin UI 前端 | HTTP (5012) | 文件上传、列表、删除、元数据更新、解析触发 |
 | QuestionBank 服务 | HTTP (5012) | 拉模式获取解析数据、回写导入状态 |
 | 其他微服务 / HTTP 客户端 | HTTP (5012) | 精确搜索 |
 
@@ -48,9 +46,9 @@
 
 | 依赖 | 类型 | 用途 |
 |------|------|------|
-| PostgreSQL | 数据库 | 文档存储、倒排索引、搜索 |
+| PostgreSQL | 数据库 | 文件、解析数据、导入状态存储 |
 | MinIO / SeaweedFS / LocalFile | OSS | 文件存储（PDF/DOCX） |
-| OpenSearch | 搜索引擎 | 外部全文检索索引（可选回退到数据库） |
+| OpenSearch | 搜索引擎 | 外部全文检索索引 |
 
 > **不依赖 QuantumZhou.Identity**：内网管理后台，访问控制由部署层网络隔离实现。
 

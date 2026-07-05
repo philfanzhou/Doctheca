@@ -145,111 +145,6 @@ public class OpenSearchIndexService : ISearchIndexService
         }
     }
 
-    public async Task IndexDocumentSegmentsAsync(Guid documentId, string documentTitle, string subject, string grade, string year)
-    {
-        var indexName = _options.IndexName;
-
-        using var scope = _serviceProvider.CreateScope();
-        var segmentRepository = scope.ServiceProvider.GetRequiredService<IDocumentSegmentRepository>();
-        var questionRepository = scope.ServiceProvider.GetRequiredService<IQuestionSegmentRepository>();
-        var pageRepository = scope.ServiceProvider.GetRequiredService<IDocumentPageRepository>();
-
-        var pages = await pageRepository.GetByDocumentIdAsync(documentId);
-        var pageLookup = pages.ToDictionary(p => p.Id, p => p.PageNumber);
-
-        var bulkOps = new List<object>();
-
-        // Index sentence segments
-        var segments = await segmentRepository.GetByDocumentIdAsync(documentId);
-        foreach (var seg in segments)
-        {
-            var pageNumber = pageLookup.TryGetValue(seg.PageId, out var pn) ? pn : 0;
-
-            bulkOps.Add(new { index = new { _index = indexName, _id = $"sentence_{seg.SentenceId}" } });
-            bulkOps.Add(new
-            {
-                document_id = documentId.ToString(),
-                document_title = documentTitle,
-                subject,
-                grade,
-                year,
-                page_number = pageNumber,
-                sentence_id = seg.SentenceId,
-                segment_type = seg.SegmentType,
-                text = seg.Text,
-                start_offset = seg.StartOffset,
-                end_offset = seg.EndOffset,
-                created_at = seg.CreatedAt.ToString("o")
-            });
-        }
-
-        // Index question segments
-        var questions = await questionRepository.GetByDocumentIdAsync(documentId);
-        foreach (var q in questions)
-        {
-            var pageNumber = pageLookup.TryGetValue(q.PageId, out var pn) ? pn : 0;
-
-            bulkOps.Add(new { index = new { _index = indexName, _id = $"question_{q.QuestionId}" } });
-            bulkOps.Add(new
-            {
-                document_id = documentId.ToString(),
-                document_title = documentTitle,
-                subject,
-                grade,
-                year,
-                page_number = pageNumber,
-                question_id = q.QuestionId,
-                segment_type = SegmentTypes.Question,
-                text = q.Stem,
-                start_offset = q.StartOffset,
-                end_offset = q.EndOffset,
-                created_at = q.CreatedAt.ToString("o")
-            });
-        }
-
-        if (bulkOps.Count == 0)
-        {
-            _logger.LogInformation("Document {DocumentId} has no indexable segments", documentId);
-            return;
-        }
-
-        var bulkJson = string.Join("\n", bulkOps.Select(op => JsonSerializer.Serialize(op))) + "\n";
-        var response = await _client.BulkAsync<BytesResponse>(PostData.String(bulkJson));
-
-        if (response.Success && (response.HttpStatusCode == 200 || response.HttpStatusCode == 201))
-        {
-            _logger.LogInformation("Document {DocumentId} indexed {Count} segments", documentId, bulkOps.Count / 2);
-        }
-        else
-        {
-            _logger.LogWarning("Document {DocumentId} indexing failed, status code: {StatusCode}", documentId, response.HttpStatusCode);
-        }
-    }
-
-    public async Task DeleteDocumentIndexAsync(Guid documentId)
-    {
-        var indexName = _options.IndexName;
-        var deleteBody = new
-        {
-            query = new
-            {
-                term = new { document_id = documentId.ToString() }
-            }
-        };
-
-        var json = JsonSerializer.Serialize(deleteBody);
-        var response = await _client.DeleteByQueryAsync<BytesResponse>(indexName, json);
-
-        if (response.Success && response.HttpStatusCode == 200)
-        {
-            _logger.LogInformation("Document {DocumentId} search index deleted", documentId);
-        }
-        else
-        {
-            _logger.LogWarning("Failed to delete document {DocumentId} search index, status code: {StatusCode}", documentId, response.HttpStatusCode);
-        }
-    }
-
     public async Task IndexParseBlocksAsync(Guid parseId, Guid documentFileId, string fileName, string? subject, string? grade, string? year)
     {
         var indexName = _options.IndexName;
@@ -355,35 +250,6 @@ public class OpenSearchIndexService : ISearchIndexService
         else
         {
             _logger.LogWarning("Failed to delete document file {FileId} search index, status code: {StatusCode}", documentFileId, response.HttpStatusCode);
-        }
-    }
-
-    public async Task UpdateDocumentMetadataAsync(Guid documentId, string subject, string grade, string year)
-    {
-        var indexName = _options.IndexName;
-        var updateBody = new
-        {
-            query = new
-            {
-                term = new { document_id = documentId.ToString() }
-            },
-            script = new
-            {
-                source = "ctx._source.subject = params.subject; ctx._source.grade = params.grade; ctx._source.year = params.year",
-                @params = new { subject, grade, year }
-            }
-        };
-
-        var json = JsonSerializer.Serialize(updateBody);
-        var response = await _client.UpdateByQueryAsync<BytesResponse>(indexName, json);
-
-        if (response.Success && response.HttpStatusCode == 200)
-        {
-            _logger.LogInformation("Document {DocumentId} search index metadata updated", documentId);
-        }
-        else
-        {
-            _logger.LogWarning("Failed to update document {DocumentId} search index metadata, status code: {StatusCode}", documentId, response.HttpStatusCode);
         }
     }
 
@@ -564,8 +430,9 @@ public class OpenSearchIndexService : ISearchIndexService
                 }
                 else
                 {
-                    var segmentType = source.TryGetProperty("segment_type", out var stEl) ? stEl.GetString() ?? SegmentTypes.Sentence : SegmentTypes.Sentence;
-                    segmentId = segmentType == SegmentTypes.Question
+                    // Legacy fallback: question segments use question_id, others use sentence_id
+                    var segmentType = source.TryGetProperty("segment_type", out var stEl) ? stEl.GetString() ?? "sentence" : "sentence";
+                    segmentId = segmentType == "question"
                         ? (source.TryGetProperty("question_id", out var qiEl) ? qiEl.GetString() ?? "" : "")
                         : (source.TryGetProperty("sentence_id", out var siEl) ? siEl.GetString() ?? "" : "");
                 }

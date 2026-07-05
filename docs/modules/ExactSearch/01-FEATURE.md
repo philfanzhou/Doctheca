@@ -14,15 +14,12 @@
 - AC-2：查询词超过 200 字符时返回 `400 Bad Request (DOCLIBRARY_QUERY_TOO_LONG)`。
 - AC-3：`page_size` 超过 100 时静默截断为 100（不报错）。
 - AC-4：`page_size` 默认 20，最小 1，最大 100。
-- AC-5：优先使用 OpenSearch BM25 搜索（`ISearchIndexService.ExactSearchAsync`）。
-- AC-6：OpenSearch 不可用或异常时，回退数据库搜索并记录 LogWarning。
-- AC-7：数据库搜索在 segments 和 questions 两表中使用 `IndexOf(query, OrdinalIgnoreCase)` 匹配。
-- AC-8：仅搜索 `status == "ready"` 的文档。
-- AC-9：短语匹配时 `Score = 1.0`，`MatchType = "exact_phrase"`。
-- AC-10：单词匹配时 `Score = 0.8`，`MatchType = "exact_word"`。
-- AC-11：结果按 `DocumentName + PageNumber + SegmentId` 去重。
-- AC-12：游标分页使用 `Base64({ "skip": N })` 编码。
-- AC-13：`SearchFilter` 中空字符串字段视为不筛选。
+- AC-5：使用 OpenSearch BM25 搜索（`ISearchIndexService.ExactSearchAsync`）。
+- AC-6：OpenSearch 不可用或异常时，返回空结果并记录 LogWarning（不中断请求）。
+- AC-7：短语匹配时 `Score = 1.0`，`MatchType = "exact_phrase"`。
+- AC-8：单词匹配时 `MatchType = "stemmed"`（`english_custom` 分析器含词干提取）。
+- AC-9：游标分页使用 `search_after`，`page_token` 为上一页最后一条记录的 sort 数组 Base64 编码。
+- AC-10：`SearchFilter` 中空字符串字段视为不筛选。
 
 ## 明确列出"范围外"（不做什么）
 
@@ -31,12 +28,13 @@
 - 不实现搜索结果缓存。
 - 不实现搜索历史或搜索建议。
 - 不处理文档权限或访问控制。
+- 不实现数据库回退搜索（OpenSearch 不可用时仅返回空结果）。
 
 ## 关键代码参考
 
 | 组件 | 文件路径 |
 |------|---------|
-| DocumentAdminEndpoints | `src/Service/DocumentAdminEndpoints.cs` |
+| DocumentSearchEndpoints | `src/Service/Endpoints/DocumentSearchEndpoints.cs` |
 | SearchDomainService | `src/Domain/Services/SearchDomainService.cs` |
 | ISearchIndexService | `src/Domain/Repositories/ISearchIndexService.cs` |
 | OpenSearchIndexService | `src/Service/OpenSearchIndexService.cs` |

@@ -48,7 +48,6 @@
 ## 范围外
 
 - 解析结果接入分段/索引流程（后续优化）
-- 替代现有 DocumentParserService（后续优化）
 - Batch 批量文件解析（后续优化）
 - Agent Lightweight API 集成（后续优化）
 
@@ -68,7 +67,7 @@
 ```
 用户点击"解析" → POST /admin/document-files/{id}/parse
   → 更新 status=pending_parse
-  → IngestionWorker 检测到 pending_parse 任务
+  → MinerUFileParseWorker 检测到 pending_parse 任务
   → 生成 presigned URL → 提交 MinerU API → 获取 task_id
   → 更新 status=parsing, external_task_id=task_id
   → 后台轮询 MinerU 状态
@@ -138,5 +137,7 @@
 | 组件 | 文件路径 |
 |------|---------|
 | MinerU Precision 客户端 | `src/Service/MinerUPrecisionClient.cs` |
-| Admin 端点 | `src/Service/DocumentAdminEndpoints.cs` |
+| 文件管理端点 | `src/Service/Endpoints/DocumentFileEndpoints.cs` |
+| 解析管理端点 | `src/Service/Endpoints/DocumentParseEndpoints.cs` |
+| 后台解析 Worker | `src/Service/MinerUFileParseWorker.cs` |
 | 前端页面 | `frontend/src/App.vue` |

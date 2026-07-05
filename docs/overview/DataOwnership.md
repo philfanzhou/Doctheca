@@ -6,12 +6,10 @@
 
 | 实体表 | 说明 | 操作权限 |
 |--------|------|---------|
-| `documents` | 文档主表 | 本服务独写 |
-| `document_pages` | 文档页面 | 本服务独写 |
-| `document_segments` | 文本片段 | 本服务独写 |
-| `question_segments` | 题目片段 | 本服务独写 |
-| `document_occurrences` | 倒排索引 | 本服务独写 |
-| `document_ingestion_jobs` | 导入任务 | 本服务独写 |
+| `document_files` | 文档文件表 | 本服务独写 |
+| `document_parses` | 解析记录表 | 本服务独写 |
+| `document_parse_blocks` | 解析 block 表 | 本服务独写 |
+| `document_parse_images` | 解析图片表 | 本服务独写 |
 
 ## 本服务引用的外部数据（只读引用）
 
@@ -30,5 +28,5 @@
 ## 双写禁区
 
 - 本服务不写入任何其他 Ruoyu 微服务的数据库
-- 其他服务不应直接写入本服务的 6 张表
+- 其他服务不应直接写入本服务的 4 张表
 - OSS 文件路径格式由本服务内部控制，其他服务不应直接操作

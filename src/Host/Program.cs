@@ -89,12 +89,6 @@ if (llmSection.Exists() && !string.IsNullOrEmpty(llmSection["ApiKey"]))
 }
 
 // Repositories
-builder.Services.AddScoped<IDocumentRepository, DocumentRepository>();
-builder.Services.AddScoped<IDocumentPageRepository, DocumentPageRepository>();
-builder.Services.AddScoped<IDocumentSegmentRepository, DocumentSegmentRepository>();
-builder.Services.AddScoped<IQuestionSegmentRepository, QuestionSegmentRepository>();
-builder.Services.AddScoped<IDocumentOccurrenceRepository, DocumentOccurrenceRepository>();
-builder.Services.AddScoped<IDocumentIngestionJobRepository, DocumentIngestionJobRepository>();
 builder.Services.AddScoped<IDocumentFileRepository, DocumentFileRepository>();
 builder.Services.AddScoped<IDocumentParseRepository, DocumentParseRepository>();
 builder.Services.AddScoped<IDocumentParseImageRepository, DocumentParseImageRepository>();
@@ -104,16 +98,9 @@ builder.Services.AddScoped<IDocumentParseImportRepository, DocumentParseImportRe
 builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
 
 // Domain Services
-builder.Services.AddScoped<IDocumentDomainService, DocumentDomainService>();
 builder.Services.AddScoped<ISearchDomainService, SearchDomainService>();
 builder.Services.AddScoped<IDocumentFileService, DocumentFileService>();
 builder.Services.AddScoped<IDocumentParseService, DocumentParseService>();
-builder.Services.AddScoped<IDocumentParserService>(sp =>
-{
-    var logger = sp.GetRequiredService<ILogger<DocumentParserService>>();
-    var llmSegmentation = sp.GetService<IDocumentAnalysisService>(); // Optional
-    return new DocumentParserService(logger, llmSegmentation);
-});
 
 // MinerU Precision API Client
 builder.Services.Configure<MinerUOptions>(builder.Configuration.GetSection(MinerUOptions.SectionName));
@@ -122,7 +109,6 @@ builder.Services.AddSingleton<IPdfSplitService, PdfSplitService>();
 builder.Services.AddSingleton<IFileConversionService, LibreOfficeConversionService>();
 
 // Background Workers
-builder.Services.AddHostedService<IngestionWorker>();
 builder.Services.AddHostedService<MinerUFileParseWorker>();
 
 // Note: DocLibrary 是内网管理后台，无应用层认证。
@@ -191,7 +177,7 @@ using (var initScope = app.Services.CreateScope())
     }
     catch (Exception ex)
     {
-        initLogger.LogWarning(ex, "Search index initialization failed, will use database fallback search");
+        initLogger.LogWarning(ex, "Search index initialization failed");
     }
 }
 

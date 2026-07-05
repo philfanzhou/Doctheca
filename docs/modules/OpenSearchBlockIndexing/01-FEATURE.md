@@ -2,22 +2,15 @@
 
 ## 功能概述
 
-将 OpenSearch 索引源从 LLM 拆段链路(`document_segments` + `question_segments`)切换为 MinerU 解析链路(`document_parse_blocks`),实现文档解析完成后自动索引、删除解析结果/文档时自动清理索引。
+将 MinerU 解析产生的版面块(`document_parse_blocks`)索引到 OpenSearch,实现文档解析完成后自动索引、删除解析结果/文档时自动清理索引,支撑 `GET /admin/documents/search` 精确关键词搜索。
 
 ## 背景
 
-当前 DocLibrary 存在两条并行链路(数据不互通):
-
-| 链路 | 数据表 | OpenSearch 索引 | 用途 |
-|------|--------|---------------|------|
-| LLM 拆段(旧) | `documents` / `document_segments` / `question_segments` | ✅ 索引 segments | 搜索(SearchPage) |
-| MinerU 解析(新) | `document_files` / `document_parses` / `document_parse_blocks` | ❌ 未索引 | 文件管理 + QuestionBank 拉模式 |
-
-MinerU 链路已承担文件管理、解析结果查看、QuestionBank 拉模式导入,但搜索功能仍依赖 LLM 拆段链路。本功能将 OpenSearch 索引源切换到 MinerU 链路,使搜索基于 MinerU 解析的版面块(blocks)。
+DocLibrary 文档解析采用 MinerU 链路,数据表为 `document_files` / `document_parses` / `document_parse_blocks` / `document_parse_images`。MinerU 链路承担文件管理、解析结果查看、QuestionBank 拉模式导入,本功能将解析后的 blocks 索引到 OpenSearch,使搜索基于 MinerU 解析的版面块(blocks)。
 
 ## 用户故事
 
-- **作为老师**:我上传讲义并完成 MinerU 解析后,搜索功能能立即检索到讲义内容,无需等待 LLM 拆段
+- **作为老师**:我上传讲义并完成 MinerU 解析后,搜索功能能立即检索到讲义内容
 - **作为运维**:我删除某次解析结果时,对应的 OpenSearch 索引自动清理,不残留脏数据
 - **作为运维**:我删除整个文档时,该文档所有解析版本的 OpenSearch 索引自动清理
 - **作为开发者**:QuestionBank 拉模式与搜索功能基于同一数据源(blocks),保证数据一致性
@@ -55,8 +48,8 @@ MinerU 链路已承担文件管理、解析结果查看、QuestionBank 拉模式
   - `image_id`(keyword)— 图片 ID(image 类型才有)
   - `created_at`(date)— 创建时间
 
-### FR-06:搜索接口兼容
-- `GET /admin/documents/search` 响应字段保持兼容:
+### FR-06:搜索接口响应字段
+- `GET /admin/documents/search` 响应字段映射:
   - `documentName` ← `file_name`
   - `pageNumber` ← `page_number`
   - `associatedText` ← `text`(高亮)
@@ -67,10 +60,9 @@ MinerU 链路已承担文件管理、解析结果查看、QuestionBank 拉模式
   - `createdAt` ← `created_at`
 - 前端 `SearchPage.vue` 无需改动
 
-### FR-07:向后兼容旧索引
-- OpenSearch mapping 保留旧字段(`document_id` / `document_title` / `sentence_id` / `question_id` / `segment_type` / `start_offset` / `end_offset`)
-- 旧索引数据(LLM 拆段链路)暂时保留,可被搜索命中
-- 新索引数据(blocks)使用新字段,搜索时优先读取新字段,回退到旧字段
+### FR-07:OpenSearch 不可用降级
+- OpenSearch 不可用时,搜索返回空结果并记录 LogWarning
+- 索引失败不阻塞解析流程(仅记 Warning 日志)
 
 ## 验收条件
 
@@ -82,7 +74,7 @@ MinerU 链路已承担文件管理、解析结果查看、QuestionBank 拉模式
 | AC-04 | `DELETE /admin/document-files/{id}` 后,该文档所有 parse 的 OpenSearch 索引文档被删除 |
 | AC-05 | `GET /admin/documents/search` 能搜到 MinerU 解析的 blocks |
 | AC-06 | 搜索响应字段与前端 `SearchPage.vue` 兼容 |
-| AC-07 | OpenSearch 不可用时,搜索回退到数据库(已有逻辑,保持不变) |
+| AC-07 | OpenSearch 不可用时,搜索返回空结果并记录 LogWarning |
 | AC-08 | 索引失败不阻塞解析流程(仅记 Warning 日志) |
 | AC-09 | 删除索引失败不阻塞删除操作(仅记 Warning 日志) |
 
@@ -109,7 +101,7 @@ MinerU 链路已承担文件管理、解析结果查看、QuestionBank 拉模式
 | 组件 | 修改 |
 |------|------|
 | `ISearchIndexService` | 新增 3 个方法:`IndexParseBlocksAsync` / `DeleteParseIndexAsync` / `DeleteDocumentFileIndexAsync` |
-| `OpenSearchIndexService` | 实现新方法;`BuildIndexBody` 新增字段;`ParseSearchResponse` 兼容新旧字段 |
+| `OpenSearchIndexService` | 实现新方法;`BuildIndexBody` 索引字段;`ParseSearchResponse` 读取 blocks 字段 |
 | `MinerUFileParseWorker` | `PersistParseResultAsync` / `PersistMergedChunkResultsAsync` 解析完成后调用 `IndexParseBlocksAsync` |
 | `DocumentParseEndpoints` | `DeleteDocumentParse` 调用 `DeleteParseIndexAsync` |
 | `DocumentFileEndpoints` | `DeleteDocumentFile` 调用 `DeleteDocumentFileIndexAsync` |

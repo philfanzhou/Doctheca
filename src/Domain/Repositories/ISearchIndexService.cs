@@ -10,22 +10,10 @@ public interface ISearchIndexService
     Task EnsureIndexAsync();
 
     /// <summary>
-    /// Index all segments of a document (legacy LLM segmentation pipeline).
-    /// Kept for backward compatibility; new code should use IndexParseBlocksAsync.
-    /// </summary>
-    Task IndexDocumentSegmentsAsync(Guid documentId, string documentTitle, string subject, string grade, string year);
-
-    /// <summary>
     /// Index all blocks of a parse to OpenSearch. Called after MinerU parse completes.
     /// Idempotent: re-indexing overwrites existing documents (same _id = block_{blockId}).
     /// </summary>
     Task IndexParseBlocksAsync(Guid parseId, Guid documentFileId, string fileName, string? subject, string? grade, string? year);
-
-    /// <summary>
-    /// Delete all OpenSearch documents for a document (legacy LLM pipeline).
-    /// Kept for backward compatibility.
-    /// </summary>
-    Task DeleteDocumentIndexAsync(Guid documentId);
 
     /// <summary>
     /// Delete all OpenSearch documents for a parse. Called when parse result is deleted.
@@ -37,12 +25,6 @@ public interface ISearchIndexService
     /// Called when document file is deleted.
     /// </summary>
     Task DeleteDocumentFileIndexAsync(Guid documentFileId);
-
-    /// <summary>
-    /// Update document metadata (subject/grade/year) (legacy LLM pipeline).
-    /// Kept for backward compatibility.
-    /// </summary>
-    Task UpdateDocumentMetadataAsync(Guid documentId, string subject, string grade, string year);
 
     /// <summary>
     /// Update subject/grade/year for all indexed blocks of a document file.

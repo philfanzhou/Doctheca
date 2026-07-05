@@ -14,18 +14,14 @@ Expected response:
 { "status": "healthy", "timestamp": "..." }
 ```
 
-## Upload Document
+## Upload Document File
 
 ```bash
-curl -X POST http://localhost:5012/admin/documents/upload \
-  -F "file=@test.pdf" \
-  -F "title=Test Document" \
-  -F "subject=English" \
-  -F "grade=G10" \
-  -F "year=2024"
+curl -X POST http://localhost:5012/admin/document-files/upload \
+  -F "file=@test.pdf"
 ```
 
-Required form fields: `file`, `title`, `subject`, `grade`, `year`. Optional: `tags`.
+Required form field: `file`. Optional: `subject`, `grade`, `year`（可由 LLM 在解析完成后自动填充）。
 
 Supported file types: PDF, Word (.doc/.docx), PowerPoint (.ppt/.pptx). Max size: 200 MB.
 
@@ -35,114 +31,68 @@ Expected response:
 {
   "success": true,
   "data": {
-    "document_id": "...",
-    "title": "Test Document",
-    "job_id": "...",
-    "status": "pending"
+    "fileId": "...",
+    "fileName": "test.pdf",
+    "status": "uploaded"
   }
 }
 ```
 
-## List Documents
+## List Document Files
 
 ```bash
-curl http://localhost:5012/admin/documents
+curl http://localhost:5012/admin/document-files
 ```
 
-Query parameters: `page`, `pageSize`, `status`, `subject`, `grade`, `keyword`, `year`.
+Query parameters: `page`, `pageSize`, `status`, `subject`, `grade`, `year`, `search`.
 
 With filters:
 
 ```bash
-curl "http://localhost:5012/admin/documents?subject=English&grade=G10&page=1&pageSize=10"
+curl "http://localhost:5012/admin/document-files?subject=English&grade=G10&page=1&pageSize=10"
 ```
 
-## Get Document Detail
+## Get Document File Detail
 
-Replace `{id}` with the `document_id` from upload response:
+Replace `{id}` with the `fileId` from upload response:
 
 ```bash
-curl http://localhost:5012/admin/documents/{id}
+curl http://localhost:5012/admin/document-files/{id}
 ```
 
-Expected response:
-
-```json
-{
-  "success": true,
-  "data": {
-    "id": "...",
-    "title": "Test Document",
-    "source_type": "pdf",
-    "file_hash": "...",
-    "file_size": 12345,
-    "language": "en",
-    "subject": "English",
-    "grade": "G10",
-    "year": "2024",
-    "tags": null,
-    "status": "ready",
-    "created_at": "...",
-    "updated_at": "..."
-  }
-}
-```
-
-## Check Document Status
-
-Replace `{id}` with the `document_id` from upload response:
+## Trigger MinerU Parse
 
 ```bash
-curl http://localhost:5012/admin/documents/{id}/status
+curl -X POST http://localhost:5012/admin/document-files/{id}/parse
 ```
 
-Expected response:
+## Check Parse Status
 
-```json
-{
-  "success": true,
-  "data": {
-    "document_id": "...",
-    "title": "Test Document",
-    "status": "ready",
-    "jobs": [
-      {
-        "job_id": "...",
-        "status": "success",
-        "parser_version": "...",
-        "ocr_version": "...",
-        "error_message": null,
-        "started_at": "...",
-        "finished_at": "..."
-      }
-    ]
-  }
-}
-```
-
-Document status flow: `pending` -> `processing` -> `ready` (or `failed`).
-
-Job status flow: `pending` -> `processing` -> `success` (or `failed`).
-
-## Update Document Metadata
-
-Only documents in `ready` status can be updated:
+Replace `{parseId}` with the parse ID returned from parse trigger:
 
 ```bash
-curl -X PUT http://localhost:5012/admin/documents/Test%20Document/metadata \
+curl http://localhost:5012/admin/document-parses/{parseId}
+```
+
+Parse status flow: `pending_parse` -> `parsing` -> `parsed` (or `failed`).
+
+## Update Document File Metadata
+
+```bash
+curl -X PUT http://localhost:5012/admin/document-files/{id}/metadata \
   -H "Content-Type: application/json" \
   -d '{"subject":"English","grade":"G11","year":"2025"}'
 ```
 
-## Delete Document
+## Delete Document File
 
 ```bash
-curl -X DELETE http://localhost:5012/admin/documents/{id}
+curl -X DELETE http://localhost:5012/admin/document-files/{id}
 ```
 
 ## Search Test Endpoint
 
-Requires OpenSearch (or database fallback) to be available:
+Requires OpenSearch to be available:
 
 ```bash
 curl "http://localhost:5012/admin/documents/search?query=algebra&pageSize=5"
@@ -169,5 +119,4 @@ Filter by module:
 ```bash
 dotnet test --filter "FullyQualifiedName~DocumentUpload"
 dotnet test --filter "FullyQualifiedName~ExactSearch"
-dotnet test --filter "FullyQualifiedName~DocumentDeletion"
 ```

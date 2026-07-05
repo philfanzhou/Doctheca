@@ -64,7 +64,6 @@ parse_imports ◄── POST /import-status (回写导入状态)
 - QuestionBank PostgreSQL GIN 全文索引（由 QuestionBank 项目负责）
 - 定时拉取调度与事件驱动（后续阶段）
 - DocLibrary 主动推送（架构已否决，保持拉模式）
-- 文档已存在 `document_segments` / `question_segments` 表的改造（属于 IngestionWorker 本地解析链路，与 MinerU 链路无关，不混用）
 - 应用层鉴权（DocLibrary 作为内网管理后台，所有 `/admin/*` 端点 `AllowAnonymous`，由部署层网络隔离实现访问控制）
 
 ## 数据模型
@@ -100,12 +99,11 @@ parse_imports ◄── POST /import-status (回写导入状态)
 | 表 | 用途 | 关键字段 |
 |----|------|---------|
 | `document_parses` | 可导入列表数据源 | `id` / `document_file_id` / `status` / `model_version` / `parsed_at` |
-| `document_files` | 列表关联文件名 | `id` / `file_name` |
-| `documents` | 列表关联文档元数据（学科/年级/年份） | `id` / `title` / `subject` / `grade` / `year` |
+| `document_files` | 列表关联文件名 + 元数据（subject/grade/year） | `id` / `file_name` / `subject` / `grade` / `year` |
 | `document_parse_blocks` | 结构化块检索数据源 | `id` / `parse_id` / `page_id` / `sort_index` / `block_type` / `text_content` / `image_id` / `block_data` |
 | `document_parse_images` | 图片访问数据源 | `id` / `parse_id` / `image_name` / `image_path` / `content_type` |
 
-> **注**：`document_parses.document_file_id` 与 `document_files.id` 关联；`document_files` 不直接关联 `documents`（两条链路独立）。学科/年级/年份过滤通过 `documents` 表实现，需借助 `document_parses` ↔ `document_files` ↔ `documents` 的反向查找关系（详见 02-SPEC.md 的关联查询设计）。
+> **注**：`document_parses.document_file_id` 与 `document_files.id` 关联。`subject`/`grade`/`year` 元数据存储在 `document_files` 表（详见 02-SPEC.md 的关联查询设计）。
 
 ## 接口清单
 

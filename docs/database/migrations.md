@@ -8,22 +8,12 @@
 
 所有表通过 [DatabaseInitializer.cs](../../src/Database/DatabaseInitializer.cs) 的 `GetTableCreationSql` 方法定义。
 
-## 已执行操作
-
-| 时间 | 操作 | 说明 |
-|------|------|------|
-| 初始 | 创建 6 张表 | documents, document_pages, document_segments, question_segments, document_occurrences, document_ingestion_jobs |
-| 初始 | 创建 document_segment_backups 表 | Refine 功能的备份表 |
-
 ## 列级迁移（EnsureColumnsAsync）
 
 通过 `DatabaseInitializer.EnsureColumnsAsync` 在启动时自动执行，兼容新旧数据库：
 
 | SQL | 说明 |
 |-----|------|
-| `ALTER TABLE documents ADD COLUMN IF NOT EXISTS llm_profile_json text NULL` | 新增 LLM 画像字段 |
-| `ALTER TABLE document_segments DROP COLUMN IF EXISTS block_id` | 移除 BlockId（SentenceId 格式从 `p{N}-b{M}-s{K}` 简化为 `p{N}-s{K}`） |
-| `ALTER TABLE documents ADD COLUMN IF NOT EXISTS created_by uuid NULL` | 新增上传者用户 ID 字段 |
 | `ALTER TABLE document_files ADD COLUMN IF NOT EXISTS subject varchar(50) NULL` | 新增学科元数据列（DocumentMetadataAnalysis 功能） |
 | `ALTER TABLE document_files ADD COLUMN IF NOT EXISTS grade varchar(20) NULL` | 新增年级元数据列（DocumentMetadataAnalysis 功能） |
 | `ALTER TABLE document_files ADD COLUMN IF NOT EXISTS year varchar(10) NULL` | 新增年份元数据列（DocumentMetadataAnalysis 功能） |
@@ -32,6 +22,4 @@
 
 | 日期 | 变更 | 影响 |
 |------|------|------|
-| 2026-06-20 | 移除 document_segments.block_id 列 | SentenceId 格式简化，BlockId 从代码和数据库中完全移除 |
-| 2026-06-20 | 新增 documents.created_by 列 | 记录文档上传者用户 ID，支持后续教师文档管理 |
 | 2026-07-04 | 新增 document_files.subject/grade/year 列 | 文档元数据分析功能，支持手动设置和 LLM 自动填充 |

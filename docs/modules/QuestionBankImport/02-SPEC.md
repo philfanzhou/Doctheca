@@ -7,8 +7,8 @@
 **补充约束**：
 - 本功能仅面向内网服务调用方（QuestionBank 内网直连 DocLibrary），不开放给前台用户。
 - 所有接口 `AllowAnonymous`，与现有 DocLibrary Admin API 风格一致（内网管理后台无应用层认证）。
-- 本模块只读 MinerU 链路数据（`document_parses` / `document_parse_blocks` / `document_parse_images`），不触碰 IngestionWorker 链路（`document_segments` / `question_segments` / `document_occurrences`）。
-- 元数据过滤（subject/grade/year）不在本次范围（`document_files` 表无这些字段，扩展超出范围外）。QuestionBank 拉取后可自行根据 `fileName` 或拉到的内容判断。
+- 本模块只读 MinerU 解析链路数据（`document_parses` / `document_parse_blocks` / `document_parse_images`）。
+- 元数据过滤（subject/grade/year）不在本次范围。QuestionBank 拉取后可自行根据 `fileName` 或拉到的内容判断。
 
 ## 功能要求清单（编号 FR-01 起）
 

@@ -1,76 +1,64 @@
 # KeyFlows — 关键业务流程
 
-## 1. 文档上传 → 解析 → 可搜索
+## 1. 文件上传 → MinerU 解析 → 可搜索
 
 ```
-  Admin UI          DocLibrary           OSS              Worker             OpenSearch
+  Admin UI          DocLibrary           OSS              MinerUFileParseWorker      OpenSearch
     │                    │                   │                 │                      │
-    │ POST /upload       │                   │                 │                      │
+    │ POST /admin/document-files/upload      │                 │                      │
     │───────────────────►│                   │                 │                      │
     │                    │ PutObject()       │                 │                      │
     │                    │──────────────────►│                 │                      │
     │                    │ 文件上传到 OSS    │                 │                      │
     │                    │                   │                 │                      │
-    │                    │ 写入 documents 表 (status=pending)  │                      │
-    │                    │ 写入 ingestion_jobs (status=pending)│                      │
-    │   201 + doc_id     │                   │                 │                      │
+    │                    │ 写入 document_files (status=uploaded)                      │
+    │   201 + file_id    │                   │                 │                      │
     │◄───────────────────│                   │                 │                      │
     │                    │                   │                 │                      │
-    │                    │                   │    5s poll      │                      │
+    │ POST /admin/document-files/{id}/parse  │                 │                      │
+    │───────────────────►│                   │                 │                      │
+    │                    │ 写入 document_parses (status=pending_parse)                │
+    │                    │                   │                 │                      │
+    │                    │                   │    轮询 pending_parse 任务             │
     │                    │                   │◄────────────────│                      │
-    │                    │                   │  GetPendingJobs │                      │
-    │                    │                   │─────────────────►                      │
+    │                    │  生成 presigned URL                  │                      │
+    │                    │  提交 MinerU API → 获取 task_id      │                      │
+    │                    │  更新 status=parsing, external_task_id                    │
     │                    │                   │                 │                      │
-    │                    │  StartJob (status=processing)        │                      │
+    │                    │  轮询 MinerU 状态                    │                      │
+    │                    │  完成后下载 ZIP → 提取 MD + 图片     │                      │
+    │                    │  图片上传 OSS → 替换 MD 路径         │                      │
+    │                    │  写入 document_parse_blocks / document_parse_images       │
+    │                    │  更新 status=parsed                  │                      │
     │                    │                   │                 │                      │
-    │                    │  Download(file_path)                │                      │
-    │                    │──────────────────►│                 │                      │
-    │                    │    file stream    │                 │                      │
-    │                    │◄──────────────────│                 │                      │
-    │                    │                   │                 │                      │
-    │                    │  Parse(Document)  │                 │                      │
-    │                    │  → pages, segments, questions, tokens                     │
-    │                    │                   │                 │                      │
-    │                    │  写入 document_pages, segments, questions, occurrences    │
-    │                    │                   │                 │                      │
-    │                    │  UpdateDocumentStatus(ready)         │                      │
-    │                    │  CompleteJob(success)                │                      │
-    │                    │                   │                 │                      │
-    │                    │                   │  IndexSegments() │                      │
+    │                    │                   │  IndexParseBlocksAsync()               │
     │                    │                   │─────────────────►                      │
     │                    │                   │                 │                      │
 ```
 
-**触发条件**：用户通过 Admin UI 上传 PDF/DOCX 文件
-**参与服务**：Admin UI → DocLibrary → OSS → PostgreSQL；Worker → OpenSearch
-**数据流转**：OSS 文件 → 解析器 → 结构化数据写入 6 张表 → 搜索引擎索引
-
-> **链路说明（2026-07 更新）**：上图描述的是 **LLM 拆段链路**（`IngestionWorker`），为历史保留链路。当前 OpenSearch 索引源已切换到 **MinerU 解析链路**：`MinerUFileParseWorker` 解析 `document_files` 完成后，将 `document_parse_blocks` 索引到 OpenSearch（`IndexParseBlocksAsync`）。详见 [OpenSearchBlockIndexing](../modules/OpenSearchBlockIndexing/01-FEATURE.md)。LLM 链路的 `IndexDocumentSegmentsAsync` 保留但新代码不再调用。
+**触发条件**：用户通过 Admin UI 上传文件并触发 MinerU 解析
+**参与服务**：Admin UI → DocLibrary → OSS → PostgreSQL；MinerUFileParseWorker → MinerU Precision API + OpenSearch
+**数据流转**：OSS 文件 → MinerU 解析 → 结构化 blocks/images 写入 3 张表 → 搜索引擎索引
 
 ---
 
 ## 2. 精确搜索 (ExactSearch)
 
 ```
-  Admin UI / HTTP Client  DocLibrary           PostgreSQL              OpenSearch
-    │                    │                       │                      │
-    │ GET /admin/documents/search?query=... │                     │                      │
-    │───────────────────►│                       │                      │
-    │                    │ OpenSearch 是否可用?   │                      │
+  Admin UI / HTTP Client  DocLibrary           OpenSearch
+    │                    │                       │
+    │ GET /admin/documents/search?query=... │                       │
+    │───────────────────►│                       │
+    │                    │ SearchDocumentAsync(query, filter) │
     │                    │──────────────────────────────────────────────►
-    │                    │                      ✓│                      │
-    │                    │◄──────────────────────────────────────────────
-    │                    │                       │                      │
-    │                    │ SearchDocumentAsync(query, filter)            │
-    │                    │──────────────────────────────────────────────►
-    │                    │    results            │                      │
-    │                    │◄──────────────────────│                      │
-    │                    │                       │                      │
-    │    results         │  (失败则回退到 PostgreSQL 倒排索引)            │
-    │◄───────────────────│                       │                      │
+    │                    │    results            │
+    │                    │◄──────────────────────│
+    │                    │                       │
+    │    results         │  (OpenSearch 不可用时返回空结果并记 LogWarning) │
+    │◄───────────────────│                       │
 ```
 
 **触发条件**：HTTP GET `/admin/documents/search`
-**降级**：OpenSearch 不可用时回退到 `document_occurrences` 倒排索引（token_text 匹配）
+**降级**：OpenSearch 不可用时返回空结果并记录 LogWarning
 
 ---

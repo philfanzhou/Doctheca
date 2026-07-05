@@ -1,10 +1,10 @@
-# document_files — 文档文件表（新管线）
+# document_files — 文档文件表
 
 > 本文件是 `document_files` 表的唯一事实源。
 
 ## 设计背景
 
-旧管线（`IngestionWorker`）使用 `documents` 表存储文档主表。新管线（`MinerUFileParseWorker`）使用 `document_files` 表，专门处理 MinerU 异步解析流程。两套管线**并行运行、数据不互通**。
+`document_files` 表存储 MinerU 解析流程的文件元数据，由 `MinerUFileParseWorker` 处理解析。
 
 `document_files` 故意保持精简：只存储文件元数据，**所有解析相关字段**（status、markdown、task_id 等）都已拆到 `document_parses` 表。
 
