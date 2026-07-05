@@ -270,7 +270,8 @@ public class MinerUFileParseWorker : BackgroundService
             result.LayoutJson != null ? "yes" : "no");
 
         // 5. Index blocks to OpenSearch (best-effort, failure does not block parse)
-        await IndexBlocksToSearchAsync(parse.Id, file.Id, file.FileName, scopeProvider);
+        // 传入文件已有的 subject/grade/year，确保索引时元数据可被过滤
+        await IndexBlocksToSearchAsync(parse.Id, file, scopeProvider);
 
         // 6. Analyze metadata via LLM if missing (best-effort, failure does not block parse)
         await AnalyzeMetadataIfMissingAsync(parse.DocumentFileId, result.Markdown, scopeProvider, ct);
@@ -278,13 +279,14 @@ public class MinerUFileParseWorker : BackgroundService
 
     /// <summary>
     /// Index parse blocks to OpenSearch. Best-effort: failures are logged but do not block the parse workflow.
+    /// 传入文件已有的 subject/grade/year，索引时即可被过滤；后续 LLM 分析或手动更新会通过 UpdateDocumentFileMetadataAsync 同步。
     /// </summary>
-    private async Task IndexBlocksToSearchAsync(Guid parseId, Guid documentFileId, string fileName, IServiceProvider scopeProvider)
+    private async Task IndexBlocksToSearchAsync(Guid parseId, DocumentFileModel file, IServiceProvider scopeProvider)
     {
         try
         {
             var searchIndexService = scopeProvider.GetRequiredService<ISearchIndexService>();
-            await searchIndexService.IndexParseBlocksAsync(parseId, documentFileId, fileName, null, null, null);
+            await searchIndexService.IndexParseBlocksAsync(parseId, file.Id, file.FileName, file.Subject, file.Grade, file.Year);
         }
         catch (Exception ex)
         {
@@ -590,7 +592,7 @@ public class MinerUFileParseWorker : BackgroundService
         // Index blocks to OpenSearch only when parse succeeded (best-effort)
         if (status == DocumentParseStatus.Parsed)
         {
-            await IndexBlocksToSearchAsync(parse.Id, file.Id, file.FileName, scopeProvider);
+            await IndexBlocksToSearchAsync(parse.Id, file, scopeProvider);
 
             // Analyze metadata via LLM if missing (best-effort, failure does not block parse)
             await AnalyzeMetadataIfMissingAsync(parse.DocumentFileId, allMarkdown, scopeProvider, ct);

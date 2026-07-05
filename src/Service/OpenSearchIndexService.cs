@@ -82,15 +82,7 @@ public class OpenSearchIndexService : ISearchIndexService
             {
                 properties = new
                 {
-                    // Legacy fields (LLM segmentation pipeline, kept for backward compatibility)
-                    document_id = new { type = "keyword" },
-                    document_title = new { type = "keyword" },
-                    sentence_id = new { type = "keyword" },
-                    question_id = new { type = "keyword" },
-                    segment_type = new { type = "keyword" },
-                    start_offset = new { type = "integer" },
-                    end_offset = new { type = "integer" },
-                    // New fields (MinerU blocks pipeline)
+                    // MinerU blocks pipeline fields
                     parse_id = new { type = "keyword" },
                     document_file_id = new { type = "keyword" },
                     file_name = new { type = "keyword" },
@@ -98,7 +90,6 @@ public class OpenSearchIndexService : ISearchIndexService
                     block_type = new { type = "keyword" },
                     sort_index = new { type = "integer" },
                     image_id = new { type = "keyword" },
-                    // Shared fields (both pipelines)
                     subject = new { type = "keyword" },
                     grade = new { type = "keyword" },
                     year = new { type = "keyword" },
@@ -342,8 +333,9 @@ public class OpenSearchIndexService : ISearchIndexService
                 filterClauses.Add(new { term = new { grade = new { value = filter.Grade } } });
             if (!string.IsNullOrEmpty(filter.Year))
                 filterClauses.Add(new { term = new { year = new { value = filter.Year } } });
+            // file_name 是 keyword 类型，使用 term 精确匹配
             if (!string.IsNullOrEmpty(filter.DocumentTitle))
-                filterClauses.Add(new { term = new { document_title = new { value = filter.DocumentTitle } } });
+                filterClauses.Add(new { term = new { file_name = new { value = filter.DocumentTitle } } });
         }
 
         object queryObj = filterClauses.Count > 0
@@ -374,8 +366,7 @@ public class OpenSearchIndexService : ISearchIndexService
             ["sort"] = new object[]
             {
                 new { _score = new { order = "desc" } },
-                new { document_id = new { order = "asc" } },
-                new { segment_type = new { order = "asc" } }
+                new { block_id = new { order = "asc" } }
             },
             ["highlight"] = new
             {
@@ -422,20 +413,7 @@ public class OpenSearchIndexService : ISearchIndexService
             {
                 var source = hit.GetProperty("_source");
 
-                // Read segment_id: prefer new block_id, fall back to legacy sentence_id/question_id
-                string segmentId;
-                if (source.TryGetProperty("block_id", out var bidEl) && !string.IsNullOrEmpty(bidEl.GetString()))
-                {
-                    segmentId = bidEl.GetString()!;
-                }
-                else
-                {
-                    // Legacy fallback: question segments use question_id, others use sentence_id
-                    var segmentType = source.TryGetProperty("segment_type", out var stEl) ? stEl.GetString() ?? "sentence" : "sentence";
-                    segmentId = segmentType == "question"
-                        ? (source.TryGetProperty("question_id", out var qiEl) ? qiEl.GetString() ?? "" : "")
-                        : (source.TryGetProperty("sentence_id", out var siEl) ? siEl.GetString() ?? "" : "");
-                }
+                var segmentId = source.TryGetProperty("block_id", out var bidEl) ? bidEl.GetString() ?? "" : "";
 
                 var associatedText = source.TryGetProperty("text", out var textEl) ? textEl.GetString() ?? "" : "";
 
@@ -450,14 +428,7 @@ public class OpenSearchIndexService : ISearchIndexService
 
                 var score = hit.TryGetProperty("_score", out var scoreEl) ? scoreEl.GetDouble() : 0;
 
-                // Read document_name: prefer new file_name, fall back to legacy document_title
-                var documentName = source.TryGetProperty("file_name", out var fnEl) && !string.IsNullOrEmpty(fnEl.GetString())
-                    ? fnEl.GetString()!
-                    : (source.TryGetProperty("document_title", out var dtEl) ? dtEl.GetString() ?? "" : "");
-
-                // Read offsets: new blocks data has no offsets, default to 0
-                var startOffset = source.TryGetProperty("start_offset", out var soEl) ? soEl.GetInt32() : 0;
-                var endOffset = source.TryGetProperty("end_offset", out var eoEl) ? eoEl.GetInt32() : 0;
+                var documentName = source.TryGetProperty("file_name", out var fnEl) ? fnEl.GetString() ?? "" : "";
 
                 results.Add(new SearchResultModel
                 {
@@ -467,8 +438,8 @@ public class OpenSearchIndexService : ISearchIndexService
                     Score = score,
                     MatchType = phrase ? SearchMatchType.ExactPhrase : SearchMatchType.Stemmed,
                     SegmentId = segmentId,
-                    StartOffset = startOffset,
-                    EndOffset = endOffset,
+                    StartOffset = 0,
+                    EndOffset = 0,
                     CreatedAt = source.TryGetProperty("created_at", out var caEl) && DateTimeOffset.TryParse(caEl.GetString(), out var ca) ? ca : null
                 });
 

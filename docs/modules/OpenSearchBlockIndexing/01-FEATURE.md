@@ -39,7 +39,7 @@ DocLibrary 文档解析采用 MinerU 链路,数据表为 `document_files` / `doc
   - `parse_id`(keyword)— 支持按 parse 删除
   - `document_file_id`(keyword)— 支持按文档删除
   - `file_name`(keyword)— 文档名(搜索结果展示)
-  - `subject` / `grade` / `year`(keyword)— 元数据过滤(当前留空,后续补齐)
+  - `subject` / `grade` / `year`(keyword)— 元数据过滤(索引时从 `document_files` 表读取文件已有 metadata 写入)
   - `page_number`(integer)— 页码
   - `block_id`(keyword)— 唯一标识
   - `block_type`(keyword)— 版面块类型(text/image/table/equation/list/code)
@@ -92,7 +92,7 @@ DocLibrary 文档解析采用 MinerU 链路,数据表为 `document_files` / `doc
 
 - **索引源**:`document_parse_blocks` 表(代表 MinerU 解析的结构化输出)
 - **block_data 字段**:保留原始 JSON(包括 content_list v1/v2 格式),索引时不解析,仅用 `text_content` 字段
-- **元数据**:`document_files` 表当前无 `subject` / `grade` / `year` 字段,索引时这些字段留空(后续补齐)
+- **元数据**:`document_files` 表已有 `subject` / `grade` / `year` 字段,索引时从文件记录读取写入,后续 LLM 分析或手动更新 metadata 时通过 `UpdateDocumentFileMetadataAsync` 同步更新索引
 
 ## 接口清单
 

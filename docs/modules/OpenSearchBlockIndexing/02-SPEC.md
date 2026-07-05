@@ -64,6 +64,13 @@ Task DeleteDocumentFileIndexAsync(Guid documentFileId);
 - OpenSearch mapping 是动态的，`EnsureIndexAsync` 创建索引时使用上述 mapping
 - 索引数据来源为 `document_parse_blocks` 表（MinerU 解析链路）
 - 搜索时 `ParseSearchResponse` 直接读取上述字段
+- **不再保留 legacy 字段**（`document_id` / `document_title` / `sentence_id` / `question_id` / `segment_type` / `start_offset` / `end_offset` 已移除，legacy IngestionWorker 链路已删除）
+
+### 2.3 搜索排序与分页
+
+- 排序字段：`_score desc` → `block_id asc`（保证分页稳定）
+- 分页使用 `search_after`，token 为上一页最后一条 sort 值的 Base64 编码
+- 不再使用 legacy 的 `document_id` / `segment_type` 排序字段
 
 ## 3. IndexParseBlocksAsync 实现规格
 
@@ -74,9 +81,9 @@ Task DeleteDocumentFileIndexAsync(Guid documentFileId);
 | `parseId` | Guid | 解析记录 ID |
 | `documentFileId` | Guid | 文档文件 ID |
 | `fileName` | string | 文件名(搜索结果展示) |
-| `subject` | string? | 学科(当前留空) |
-| `grade` | string? | 年级(当前留空) |
-| `year` | string? | 年份(当前留空) |
+| `subject` | string? | 学科(从 `document_files` 表读取) |
+| `grade` | string? | 年级(从 `document_files` 表读取) |
+| `year` | string? | 年份(从 `document_files` 表读取) |
 
 ### 3.2 数据流
 
@@ -157,8 +164,8 @@ Task DeleteDocumentFileIndexAsync(Guid documentFileId);
 | `SegmentId` | `block_id` |
 | `MatchType` | phrase ? `exact_phrase` : `stemmed` |
 | `AssociatedText` | `text`(高亮优先) |
-| `StartOffset` | 0（blocks 无 offset） |
-| `EndOffset` | 0（blocks 无 offset） |
+| `StartOffset` | 0（blocks 无 offset，保留字段仅为前端兼容） |
+| `EndOffset` | 0（blocks 无 offset，保留字段仅为前端兼容） |
 | `Score` | `_score` |
 | `CreatedAt` | `created_at` |
 
@@ -166,6 +173,10 @@ Task DeleteDocumentFileIndexAsync(Guid documentFileId);
 
 - `block_type` 取值：text/image/table/equation/list/code
 - 搜索响应 `matchType` 不受 `block_type` 影响（由 `phrase` 参数决定）
+
+### 6.3 legacy 字段回退逻辑（已移除）
+
+不再保留 `sentence_id` / `question_id` / `document_title` 回退逻辑，所有读取直接使用 blocks 字段。
 
 ## 7. MinerUFileParseWorker 变更
 
@@ -175,10 +186,11 @@ Task DeleteDocumentFileIndexAsync(Guid documentFileId);
 
 ```csharp
 // Index blocks to OpenSearch (best-effort, failure does not block parse)
+// 传入文件已有的 subject/grade/year,确保索引时元数据可被过滤
 try
 {
     var searchIndexService = scopeProvider.GetRequiredService<ISearchIndexService>();
-    await searchIndexService.IndexParseBlocksAsync(parse.Id, file.Id, file.FileName, null, null, null);
+    await searchIndexService.IndexParseBlocksAsync(parse.Id, file.Id, file.FileName, file.Subject, file.Grade, file.Year);
 }
 catch (Exception ex)
 {
@@ -188,7 +200,7 @@ catch (Exception ex)
 
 ### 7.2 PersistMergedChunkResultsAsync 变更
 
-同 7.1,在 `parseService.UpdateStatusAsync(status, ...)` 之后新增相同逻辑。
+同 7.1,在 `parseService.UpdateStatusAsync(status, ...)` 之后新增相同逻辑,同样传入 `file.Subject / file.Grade / file.Year`。
 
 ### 7.3 失败状态不索引
 
