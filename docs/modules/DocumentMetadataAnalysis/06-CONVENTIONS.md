@@ -44,7 +44,12 @@
 
 ## LLM 配置约定
 
-- 配置节：`LlmDocumentAnalysis`
-- 温度固定为 0.1（结构化输出）
-- 流式 SSE 调用，stream idle timeout 默认 60s
-- ContextLength 支持 `128K` / `1M` 等人类友好格式
+- 配置节：`LlmDocumentAnalysis`(`DocumentAnalysisOptions.SectionName`)
+- `IDocumentAnalysisService` 仅在配置节存在且 `ApiKey` 非空时注册(`Program.cs` 条件 DI),未注册时 Worker 以 `GetService` 取 null 后 skip
+- 温度固定为 0.1(`DocumentAnalysisOptions.Temperature` 只读属性,结构化输出)
+- 流式 SSE 调用,stream idle timeout 默认 60s(`StreamIdleTimeoutSeconds`)
+- ContextLength 支持 `128K` / `1M` / 纯数字等人类友好格式,未配置时动态 GET `/v1/models/{Model}` 获取,仍失败则禁用 LLM
+
+## 空值校验边界
+
+> 本功能**不强制校验** subject/grade/year 的取值范围。`DocLibraryConstants.ValidSubjects` / `ValidGrades` 仅作为 LLM 提示词示例与 future 校验储备;`UpdateMetadataAsync` 与 Entity 列约束仅做 `MaxLength` + nullable 兜底。

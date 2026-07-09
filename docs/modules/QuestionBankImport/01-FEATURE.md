@@ -54,7 +54,7 @@ parse_imports ◄── POST /import-status (回写导入状态)
 - 新增 `document_parse_imports` 表（记录 QuestionBank 导入状态）
 - `DatabaseInitializer.cs` 新增建表 SQL
 - 图片访问端点通过 `IOssService.DownloadAsync` 流式返回
-- 现有 `IDocumentParseService` 扩展方法（GetImportableListAsync / GetBlocksAsync / UpsertImportStatusAsync）
+- 新增独立接口 `IQuestionBankImportService` 及实现 `QuestionBankImportService`（GetImportableListAsync / GetBlocksAsync / GetImageBlobAsync / UpsertImportStatusAsync）
 - 单元测试覆盖核心路径
 
 ## 范围外

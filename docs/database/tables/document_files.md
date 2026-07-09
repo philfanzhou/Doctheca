@@ -28,6 +28,7 @@
 | 索引名 | 列 | 说明 |
 |--------|-----|------|
 | `PK_document_files` | `id` | 主键 |
+| `IX_document_files_file_name` | `file_name` | 按文件名查询 |
 
 ## 外键
 

@@ -54,7 +54,7 @@
 
 ### OpenSearch 索引源
 
-详见 [OpenSearchBlockIndexing 模块](../modules/OpenSearchBlockIndexing/01-FEATURE.md):
+详见 [DocumentSearch 模块](../modules/DocumentSearch/01-FEATURE.md):
 
 - **索引源**:`document_parse_blocks` 表(MinerU 解析链路)
 - **索引时机**:MinerUFileParseWorker 解析状态变为 `parsed` 后自动索引

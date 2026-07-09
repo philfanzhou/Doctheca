@@ -12,10 +12,10 @@
 | `status` | `VARCHAR(30)` | NOT NULL | `'pending'` | 解析状态：`pending` / `parsing` / `parsed` / `failed` |
 | `external_task_id` | `VARCHAR(100)` | NULL | | MinerU 任务 ID（异步模式下用于轮询） |
 | `markdown_content` | `TEXT` | NULL | | 从 MinerU ZIP 抽取的 `full.md` 内容 |
-| `content_list` | `TEXT` (SQLite) / `JSONB` (PostgreSQL) | NULL | | 完整 `content_list.json`（结构化 block 数组 v1） |
-| `content_list_v2` | `TEXT` (SQLite) / `JSONB` (PostgreSQL) | NULL | | 结构化 block 数组 v2（MinerU 升级后新增，字段更丰富） |
-| `model_json` | `TEXT` (SQLite) / `JSONB` (PostgreSQL) | NULL | | 模型推理结果（含 bbox 坐标、版面分类） |
-| `layout_json` | `TEXT` (SQLite) / `JSONB` (PostgreSQL) | NULL | | 版面分析数据（含每页 bbox 坐标） |
+| `content_list` | `JSONB` | NULL | | 完整 `content_list.json`（结构化 block 数组 v1） |
+| `content_list_v2` | `JSONB` | NULL | | 结构化 block 数组 v2（MinerU 升级后新增，字段更丰富） |
+| `model_json` | `JSONB` | NULL | | 模型推理结果（含 bbox 坐标、版面分类） |
+| `layout_json` | `JSONB` | NULL | | 版面分析数据（含每页 bbox 坐标） |
 | `zip_path` | `VARCHAR(500)` | NULL | | 完整 MinerU ZIP 在 OSS 的路径 |
 | `error_message` | `TEXT` | NULL | | 解析失败时的错误信息 |
 | `parsed_at` | `TIMESTAMP WITH TIME ZONE` | NULL | | 解析完成时间 |
@@ -27,13 +27,14 @@
 | `PK_document_parses` | `id` | 主键 |
 | `IX_document_parses_document_file_id` | `document_file_id` | 按文件查最新解析 |
 | `IX_document_parses_status` | `status` | 按状态筛选（轮询 pending 用） |
+| `IX_document_parses_model_version` | `model_version` | 按模型版本查询 |
 
 ## 存储策略
 
 - **`markdown_content` (text)**：直接展示用，单文档可达 5MB+
-- **`content_list_v2` (jsonb on PG / text on SQLite)**：MinerU 升级后新增的 structured block 数组 v2，字段更丰富（含 bbox / 分类等），与 v1 并存。
-- **`model_json` (jsonb on PG / text on SQLite)**：模型推理结果（含 bbox 坐标、版面分类、置信度）。
-- **`layout_json` (jsonb on PG / text on SQLite)**：版面分析数据（含每页 bbox 坐标和分类）。
+- **`content_list_v2` (jsonb)**：MinerU 升级后新增的 structured block 数组 v2，字段更丰富（含 bbox / 分类等），与 v1 并存。
+- **`model_json` (jsonb)**：模型推理结果（含 bbox 坐标、版面分类、置信度）。
+- **`layout_json` (jsonb)**：版面分析数据（含每页 bbox 坐标和分类）。
 - **`zip_path` (varchar)**：完整 ZIP 在 OSS 的路径，**兜底**。如果未来 MinerU 升级导致 JSON 格式变化，可以从 ZIP 重新抽取。
 
 ## 特殊说明

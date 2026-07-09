@@ -49,8 +49,8 @@
 |------|------|------|
 | 框架 | .NET 8 | ASP.NET Core HTTP |
 | 通信 | HTTP REST (JSON) | Admin API + 搜索 |
-| ORM | EF Core 8.0 | Npgsql + SQLite |
-| 数据库 | PostgreSQL / SQLite | 双数据库切换 |
+| ORM | EF Core 8.0 | Npgsql |
+| 数据库 | PostgreSQL | 代码硬编码 UseNpgsql，无 SQLite 回退 |
 | 对象映射 | Mapster 10.0 | Entity ↔ Model 映射 |
 | 文档解析 | MinerU Precision API | 在线解析（含图片输出，Token 认证） |
 | 搜索引擎 | OpenSearch 2.19 (Docker) / OpenSearch.Net 1.8 (NuGet) | 外部全文检索 |
@@ -77,7 +77,7 @@ DocLibrary 作为内网管理后台运行，**不实现应用层认证**：
 | 决策 | 理由 |
 |------|------|
 | 异步解析（Worker 模式） | MinerU 解析耗时，避免阻塞上传请求 |
-| SQLite 支持本地开发 | 无需 PostgreSQL 即可本地运行 |
+| 原生 SQL 建表（OSS 可选 LocalFile） | OSS 支持 LocalFile / S3 切换（`USE_LOCAL_OSS` 环境变量控制），无需对象存储即可本地运行 |
 | 原生 SQL 建表（非 Migration） | 简化部署，避免 Migration 版本冲突 |
 | OSS 支持 LocalFile / S3 切换 | 环境变量 `USE_LOCAL_OSS` 控制 |
 | 移除 Identity 鉴权，改为内网部署隔离 | 内网管理后台，应用层认证增加复杂度无实际收益 |

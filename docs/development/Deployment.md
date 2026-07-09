@@ -36,7 +36,7 @@
 }
 ```
 
-本地开发可使用 SQLite（连接字符串不包含 `Host=` / `Server=` 时自动切换）。
+代码硬编码 `UseNpgsql`，**无 SQLite 回退**（相关描述已废弃）。本地开发请运行 PostgreSQL。
 
 ## 启动命令
 

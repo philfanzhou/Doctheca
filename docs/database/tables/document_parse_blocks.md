@@ -20,10 +20,10 @@
 | `parse_id` | `UUID` | NOT NULL, FK → `document_parses(id)` ON DELETE CASCADE | | 关联解析 |
 | `page_id` | `INT` | NOT NULL | | 所属页（0-indexed） |
 | `sort_index` | `INT` | NOT NULL | | 在 page 内的阅读顺序 |
-| `block_type` | `VARCHAR(20)` | NOT NULL | | 类型：`text` / `table` / `equation` / `image` / `code` / `list` |
+| `block_type` | `VARCHAR(20)` | NOT NULL | | 类型（常见值：`text` / `image` / `equation` / `code` / `table` / `list`，实际值由 MinerU 输出决定） |
 | `text_content` | `TEXT` | NULL | | 文本/HTML/LaTeX（block 主体） |
 | `image_id` | `UUID` | NULL, FK → `document_parse_images(id)` ON DELETE SET NULL | | 仅 `block_type='image'` 时有值 |
-| `block_data` | `TEXT` (SQLite) / `JSONB` (PostgreSQL) | NOT NULL | | ⭐ 整块原 JSON（兜底） |
+| `block_data` | `JSONB` | NOT NULL | | ⭐ 整块原 JSON（兜底） |
 | `created_at` | `TIMESTAMP WITH TIME ZONE` | NOT NULL | `NOW()` | 创建时间 |
 
 ## 索引
@@ -31,10 +31,9 @@
 | 索引名 | 列 | 说明 |
 |--------|-----|------|
 | `PK_document_parse_blocks` | `id` | 主键 |
-| `IX_blocks_parse_page` | `(parse_id, page_id, sort_index)` | 按页顺序读 |
-| `IX_blocks_type` | `block_type` | 按类型过滤 |
-| `IX_blocks_text_fts` | `to_tsvector('simple', text_content)` GIN | 全文搜索 |
-| `IX_blocks_data_gin` | `block_data` GIN (jsonb_path_ops on PG) | JSONB 字段查询（如 `block_data->>'angle'`） |
+| `IX_document_parse_blocks_parse_id_page_id_sort_index` | `(parse_id, page_id, sort_index)` | 按页顺序读 |
+| `IX_document_parse_blocks_block_type` | `block_type` | 按类型过滤 |
+| `IX_document_parse_blocks_image_id` | `image_id` | 按图片关联查询 |
 
 ## 关键设计点
 

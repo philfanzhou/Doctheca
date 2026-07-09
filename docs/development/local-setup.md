@@ -7,10 +7,9 @@
 | 依赖 | 是否必需 | 说明 |
 |------|----------|------|
 | .NET 8 SDK | 是 | 项目目标框架为 `net8.0` |
-| PostgreSQL | 可选 | `appsettings.json` 中的默认连接字符串指向 `localhost:5432` |
-| SQLite | 可选 | 自动检测的回退方案；无需安装（EF Core SQLite 提供程序已内置） |
+| PostgreSQL | 是 | 默认连接字符串指向 `localhost:5432`（`ruoyu_study_doclibrary`）|
 | OpenSearch | 可选 | 全文搜索索引；默认地址为 `http://localhost:9200`；推荐 Docker 镜像版本 `2.19.5`（与 `OpenSearch.Net 1.8.0` 客户端兼容） |
-| MinIO / SeaweedFS | 可选 | S3 兼容的对象存储；默认地址为 `localhost:8333` |
+| MinIO / SeaweedFS | 可选 | S3 兼容的对象存储；默认地址为 `localhost:8333`；可通过 `USE_LOCAL_OSS=1` 切换为本地文件系统存储 |
 
 ## 环境变量
 
@@ -21,30 +20,17 @@
 
 无需其他环境变量，其余配置均来自 `appsettings.json`。
 
-## 数据库：SQLite 自动检测
+## 数据库配置
 
-服务根据 `appsettings.json` 中的连接字符串选择数据库提供程序：
-
-- 如果连接字符串包含 `Host=` 或 `Server=`（不区分大小写）→ **PostgreSQL**（`UseNpgsql`）
-- 否则 → **SQLite**（`UseSqlite`）
-
-默认的 `appsettings.json` 包含 PostgreSQL 连接字符串：
+服务使用 **PostgreSQL**（`UseNpgsql`，连接字符串来自 `ConnectionStrings:Default`）。默认的 `appsettings.json` 包含：
 
 ```
 Host=localhost;Port=5432;Database=ruoyu_study_doclibrary;Username=phil
 ```
 
-若要改用 SQLite，请将 `ConnectionStrings:Default` 改为 SQLite 风格的字符串，例如：
+> **不提供 SQLite 切换**：代码硬编码 `UseNpgsql`，没有 SQLite 回退（相关文档描述已废弃）。本地开发请运行 PostgreSQL（Docker:`ruoyu-postgres`）。
 
-```json
-"ConnectionStrings": {
-  "Default": "Data Source=data/sqlite/ruoyu_study_doclibrary.db"
-}
-```
-
-如果连接字符串为空或 null，SQLite 默认使用 `Data Source=data/sqlite/ruoyu_study_doclibrary.db`。
-
-数据库和表会在启动时通过 `DatabaseInitializer.InitializeAsync` 自动创建。
+数据库和表会在启动时通过 `DatabaseInitializer.InitializeAsync` 自动创建（`CREATE TABLE IF NOT EXISTS`）。
 
 ## 运行服务
 
@@ -62,22 +48,21 @@ dotnet run --project src/Host
 
 端口可在 `appsettings.json` 的 `Endpoints` 节中覆盖。
 
-## 最小本地搭建（无需外部服务）
+## 最小本地搭建（仅 OSS 用本地存储）
 
-在没有任何外部服务的情况下实现基本的上传/列表/删除功能：
+在不依赖外部对象存储的情况下运行（PostgreSQL 仍必需）：
 
-1. 将连接字符串设为 SQLite 值（移除 `Host=` / `Server=`）。
-2. 设置环境变量 `USE_LOCAL_OSS=1`。
-3. 运行 `dotnet run --project src/Host`。
+1. 设置环境变量 `USE_LOCAL_OSS=1`（可选指定 `OSS_LOCAL_PATH`，默认 `data/oss`）。
+2. 运行 `dotnet run --project src/Host`。
 
 你将获得：
-- SQLite 数据库（自动创建）
+- PostgreSQL 数据库（自动创建表）
 - 本地文件系统对象存储（文件保存至 `data/oss/`）
 - 通过 HTTP 管理 API 进行文档上传、列表、删除和元数据更新
-- 后台摄取工作器（仅解析；搜索索引将优雅降级）
+- 后台解析工作器（解析功能完整；OpenSearch 不可用时搜索返回空结果）
 
 ## 需要外部服务的功能
 
 | 功能 | 服务 | 配置节 | 缺少时的行为 |
 |------|------|--------|-------------|
-| 全文搜索 | OpenSearch | `OpenSearch` | 回退到数据库 LIKE 搜索；索引初始化时记录警告 |
+| 全文搜索 | OpenSearch | `OpenSearch` | 搜索返回空结果（`SearchDomainService` 返回空 + LogWarning）；索引初始化时记录警告 |

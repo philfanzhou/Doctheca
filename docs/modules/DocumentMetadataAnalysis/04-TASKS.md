@@ -1,6 +1,6 @@
 # DocumentMetadataAnalysis — 任务列表
 
-> **本模块所有任务已完成。** 以下为历史记录。
+> **本模块实现任务已完成,但单元测试尚未编写。** 详见 05-TESTS。
 
 ## 已完成任务
 
@@ -23,7 +23,12 @@
 | DM-15 | MinerUFileParseWorker.AnalyzeMetadataIfMissingAsync 实现 | completed |
 | DM-16 | DI 注册 IDocumentAnalysisService（条件注册） | completed |
 | DM-17 | Program.cs LLM 初始化调用 InitializeAsync | completed |
-| DM-18 | 单元测试 DocumentAnalysisServiceTests（15 tests） | completed |
+
+## 待完成任务
+
+| ID | 任务 | 状态 | 说明 |
+|----|------|------|------|
+| DM-18 | 单元测试 DocumentAnalysisService(覆盖内部方法) | pending | 02-SPEC §7.2 建议方向,当前零测试覆盖 |
 
 ## 命令速查
 
@@ -31,8 +36,8 @@
 # 构建
 dotnet build Ruoyu.Study.DocLibrary.sln --configuration Release
 
-# 测试
-dotnet test src/Tests/Ruoyu.Study.DocLibrary.Tests --filter "FullyQualifiedName~DocumentAnalysis"
+# 测试(目前无 DocumentAnalysis 测试可筛选)
+dotnet test src/Tests/Ruoyu.Study.DocLibrary.Tests --configuration Release
 
 # 前端构建
 cd frontend && npm run build

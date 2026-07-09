@@ -345,7 +345,7 @@ FROM document_parses p
 INNER JOIN document_files f ON p.document_file_id = f.id
 LEFT JOIN document_parse_imports i ON i.parse_id = p.id
 WHERE p.status = 'parsed'
-  [AND f.file_name ILIKE '%search%']
+  [AND f.file_name LIKE '%search%']
   [AND (i.status IS NULL OR i.status != 'imported')]  -- includeImported=false
 ORDER BY p.parsed_at DESC NULLS LAST
 LIMIT @pageSize OFFSET @offset;
@@ -401,7 +401,7 @@ var blocks = await query
 | NFR-05 | 兼容性 | 遵循 DocLibrary 统一响应封装 `{success, data, total, page, pageSize, totalPages}` |
 | NFR-06 | 安全性 | 所有端点 `AllowAnonymous`，由部署层网络隔离实现访问控制（内网管理后台） |
 | NFR-07 | 可观测性 | 关键操作（导入状态回写、图片下载失败）记录日志；列表查询无额外日志 |
-| NFR-08 | 并发 | `document_parse_imports` 表 `parse_id` UNIQUE 约束保证并发写入安全（捕获 UniqueViolation 后转为 UPDATE） |
+| NFR-08 | 并发 | `document_parse_imports` 表 `parse_id` UNIQUE 约束作为数据库兜底；代码采用"先查后写"模式（`GetByParseIdAsync` 查询已有记录后决定 INSERT / UPDATE），不依赖捕获 UniqueViolation |
 | NFR-09 | 数据完整性 | `document_parse_imports.parse_id` ON DELETE CASCADE，parse 删除时联动清除导入记录 |
 
 ## 测试策略
@@ -411,7 +411,7 @@ var blocks = await query
 | 单元测试 | `GetImportableListAsync` | 验证分页参数修正、`status=parsed` 过滤、`includeImported` 控制、`search` 模糊匹配 |
 | 单元测试 | `GetBlocksAsync` | 验证 parseId/pageId/blockType 过滤、`Include(Image)` 预加载、`blockData` JSON 解析、非法 JSON 兜底 |
 | 单元测试 | `UpsertImportStatusAsync` | 验证首次插入、状态覆盖（imported↔failed）、重复 imported 抛异常、parseId 不存在抛异常 |
-| 单元测试 | `GetImageStreamAsync` | 验证 imageId 不存在返回 null、OSS 下载异常向上抛 |
+| 单元测试 | `GetImageBlobAsync` | 验证 imageId 不存在返回 null、OSS 下载异常向上抛 |
 | 单元测试 | `blockData` JSON 解析 | 验证合法 JSON、空对象、非法 JSON（返回 null）、null 字符串 |
 | 集成测试 | `GET /admin/document-parses/importable` | 验证响应封装、分页字段、排序（无鉴权） |
 | 集成测试 | `GET /admin/document-parses/{parseId}/blocks` | 验证 200/404/422 三种响应、pageId=0 不被当作未传参 |

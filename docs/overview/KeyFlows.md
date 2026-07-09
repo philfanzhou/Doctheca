@@ -17,9 +17,9 @@
     │                    │                   │                 │                      │
     │ POST /admin/document-files/{id}/parse  │                 │                      │
     │───────────────────►│                   │                 │                      │
-    │                    │ 写入 document_parses (status=pending_parse)                │
+    │                    │ 写入 document_parses (status=pending)                     │
     │                    │                   │                 │                      │
-    │                    │                   │    轮询 pending_parse 任务             │
+    │                    │                   │    轮询 pending 任务                   │
     │                    │                   │◄────────────────│                      │
     │                    │  生成 presigned URL                  │                      │
     │                    │  提交 MinerU API → 获取 task_id      │                      │

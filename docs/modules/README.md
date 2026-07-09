@@ -2,8 +2,9 @@
 
 | 业务域 | 功能点入口 |
 |--------|------------|
+| DocumentManagement | [DocumentManagement](./DocumentManagement/01-FEATURE.md) |
+| DocumentParse | [DocumentParse](./DocumentParse/01-FEATURE.md) |
+| DocumentExport | [DocumentExport](./DocumentExport/01-FEATURE.md) |
 | DocumentMetadataAnalysis | [DocumentMetadataAnalysis](./DocumentMetadataAnalysis/01-FEATURE.md) |
-| ExactSearch | [ExactSearch](./ExactSearch/01-FEATURE.md) |
-| MinerUAgentParsing | [MinerUAgentParsing](./MinerUAgentParsing/01-FEATURE.md) |
-| OpenSearchBlockIndexing | [OpenSearchBlockIndexing](./OpenSearchBlockIndexing/01-FEATURE.md) |
+| DocumentSearch | [DocumentSearch](./DocumentSearch/01-FEATURE.md) |
 | QuestionBankImport | [QuestionBankImport](./QuestionBankImport/01-FEATURE.md) |

@@ -14,9 +14,16 @@
 
 | SQL | 说明 |
 |-----|------|
-| `ALTER TABLE document_files ADD COLUMN IF NOT EXISTS subject varchar(50) NULL` | 新增学科元数据列（DocumentMetadataAnalysis 功能） |
-| `ALTER TABLE document_files ADD COLUMN IF NOT EXISTS grade varchar(20) NULL` | 新增年级元数据列（DocumentMetadataAnalysis 功能） |
-| `ALTER TABLE document_files ADD COLUMN IF NOT EXISTS year varchar(10) NULL` | 新增年份元数据列（DocumentMetadataAnalysis 功能） |
+| `ALTER TABLE document_parses ADD COLUMN IF NOT EXISTS content_list jsonb NULL` | 新增 content_list（阶段 2） |
+| `ALTER TABLE document_parses ADD COLUMN IF NOT EXISTS zip_path character varying(500) NULL` | 新增 zip_path（阶段 2） |
+| `ALTER TABLE document_parses ADD COLUMN IF NOT EXISTS model_version character varying(20) NOT NULL DEFAULT 'vlm'` | 新增模型版本列 |
+| `ALTER TABLE document_parses ADD COLUMN IF NOT EXISTS content_list_v2 jsonb NULL` | 新增 MinerU pipeline 输出 v2 |
+| `ALTER TABLE document_parses ADD COLUMN IF NOT EXISTS model_json jsonb NULL` | 新增模型推理结果 |
+| `ALTER TABLE document_parses ADD COLUMN IF NOT EXISTS layout_json jsonb NULL` | 新增版面分析数据 |
+| `ALTER TABLE document_parses DROP COLUMN IF EXISTS layout_pdf_path` | 删除旧列（被 layout_json 替代） |
+| `ALTER TABLE document_files ADD COLUMN IF NOT EXISTS subject character varying(50) NULL` | 新增学科元数据列（DocumentMetadataAnalysis 功能） |
+| `ALTER TABLE document_files ADD COLUMN IF NOT EXISTS grade character varying(20) NULL` | 新增年级元数据列（DocumentMetadataAnalysis 功能） |
+| `ALTER TABLE document_files ADD COLUMN IF NOT EXISTS year character varying(10) NULL` | 新增年份元数据列（DocumentMetadataAnalysis 功能） |
 
 ## 变更日志
 

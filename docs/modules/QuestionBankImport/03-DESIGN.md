@@ -152,6 +152,7 @@ POST /admin/document-parses/{parseId}/import-status
 ## DI 注册
 
 ```csharp
-builder.Services.AddScoped<IQuestionBankImportService, QuestionBankImportService>();
 builder.Services.AddScoped<IDocumentParseImportRepository, DocumentParseImportRepository>();
 ```
+
+> **现状（与代码一致）**：`Program.cs` 仅注册了 `IDocumentParseImportRepository`。`IQuestionBankImportService` **尚未注册**——端点通过 DI 解析 `IQuestionBankImportService` 参数，运行时将抛出 "Unable to resolve service" 异常。此为待修复项，注册应为 `builder.Services.AddScoped<IQuestionBankImportService, QuestionBankImportService>();`。

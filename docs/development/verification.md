@@ -21,7 +21,7 @@ curl -X POST http://localhost:5012/admin/document-files/upload \
   -F "file=@test.pdf"
 ```
 
-Required form field: `file`. Optional: `subject`, `grade`, `year`（可由 LLM 在解析完成后自动填充）。
+Required form field: `file`（multipart/form-data）。元数据（`subject`/`grade`/`year`）不在上传时填写，需通过 `PUT /admin/document-files/{id}/metadata` 后续设置，或在 MinerU 解析完成后由 LLM 自动填充。
 
 Supported file types: PDF, Word (.doc/.docx), PowerPoint (.ppt/.pptx). Max size: 200 MB.
 
@@ -74,7 +74,7 @@ Replace `{parseId}` with the parse ID returned from parse trigger:
 curl http://localhost:5012/admin/document-parses/{parseId}
 ```
 
-Parse status flow: `pending_parse` -> `parsing` -> `parsed` (or `failed`).
+Parse status flow: `pending` -> `parsing` -> `parsed` (or `failed`).
 
 ## Update Document File Metadata
 
@@ -111,12 +111,12 @@ Query parameters: `query` (required), `phrase` (boolean, default false), `pageSi
 From `src/services/ruoyu.doclibrary/` directory:
 
 ```bash
-dotnet test test/Ruoyu.Study.DocLibrary.Tests
+dotnet test src/Tests/Ruoyu.Study.DocLibrary.Tests
 ```
 
 Filter by module:
 
 ```bash
-dotnet test --filter "FullyQualifiedName~DocumentUpload"
-dotnet test --filter "FullyQualifiedName~ExactSearch"
+dotnet test src/Tests/Ruoyu.Study.DocLibrary.Tests --filter "FullyQualifiedName~DocumentFileService"
+dotnet test src/Tests/Ruoyu.Study.DocLibrary.Tests --filter "FullyQualifiedName~SearchDomainService"
 ```

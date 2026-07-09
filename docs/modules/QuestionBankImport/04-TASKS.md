@@ -14,8 +14,8 @@
 | QBI-06 | 创建 QuestionBankImportEndpoints（4 个端点） | completed |
 | QBI-07 | 单元测试 QuestionBankImportServiceTests | completed |
 | QBI-08 | DatabaseInitializer 新增 document_parse_imports 建表 SQL | completed |
-| QBI-09 | DocRetrievalDbContext 配置 document_parse_imports | completed |
-| QBI-10 | DI 注册 QuestionBankImportService | completed |
+| QBI-09 | DocLibraryDbContext 配置 document_parse_imports | completed |
+| QBI-10 | DI 注册 IDocumentParseImportRepository（IQuestionBankImportService 未注册，见 03-DESIGN） | completed |
 
 ## 命令速查
 
