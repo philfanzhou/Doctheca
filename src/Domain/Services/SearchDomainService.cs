@@ -29,8 +29,8 @@ public class SearchDomainService : ISearchDomainService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "OpenSearch query failed for query '{Query}'", query);
-            throw;
+            _logger.LogWarning(ex, "OpenSearch query failed for query '{Query}', returning empty results", query);
+            return (Results: [], TotalCount: 0, NextToken: null);
         }
     }
 }

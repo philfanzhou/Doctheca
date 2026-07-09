@@ -23,3 +23,7 @@
 | 日期 | 变更 | 影响 |
 |------|------|------|
 | 2026-07-04 | 新增 document_files.subject/grade/year 列 | 文档元数据分析功能，支持手动设置和 LLM 自动填充 |
+| 2026-07-04 | 新增 document_parses.content_list_v2 / model_json / layout_json 列 | MinerU pipeline/vlm 模式输出结构化数据 |
+| 2026-07-04 | 新增 document_parse_blocks 表和 document_parse_images 表 | OpenSearch 块级索引和图片管理 |
+| 2026-07-04 | 删除 document_parses.layout_pdf_path 列 | 被 layout_json 替代（JSONB 存储完整版面数据） |
+| 2026-07-04 | 新增 document_parses.model_version 列（默认 'vlm'） | 支持 vlm / pipeline 双模型版本 |

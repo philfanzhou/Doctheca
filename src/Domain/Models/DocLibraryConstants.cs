@@ -3,8 +3,18 @@ namespace Ruoyu.Study.DocLibrary.Domain.Models;
 public static class DocLibraryConstants
 {
     public const string SubjectEnglish = "英语";
+    public const string SubjectChinese = "语文";
+    public const string SubjectMath = "数学";
+    public const string SubjectPhysics = "物理";
+    public const string SubjectChemistry = "化学";
+    public const string SubjectBiology = "生物";
+    public const string SubjectOther = "其他";
 
-    public static readonly string[] ValidSubjects = [SubjectEnglish];
+    public static readonly string[] ValidSubjects =
+    [
+        SubjectEnglish, SubjectChinese, SubjectMath,
+        SubjectPhysics, SubjectChemistry, SubjectBiology, SubjectOther
+    ];
 
     public static readonly string[] ValidGrades =
     [

@@ -27,7 +27,6 @@
 | DELETE | `/admin/document-files/{id}` | 按 ID 删除文档文件（联动删除解析、图片、OpenSearch 索引） |
 | PUT | `/admin/document-files/{id}/metadata` | 更新 document_files 元数据（subject/grade/year），并同步 OpenSearch 索引 |
 | POST | `/admin/document-files/{id}/parse` | 触发 MinerU 解析 |
-| GET | `/admin/document-parses/{parseId}` | 查询解析状态与结果 |
 | DELETE | `/admin/document-parses/{parseId}` | 删除解析记录（联动删除 blocks、images、OpenSearch 索引） |
 | GET | `/admin/documents/search` | 精确关键词搜索（支持 subject/grade/year/documentTitle 过滤） |
 | GET | `/health` | 健康检查 |

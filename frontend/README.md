@@ -28,8 +28,8 @@ npm run preview
 
 | 项目 | 技术 |
 |------|------|
-| 框架 | Vue 3 + TypeScript |
-| UI 库 | Element Plus (部分组件) |
+| 框架 | Vue 3.5 + TypeScript |
+| UI | 纯手写 CSS（不使用 UI 组件库） |
 | HTTP 客户端 | Axios |
 | 构建工具 | Vite |
 

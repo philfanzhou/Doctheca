@@ -10,8 +10,13 @@ public class ConstantsTests
 
     [Theory]
     [InlineData("英语", true)]
-    [InlineData("数学", false)]
-    [InlineData("语文", false)]
+    [InlineData("语文", true)]
+    [InlineData("数学", true)]
+    [InlineData("物理", true)]
+    [InlineData("化学", true)]
+    [InlineData("生物", true)]
+    [InlineData("其他", true)]
+    [InlineData("历史", false)]
     [InlineData("", false)]
     public void IsValidSubject_ValidatesCorrectly(string subject, bool expected)
     {
@@ -19,10 +24,16 @@ public class ConstantsTests
     }
 
     [Fact]
-    public void ValidSubjects_ContainsOnlyEnglish()
+    public void ValidSubjects_ContainsAll7Subjects()
     {
-        Assert.Single(DocLibraryConstants.ValidSubjects);
-        Assert.Equal("英语", DocLibraryConstants.ValidSubjects[0]);
+        Assert.Equal(7, DocLibraryConstants.ValidSubjects.Length);
+        Assert.Contains("英语", DocLibraryConstants.ValidSubjects);
+        Assert.Contains("语文", DocLibraryConstants.ValidSubjects);
+        Assert.Contains("数学", DocLibraryConstants.ValidSubjects);
+        Assert.Contains("物理", DocLibraryConstants.ValidSubjects);
+        Assert.Contains("化学", DocLibraryConstants.ValidSubjects);
+        Assert.Contains("生物", DocLibraryConstants.ValidSubjects);
+        Assert.Contains("其他", DocLibraryConstants.ValidSubjects);
     }
 
     #endregion

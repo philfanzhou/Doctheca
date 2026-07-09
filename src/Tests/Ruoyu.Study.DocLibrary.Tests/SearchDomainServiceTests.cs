@@ -92,16 +92,20 @@ public class SearchDomainServiceTests
     }
 
     [Fact]
-    public async Task ExactSearchAsync_WhenIndexServiceThrows_ReThrows()
+    public async Task ExactSearchAsync_WhenIndexServiceThrows_ReturnsEmptyResults()
     {
         // Arrange
         _searchIndexServiceMock
             .Setup(s => s.ExactSearchAsync(It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<SearchFilterModel?>(), It.IsAny<int>(), It.IsAny<string?>()))
             .ThrowsAsync(new InvalidOperationException("OpenSearch unavailable"));
 
-        // Act & Assert
-        await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            _service.ExactSearchAsync("hello", false, null, 50, null));
+        // Act
+        var (results, totalCount, nextToken) = await _service.ExactSearchAsync("hello", false, null, 50, null);
+
+        // Assert — graceful degradation: return empty results instead of throwing
+        Assert.Empty(results);
+        Assert.Equal(0, totalCount);
+        Assert.Null(nextToken);
     }
 
     [Fact]

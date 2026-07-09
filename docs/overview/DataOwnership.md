@@ -10,6 +10,7 @@
 | `document_parses` | 解析记录表 | 本服务独写 |
 | `document_parse_blocks` | 解析 block 表 | 本服务独写 |
 | `document_parse_images` | 解析图片表 | 本服务独写 |
+| `document_parse_imports` | 导入状态表 | 本服务独写（由 QuestionBank 服务通过 API 触发写入） |
 
 ## 本服务引用的外部数据（只读引用）
 
@@ -28,5 +29,5 @@
 ## 双写禁区
 
 - 本服务不写入任何其他 Ruoyu 微服务的数据库
-- 其他服务不应直接写入本服务的 4 张表
+- 其他服务不应直接写入本服务的 5 张表
 - OSS 文件路径格式由本服务内部控制，其他服务不应直接操作
