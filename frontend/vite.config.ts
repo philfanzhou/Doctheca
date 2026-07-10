@@ -1,8 +1,25 @@
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
+import AutoImport from 'unplugin-auto-import/vite'
+import Components from 'unplugin-vue-components/vite'
+import { ElementPlusResolver } from 'unplugin-vue-components/resolvers'
+import { fileURLToPath, URL } from 'node:url'
 
 export default defineConfig({
-  plugins: [vue()],
+  plugins: [
+    vue(),
+    // importStyle: false disables per-component prebuilt CSS auto-import, because
+    // the full themed stylesheet is compiled once from element-variables.scss
+    // (ADR-001 §5.2 @forward + @use index.scss) and imported in main.ts.
+    // See ADR-001 ### 实施偏差 1 for rationale.
+    AutoImport({ resolvers: [ElementPlusResolver({ importStyle: false })] }),
+    Components({ resolvers: [ElementPlusResolver({ importStyle: false })] })
+  ],
+  resolve: {
+    alias: {
+      '@': fileURLToPath(new URL('./src', import.meta.url))
+    }
+  },
   server: {
     host: '0.0.0.0',
     port: 5174,

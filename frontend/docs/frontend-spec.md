@@ -58,7 +58,8 @@ DocLibrary 为**内网管理后台**,不实现应用层认证:
 └─────────────────────────────────────────┘
 ```
 
-- 侧边栏可折叠(桌面)/ 抽屉式(移动端 <1200px)
+- 侧边栏可折叠(桌面 ≥768px,el-aside + el-menu :collapse)/ 抽屉式(移动端 <768px,el-drawer direction="ltr")
+- 折叠状态持久化:localStorage(`docSidebarCollapsed`)
 - 导航项:文档管理、解析结果、检索测试
 - 无登录页、无用户区域、无登出按钮
 
@@ -91,40 +92,58 @@ DocLibrary 为**内网管理后台**,不实现应用层认证:
   - V1 列:#、文档标题、页码(显示 page_idx+1)、匹配类型、BM25 相关度、匹配文本、Segment ID、创建时间
   - minerU 列:块类型(从 blockData.type 解析)、subType、矿工 U 置信度(mineruScore)、textFormat、Caption(前 30 字)
   - 操作列:"展开详情"按钮 → 行内展开卡片展示 blockData 格式化 JSON + bbox[text0,y0,x1,y1] + mineruScore 与 V1 Score 明确区分标签
-- **状态**:空结果(.empty-state) / loading(.spinner 或按钮禁用文案) / 错误(console.error)保持 V1 风格
+- **状态**(ADR-001 迁移后):空结果(`<ElEmpty>`) / loading(`v-loading` 指令或 `<ElSkeleton>`) / 错误(`ElMessage.error`)
 
 ## 5. 样式规范
 
 ### 5.1 全局样式(style.css)
 
-所有页面共用 `src/style.css`,定义 CSS 变量和通用组件类。**禁止内联 `style="..."`**(进度条等动态宽度除外,用 `:style` 绑定)。
+ADR-001 迁移后,`src/style.css` 仅保留:
+- `:root` 品牌色 / 间距 / 圆角 / 过渡 token(作为 EP SCSS 的补充,EP 变量权威源在 `src/styles/element-variables.scss`)
+- ADR §5.3 过渡收紧:`--el-transition-duration: 0.2s` / `--el-transition-duration-fast: 0.15s`
+- 基础重置(box-sizing / body / #app)
+- 排版辅助类:`.page-header` / `.page-title` / `.page-subtitle`(三页面共用)
 
-### 5.2 CSS 变量(统一命名)
+> 手写组件类(`.btn` / `.card` / `.data-table` / `.tag` / `.status-badge` / `.pagination-bar` / `.input-wrap` / `.sidebar` / `.empty-state` / `.upload-progress` 等)已全部移除,功能由 Element Plus 组件承担。页面级布局类在各 `.vue` 文件 `<style scoped>` 内定义。**禁止内联 `style="..."`**(进度条等动态宽度除外,用 `:style` 绑定)。
 
-| 变量 | 用途 |
+### 5.2 EP SCSS 主题覆写(element-variables.scss)
+
+按 ADR-001 §5.2 模板,`src/styles/element-variables.scss` 通过 `@forward 'element-plus/theme-chalk/src/common/var.scss' with (...)` 注入品牌值,并 `@use 'element-plus/theme-chalk/src/index.scss'` 一次性编译完整主题样式。`main.ts` 引入一次即生效全量 themed CSS。
+
+| EP SCSS 变量 | 品牌值 | 对应旧 CSS 变量 |
+|------|------|------|
+| `$colors.primary.base` | `#2563eb` | `--primary-color` |
+| `$colors.success/danger/warning/info.base` | `#10b981` / `#ef4444` / `#f59e0b` / `#3b82f6` | 语义色 |
+| `$text-color.primary/regular/secondary` | `#111827` / `#6b7280` / `#9ca3af` | 文字色阶 |
+| `$border-color.base/light` | `#e5e7eb` / `#f3f4f6` | 边框色 |
+| `$bg-color.(''/page/overlay)` | `#f5f7fa` / `#f5f7fa` / `#ffffff` | 背景色 |
+| `$border-radius.small/medium/large` | `4px` / `6px` / `8px` | 圆角 |
+| `$box-shadow.light/''` | 品牌阴影 | `--shadow-sm/md` |
+| `$transition-duration.(''/fast)` | `0.2s` / `0.15s` | 过渡收紧(ADR §5.3) |
+
+> 运行时 EP CSS 变量(`--el-color-primary` / `--el-text-color-secondary` / `--el-border-color-lighter` / `--el-fill-color-light` 等)由 themed SCSS 编译产出,页面 scoped 样式可直接引用。
+
+### 5.3 组件映射(手写类 → Element Plus)
+
+ADR-001 迁移后,所有手写组件类替换为 EP 组件:
+
+| 旧手写类 | Element Plus 组件 |
 |------|------|
-| `--primary-color` / `--primary-light` / `--primary-dark` | 主色(蓝) |
-| `--success-color` / `--danger-color` / `--warning-color` / `--info-color` | 语义色 |
-| `--text-primary` / `--text-secondary` / `--text-muted` | 文字色阶 |
-| `--border-color` / `--border-light` | 边框色 |
-| `--card-bg` / `--bg-color` / `--hover-bg` / `--bg-secondary` | 背景色 |
-| `--radius-sm` / `--radius-md` / `--radius-lg` | 圆角 |
-| `--shadow-sm` / `--shadow-md` | 阴影 |
-| `--sidebar-width` / `--sidebar-collapsed-width` / `--header-height` | 布局尺寸 |
+| `.btn` / `.btn-primary` / `.btn-secondary` / `.btn-danger` / `.btn-link` / `.btn-small` | `ElButton`(type / size / text / loading / disabled) |
+| `.input-wrap input` / `.select-wrap select` | `ElInput` / `ElInputNumber` / `ElSelect` |
+| `.checkbox-wrap` | `ElCheckbox` / `ElSwitch` |
+| `.card` / `.card-header` / `.card-body` | `ElCard` + `#header` slot |
+| `.data-table` | `ElTable` + `ElTableColumn`(stripe / border / show-overflow-tooltip / type="expand") |
+| `.pagination-bar` / `.page-btn` | `ElPagination`(layout="total, sizes, prev, pager, next, jumper") |
+| `.tag` / `.status-badge` | `ElTag`(type="success/info/warning/danger") |
+| `.empty-state` | `ElEmpty` |
+| `.spinner` / "加载中..."文字 | `v-loading` 指令 / `ElSkeleton` |
+| `.upload-progress` | `ElProgress` |
+| `window.confirm` / `alert` | `ElMessageBox.confirm` / `ElMessage` |
+| 手写 SVG 图标 | `@element-plus/icons-vue`(Document / Files / Search / Upload / Filter / Menu / Expand / Fold) |
+| 高级筛选 inline 折叠 | `ElDrawer`(direction="rtl") |
 
-> 历史问题已修复:统一使用 `--primary-color`(不再混用 `--primary`),补充定义 `--bg-secondary`。
-
-### 5.3 通用组件类
-
-- `.btn` / `.btn-primary` / `.btn-secondary` / `.btn-danger` / `.btn-link` / `.btn-small`
-- `.card` / `.card-header` / `.card-body`
-- `.data-table` / `.table-actions`
-- `.input-wrap` / `.select-wrap` / `.checkbox-wrap`
-- `.tag` / `.tag-success` / `.tag-info` / `.tag-warning` / `.tag-danger`
-- `.status-badge` / `.status-success` / `.status-error` / `.status-processing` / `.status-pending`
-- `.pagination-bar` / `.page-btn`
-- `.page-header` / `.page-title` / `.page-subtitle`
-- `.empty-state` / `.spinner`
+> 状态映射:`format.ts` 的 `getFileStatusType(status)` 返回 EP `ElTag` type(success/danger/warning/info),替代旧 `getFileStatusClass`。
 
 ### 5.4 已清理的死代码
 
@@ -135,6 +154,7 @@ DocLibrary 为**内网管理后台**,不实现应用层认证:
 - 未使用的按钮变体(`.btn-link-success`、`.btn-link-warning`、`.btn-link-danger`、`.btn-success`)
 - 未使用的统计卡片(`.stat-card`、`.stat-item`、`.stats-bar*`)
 - 未使用的 Markdown 预览(`.markdown-preview`)
+- ADR-001 迁移:全部手写组件类(见 §5.3 映射表)
 
 ## 6. API 客户端(docApi.ts)
 
@@ -178,3 +198,16 @@ DocLibrary 为**内网管理后台**,不实现应用层认证:
 - SearchPage/DocManagePage/ParseResultsPage 消除所有内联样式
 - ParseResultsPage 修复 VLM 模式按钮显示(移除 modelVersion === 'pipeline' 限制)
 - App.vue 移除未使用的 lastRefreshTime
+
+### 2026-07-10: ADR-001 迁移到 Element Plus
+
+- 重新引入 element-plus ^2.10.0 / @element-plus/icons-vue ^2.3.1 / sass ^1.80.0 / unplugin-auto-import ^0.18.3 / unplugin-vue-components ^0.27.4
+- vite.config.ts 启用 AutoImport + Components(ElementPlusResolver,importStyle: false)
+- 新增 `src/styles/element-variables.scss`(@forward + @use 注入品牌 SCSS token,见 §5.2)
+- main.ts 引入 element-variables.scss 编译全量 themed CSS
+- App.vue 改为 el-container / el-aside(el-menu 折叠) / el-header(面包屑) / el-main;移动端 el-drawer
+- 三页面(DocManagePage / ParseResultsPage / SearchPage)全部手写组件类替换为 EP 组件(见 §5.3 映射表)
+- window.confirm → ElMessageBox.confirm;alert/console.error → ElMessage
+- style.css 从 ~914 行清理至 ~89 行,仅保留 :root tokens + 排版辅助类
+- 保留 minerU 第 2 代检索能力(DS-13~DS-18):8 个 minerU 过滤参数 + 行展开 blockData 详情 + mineruScore 独立列
+- 实施偏差 1:移除 vite.config.ts `additionalData` SCSS 注入(导致 module loop),改用 importStyle: false,themed CSS 由 element-variables.scss 一次性编译(详见 ADR-001 ### 实施偏差 1)

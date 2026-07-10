@@ -1,7 +1,9 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, onMounted } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { Search } from '@element-plus/icons-vue'
 import { createDocApiClient, type DocumentParse } from '../services/docApi'
-import { formatTime, getFileStatusLabel, getFileStatusClass } from '../utils/format'
+import { formatTime, getFileStatusLabel, getFileStatusType } from '../utils/format'
 
 const client = createDocApiClient()
 
@@ -11,16 +13,18 @@ const parsePage = ref(1)
 const parsePageSize = ref(20)
 const parseSearch = ref('')
 const parseDeleting = ref<string | null>(null)
-
-const parseTotalPages = computed(() => Math.ceil(parseTotal.value / parsePageSize.value))
+const listLoading = ref(false)
 
 async function loadParseList() {
+  listLoading.value = true
   try {
     const response = await client.listDocumentParses(parsePage.value, parsePageSize.value, parseSearch.value || undefined)
     parseList.value = response.data as DocumentParse[]
     parseTotal.value = response.total
   } catch (e) {
-    console.error('Failed to load parse list', e)
+    ElMessage.error(e instanceof Error ? e.message : '加载解析记录失败')
+  } finally {
+    listLoading.value = false
   }
 }
 
@@ -29,15 +33,30 @@ function handleParsePageChange(newPage: number) {
   loadParseList()
 }
 
+function handleParsePageSizeChange(newSize: number) {
+  parsePageSize.value = newSize
+  parsePage.value = 1
+  loadParseList()
+}
+
 async function handleDeleteParse(parseId: string) {
-  if (!confirm('确定删除此解析记录？原始文件不会被删除。')) return
+  try {
+    await ElMessageBox.confirm('确定删除此解析记录？原始文件不会被删除。', '删除确认', {
+      confirmButtonText: '删除',
+      cancelButtonText: '取消',
+      type: 'warning'
+    })
+  } catch {
+    return
+  }
   parseDeleting.value = parseId
   try {
     await client.deleteDocumentParse(parseId)
     await loadParseList()
+    ElMessage.success('删除成功')
   } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : 'Delete failed'
-    alert(msg)
+    const msg = e instanceof Error ? e.message : '删除失败'
+    ElMessage.error(msg)
   } finally {
     parseDeleting.value = null
   }
@@ -50,7 +69,7 @@ async function openMarkdown(parseId: string, fileId: string) {
     const detail = response.data
     const parse = detail.parses?.find(p => p.id === parseId)
     if (!parse?.markdownContent) {
-      alert('该解析结果没有 Markdown 内容')
+      ElMessage.warning('该解析结果没有 Markdown 内容')
       return
     }
     const w = window.open('', '_blank')
@@ -60,7 +79,7 @@ async function openMarkdown(parseId: string, fileId: string) {
       w.document.close()
     }
   } catch (e) {
-    alert(e instanceof Error ? e.message : 'Failed to load markdown')
+    ElMessage.error(e instanceof Error ? e.message : '加载 Markdown 失败')
   }
 }
 
@@ -71,7 +90,7 @@ async function openHtmlPreview(parseId: string) {
     const url = URL.createObjectURL(blob)
     window.open(url, '_blank')
   } catch (e) {
-    alert(e instanceof Error ? e.message : 'Failed to generate HTML')
+    ElMessage.error(e instanceof Error ? e.message : '生成 HTML 失败')
   }
 }
 
@@ -83,12 +102,12 @@ async function openJson(parseId: string, fileId: string) {
     const parse = detail.parses?.find(p => p.id === parseId)
     const rawContent = parse?.contentList
     if (!rawContent || rawContent === '[]' || rawContent === 'null') {
-      alert('该解析结果没有结构化 JSON 数据(content_list.json)。')
+      ElMessage.warning('该解析结果没有结构化 JSON 数据(content_list.json)。')
       return
     }
     openJsonInNewWindow(detail.fileName, 'content_list.json', rawContent)
   } catch (e) {
-    alert(e instanceof Error ? e.message : 'Failed to load JSON data')
+    ElMessage.error(e instanceof Error ? e.message : '加载 JSON 数据失败')
   }
 }
 
@@ -100,12 +119,12 @@ async function openContentListV2(parseId: string, fileId: string) {
     const parse = detail.parses?.find(p => p.id === parseId)
     const rawContent = parse?.contentListV2
     if (!rawContent || rawContent === '[]' || rawContent === 'null') {
-      alert('该解析结果没有 content_list_v2.json 数据。')
+      ElMessage.warning('该解析结果没有 content_list_v2.json 数据。')
       return
     }
     openJsonInNewWindow(detail.fileName, 'content_list_v2.json', rawContent)
   } catch (e) {
-    alert(e instanceof Error ? e.message : 'Failed to load data')
+    ElMessage.error(e instanceof Error ? e.message : '加载数据失败')
   }
 }
 
@@ -117,12 +136,12 @@ async function openModelJson(parseId: string, fileId: string) {
     const parse = detail.parses?.find(p => p.id === parseId)
     const rawContent = parse?.modelJson
     if (!rawContent || rawContent === 'null') {
-      alert('该解析结果没有 model.json 数据。')
+      ElMessage.warning('该解析结果没有 model.json 数据。')
       return
     }
     openJsonInNewWindow(detail.fileName, 'model.json', rawContent)
   } catch (e) {
-    alert(e instanceof Error ? e.message : 'Failed to load data')
+    ElMessage.error(e instanceof Error ? e.message : '加载数据失败')
   }
 }
 
@@ -134,12 +153,12 @@ async function openLayoutJson(parseId: string, fileId: string) {
     const parse = detail.parses?.find(p => p.id === parseId)
     const rawContent = parse?.layoutJson
     if (!rawContent || rawContent === 'null') {
-      alert('该解析结果没有 layout.json 数据（版面分析数据）。')
+      ElMessage.warning('该解析结果没有 layout.json 数据（版面分析数据）。')
       return
     }
     openJsonInNewWindow(detail.fileName, 'layout.json', rawContent)
   } catch (e) {
-    alert(e instanceof Error ? e.message : 'Failed to load data')
+    ElMessage.error(e instanceof Error ? e.message : '加载数据失败')
   }
 }
 
@@ -149,7 +168,7 @@ function openJsonInNewWindow(fileName: string, jsonName: string, rawContent: str
   try {
     const parsed = JSON.parse(rawContent)
     if (Array.isArray(parsed) && parsed.length === 0) {
-      alert(`${jsonName} 数据为空数组。`)
+      ElMessage.warning(`${jsonName} 数据为空数组。`)
       return
     }
     formatted = JSON.stringify(parsed, null, 2)
@@ -171,7 +190,7 @@ async function openImages(parseId: string, fileId: string) {
     const detail = response.data
     const parse = detail.parses?.find(p => p.id === parseId)
     if (!parse?.images?.length) {
-      alert('该解析结果没有图片')
+      ElMessage.warning('该解析结果没有图片')
       return
     }
     const w = window.open('', '_blank')
@@ -182,7 +201,7 @@ async function openImages(parseId: string, fileId: string) {
       w.document.close()
     }
   } catch (e) {
-    alert(e instanceof Error ? e.message : 'Failed to load images')
+    ElMessage.error(e instanceof Error ? e.message : '加载图片失败')
   }
 }
 
@@ -191,8 +210,9 @@ async function exportMarkdown(parseId: string) {
   try {
     const { blob, fileName } = await client.exportParseMarkdown(parseId)
     downloadBlob(blob, fileName)
+    ElMessage.success('导出成功')
   } catch (e) {
-    alert(e instanceof Error ? e.message : 'Export failed')
+    ElMessage.error(e instanceof Error ? e.message : '导出失败')
   }
 }
 
@@ -201,8 +221,9 @@ async function exportHtml(parseId: string) {
   try {
     const { blob, fileName } = await client.exportParseHtml(parseId)
     downloadBlob(blob, fileName)
+    ElMessage.success('导出成功')
   } catch (e) {
-    alert(e instanceof Error ? e.message : 'Export failed')
+    ElMessage.error(e instanceof Error ? e.message : '导出失败')
   }
 }
 
@@ -236,74 +257,120 @@ onMounted(() => {
     <p class="page-subtitle">查看所有文档的解析记录和数据</p>
   </div>
 
-  <div class="card">
-    <div class="card-header">
-      <span>解析记录</span>
-      <div class="card-header-actions">
-        <div class="input-wrap w-200">
-          <input v-model="parseSearch" type="text" placeholder="搜索文档名..." @keyup.enter="parsePage = 1; loadParseList()" />
+  <el-card shadow="never" class="page-card">
+    <template #header>
+      <div class="card-header">
+        <span>解析记录</span>
+        <div class="card-header-actions">
+          <el-input
+            v-model="parseSearch"
+            :prefix-icon="Search"
+            placeholder="搜索文档名..."
+            clearable
+            style="width: 220px"
+            @keyup.enter="parsePage = 1; loadParseList()"
+          />
+          <el-button size="small" @click="parsePage = 1; loadParseList()">搜索</el-button>
         </div>
-        <button class="btn btn-secondary btn-small" @click="parsePage = 1; loadParseList()">搜索</button>
       </div>
-    </div>
-    <div class="card-body">
-      <table v-if="parseList.length > 0" class="data-table">
-        <thead>
-          <tr>
-            <th>文件名</th>
-            <th>模型</th>
-            <th>状态</th>
-            <th>解析时间</th>
-            <th>错误信息</th>
-            <th>操作</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="p in parseList" :key="p.id">
-            <td>{{ p.fileName }}</td>
-            <td>
-              <span class="status-badge" :class="p.modelVersion === 'pipeline' ? 'status-success' : 'status-processing'">
-                {{ p.modelVersion === 'pipeline' ? 'Pipeline' : 'VLM' }}
-              </span>
-            </td>
-            <td>
-              <span class="status-badge" :class="getFileStatusClass(p.status)">{{ getFileStatusLabel(p.status) }}</span>
-            </td>
-            <td>{{ p.parsedAt ? formatTime(p.parsedAt) : '-' }}</td>
-            <td class="text-ellipsis" :style="{ maxWidth: '200px' }" :title="p.errorMessage || ''">{{ p.errorMessage || '-' }}</td>
-            <td>
-              <div v-if="p.status === 'parsed'" class="action-group">
-                <button class="btn btn-primary btn-small" @click="openMarkdown(p.id, p.fileId)">MD</button>
-                <button class="btn btn-secondary btn-small" @click="openHtmlPreview(p.id)">HTML</button>
-                <button class="btn btn-secondary btn-small" @click="openJson(p.id, p.fileId)">JSON</button>
-                <button class="btn btn-secondary btn-small" @click="openContentListV2(p.id, p.fileId)">V2</button>
-                <button class="btn btn-secondary btn-small" @click="openModelJson(p.id, p.fileId)">Model</button>
-                <button class="btn btn-secondary btn-small" @click="openLayoutJson(p.id, p.fileId)">Layout</button>
-                <button class="btn btn-secondary btn-small" @click="openImages(p.id, p.fileId)">图片</button>
-                <button class="btn btn-secondary btn-small" @click="exportMarkdown(p.id)">导出MD</button>
-                <button class="btn btn-secondary btn-small" @click="exportHtml(p.id)">导出HTML</button>
-              </div>
-              <button class="btn btn-secondary btn-small btn-text-danger" :disabled="parseDeleting === p.id" @click="handleDeleteParse(p.id)">
-                {{ parseDeleting === p.id ? '删除中...' : '删除' }}
-              </button>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-      <div v-else class="empty-state">
-        <div class="empty-state-text">暂无解析记录</div>
-      </div>
+    </template>
 
-      <div v-if="parseTotal > parsePageSize" class="pagination-bar">
-        <span class="pagination-info">共 {{ parseTotal }} 条</span>
-        <button class="page-btn" :disabled="parsePage <= 1" @click="handleParsePageChange(parsePage - 1)">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6" /></svg>
-        </button>
-        <button v-for="p in parseTotalPages" :key="p" class="page-btn" :class="{ active: parsePage === p }" @click="handleParsePageChange(p)">{{ p }}</button>
-        <button class="page-btn" :disabled="parsePage >= parseTotalPages" @click="handleParsePageChange(parsePage + 1)">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6" /></svg>
-        </button>
-      </div>
+    <el-table
+      v-loading="listLoading"
+      :data="parseList"
+      stripe
+      border
+      empty-text="暂无解析记录"
+    >
+      <el-table-column prop="fileName" label="文件名" min-width="200" show-overflow-tooltip />
+      <el-table-column label="模型" width="110">
+        <template #default="{ row }">
+          <el-tag :type="row.modelVersion === 'pipeline' ? 'success' : 'warning'" size="small">
+            {{ row.modelVersion === 'pipeline' ? 'Pipeline' : 'VLM' }}
+          </el-tag>
+        </template>
+      </el-table-column>
+      <el-table-column label="状态" width="110">
+        <template #default="{ row }">
+          <el-tag :type="getFileStatusType(row.status)" size="small">{{ getFileStatusLabel(row.status) }}</el-tag>
+        </template>
+      </el-table-column>
+      <el-table-column label="解析时间" width="170">
+        <template #default="{ row }">{{ row.parsedAt ? formatTime(row.parsedAt) : '-' }}</template>
+      </el-table-column>
+      <el-table-column label="错误信息" min-width="200" show-overflow-tooltip>
+        <template #default="{ row }">{{ row.errorMessage || '-' }}</template>
+      </el-table-column>
+      <el-table-column label="操作" width="440">
+        <template #default="{ row }">
+          <div v-if="row.status === 'parsed'" class="action-group">
+            <el-button type="primary" size="small" @click="openMarkdown(row.id, row.fileId)">MD</el-button>
+            <el-button size="small" @click="openHtmlPreview(row.id)">HTML</el-button>
+            <el-button size="small" @click="openJson(row.id, row.fileId)">JSON</el-button>
+            <el-button size="small" @click="openContentListV2(row.id, row.fileId)">V2</el-button>
+            <el-button size="small" @click="openModelJson(row.id, row.fileId)">Model</el-button>
+            <el-button size="small" @click="openLayoutJson(row.id, row.fileId)">Layout</el-button>
+            <el-button size="small" @click="openImages(row.id, row.fileId)">图片</el-button>
+            <el-button size="small" @click="exportMarkdown(row.id)">导出MD</el-button>
+            <el-button size="small" @click="exportHtml(row.id)">导出HTML</el-button>
+          </div>
+          <el-button
+            type="danger"
+            size="small"
+            text
+            :loading="parseDeleting === row.id"
+            @click="handleDeleteParse(row.id)"
+          >
+            删除
+          </el-button>
+        </template>
+      </el-table-column>
+    </el-table>
+
+    <div v-if="parseTotal > 0" class="pagination-wrap">
+      <el-pagination
+        v-model:current-page="parsePage"
+        v-model:page-size="parsePageSize"
+        :total="parseTotal"
+        :page-sizes="[20, 50, 100]"
+        layout="total, sizes, prev, pager, next, jumper"
+        background
+        @current-change="handleParsePageChange"
+        @size-change="handleParsePageSizeChange"
+      />
     </div>
-  </div>
+  </el-card>
 </template>
+
+<style scoped>
+.page-card {
+  border-radius: 8px;
+}
+
+.card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.card-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.action-group {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+
+.pagination-wrap {
+  margin-top: 12px;
+  display: flex;
+  justify-content: flex-end;
+}
+</style>

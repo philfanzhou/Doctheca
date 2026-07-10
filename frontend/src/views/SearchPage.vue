@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
+import { ElMessage } from 'element-plus'
+import { Search, Filter } from '@element-plus/icons-vue'
 import { createDocApiClient, type SearchResult } from '../services/docApi'
 import { formatDate } from '../utils/format'
 
@@ -13,7 +15,7 @@ const searchResults = ref<SearchResult[]>([])
 const searchTotalCount = ref(0)
 const searchNextToken = ref('')
 
-// [Gen-2] minerU advanced filter state
+// [Gen-2] minerU advanced filter state — RED LINE: all 8 filters must be preserved
 const showAdvancedFilter = ref(false)
 const filterBlockType = ref('')
 const filterBlockSubType = ref('')
@@ -24,17 +26,20 @@ const filterParseId = ref('')
 const filterDocumentFileId = ref('')
 const filterHasImage = ref(false)
 
-// Row expansion state (blockData detail)
-const expandedRows = ref<Set<number>>(new Set())
-
 // minerU block type candidates (pipeline + VLM union; not enforced — minerU version may iterate)
+// RED LINE: continue to provide as ElSelect.filterable (replaces legacy <datalist>)
 const blockTypeOptions = [
   'text', 'title', 'image', 'table', 'chart', 'list', 'index', 'interline_equation',
   'code', 'algorithm', 'equation', 'phonetic', 'ref_text',
   'header', 'footer', 'page_number', 'aside_text', 'page_footnote'
 ]
 const subTypePlaceholder = '如 table_caption / code / algorithm / image_body'
-const textFormatOptions = ['', 'latex', 'markdown', 'none']
+const textFormatOptions = [
+  { value: '', label: '(不限)' },
+  { value: 'latex', label: 'latex' },
+  { value: 'markdown', label: 'markdown' },
+  { value: 'none', label: 'none' }
+]
 
 const hasMinerUFilter = computed(() => {
   return !!(filterBlockType.value || filterBlockSubType.value
@@ -45,6 +50,7 @@ const hasMinerUFilter = computed(() => {
     || filterHasImage.value)
 })
 
+// RED LINE: handleSearch() must pass all 8 minerU filters to client.searchTest(...) in the same order
 async function handleSearch() {
   if (!searchQuery.value.trim()) return
   searchLoading.value = true
@@ -66,9 +72,8 @@ async function handleSearch() {
     searchResults.value = response.results
     searchTotalCount.value = response.totalCount
     searchNextToken.value = response.nextPageToken
-    expandedRows.value.clear()
   } catch (error) {
-    console.error('检索失败', error)
+    ElMessage.error(error instanceof Error ? error.message : '检索失败')
   } finally {
     searchLoading.value = false
   }
@@ -80,7 +85,6 @@ function clearSearch() {
   searchResults.value = []
   searchTotalCount.value = 0
   searchNextToken.value = ''
-  expandedRows.value.clear()
 }
 
 function clearFilters() {
@@ -92,14 +96,6 @@ function clearFilters() {
   filterParseId.value = ''
   filterDocumentFileId.value = ''
   filterHasImage.value = false
-}
-
-function toggleRow(idx: number) {
-  if (expandedRows.value.has(idx)) {
-    expandedRows.value.delete(idx)
-  } else {
-    expandedRows.value.add(idx)
-  }
 }
 
 function formatBlockData(raw?: string): string {
@@ -141,10 +137,14 @@ function matchTypeLabel(matchType: string): string {
   return matchType
 }
 
-function matchTypeClass(matchType: string): string {
-  if (matchType === 'exact_phrase') return 'tag-success'
-  if (matchType === 'exact_word') return 'tag-info'
-  return 'tag-warning'
+function matchTypeTagType(matchType: string): 'success' | 'info' | 'warning' {
+  if (matchType === 'exact_phrase') return 'success'
+  if (matchType === 'exact_word') return 'info'
+  return 'warning'
+}
+
+function mineruScoreText(score?: number): string {
+  return score !== undefined && score !== null ? score.toFixed(2) : '-'
 }
 </script>
 
@@ -154,209 +154,250 @@ function matchTypeClass(matchType: string): string {
     <p class="page-subtitle">测试文档检索功能</p>
   </div>
 
-  <div class="card">
-    <div class="card-header">
-      <span>检索测试</span>
+  <el-card shadow="never" class="page-card">
+    <template #header>
+      <div class="card-header">
+        <span>检索测试</span>
+        <el-tag v-if="hasMinerUFilter" type="warning" size="small" effect="light">已应用 minerU 筛选</el-tag>
+      </div>
+    </template>
+
+    <!-- V1 keyword + phrase query area (preserved) -->
+    <div class="toolbar">
+      <el-input
+        v-model="searchQuery"
+        :prefix-icon="Search"
+        placeholder="输入单词或短语进行检索..."
+        clearable
+        class="query-input"
+        @keyup.enter="handleSearch"
+      />
+      <el-checkbox v-model="searchPhrase">短语查询</el-checkbox>
+      <el-button type="primary" :loading="searchLoading" :disabled="!searchQuery.trim()" @click="handleSearch">
+        搜索
+      </el-button>
+      <el-button :icon="Filter" @click="showAdvancedFilter = true">
+        高级筛选
+        <span v-if="hasMinerUFilter" class="filter-active-dot" title="已启用 minerU 筛选"></span>
+      </el-button>
+      <el-button v-if="searchResults.length > 0" text @click="clearSearch">清空</el-button>
     </div>
-    <div class="card-body">
-      <!-- V1 keyword + phrase query area (preserved) -->
-      <div class="toolbar">
-        <div class="input-wrap input-flex">
-          <input v-model="searchQuery" type="text" placeholder="输入单词或短语进行检索..." @keyup.enter="handleSearch" />
-        </div>
-        <label class="inline-check">
-          <input v-model="searchPhrase" type="checkbox" />
-          短语查询
-        </label>
-        <button class="btn btn-primary btn-small" :disabled="searchLoading || !searchQuery.trim()" @click="handleSearch">
-          {{ searchLoading ? '搜索中...' : '搜索' }}
-        </button>
-        <button class="btn btn-link btn-small" @click="showAdvancedFilter = !showAdvancedFilter">
-          {{ showAdvancedFilter ? '收起筛选' : '高级筛选' }}
-          <span v-if="hasMinerUFilter" class="filter-active-dot" title="已启用 minerU 筛选"></span>
-        </button>
-      </div>
 
-      <!-- [Gen-2] minerU advanced filter drawer -->
-      <div v-if="showAdvancedFilter" class="advanced-filter">
-        <div class="filter-grid">
-          <div class="input-wrap">
-            <label class="filter-label">块类型 (blockType)</label>
-            <input v-model="filterBlockType" type="text" list="blockTypeList" placeholder="text / image / table..." />
-            <datalist id="blockTypeList">
-              <option v-for="t in blockTypeOptions" :key="t" :value="t" />
-            </datalist>
-          </div>
-          <div class="input-wrap">
-            <label class="filter-label">二级类型 (subType)</label>
-            <input v-model="filterBlockSubType" type="text" :placeholder="subTypePlaceholder" />
-          </div>
-          <div class="input-wrap">
-            <label class="filter-label">页码 (pageNumber)</label>
-            <input v-model.number="filterPageNumber" type="number" min="0" placeholder="0-based page_idx" />
-          </div>
-          <div class="input-wrap">
-            <label class="filter-label">标题层级 (textLevel)</label>
-            <input v-model.number="filterTextLevel" type="number" min="-1" placeholder="0=正文 / 1=h1 / 2=h2" />
-          </div>
-          <div class="input-wrap">
-            <label class="filter-label">文本格式 (textFormat)</label>
-            <select v-model="filterTextFormat">
-              <option v-for="f in textFormatOptions" :key="f" :value="f">{{ f || '(不限)' }}</option>
-            </select>
-          </div>
-          <div class="input-wrap">
-            <label class="filter-label">解析 ID (parseId)</label>
-            <input v-model="filterParseId" type="text" placeholder="Guid" />
-          </div>
-          <div class="input-wrap">
-            <label class="filter-label">文档 ID (documentFileId)</label>
-            <input v-model="filterDocumentFileId" type="text" placeholder="Guid" />
-          </div>
-          <div class="input-wrap checkbox-wrap">
-            <label class="inline-check">
-              <input v-model="filterHasImage" type="checkbox" />
-              仅含图片块 (hasImage)
-            </label>
-          </div>
-        </div>
-        <div class="filter-actions">
-          <button class="btn btn-primary btn-small" :disabled="searchLoading || !searchQuery.trim()" @click="handleSearch">
-            应用筛选
-          </button>
-          <button class="btn btn-secondary btn-small" @click="clearFilters">
-            清空筛选
-          </button>
-        </div>
-      </div>
+    <div v-if="searchResults.length > 0" class="result-meta">
+      <span>共 {{ searchTotalCount }} 条结果，关键词: <strong>{{ searchQuery }}</strong></span>
+    </div>
 
-      <div v-if="searchResults.length > 0" class="result-meta">
-        <span>共 {{ searchTotalCount }} 条结果，关键词: <strong>{{ searchQuery }}</strong>
-          <span v-if="hasMinerUFilter" class="filter-badge">已应用 minerU 筛选</span>
-        </span>
-        <button class="btn btn-link btn-small" @click="clearSearch">清空</button>
-      </div>
+    <!-- RED LINE: result table preserves minerU columns + row-expand blockData detail -->
+    <el-table
+      v-loading="searchLoading"
+      :data="searchResults"
+      stripe
+      border
+      :empty-text="searchQuery && !searchLoading ? '无匹配结果' : '输入查询词后点击搜索'"
+    >
+      <el-table-column type="expand">
+        <!-- RED LINE: row expand blockData detail (formatBlockData + formatBbox + mineruScore) -->
+        <template #default="{ row }">
+          <div class="detail-card">
+            <div class="detail-section">
+              <div class="detail-label">BM25 相关度 (V1 Score)</div>
+              <div class="detail-value mono">{{ row.score.toFixed(4) }}</div>
+              <div class="detail-hint">OpenSearch _score，越大越相关</div>
+            </div>
+            <div class="detail-section">
+              <div class="detail-label">矿工 U 置信度 (mineruScore)</div>
+              <div class="detail-value mono">{{ row.mineruScore !== undefined && row.mineruScore !== null ? row.mineruScore.toFixed(4) : '-' }}</div>
+              <div class="detail-hint">VLM 后端解析置信度，0-1 区间</div>
+            </div>
+            <div class="detail-section">
+              <div class="detail-label">bbox [x0, y0, x1, y1]</div>
+              <div class="detail-value mono">{{ formatBbox(row.bbox) }}</div>
+              <div class="detail-hint">归一化到 0-1000 pipeline 惯例</div>
+            </div>
+            <div class="detail-section">
+              <div class="detail-label">textLevel</div>
+              <div class="detail-value mono">{{ row.textLevel !== undefined && row.textLevel !== null ? row.textLevel : '-' }}</div>
+              <div class="detail-hint">0=正文 / 1=h1 / 2=h2...</div>
+            </div>
+            <div class="detail-block-data">
+              <div class="detail-label">blockData 原始 JSON</div>
+              <pre class="block-data-pre">{{ formatBlockData(row.blockData) || '(无)' }}</pre>
+            </div>
+          </div>
+        </template>
+      </el-table-column>
+      <el-table-column label="#" type="index" width="50" />
+      <el-table-column label="文档标题" min-width="200" show-overflow-tooltip>
+        <template #default="{ row }">{{ row.documentName }}</template>
+      </el-table-column>
+      <el-table-column label="块类型" width="110">
+        <template #default="{ row }">
+          <el-tag type="info" size="small">{{ extractBlockType(row.blockData) || '-' }}</el-tag>
+        </template>
+      </el-table-column>
+      <el-table-column label="subType" width="110">
+        <template #default="{ row }">
+          <span class="text-muted-sm">{{ row.subType || '-' }}</span>
+        </template>
+      </el-table-column>
+      <el-table-column label="页码" width="80">
+        <template #default="{ row }">
+          <el-tag type="info" size="small">P{{ row.pageNumber + 1 }}</el-tag>
+        </template>
+      </el-table-column>
+      <el-table-column label="匹配类型" width="100">
+        <template #default="{ row }">
+          <el-tag :type="matchTypeTagType(row.matchType)" size="small">{{ matchTypeLabel(row.matchType) }}</el-tag>
+        </template>
+      </el-table-column>
+      <!-- RED LINE: BM25 Score and mineruScore must be explicit separate columns (not conflated) -->
+      <el-table-column label="BM25 相关度" width="120">
+        <template #default="{ row }">
+          <span class="mono">{{ row.score.toFixed(2) }}</span>
+        </template>
+      </el-table-column>
+      <el-table-column label="矿工 U 置信度" width="120">
+        <template #default="{ row }">
+          <span class="mono">{{ mineruScoreText(row.mineruScore) }}</span>
+        </template>
+      </el-table-column>
+      <el-table-column label="textFormat" width="110">
+        <template #default="{ row }">
+          <span class="text-muted-sm">{{ row.textFormat || '-' }}</span>
+        </template>
+      </el-table-column>
+      <el-table-column label="Caption" width="140" show-overflow-tooltip>
+        <template #default="{ row }">{{ captionPreview(row.caption) }}</template>
+      </el-table-column>
+      <el-table-column label="匹配文本" min-width="280">
+        <template #default="{ row }">
+          <div class="match-text">{{ row.associatedText }}</div>
+        </template>
+      </el-table-column>
+      <el-table-column label="Segment ID" width="160" show-overflow-tooltip>
+        <template #default="{ row }">
+          <span class="mono text-muted-sm">{{ row.segmentId }}</span>
+        </template>
+      </el-table-column>
+      <el-table-column label="创建时间" width="160">
+        <template #default="{ row }">
+          <span class="text-muted-sm">{{ row.createdAt ? formatDate(row.createdAt) : '-' }}</span>
+        </template>
+      </el-table-column>
+    </el-table>
 
-      <div v-if="searchResults.length > 0" class="table-scroll">
-        <table class="data-table">
-          <thead>
-            <tr>
-              <th>#</th>
-              <th>文档标题</th>
-              <th>块类型</th>
-              <th>subType</th>
-              <th>页码</th>
-              <th>匹配类型</th>
-              <th>BM25 相关度</th>
-              <th>矿工 U 置信度</th>
-              <th>textFormat</th>
-              <th>Caption</th>
-              <th>匹配文本</th>
-              <th>Segment ID</th>
-              <th>创建时间</th>
-              <th>操作</th>
-            </tr>
-          </thead>
-          <tbody>
-            <template v-for="(result, idx) in searchResults" :key="idx">
-              <tr>
-                <td class="text-muted-sm">{{ idx + 1 }}</td>
-                <td class="text-ellipsis" :style="{ maxWidth: '200px' }" :title="result.documentName">{{ result.documentName }}</td>
-                <td><span class="tag tag-info">{{ extractBlockType(result.blockData) || '-' }}</span></td>
-                <td class="text-muted-sm">{{ result.subType || '-' }}</td>
-                <td><span class="tag tag-info">P{{ result.pageNumber + 1 }}</span></td>
-                <td>
-                  <span class="tag" :class="matchTypeClass(result.matchType)">{{ matchTypeLabel(result.matchType) }}</span>
-                </td>
-                <td class="text-mono">{{ result.score.toFixed(2) }}</td>
-                <td class="text-mono">{{ result.mineruScore !== undefined && result.mineruScore !== null ? result.mineruScore.toFixed(2) : '-' }}</td>
-                <td class="text-muted-sm">{{ result.textFormat || '-' }}</td>
-                <td class="text-muted-sm text-ellipsis" :style="{ maxWidth: '120px' }" :title="result.caption">{{ captionPreview(result.caption) }}</td>
-                <td class="match-text" :style="{ maxWidth: '400px' }">{{ result.associatedText }}</td>
-                <td class="text-mono text-muted-sm text-ellipsis" :style="{ maxWidth: '150px' }" :title="result.segmentId">{{ result.segmentId }}</td>
-                <td class="text-muted-sm">{{ result.createdAt ? formatDate(result.createdAt) : '-' }}</td>
-                <td>
-                  <button class="btn btn-link btn-small" @click="toggleRow(idx)">
-                    {{ expandedRows.has(idx) ? '收起' : '展开详情' }}
-                  </button>
-                </td>
-              </tr>
-              <tr v-if="expandedRows.has(idx)" class="detail-row">
-                <td :colspan="14">
-                  <div class="detail-card">
-                    <div class="detail-section">
-                      <div class="detail-label">BM25 相关度 (V1 Score)</div>
-                      <div class="detail-value text-mono">{{ result.score.toFixed(4) }}</div>
-                      <div class="detail-hint">OpenSearch _score，越大越相关</div>
-                    </div>
-                    <div class="detail-section">
-                      <div class="detail-label">矿工 U 置信度 (mineruScore)</div>
-                      <div class="detail-value text-mono">{{ result.mineruScore !== undefined && result.mineruScore !== null ? result.mineruScore.toFixed(4) : '-' }}</div>
-                      <div class="detail-hint">VLM 后端解析置信度，0-1 区间</div>
-                    </div>
-                    <div class="detail-section">
-                      <div class="detail-label">bbox [x0, y0, x1, y1]</div>
-                      <div class="detail-value text-mono">{{ formatBbox(result.bbox) }}</div>
-                      <div class="detail-hint">归一化到 0-1000 pipeline 惯例</div>
-                    </div>
-                    <div class="detail-section">
-                      <div class="detail-label">textLevel</div>
-                      <div class="detail-value text-mono">{{ result.textLevel !== undefined && result.textLevel !== null ? result.textLevel : '-' }}</div>
-                      <div class="detail-hint">0=正文 / 1=h1 / 2=h2...</div>
-                    </div>
-                    <div class="detail-block-data">
-                      <div class="detail-label">blockData 原始 JSON</div>
-                      <pre class="block-data-pre">{{ formatBlockData(result.blockData) || '(无)' }}</pre>
-                    </div>
-                  </div>
-                </td>
-              </tr>
-            </template>
-          </tbody>
-        </table>
-      </div>
+    <el-empty
+      v-if="searchResults.length === 0 && searchQuery && !searchLoading"
+      description="无匹配结果"
+    />
+  </el-card>
 
-      <div v-else-if="searchQuery && !searchLoading" class="empty-state">
-        <div class="empty-state-text">输入查询词后点击搜索</div>
+  <!-- [Gen-2] minerU advanced filter drawer (ADR §6: el-drawer) -->
+  <el-drawer
+    v-model="showAdvancedFilter"
+    title="高级筛选 (minerU 第 2 代)"
+    direction="rtl"
+    size="420px"
+  >
+    <div class="filter-form">
+      <div class="filter-field">
+        <label class="filter-label">块类型 (blockType)</label>
+        <el-select
+          v-model="filterBlockType"
+          filterable
+          allow-create
+          clearable
+          default-first-option
+          placeholder="text / image / table..."
+          style="width: 100%"
+        >
+          <el-option v-for="t in blockTypeOptions" :key="t" :label="t" :value="t" />
+        </el-select>
+      </div>
+      <div class="filter-field">
+        <label class="filter-label">二级类型 (subType)</label>
+        <el-input v-model="filterBlockSubType" :placeholder="subTypePlaceholder" clearable />
+      </div>
+      <div class="filter-field">
+        <label class="filter-label">页码 (pageNumber)</label>
+        <el-input-number
+          v-model="filterPageNumber"
+          :min="0"
+          controls-position="right"
+          placeholder="0-based page_idx"
+          style="width: 100%"
+        />
+      </div>
+      <div class="filter-field">
+        <label class="filter-label">标题层级 (textLevel)</label>
+        <el-input-number
+          v-model="filterTextLevel"
+          :min="-1"
+          controls-position="right"
+          placeholder="0=正文 / 1=h1 / 2=h2"
+          style="width: 100%"
+        />
+      </div>
+      <div class="filter-field">
+        <label class="filter-label">文本格式 (textFormat)</label>
+        <el-select v-model="filterTextFormat" clearable style="width: 100%">
+          <el-option v-for="f in textFormatOptions" :key="f.value" :label="f.label" :value="f.value" />
+        </el-select>
+      </div>
+      <div class="filter-field">
+        <label class="filter-label">解析 ID (parseId)</label>
+        <el-input v-model="filterParseId" placeholder="Guid" clearable />
+      </div>
+      <div class="filter-field">
+        <label class="filter-label">文档 ID (documentFileId)</label>
+        <el-input v-model="filterDocumentFileId" placeholder="Guid" clearable />
+      </div>
+      <div class="filter-field">
+        <label class="filter-label">仅含图片块 (hasImage)</label>
+        <el-switch v-model="filterHasImage" />
       </div>
     </div>
-  </div>
+    <template #footer>
+      <div class="filter-actions">
+        <el-button @click="clearFilters">清空筛选</el-button>
+        <el-button
+          type="primary"
+          :loading="searchLoading"
+          :disabled="!searchQuery.trim()"
+          @click="showAdvancedFilter = false; handleSearch()"
+        >
+          应用筛选
+        </el-button>
+      </div>
+    </template>
+  </el-drawer>
 </template>
 
 <style scoped>
-.match-text {
-  line-height: 1.5;
-  color: var(--text-secondary);
-  white-space: pre-wrap;
-  word-break: break-word;
+.page-card {
+  border-radius: 8px;
 }
 
-.advanced-filter {
-  margin-top: 12px;
-  padding: 16px;
-  background: var(--bg-secondary);
-  border-radius: var(--radius-md);
-  border: 1px solid var(--border-light);
-}
-
-.filter-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 12px;
-}
-
-.filter-label {
-  display: block;
-  font-size: 12px;
-  color: var(--text-secondary);
-  margin-bottom: 4px;
-  font-weight: 500;
-}
-
-.filter-actions {
-  margin-top: 12px;
+.card-header {
   display: flex;
+  align-items: center;
+  justify-content: space-between;
   gap: 8px;
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.query-input {
+  flex: 1;
+  min-width: 280px;
 }
 
 .filter-active-dot {
@@ -364,58 +405,64 @@ function matchTypeClass(matchType: string): string {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: var(--warning-color);
+  background: var(--el-color-warning);
   margin-left: 4px;
   vertical-align: middle;
 }
 
-.filter-badge {
-  display: inline-block;
-  padding: 2px 8px;
-  background: var(--warning-color);
-  color: #fff;
-  border-radius: var(--radius-sm);
-  font-size: 11px;
-  margin-left: 8px;
+.result-meta {
+  margin-bottom: 8px;
+  font-size: 13px;
+  color: var(--el-text-color-regular);
 }
 
-.detail-row {
-  background: var(--bg-secondary);
+.match-text {
+  line-height: 1.5;
+  color: var(--el-text-color-regular);
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
-.detail-row > td {
-  padding: 12px 16px;
+.text-muted-sm {
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
 }
 
+.mono {
+  font-family: 'SF Mono', Menlo, Monaco, Consolas, monospace;
+}
+
+/* RED LINE: row expand blockData detail styling preserved */
 .detail-card {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 16px;
+  gap: 12px;
   align-items: start;
+  padding: 8px 4px;
 }
 
 .detail-section {
   padding: 8px 12px;
-  background: var(--card-bg);
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border-light);
+  background: var(--el-fill-color-light);
+  border-radius: 4px;
+  border: 1px solid var(--el-border-color-lighter);
 }
 
 .detail-label {
   font-size: 12px;
-  color: var(--text-secondary);
+  color: var(--el-text-color-secondary);
   font-weight: 500;
   margin-bottom: 4px;
 }
 
 .detail-value {
   font-size: 14px;
-  color: var(--text-primary);
+  color: var(--el-text-color-primary);
 }
 
 .detail-hint {
   font-size: 11px;
-  color: var(--text-muted);
+  color: var(--el-text-color-placeholder);
   margin-top: 2px;
 }
 
@@ -426,10 +473,10 @@ function matchTypeClass(matchType: string): string {
 .block-data-pre {
   white-space: pre-wrap;
   word-break: break-word;
-  background: var(--card-bg);
+  background: var(--el-fill-color-blank);
   padding: 12px;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border-light);
+  border-radius: 4px;
+  border: 1px solid var(--el-border-color-lighter);
   font-size: 12px;
   font-family: 'SF Mono', Menlo, Monaco, Consolas, monospace;
   max-height: 400px;
@@ -437,8 +484,27 @@ function matchTypeClass(matchType: string): string {
   margin: 0;
 }
 
-.checkbox-wrap {
+.filter-form {
   display: flex;
-  align-items: flex-end;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.filter-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.filter-label {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+  font-weight: 500;
+}
+
+.filter-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
 }
 </style>

@@ -127,7 +127,7 @@ Vue 3.5 + TypeScript + Vite + Element Plus (按需导入, unplugin-auto-import �
   ),
   $box-shadow: (
     'light':  0 1px 2px 0 rgba(0,0,0,0.05),
-    '':       0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06),
+    '':       (0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06)),
   ),
   $transition-duration: (
     '':     0.2s,
@@ -216,3 +216,22 @@ EP v2.7+ 推荐 `@use`，避免 `@import` 在 Vite 中的 future-deprecation 警
 - 既有门户 EP 实践：`src/admin_portal/frontend`（Element Plus 已接入）
 - 本前端既有样式源：`frontend/src/style.css`（CSS 变量见 §5 映射表）
 - minerU 第 2 代检索设计：`docs/modules/DocumentSearch/03-DESIGN.md §演进（DS-13~DS-18 已合并 master）`
+
+## 实施偏差
+
+### 实施偏差 1：SCSS 注入方式调整（additionalData → importStyle: false）
+
+**现象**：按 §5.2 在 `vite.config.ts` 配置 `css.preprocessorOptions.scss.additionalData: '@use "@/styles/element-variables.scss" as *;'` 后，`npm run build` 报 `Error: [sass] Module loop: this module is already being loaded.`。原因是 `additionalData` 会把 `@use` 注入到**每个** SCSS 文件中，包括 `element-variables.scss` 自身，形成循环加载。
+
+**调整**：
+1. 移除 `vite.config.ts` 的 `css.preprocessorOptions.scss.additionalData` 块。
+2. `AutoImport` 和 `Components` 的 `ElementPlusResolver` 均加 `importStyle: false`，禁用 per-component 预构建 CSS 自动导入。
+3. themed 样式表由 `element-variables.scss`（`@forward` + `@use index.scss`）一次性编译，`main.ts` 引入一次即生效全量 themed CSS。
+
+**影响**：无功能损失。themed CSS 仍由 SCSS 编译产出品牌值，只是注入路径从"每个 SCSS 文件 @use"改为"main.ts 一次性 import 全量编译产物"。
+
+### 实施偏差 2：$box-shadow 多阴影值需括号包裹
+
+**现象**：§5.2 模板中 `$box-shadow` 的 `''` key 包含两个逗号分隔的阴影值 `0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06),`，SCSS parser 把逗号误解为 map entry 分隔符，报 `expected ":"`。
+
+**调整**：用括号包裹多阴影值 `(0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06))`。本 ADR §5.2 模板已同步修正。

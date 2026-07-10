@@ -31,9 +31,11 @@ export function getFileStatusLabel(status: string | null): string {
   return labels[status] || status
 }
 
-export function getFileStatusClass(status: string | null): string {
-  if (status === 'parsed') return 'status-success'
-  if (status === 'failed') return 'status-error'
-  if (status === 'parsing' || status === 'pending') return 'status-processing'
-  return 'status-pending'
+// Returns Element Plus ElTag type for a parse status.
+// Replaces the legacy getFileStatusClass (CSS class) after ADR-001 migration.
+export function getFileStatusType(status: string | null): 'success' | 'danger' | 'warning' | 'info' {
+  if (status === 'parsed') return 'success'
+  if (status === 'failed') return 'danger'
+  if (status === 'parsing' || status === 'pending') return 'warning'
+  return 'info'
 }
