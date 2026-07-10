@@ -4,22 +4,33 @@
 
 DocLibrary Admin 是文档库的管理后台前端,供本地管理员上传文档、触发 MinerU 解析、查看解析结果、测试检索功能。
 
-- 技术栈:Vue 3.5 + TypeScript + Vite(纯手写 CSS,不使用 UI 组件库)
+- 技术栈:Vue 3.5 + TypeScript + Vite + Element Plus(SCSS design-token 覆写,按 ADR-001 §5)
 - 部署:由 DocLibrary 后端 Host 静态托管(`wwwroot/`),与后端同源,无需独立部署
 - 访问:HTTP `:5012`
 
 ## 2. 依赖策略
 
-**仅保留运行时必需依赖,不引入 UI 组件库。**
+**Element Plus 作为唯一 UI 组件库,纯手写 CSS 改为 SCSS design-token 覆写。**
+
+迁移令：ADR-001（docs/overview/ADR-001-frontend-element-plus.md）。
 
 | 依赖 | 用途 | 必要性 |
 |------|------|--------|
-| `vue` | 框架 | 必需 |
+| `vue` | 框架(3.5) | 必需 |
+| `typescript` | 类型(~) | 必需 |
+| `vite` | 构建 | 必需 |
 | `axios` | HTTP 请求 | 必需 |
+| `element-plus` | UI 组件库 | 必需 |
+| `element-plus/theme-chalk` | SCSS 主题覆写源 | 必需(按 ADR-001 §5 映射表) |
+| `sass` | SCSS 编译(element-plus 主题必需) | 必需(迁移期间引入) |
 
-**已移除的依赖(历史遗留,不再使用):**
-- `element-plus` / `@element-plus/icons-vue` — 已移除,改用原生 toast 提示
+**历史决策(已撤销):**
+- `element-plus` / `@element-plus/icons-vue` — 曾在早期被移除,本次由 ADR-001 重新引入
 - `marked` — 未使用(解析结果 Markdown 以 `<pre>` 原文展示,不渲染)
+
+**不在依赖内:**
+- 其他 UI 库(Naive / Arco / Ant Design Vue / Vuetify) — ADR-001 已排除
+- `element-plus` 图标如用 iconfont 单独处理,否则使用 `@element-plus/icons-vue`(按需)
 
 ## 3. 访问控制
 
