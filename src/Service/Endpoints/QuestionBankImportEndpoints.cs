@@ -29,7 +29,7 @@ public static class QuestionBankImportEndpoints
     }
 
     private static async Task<IResult> ListImportableParses(
-        IQuestionBankImportService importService,
+        [FromServices] IQuestionBankImportService importService,
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 20,
         [FromQuery] string? search = null,
@@ -61,7 +61,7 @@ public static class QuestionBankImportEndpoints
 
     private static async Task<IResult> GetParseBlocks(
         Guid parseId,
-        IQuestionBankImportService importService,
+        [FromServices] IQuestionBankImportService importService,
         [FromServices] ILoggerFactory loggerFactory,
         [FromQuery] int? pageId = null,
         [FromQuery] string? blockType = null,
@@ -113,7 +113,7 @@ public static class QuestionBankImportEndpoints
 
     private static async Task<IResult> GetImage(
         Guid imageId,
-        IQuestionBankImportService importService,
+        [FromServices] IQuestionBankImportService importService,
         [FromServices] ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(QuestionBankImportEndpoints));
@@ -139,7 +139,7 @@ public static class QuestionBankImportEndpoints
 
     private static async Task<IResult> UpsertImportStatus(
         Guid parseId,
-        IQuestionBankImportService importService,
+        [FromServices] IQuestionBankImportService importService,
         [FromBody] ImportStatusRequest body,
         [FromServices] ILoggerFactory loggerFactory)
     {

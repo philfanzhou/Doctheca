@@ -101,6 +101,7 @@ builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
 builder.Services.AddScoped<ISearchDomainService, SearchDomainService>();
 builder.Services.AddScoped<IDocumentFileService, DocumentFileService>();
 builder.Services.AddScoped<IDocumentParseService, DocumentParseService>();
+builder.Services.AddScoped<IQuestionBankImportService, QuestionBankImportService>();
 
 // MinerU Precision API Client
 builder.Services.Configure<MinerUOptions>(builder.Configuration.GetSection(MinerUOptions.SectionName));

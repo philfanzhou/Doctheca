@@ -153,6 +153,29 @@ POST /admin/document-parses/{parseId}/import-status
 
 ```csharp
 builder.Services.AddScoped<IDocumentParseImportRepository, DocumentParseImportRepository>();
+builder.Services.AddScoped<IQuestionBankImportService, QuestionBankImportService>();
 ```
 
-> **现状（与代码一致）**：`Program.cs` 仅注册了 `IDocumentParseImportRepository`。`IQuestionBankImportService` **尚未注册**——端点通过 DI 解析 `IQuestionBankImportService` 参数，运行时将抛出 "Unable to resolve service" 异常。此为待修复项，注册应为 `builder.Services.AddScoped<IQuestionBankImportService, QuestionBankImportService>();`。
+### 端点参数绑定约定（Bug 修复记录 2026-07-10）
+
+`QuestionBankImportEndpoints.cs` 的四个静态方法通过 DI 接收 `IQuestionBankImportService importService` 参数。.NET 8 minimal API 对复杂类型参数默认推断为 Body（Inferred），若方法不允许 inferred body parameters 会抛 `System.InvalidOperationException: Body was inferred but the method does not allow inferred body parameters.`
+
+**修复要求**：所有通过 DI 解析的服务参数必须显式标注 `[FromServices]`，否则路由元数据推断阶段失败，首个请求即报 500。
+
+```csharp
+// 正确写法
+private static async Task<IResult> ListImportableParses(
+    [FromServices] IQuestionBankImportService importService,
+    [FromQuery] int page = 1,
+    ...)
+
+// 错误写法（会触发 Body inferred 异常）
+private static async Task<IResult> ListImportableParses(
+    IQuestionBankImportService importService,   // 缺 [FromServices]
+    [FromQuery] int page = 1,
+    ...)
+```
+
+四个端点方法（`ListImportableParses` / `GetParseBlocks` / `GetImage` / `UpsertImportStatus`）的 `importService` 参数均已补 `[FromServices]`。`GetParseBlocks` / `GetImage` / `UpsertImportStatus` 原本已对 `ILoggerFactory` 标注 `[FromServices]`，此次补齐 `importService`。
+
+> **历史现状（已修复）**：2026-07-10 部署验证发现 `Program.cs` 未注册 `IQuestionBankImportService`，且四个端点方法的 `importService` 参数缺 `[FromServices]`。首个请求 `/admin/document-parses/importable` 报 `Body was inferred` 异常。已修复：Program.cs 补 `AddScoped<IQuestionBankImportService, QuestionBankImportService>()`，四个方法补 `[FromServices]`。
