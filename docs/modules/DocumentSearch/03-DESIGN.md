@@ -295,6 +295,28 @@ GET /admin/documents/search
 | `pageToken` 非法 Base64 | LogDebug，从第一页开始 |
 | HTTP 参数校验失败 | 返回 400 + 错误码 |
 
+### 搜索失败诊断信息（2026-07-10 补充）
+
+`ExactSearchAsync` 在 OpenSearch 返回非 200 时，异常消息必须包含**响应体**（OpenSearch 的错误 JSON），否则仅凭 status code 无法定位 400/500 的根因。
+
+```csharp
+// 正确：异常消息包含响应体
+if (!response.Success || response.HttpStatusCode != 200)
+{
+    var errorBody = response.Body != null ? Encoding.UTF8.GetString(response.Body) : "(empty)";
+    throw new InvalidOperationException(
+        $"OpenSearch query failed, status code: {response.HttpStatusCode}, response: {errorBody}, query: {json}");
+}
+```
+
+同时以 Debug 级别记录发送的查询 JSON，便于复现：
+
+```csharp
+_logger.LogDebug("OpenSearch search request: index={Index}, body={Body}", indexName, json);
+```
+
+> **历史背景**：2026-07-10 部署后发现搜索请求全部返回空结果，日志仅有 `OpenSearch query failed, status code: 400`，无法定位根因。根因是异常消息缺少 OpenSearch 响应体。修复后异常消息包含 `response` 和 `query` 字段，`SearchDomainService` 的 LogWarning 即可输出完整诊断信息。
+
 ## 依赖的外部模块接口
 
 | 依赖 | 提供能力 | 所在模块 |
