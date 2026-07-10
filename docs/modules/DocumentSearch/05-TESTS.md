@@ -90,6 +90,34 @@ Mock `ISearchIndexService`，验证领域服务委托与降级。
 | `ExactSearchAsync_PropagatesPageToken` | FR-07 | — |
 | `ExactSearchAsync_WhenIndexServiceThrows_ReturnsEmptyResults` | FR-08 | AC-08 |
 | `ExactSearchAsync_ReturnsEmptyResultsWhenNoMatch` | FR-07 | — |
+| `BuildSearchBody_WithBlockTypeFilter_IncludesTerm` | FR-10 | AC-13 |
+| `BuildSearchBody_WithPageNumberAndHasImage_WrapsAllInFilter` | FR-10, FR-12 | AC-16 |
+| `BuildSearchBody_WithNoMinerUFilter_OutputEqualsV1` | — | AC-17（零回归） |
+| `BuildSearchBody_WithKeywordAndMinerUFilter_SplitsMustAndFilter` | FR-10, FR-12 | — |
+| `ParseSearchResponse_WithBlockData_ReturnsBlockResultFields` | FR-11 | AC-18, AC-20 |
+| `ParseSearchResponse_BboxAndScoreFields_MappedCorrectly` | FR-11 | AC-19 |
+| `ParseSearchResponse_WithMissingMinerUFields_FallsBackToNull` | FR-11（健壮性） | — |
+| `ParseSearchResponse_WithNoMinerUFilter_OutputEqualsV1` | — | AC-17（零回归） |
+| `ExactSearchAsync_PropagatesMinerUFilterToIndexService` | FR-10 | — |
+| `ExactSearchAsync_WithMinerUFilterAndIndexServiceThrow_ReturnsEmpty` | 降级 | — |
+
+### 第 2 代单元测试（追加到 `OpenSearchIndexServiceTests.cs` / `SearchDomainServiceTests.cs`，planned）
+
+在现有 V1 测试方法集中追加 minerU 断言（不新增独立测试方法类）：
+
+| 测试方法（追加断言或新测方法） | 覆盖 |
+|---------|------|
+| `BuildSearchBody_WithBlockTypeFilter_IncludesTerm` | minerU `blockType` 走 `filter: { block_type }`（FR-10） |
+| `BuildSearchBody_WithPageNumberAndHasImage_WrapsAllInFilter` | 多 minerU 条件全走 `filter` 子句（FR-10, FR-12） |
+| `BuildSearchBody_WithNoMinerUFilter_OutputEqualsV1` | 无 minerU filter 时 `BuildSearchBody` 输出与 V1 完全一致（零回归，AC-17） |
+| `BuildSearchBody_WithKeywordAndMinerUFilter_SplitsMustAndFilter` | keyword 走 `must`、minerU 精确项走 `filter`（FR-10, FR-12） |
+| `BuildSearchBody_WithoutKeyword_SortsBySortIndex` | 无 keyword 时按 `sort_index asc` 排序（FR-10） |
+| `ParseSearchResponse_WithBlockData_ReturnsBlockResultFields` | `_source._meta.block_data` 映射到 `BlockData`（FR-11, AC-18, AC-20） |
+| `ParseSearchResponse_BboxAndScoreFields_MappedCorrectly` | `x0/y0/x1/y1` 组合为 `Bbox`，`score` 字段回挂（FR-11, AC-19） |
+| `ParseSearchResponse_WithMissingMinerUFields_FallsBackToNull` | minerU 字段缺失时 `BlockData`/`Bbox`/`Score` = null（健壮性） |
+| `ParseSearchResponse_WithNoMinerUFilter_OutputEqualsV1` | 无 minerU filter 时所有 V1 字段行为与改造前一致（零回归） |
+| `ExactSearchAsync_PropagatesMinerUFilterToIndexService` | minerU filter 透传给 `ISearchIndexService`（FR-10） |
+| `ExactSearchAsync_WithMinerUFilterAndIndexServiceThrow_ReturnsEmpty` | 索引服务抛异常时 minerU filter 仍走降级路径（降级） |
 
 ## 集成测试（规划，未实现）
 
@@ -104,9 +132,14 @@ Mock `ISearchIndexService`，验证领域服务委托与降级。
 | `PUT /{id}/metadata` 后 OpenSearch 元数据同步刷新 | AC-05 |
 | 搜索能命中 blocks 数据 | AC-06 |
 | OpenSearch 不可用时索引/删除 best-effort | NFR-03 |
+| 第 2 代：解析完成后 OpenSearch 有 `x0/y0/x1/y1`/`score`/`has_image`/`_meta.block_data` | AC-13 |
+| 第 2 代：`GET /admin/documents/search` 按 `blockType` / `hasImage` 命中并回挂 `blockData` | AC-13, AC-18, AC-16, AC-20 |
+| 第 2 代：零回归——无 minerU filter 时行为完全等同 V1 | AC-17 |
+| 第 2 代：游标分页稳定 | AC-19 |
 
 ## 未覆盖项
 
 - **HTTP 端点参数校验**（query 空/过长 → 400、`pageSize` 截断）：无独立单元测试（不存在 `DocumentSearchEndpointsTests.cs`）。
 - **Worker 集成**（解析完成后索引、LLM 元数据同步）：无单元测试（依赖 OpenSearch HTTP + 数据库，属集成测试）。
 - **端点集成**（删除 parse/文件后清理索引）：无单元测试。
+- **第 2 代首版未覆盖**：minerU `chars`/`position`/`layout_width`/`images`/`table_html`/`angle`/`formula_latex` 字段检索 —— 上述字段以 `block_data` jsonb 入库，管理界面通过 `GET /admin/document-files/{id}` 查看，延至 facet 需求明确后再进入 mapping（参见 [03-DESIGN.md §第 2 代演进](./03-DESIGN.md) 与 AC-22）。
