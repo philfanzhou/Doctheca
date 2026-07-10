@@ -279,8 +279,32 @@ GET /admin/documents/search
 ```
 1. DatabaseInitializer.InitializeAsync(dbContext, loggerFactory)  — 数据库初始化（无 EF Core Migration）
 2. searchIndexService.EnsureIndexAsync() (best-effort, 失败不阻塞启动)
-   → EnsureIndexExistsAsync → 检查索引存在 → 不存在则 CreateAsync（使用 BuildIndexBody）
+   → EnsureIndexExistsAsync
+       → 检查索引存在
+           ├─ 不存在 → CreateAsync（BuildIndexBody + _meta.mapping_version=CurrentMappingVersion）
+           └─ 存在 → 读取索引 _meta.mapping_version
+               ├─ 版本缺失或 < CurrentMappingVersion → 删除索引 → CreateAsync（重建为新版本 mapping）
+               │     ⚠️ 重建会清空所有已索引文档，需重新触发解析才能恢复索引数据
+               │     日志：[WRN] OpenSearch index {name} has outdated mapping (expected=v, actual=v_old), recreating
+               └─ 版本匹配 → 跳过（正常启动）
 ```
+
+#### 索引 mapping 版本管理（2026-07-10 补充）
+
+OpenSearch 索引的 mapping 一旦创建就**不可在线修改**（字段类型变更需重建索引）。`EnsureIndexAsync` 只检查索引是否存在，存在就跳过——这意味着代码升级 mapping 后，旧索引不会被自动更新，查询会因 mapping 不一致而 400。
+
+**解决方案**：在索引 `_meta` 中写入 `mapping_version`，启动时对比版本号，版本不匹配则删除并重建索引。
+
+- `CurrentMappingVersion` 常量定义在 `OpenSearchIndexService`，每次 `BuildIndexBody` 的 mapping 变更时递增
+- `BuildIndexBody` 的 `_meta` 字段追加 `mapping_version`
+- `EnsureIndexExistsAsync` 读取索引 `_meta.mapping_version`，缺失或低于当前版本则删除重建
+- 重建是 best-effort：删除失败 → LogWarning 不阻塞启动；删除成功后创建失败 → LogWarning 不阻塞启动
+
+> **版本历史**：
+> - v1：初始 mapping（V1 检索能力）
+> - v2：minerU Gen-2 演进（追加 x0/y0/x1/y1/score/has_image/sub_type/text_level/text_format/caption/_meta.block_data）
+
+> **历史背景**：2026-07-10 部署 minerU Gen-2 后，旧索引（v1 mapping）与新查询代码不兼容，搜索请求全部 400。原 `EnsureIndexAsync` 只检查索引存在性，不检查 mapping 版本，导致旧索引无法自动更新。引入版本号机制后，服务重启即自动检测并重建一次。
 
 ## 错误处理策略
 
