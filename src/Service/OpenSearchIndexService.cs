@@ -104,7 +104,36 @@ public class OpenSearchIndexService : ISearchIndexService
                             keyword = new { type = "keyword", ignore_above = 256 }
                         }
                     },
-                    created_at = new { type = "date" }
+                    created_at = new { type = "date" },
+                    // [Gen-2] minerU block-level structured fields
+                    x0 = new { type = "float" },
+                    y0 = new { type = "float" },
+                    x1 = new { type = "float" },
+                    y1 = new { type = "float" },
+                    score = new { type = "float" },
+                    has_image = new { type = "boolean" },
+                    sub_type = new { type = "keyword" },
+                    text_level = new { type = "integer" },
+                    text_format = new { type = "keyword" },
+                    caption = new
+                    {
+                        type = "text",
+                        analyzer = "english_custom",
+                        fields = new
+                        {
+                            keyword = new { type = "keyword", ignore_above = 256 }
+                        }
+                    },
+                    _meta = new
+                    {
+                        type = "object",
+                        enabled = true,
+                        dynamic = false,
+                        properties = new
+                        {
+                            block_data = new { type = "object", enabled = false }
+                        }
+                    }
                 }
             }
         };
@@ -172,7 +201,19 @@ public class OpenSearchIndexService : ISearchIndexService
                 text = block.TextContent,
                 sort_index = block.SortIndex,
                 image_id = block.ImageId?.ToString() ?? string.Empty,
-                created_at = block.CreatedAt.ToString("o")
+                created_at = block.CreatedAt.ToString("o"),
+                // [Gen-2] minerU block-level fields (same bulk, same _id — no extra network round-trip)
+                x0 = block.BboxX0,
+                y0 = block.BboxY0,
+                x1 = block.BboxX1,
+                y1 = block.BboxY1,
+                score = block.MineruScore,
+                has_image = block.ImageId != null,
+                sub_type = block.SubType ?? string.Empty,
+                text_level = block.TextLevel,
+                text_format = block.TextFormat,
+                caption = block.Caption ?? string.Empty,
+                _meta = new { block_data = block.BlockData }
             });
         }
 
@@ -327,6 +368,7 @@ public class OpenSearchIndexService : ISearchIndexService
         var filterClauses = new List<object>();
         if (filter != null)
         {
+            // V1 filters (unchanged — zero regression)
             if (!string.IsNullOrEmpty(filter.Subject))
                 filterClauses.Add(new { term = new { subject = new { value = filter.Subject } } });
             if (!string.IsNullOrEmpty(filter.Grade))
@@ -336,6 +378,24 @@ public class OpenSearchIndexService : ISearchIndexService
             // file_name 是 keyword 类型，使用 term 精确匹配
             if (!string.IsNullOrEmpty(filter.DocumentTitle))
                 filterClauses.Add(new { term = new { file_name = new { value = filter.DocumentTitle } } });
+
+            // [Gen-2] minerU block-level filters (all term+filter; null → not added → zero regression)
+            if (!string.IsNullOrEmpty(filter.BlockType))
+                filterClauses.Add(new { term = new { block_type = new { value = filter.BlockType } } });
+            if (!string.IsNullOrEmpty(filter.BlockSubType))
+                filterClauses.Add(new { term = new { sub_type = new { value = filter.BlockSubType } } });
+            if (filter.PageNumber.HasValue)
+                filterClauses.Add(new { term = new { page_number = new { value = filter.PageNumber.Value } } });
+            if (filter.TextLevel.HasValue)
+                filterClauses.Add(new { term = new { text_level = new { value = filter.TextLevel.Value } } });
+            if (!string.IsNullOrEmpty(filter.TextFormat))
+                filterClauses.Add(new { term = new { text_format = new { value = filter.TextFormat } } });
+            if (filter.ParseId.HasValue)
+                filterClauses.Add(new { term = new { parse_id = new { value = filter.ParseId.Value.ToString() } } });
+            if (filter.DocumentFileId.HasValue)
+                filterClauses.Add(new { term = new { document_file_id = new { value = filter.DocumentFileId.Value.ToString() } } });
+            if (filter.HasImage.HasValue)
+                filterClauses.Add(new { term = new { has_image = new { value = filter.HasImage.Value } } });
         }
 
         object queryObj = filterClauses.Count > 0
@@ -430,6 +490,36 @@ public class OpenSearchIndexService : ISearchIndexService
 
                 var documentName = source.TryGetProperty("file_name", out var fnEl) ? fnEl.GetString() ?? "" : "";
 
+                // [Gen-2] minerU block-level fields from _source (null/defaults when absent — robust)
+                string? blockData = null;
+                if (source.TryGetProperty("_meta", out var metaEl)
+                    && metaEl.ValueKind == JsonValueKind.Object
+                    && metaEl.TryGetProperty("block_data", out var bdEl)
+                    && bdEl.ValueKind == JsonValueKind.String)
+                {
+                    blockData = bdEl.GetString();
+                }
+
+                float[]? bbox = null;
+                var x0 = TryGetFloat(source, "x0");
+                var y0 = TryGetFloat(source, "y0");
+                var x1 = TryGetFloat(source, "x1");
+                var y1 = TryGetFloat(source, "y1");
+                if (x0.HasValue || y0.HasValue || x1.HasValue || y1.HasValue)
+                {
+                    bbox = new float[4];
+                    bbox[0] = x0 ?? 0f;
+                    bbox[1] = y0 ?? 0f;
+                    bbox[2] = x1 ?? 0f;
+                    bbox[3] = y1 ?? 0f;
+                }
+
+                var mineruScore = TryGetDouble(source, "score");
+                var subType = TryGetString(source, "sub_type");
+                var textLevel = TryGetInt(source, "text_level");
+                var textFormat = TryGetString(source, "text_format");
+                var caption = TryGetString(source, "caption");
+
                 results.Add(new SearchResultModel
                 {
                     DocumentName = documentName,
@@ -440,7 +530,15 @@ public class OpenSearchIndexService : ISearchIndexService
                     SegmentId = segmentId,
                     StartOffset = 0,
                     EndOffset = 0,
-                    CreatedAt = source.TryGetProperty("created_at", out var caEl) && DateTimeOffset.TryParse(caEl.GetString(), out var ca) ? ca : null
+                    CreatedAt = source.TryGetProperty("created_at", out var caEl) && DateTimeOffset.TryParse(caEl.GetString(), out var ca) ? ca : null,
+                    // [Gen-2] minerU fields
+                    BlockData = blockData,
+                    Bbox = bbox,
+                    MineruScore = mineruScore,
+                    SubType = subType,
+                    TextLevel = textLevel,
+                    TextFormat = textFormat,
+                    Caption = caption
                 });
 
                 if (hit.TryGetProperty("sort", out var sortEl))
@@ -458,6 +556,39 @@ public class OpenSearchIndexService : ISearchIndexService
         }
 
         return (results, totalCount, nextToken);
+    }
+
+    // [Gen-2] Safe extraction helpers for nullable _source fields (null when absent or wrong type)
+
+    private static float? TryGetFloat(JsonElement source, string fieldName)
+    {
+        if (source.TryGetProperty(fieldName, out var el) && el.ValueKind == JsonValueKind.Number)
+            return el.GetSingle();
+        return null;
+    }
+
+    private static double? TryGetDouble(JsonElement source, string fieldName)
+    {
+        if (source.TryGetProperty(fieldName, out var el) && el.ValueKind == JsonValueKind.Number)
+            return el.GetDouble();
+        return null;
+    }
+
+    private static string? TryGetString(JsonElement source, string fieldName)
+    {
+        if (source.TryGetProperty(fieldName, out var el) && el.ValueKind == JsonValueKind.String)
+        {
+            var v = el.GetString();
+            return string.IsNullOrEmpty(v) ? null : v;
+        }
+        return null;
+    }
+
+    private static int? TryGetInt(JsonElement source, string fieldName)
+    {
+        if (source.TryGetProperty(fieldName, out var el) && el.ValueKind == JsonValueKind.Number)
+            return el.GetInt32();
+        return null;
     }
 
 }

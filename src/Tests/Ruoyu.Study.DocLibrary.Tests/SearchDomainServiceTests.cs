@@ -125,5 +125,52 @@ public class SearchDomainServiceTests
         Assert.Null(nextToken);
     }
 
+    // ==================== [Gen-2] minerU filter propagation ====================
+
+    [Fact]
+    public async Task ExactSearchAsync_PropagatesMinerUFilterToIndexService()
+    {
+        // Arrange
+        var filter = new SearchFilterModel
+        {
+            BlockType = "image",
+            PageNumber = 3,
+            HasImage = true,
+            ParseId = Guid.Parse("12345678-1234-1234-1234-123456789012")
+        };
+        _searchIndexServiceMock
+            .Setup(s => s.ExactSearchAsync("keyword", false, filter, 20, null))
+            .ReturnsAsync((new List<SearchResultModel>
+            {
+                new() { DocumentName = "doc.pdf", Score = 1.0, BlockData = "{\"type\":\"image\"}" }
+            }, 1, null));
+
+        // Act
+        var (results, totalCount, _) = await _service.ExactSearchAsync("keyword", false, filter, 20, null);
+
+        // Assert — minerU filter passed through to index service
+        Assert.Single(results);
+        Assert.Equal(1, totalCount);
+        _searchIndexServiceMock.Verify(s => s.ExactSearchAsync("keyword", false, filter, 20, null), Times.Once);
+    }
+
+    [Fact]
+    public async Task ExactSearchAsync_WithMinerUFilterAndIndexServiceThrow_ReturnsEmpty()
+    {
+        // Arrange — degradation path: index service throws, minerU filter present, still returns empty
+        var filter = new SearchFilterModel { BlockType = "text", HasImage = false };
+        _searchIndexServiceMock
+            .Setup(s => s.ExactSearchAsync(It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<SearchFilterModel?>(), It.IsAny<int>(), It.IsAny<string?>()))
+            .ThrowsAsync(new InvalidOperationException("OpenSearch unavailable"));
+
+        // Act
+        var (results, totalCount, nextToken) = await _service.ExactSearchAsync("keyword", false, filter, 50, null);
+
+        // Assert — graceful degradation with minerU filter
+        Assert.Empty(results);
+        Assert.Equal(0, totalCount);
+        Assert.Null(nextToken);
+    }
+
     #endregion
 }

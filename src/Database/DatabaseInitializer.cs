@@ -36,7 +36,17 @@ public static class DatabaseInitializer
             // document_files: subject/grade/year metadata columns (DocumentMetadataAnalysis feature)
             "ALTER TABLE document_files ADD COLUMN IF NOT EXISTS subject character varying(50) NULL",
             "ALTER TABLE document_files ADD COLUMN IF NOT EXISTS grade character varying(20) NULL",
-            "ALTER TABLE document_files ADD COLUMN IF NOT EXISTS year character varying(10) NULL"
+            "ALTER TABLE document_files ADD COLUMN IF NOT EXISTS year character varying(10) NULL",
+            // document_parse_blocks: [Gen-2] minerU block-level structured columns
+            "ALTER TABLE document_parse_blocks ADD COLUMN IF NOT EXISTS sub_type character varying(50) NULL",
+            "ALTER TABLE document_parse_blocks ADD COLUMN IF NOT EXISTS text_level integer NOT NULL DEFAULT -1",
+            "ALTER TABLE document_parse_blocks ADD COLUMN IF NOT EXISTS text_format character varying(20) NOT NULL DEFAULT ''",
+            "ALTER TABLE document_parse_blocks ADD COLUMN IF NOT EXISTS bbox_x0 real NULL",
+            "ALTER TABLE document_parse_blocks ADD COLUMN IF NOT EXISTS bbox_y0 real NULL",
+            "ALTER TABLE document_parse_blocks ADD COLUMN IF NOT EXISTS bbox_x1 real NULL",
+            "ALTER TABLE document_parse_blocks ADD COLUMN IF NOT EXISTS bbox_y1 real NULL",
+            "ALTER TABLE document_parse_blocks ADD COLUMN IF NOT EXISTS score real NULL",
+            "ALTER TABLE document_parse_blocks ADD COLUMN IF NOT EXISTS caption text NULL"
         };
 
         foreach (var sql in alterStatements)

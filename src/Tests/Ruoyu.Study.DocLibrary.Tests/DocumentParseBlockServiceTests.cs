@@ -208,4 +208,114 @@ public class DocumentParseBlockServiceTests
         // Assert
         captured![0].TextContent.Should().Contain("<table>");
     }
+
+    // ==================== [Gen-2] minerU field extraction ====================
+
+    [Fact]
+    public async Task InsertBlocksFromContentListAsync_ExtractsMinerUFields_PipelineBbox()
+    {
+        // Arrange - pipeline backend: bbox in 0-1000, has score, sub_type, text_level
+        var parseId = Guid.NewGuid();
+        var contentListJson = @"[
+            {
+                ""type"": ""text"",
+                ""page_id"": 0,
+                ""text"": ""heading"",
+                ""sub_type"": ""text"",
+                ""text_level"": 1,
+                ""bbox"": [100, 200, 300, 400],
+                ""score"": 0.95,
+                ""image_caption"": [""Figure 1: diagram""]
+            }
+        ]";
+
+        List<DocumentParseBlockModel>? captured = null;
+        _blockRepoMock.Setup(r => r.AddBlocksAsync(parseId, It.IsAny<IEnumerable<DocumentParseBlockModel>>()))
+            .Callback<Guid, IEnumerable<DocumentParseBlockModel>>((_, blocks) => captured = blocks.ToList())
+            .Returns(Task.CompletedTask);
+
+        // Act
+        await _service.InsertBlocksFromContentListAsync(parseId, contentListJson, null);
+
+        // Assert
+        captured.Should().NotBeNull();
+        captured![0].SubType.Should().Be("text");
+        captured[0].TextLevel.Should().Be(1);
+        captured[0].BboxX0.Should().Be(100f);
+        captured[0].BboxY0.Should().Be(200f);
+        captured[0].BboxX1.Should().Be(300f);
+        captured[0].BboxY1.Should().Be(400f);
+        captured[0].MineruScore.Should().Be(0.95);
+        captured[0].Caption.Should().Be("Figure 1: diagram");
+        // text_format absent in pipeline → empty string
+        captured[0].TextFormat.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task InsertBlocksFromContentListAsync_NormalizesVlmBboxTo1000()
+    {
+        // Arrange - VLM backend: bbox in 0-1 percentage, should be normalized to 0-1000
+        var parseId = Guid.NewGuid();
+        var contentListJson = @"[
+            {
+                ""type"": ""image"",
+                ""page_id"": 0,
+                ""img_path"": ""images/img1.jpg"",
+                ""bbox"": [0.1, 0.2, 0.3, 0.4],
+                ""text_format"": ""latex""
+            }
+        ]";
+
+        List<DocumentParseBlockModel>? captured = null;
+        _blockRepoMock.Setup(r => r.AddBlocksAsync(parseId, It.IsAny<IEnumerable<DocumentParseBlockModel>>()))
+            .Callback<Guid, IEnumerable<DocumentParseBlockModel>>((_, blocks) => captured = blocks.ToList())
+            .Returns(Task.CompletedTask);
+
+        // Act
+        await _service.InsertBlocksFromContentListAsync(parseId, contentListJson, null);
+
+        // Assert — VLM 0-1 values multiplied by 1000
+        captured.Should().NotBeNull();
+        captured![0].BboxX0.Should().Be(100f);
+        captured[0].BboxY0.Should().Be(200f);
+        captured[0].BboxX1.Should().Be(300f);
+        captured[0].BboxY1.Should().Be(400f);
+        captured[0].TextFormat.Should().Be("latex");
+        // text_level absent → -1
+        captured[0].TextLevel.Should().Be(-1);
+        // score absent → null
+        captured[0].MineruScore.Should().BeNull();
+        // caption absent → null
+        captured[0].Caption.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task InsertBlocksFromContentListAsync_NoMinerUFields_DefaultsApplied()
+    {
+        // Arrange - minimal block with only V1 fields, no minerU fields
+        var parseId = Guid.NewGuid();
+        var contentListJson = @"[
+            { ""type"": ""text"", ""page_id"": 0, ""text"": ""plain text"" }
+        ]";
+
+        List<DocumentParseBlockModel>? captured = null;
+        _blockRepoMock.Setup(r => r.AddBlocksAsync(parseId, It.IsAny<IEnumerable<DocumentParseBlockModel>>()))
+            .Callback<Guid, IEnumerable<DocumentParseBlockModel>>((_, blocks) => captured = blocks.ToList())
+            .Returns(Task.CompletedTask);
+
+        // Act
+        await _service.InsertBlocksFromContentListAsync(parseId, contentListJson, null);
+
+        // Assert — minerU fields default to null/empty/-1
+        captured.Should().NotBeNull();
+        captured![0].SubType.Should().BeNull();
+        captured[0].TextLevel.Should().Be(-1);
+        captured[0].TextFormat.Should().BeEmpty();
+        captured[0].BboxX0.Should().BeNull();
+        captured[0].BboxY0.Should().BeNull();
+        captured[0].BboxX1.Should().BeNull();
+        captured[0].BboxY1.Should().BeNull();
+        captured[0].MineruScore.Should().BeNull();
+        captured[0].Caption.Should().BeNull();
+    }
 }

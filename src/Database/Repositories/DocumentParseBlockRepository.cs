@@ -63,6 +63,16 @@ public class DocumentParseBlockRepository : IDocumentParseBlockRepository
         ImageId = model.ImageId,
         BlockData = model.BlockData,
         CreatedAt = model.CreatedAt,
+        // [Gen-2] minerU structured fields
+        SubType = model.SubType,
+        TextLevel = model.TextLevel,
+        TextFormat = model.TextFormat,
+        BboxX0 = model.BboxX0,
+        BboxY0 = model.BboxY0,
+        BboxX1 = model.BboxX1,
+        BboxY1 = model.BboxY1,
+        MineruScore = model.MineruScore,
+        Caption = model.Caption,
     };
 
     private static DocumentParseBlockModel MapToModel(DocumentParseBlockEntity entity) => new()
@@ -76,5 +86,15 @@ public class DocumentParseBlockRepository : IDocumentParseBlockRepository
         ImageId = entity.ImageId,
         BlockData = entity.BlockData,
         CreatedAt = entity.CreatedAt,
+        // [Gen-2] minerU structured fields
+        SubType = entity.SubType,
+        TextLevel = entity.TextLevel,
+        TextFormat = entity.TextFormat,
+        BboxX0 = entity.BboxX0,
+        BboxY0 = entity.BboxY0,
+        BboxX1 = entity.BboxX1,
+        BboxY1 = entity.BboxY1,
+        MineruScore = entity.MineruScore,
+        Caption = entity.Caption,
     };
 }

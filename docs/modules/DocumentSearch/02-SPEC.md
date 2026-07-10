@@ -384,10 +384,17 @@ LLM 分析完成后，调用 `UpdateDocumentFileMetadataAsync(documentFileId, ne
 // SearchResultModel.cs — 第 2 代追加 optional 字段（老前端不传时 null，向后兼容）
 public class SearchResultModel
 {
-    // ... V1 字段不变 ...
+    // ... V1 字段不变（含 public double Score = OpenSearch _score）...
     public string? BlockData { get; set; }                  // [第 2 代] minerU 原始 JSON 原文（详情展示）
     public float[]? Bbox { get; set; }                      // [第 2 代] minerU bbox [x0,y0,x1,y1]
-    public float? Score { get; set; }                       // [第 2 代] minerU 置信度
+    public double? MineruScore { get; set; }                // [第 2 代] minerU 置信度（VLM 后端）
+    // [偏差说明] SPEC 原拟 `float? Score`，但 V1 已有 `public double Score`（OpenSearch _score），
+    // C# 不允许同名字段，故第 2 代新字段命名为 `MineruScore`（与 §13.9.1 `block.MineruScore` 一致）。
+    // HTTP 响应 JSON 字段名仍为 `mineruScore`，前端按此 key 读取。
+    public string? SubType { get; set; }                    // [第 2 代] minerU 二级分类
+    public int? TextLevel { get; set; }                     // [第 2 代] 0=正文,1=h1...;非标题 null
+    public string? TextFormat { get; set; }                 // [第 2 代] latex/markdown/none（VLM）
+    public string? Caption { get; set; }                    // [第 2 代] 拼接 caption 文本（关键词召回）
 }
 
 // SearchFilterModel.cs — 第 2 代追加 minerU 过滤条件（V1 原有 4 项不变）
@@ -395,7 +402,10 @@ public class SearchFilterModel
 {
     // ... V1 字段（DocumentTitle / Subject / Grade / Year）不变 ...
     public string? BlockType { get; set; }                  // [第 2 代] 精确匹配 minerU type
+    public string? BlockSubType { get; set; }               // [第 2 代] 精确匹配 minerU sub_type
     public int? PageNumber { get; set; }                    // [第 2 代] minerU page_id
+    public int? TextLevel { get; set; }                     // [第 2 代] minerU text_level
+    public string? TextFormat { get; set; }                 // [第 2 代] minerU text_format
     public Guid? ParseId { get; set; }                      // [第 2 代] 缩小到某次 parse
     public Guid? DocumentFileId { get; set; }              // [第 2 代] 缩小到某文档
     public bool? HasImage { get; set; }                     // [第 2 代] 筛选有 img_path 的 block
@@ -548,7 +558,7 @@ public static async Task<IResults> Search(...)
       "createdAt": "2026-07-04T10:00:00.0000000+00:00",
       "blockData": "{\"type\":\"text\",\"text_level\":0,\"page_idx\":0,\"text\":\"...\",\"bbox\":[100,200,300,400]}",
       "bbox": [100.0, 200.0, 300.0, 400.0],
-      "score": 0.97,
+      "mineruScore": 0.97,
       "subType": null,
       "textLevel": 0,
       "textFormat": null,
@@ -592,7 +602,7 @@ public static async Task<IResults> Search(...)
 |-------------------|----------|
 | `BlockData` (string?) | `_source._meta.block_data`（原文 string，第 2 代新增） |
 | `Bbox` (float[]?) | `[_source.x0, _source.y0, _source.x1, _source.y1]`（第 2 代新增） |
-| `Score` (float?) | `_source.score`（第 2 代新增） |
+| `MineruScore` (double?) | `_source.score`（第 2 代新增；C# 属性名 `MineruScore` 以避免与 V1 `Score`（OpenSearch `_score`）冲突，详见 §13.1.1 偏差说明） |
 | `SubType` (string?) | `_source.sub_type`（第 2 代新增，caption/body/footnote 等二级分类） |
 | `TextLevel` (int?) | `_source.text_level`（第 2 代新增，标题层级，-1 = 非标题文本） |
 | `TextFormat` (string?) | `_source.text_format`（第 2 代新增，`latex`/`markdown` 等，VLM 后端特有） |

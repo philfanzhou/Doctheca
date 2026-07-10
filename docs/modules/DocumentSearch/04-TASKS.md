@@ -1,6 +1,7 @@
 # DocumentSearch — 任务清单 (TASKS)
 
-> **本模块代码已实现完成。** 以下为代码评审与自动化验证记录。
+> **本模块代码已实现完成（第 1 代 + 第 2 代后端）。** 第 2 代前端（DS-19）属独立工程，状态保持 planned。
+> 以下为代码评审与自动化验证记录。
 
 ## 任务拆解
 
@@ -23,14 +24,26 @@
 
 | ID | 任务 | 状态 | 验证文件 |
 |----|------|------|---------|
-| DS-13 | 扩展 `OpenSearchIndexService.IndexParseBlocksAsync`：在同一 bulk 追加 minerU 维度字段（`x0`/`y0`/`x1`/`y1`/`score`/`has_image`/`_meta.block_data`）；扩展 `BuildIndexBody` 追加 minerU 维度映射 | planned | `OpenSearchIndexService.cs` |
-| DS-14 | 扩展 `MinerUFileParseWorker.IndexBlocksToSearchAsync`：调用扩展后的 `IndexParseBlocksAsync`（同一 best-effort 入口） | planned | `MinerUFileParseWorker.cs` |
-| DS-15 | 扩展 `SearchResultModel`（追加 optional `BlockData`/`Bbox`/`Score`）+ `SearchFilterModel`（追加 `BlockType`/`PageNumber`/`ParseId`/`DocumentFileId`/`HasImage`） | planned | `SearchResultModel.cs` / `SearchFilterModel.cs` |
-| DS-16 | 扩展 `OpenSearchIndexService.ExactSearchAsync`（`BuildSearchBody` 追加 minerU filter 分支 + `ParseSearchResponse` 追加 minerU 回挂分支） | planned | `OpenSearchIndexService.cs` |
-| DS-17 | 扩展 `SearchDomainService.ExactSearchAsync`：透传 minerU filter + 解析回挂字段（同一方法内扩展，复用 V1 降级模式） | planned | `SearchDomainService.cs` |
-| DS-18 | 扩展 `DocumentSearchEndpoints.cs`：同一 `GET /admin/documents/search` 追加可选 minerU 入参（V1 校验保留；参数 null 时零回归） | planned | `DocumentSearchEndpoints.cs` |
+| DS-13 | 扩展 `OpenSearchIndexService.IndexParseBlocksAsync`：在同一 bulk 追加 minerU 维度字段（`x0`/`y0`/`x1`/`y1`/`score`/`has_image`/`sub_type`/`text_level`/`text_format`/`caption`/`_meta.block_data`）；扩展 `BuildIndexBody` 追加 minerU 维度映射 | completed | `OpenSearchIndexService.cs` |
+| DS-14 | 扩展 `MinerUFileParseWorker.IndexBlocksToSearchAsync`：调用扩展后的 `IndexParseBlocksAsync`（同一 best-effort 入口）。**实现说明**：Worker 本身无需改动——minerU 字段由 `DocumentParseBlockService.ParseBlock` 抽取并写入 `DocumentParseBlockEntity`，经 `DocumentParseBlockRepository` 持久化，`IndexParseBlocksAsync` 通过 `GetByParseIdAsync` 读取后直接索引，字段流自动传递。 | completed | `MinerUFileParseWorker.cs`（无改动） |
+| DS-15 | 扩展 `SearchResultModel`（追加 optional `BlockData`/`Bbox`/`MineruScore`/`SubType`/`TextLevel`/`TextFormat`/`Caption`）+ `SearchFilterModel`（追加 `BlockType`/`BlockSubType`/`PageNumber`/`TextLevel`/`TextFormat`/`ParseId`/`DocumentFileId`/`HasImage`）。**偏差说明**：SPEC §13.1.1 原拟 `float? Score`，但 V1 已有 `public double Score`（OpenSearch `_score`），C# 不允许同名字段，故第 2 代新字段命名为 `MineruScore`（与 §13.9.1 `block.MineruScore` 一致）；HTTP 响应 JSON key 为 `mineruScore`。详见 02-SPEC.md §13.1.1 偏差说明。 | completed | `SearchResultModel.cs` / `SearchFilterModel.cs` |
+| DS-16 | 扩展 `OpenSearchIndexService.ExactSearchAsync`（`BuildSearchBody` 追加 minerU filter 分支 + `ParseSearchResponse` 追加 minerU 回挂分支） | completed | `OpenSearchIndexService.cs` |
+| DS-17 | 扩展 `SearchDomainService.ExactSearchAsync`：透传 minerU filter + 解析回挂字段（同一方法内扩展，复用 V1 降级模式）。**实现说明**：`SearchDomainService` 为薄封装，filter 透传通过 `SearchFilterModel` 自动完成，无需改动方法体；异常降级路径已在 UT `ExactSearchAsync_WithMinerUFilterAndIndexServiceThrow_ReturnsEmpty` 覆盖。 | completed | `SearchDomainService.cs`（无改动） |
+| DS-18 | 扩展 `DocumentSearchEndpoints.cs`：同一 `GET /admin/documents/search` 追加可选 minerU 入参（`blockType`/`blockSubType`/`pageNumber`/`textLevel`/`textFormat`/`parseId`/`documentFileId`/`hasImage`）；V1 校验保留；参数 null 时零回归。响应追加 `blockData`/`bbox`/`mineruScore`/`subType`/`textLevel`/`textFormat`/`caption` optional 字段。 | completed | `DocumentSearchEndpoints.cs` |
 | DS-19 | doclibrary 自带前端扩展 `SearchPage.vue`：加"高级筛选"抽屉 + 结果行展开 `blockData`/`bbox`/`score` 详情（改造现有页，不新增 `BlockSearchPage.vue`） | planned | `SearchPage.vue` |
-| DS-20 | 单元测试追加：在现有 `OpenSearchIndexServiceTests` / `SearchDomainServiceTests` 追加 minerU filter 构造 / `blockData` 回挂 / 缺省 fallback / 零回归断言（不新增测试方法类） | planned | 测试文件 |
+| DS-20 | 单元测试追加：在现有 `OpenSearchIndexServiceTests` / `SearchDomainServiceTests` / `DocumentParseBlockServiceTests` 追加 minerU filter 构造 / `blockData` 回挂 / 缺省 fallback / bbox 归一化 / 零回归断言（不新增测试方法类）。新增 15 个测试方法，全部通过（169/169）。 | completed | 测试文件 |
+
+## 第 2 代实现附注
+
+### 数据库 schema 变更（DatabaseInitializer 原生 SQL）
+新增 9 列到 `document_parse_blocks` 表（通过 `ALTER TABLE ADD COLUMN IF NOT EXISTS`）：
+`sub_type` / `text_level` / `text_format` / `bbox_x0` / `bbox_y0` / `bbox_x1` / `bbox_y1` / `score` / `caption`
+
+> 列名 `score` 遵循 06-CONVENTIONS §103 行"真正新字段不加 mineru_ 前缀"规定；C# 属性名 `MineruScore` 避免与 V1 概念混淆。
+
+### 验证结果
+- `dotnet build src/services/ruoyu.doclibrary/src/Ruoyu.Study.DocLibrary.sln --configuration Release`：**成功**（0 错误，3 个无关 nullable 警告）
+- `dotnet test ... --configuration Release`：**169/169 通过**（含 AC-17 零回归 `BuildSearchBody_WithNoMinerUFilter_OutputEqualsV1`）
 
 ## 命令速查
 

@@ -25,6 +25,15 @@
 | `image_id` | `UUID` | NULL, FK → `document_parse_images(id)` ON DELETE SET NULL | | 仅 `block_type='image'` 时有值 |
 | `block_data` | `JSONB` | NOT NULL | | ⭐ 整块原 JSON（兜底） |
 | `created_at` | `TIMESTAMP WITH TIME ZONE` | NOT NULL | `NOW()` | 创建时间 |
+| `sub_type` | `VARCHAR(50)` | NULL | | [第 2 代] minerU 二级分类（如 `image_body`/`table_caption`/`text`/`ref_text`） |
+| `text_level` | `INT` | NOT NULL | `-1` | [第 2 代] 标题级别：0=正文,1=h1,2=h2...；非标题文本为 `-1` |
+| `text_format` | `VARCHAR(20)` | NOT NULL | `''` | [第 2 代] 文本格式（VLM 后端）：`latex`/`markdown`/`none` |
+| `bbox_x0` | `REAL` | NULL | | [第 2 代] bbox 左上 X（归一化到 0-1000 pipeline 惯例） |
+| `bbox_y0` | `REAL` | NULL | | [第 2 代] bbox 左上 Y |
+| `bbox_x1` | `REAL` | NULL | | [第 2 代] bbox 右下 X |
+| `bbox_y1` | `REAL` | NULL | | [第 2 代] bbox 右下 Y |
+| `score` | `REAL` | NULL | | [第 2 代] minerU 置信度（VLM 后端；pipeline 后端无此字段） |
+| `caption` | `TEXT` | NULL | | [第 2 代] 拼接 caption 文本（`image_caption`/`table_caption`/`chart_caption`/`code_caption` 数组拼接） |
 
 ## 索引
 
@@ -41,6 +50,8 @@
 - 经常查的字段（page、type、text）单独提出来建索引——查询性能 OK
 - 不常查的字段（angle、formula_latex）放在 `block_data` 里——不占结构化存储空间
 - `image_id` 软关联到 `document_parse_images`（SET NULL）——图片被删时 block 仍保留，但失去图片引用
+- **[第 2 代] 结构化 minerU 维度字段**：`sub_type`/`text_level`/`text_format`/`bbox_x0..y1`/`score`/`caption` 在 `ParseBlock` 阶段从 `block_data` 抽取为独立列，支持 OpenSearch mapping 索引与 SQL 过滤；`block_data` JSONB 仍保留整块原文（兜底 + `_meta.block_data` 回挂）
+- **[第 2 代] bbox 归一化**：pipeline 后端 bbox ∈ [0,1000]，VLM 后端 bbox ∈ [0,1]（百分比）；`ParseBlock` 启发式判断（max ≤ 1.0 → VLM）后统一归一化到 0-1000 pipeline 惯例入库
 
 ## 填充流程
 
@@ -58,6 +69,13 @@ INSERT INTO document_parse_blocks
     text_content   = block.text / block.content / block.body
     block_data     = 整块 JSON 字符串
     image_id       = (type=image 时) 根据 imageName 在已上传图片表中查 ID
+    # [第 2 代] minerU 结构化字段抽取（DocumentParseBlockService.ParseBlock）
+    sub_type       = block.sub_type（二级分类，可为空）
+    text_level     = block.text_level（0=正文,1=h1...；不存在则 -1）
+    text_format    = block.text_format（latex/markdown/none；不存在则 ''）
+    bbox_x0/y0/x1/y1 = block.bbox[0..3]（归一化到 0-1000）
+    score          = block.score（VLM 置信度；pipeline 后端无此字段则 null）
+    caption        = 拼接 image_caption/table_caption/chart_caption/code_caption 数组文本
 ```
 
 ## 特殊说明

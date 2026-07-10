@@ -94,30 +94,47 @@ Mock `ISearchIndexService`，验证领域服务委托与降级。
 | `BuildSearchBody_WithPageNumberAndHasImage_WrapsAllInFilter` | FR-10, FR-12 | AC-16 |
 | `BuildSearchBody_WithNoMinerUFilter_OutputEqualsV1` | — | AC-17（零回归） |
 | `BuildSearchBody_WithKeywordAndMinerUFilter_SplitsMustAndFilter` | FR-10, FR-12 | — |
+| `BuildSearchBody_WithAllMinerUFilters_IncludesAllTerms` | FR-10, FR-12 | AC-13~AC-16 |
 | `ParseSearchResponse_WithBlockData_ReturnsBlockResultFields` | FR-11 | AC-18, AC-20 |
 | `ParseSearchResponse_BboxAndScoreFields_MappedCorrectly` | FR-11 | AC-19 |
 | `ParseSearchResponse_WithMissingMinerUFields_FallsBackToNull` | FR-11（健壮性） | — |
-| `ParseSearchResponse_WithNoMinerUFilter_OutputEqualsV1` | — | AC-17（零回归） |
+| `ParseSearchResponse_WithPartialBbox_StillConstructsArray` | FR-11（健壮性） | — |
 | `ExactSearchAsync_PropagatesMinerUFilterToIndexService` | FR-10 | — |
 | `ExactSearchAsync_WithMinerUFilterAndIndexServiceThrow_ReturnsEmpty` | 降级 | — |
 
-### 第 2 代单元测试（追加到 `OpenSearchIndexServiceTests.cs` / `SearchDomainServiceTests.cs`，planned）
+### 第 2 代单元测试（追加到 `OpenSearchIndexServiceTests.cs` / `SearchDomainServiceTests.cs` / `DocumentParseBlockServiceTests.cs`，已实现）
 
-在现有 V1 测试方法集中追加 minerU 断言（不新增独立测试方法类）：
+在现有 V1 测试方法集中追加 minerU 断言（不新增独立测试方法类）。共 15 个测试方法，分布如下：
 
-| 测试方法（追加断言或新测方法） | 覆盖 |
+#### OpenSearchIndexServiceTests（10 个）
+
+| 测试方法 | 覆盖 |
 |---------|------|
+| `BuildIndexBody_IncludesMinerUFields` | mapping 含 x0/y0/x1/y1/score/has_image/sub_type/text_level/text_format/caption/_meta（FR-12） |
 | `BuildSearchBody_WithBlockTypeFilter_IncludesTerm` | minerU `blockType` 走 `filter: { block_type }`（FR-10） |
 | `BuildSearchBody_WithPageNumberAndHasImage_WrapsAllInFilter` | 多 minerU 条件全走 `filter` 子句（FR-10, FR-12） |
 | `BuildSearchBody_WithNoMinerUFilter_OutputEqualsV1` | 无 minerU filter 时 `BuildSearchBody` 输出与 V1 完全一致（零回归，AC-17） |
 | `BuildSearchBody_WithKeywordAndMinerUFilter_SplitsMustAndFilter` | keyword 走 `must`、minerU 精确项走 `filter`（FR-10, FR-12） |
-| `BuildSearchBody_WithoutKeyword_SortsBySortIndex` | 无 keyword 时按 `sort_index asc` 排序（FR-10） |
+| `BuildSearchBody_WithAllMinerUFilters_IncludesAllTerms` | 8 个 minerU filter 全部命中（FR-10, FR-12） |
 | `ParseSearchResponse_WithBlockData_ReturnsBlockResultFields` | `_source._meta.block_data` 映射到 `BlockData`（FR-11, AC-18, AC-20） |
-| `ParseSearchResponse_BboxAndScoreFields_MappedCorrectly` | `x0/y0/x1/y1` 组合为 `Bbox`，`score` 字段回挂（FR-11, AC-19） |
-| `ParseSearchResponse_WithMissingMinerUFields_FallsBackToNull` | minerU 字段缺失时 `BlockData`/`Bbox`/`Score` = null（健壮性） |
-| `ParseSearchResponse_WithNoMinerUFilter_OutputEqualsV1` | 无 minerU filter 时所有 V1 字段行为与改造前一致（零回归） |
+| `ParseSearchResponse_BboxAndScoreFields_MappedCorrectly` | `x0/y0/x1/y1` 组合为 `Bbox`，`score` 字段回挂为 `MineruScore`（FR-11, AC-19） |
+| `ParseSearchResponse_WithMissingMinerUFields_FallsBackToNull` | minerU 字段缺失时 `BlockData`/`Bbox`/`MineruScore` = null（健壮性） |
+| `ParseSearchResponse_WithPartialBbox_StillConstructsArray` | 部分 bbox 分量存在时仍构造 float[4]（健壮性） |
+
+#### SearchDomainServiceTests（2 个）
+
+| 测试方法 | 覆盖 |
+|---------|------|
 | `ExactSearchAsync_PropagatesMinerUFilterToIndexService` | minerU filter 透传给 `ISearchIndexService`（FR-10） |
-| `ExactSearchAsync_WithMinerUFilterAndIndexServiceThrow_ReturnsEmpty` | 索引服务抛异常时 minerU filter 仍走降级路径（降级） |
+| `ExactSearchAsync_WithMinerUFilterAndIndexServiceThrow_ReturnsEmpty` | minerU filter + 索引异常 → 返回空结果（降级） |
+
+#### DocumentParseBlockServiceTests（3 个）
+
+| 测试方法 | 覆盖 |
+|---------|------|
+| `InsertBlocksFromContentListAsync_ExtractsMinerUFields_PipelineBbox` | pipeline 后端 bbox 0-1000 + score + sub_type + text_level + caption 抽取 |
+| `InsertBlocksFromContentListAsync_NormalizesVlmBboxTo1000` | VLM 后端 bbox 0-1 百分比归一化到 0-1000 |
+| `InsertBlocksFromContentListAsync_NoMinerUFields_DefaultsApplied` | 无 minerU 字段时默认值（null/empty/-1） |
 
 ## 集成测试（规划，未实现）
 

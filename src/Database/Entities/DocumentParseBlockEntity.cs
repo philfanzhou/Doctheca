@@ -41,6 +41,36 @@ public class DocumentParseBlockEntity
     [Column("created_at")]
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 
+    // [Gen-2] minerU block-level structured columns (added via DatabaseInitializer ALTER TABLE)
+    [Column("sub_type")]
+    [MaxLength(50)]
+    public string? SubType { get; set; }
+
+    [Column("text_level")]
+    public int TextLevel { get; set; } = -1;
+
+    [Column("text_format")]
+    [MaxLength(20)]
+    public string TextFormat { get; set; } = string.Empty;
+
+    [Column("bbox_x0")]
+    public float? BboxX0 { get; set; }
+
+    [Column("bbox_y0")]
+    public float? BboxY0 { get; set; }
+
+    [Column("bbox_x1")]
+    public float? BboxX1 { get; set; }
+
+    [Column("bbox_y1")]
+    public float? BboxY1 { get; set; }
+
+    [Column("score")]
+    public double? MineruScore { get; set; }
+
+    [Column("caption")]
+    public string? Caption { get; set; }
+
     [ForeignKey(nameof(ParseId))]
     public DocumentParseEntity? Parse { get; set; }
 
