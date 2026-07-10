@@ -152,7 +152,19 @@ Mock `ISearchIndexService`，验证领域服务委托与降级。
 | 第 2 代：解析完成后 OpenSearch 有 `x0/y0/x1/y1`/`score`/`has_image`/`_meta.block_data` | AC-13 |
 | 第 2 代：`GET /admin/documents/search` 按 `blockType` / `hasImage` 命中并回挂 `blockData` | AC-13, AC-18, AC-16, AC-20 |
 | 第 2 代：零回归——无 minerU filter 时行为完全等同 V1 | AC-17 |
-| 第 2 代：游标分页稳定 | AC-19 |
+
+## 前端验证（DS-19）
+
+前端无单元测试框架（`package.json` 未配置 vitest/jest）。验证方式：
+
+1. `cd frontend && npm install && npm run build`（vue-tsc 类型检查 + vite 构建）必须通过
+2. 人工验证 `SearchPage.vue`：
+   - 高级筛选抽屉展开/收起，8 个 minerU filter 输入控件可交互
+   - "应用筛选" / "清空筛选" 按钮行为正确
+   - 结果表格 minerU 列（块类型/subType/矿工 U 置信度/textFormat/Caption）正确显示
+   - "展开详情"按钮行内展开 blockData 格式化 JSON + bbox + mineruScore 详情卡片
+   - V1 零回归：不展开高级筛选、仅关键词搜索时，行为与改造前一致
+3. 类型检查重点：`SearchResult` 新 optional 字段 + `searchTest` 新签名 TS 兼容性
 
 ## 未覆盖项
 

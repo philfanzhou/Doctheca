@@ -68,9 +68,19 @@ DocLibrary 为**内网管理后台**,不实现应用层认证:
 
 ### 4.4 SearchPage(检索测试)
 
-- 功能:输入关键词/短语,调用精确检索 API,展示匹配结果
-- 结果表格:序号、文档标题、页码、匹配类型、相关度、匹配文本、Segment ID、偏移量、创建时间
-- 短语查询开关
+- 功能:关键词检索 + 高级筛选(minerU 字段)双区 + 结果表格(V1 列 + minerU 列) + 行展开 blockData 详情
+- **V1 关键词区**(保留):关键词输入框 + 短语查询开关 + 搜索按钮
+- **[Gen-2] 高级筛选抽屉**(可折叠,默认收起):
+  - blockType(datalist 候选:text/title/image/table/chart/list/interline_equation/code/algorithm/equation/phonetic/ref_text/header/footer/page_number/aside_text/page_footnote)
+  - blockSubType(自由输入,如 table_caption / code / algorithm)
+  - pageNumber(0-based page_idx)、textLevel(0=正文/1=h1/2=h2)
+  - textFormat(latex/markdown/none)、parseId、documentFileId、hasImage
+  - "应用筛选" / "清空筛选" 按钮;所有 minerU filter 可选,空值不透传(零回归)
+- **结果表格**(V1 列保留 + minerU 列追加):
+  - V1 列:#、文档标题、页码(显示 page_idx+1)、匹配类型、BM25 相关度、匹配文本、Segment ID、创建时间
+  - minerU 列:块类型(从 blockData.type 解析)、subType、矿工 U 置信度(mineruScore)、textFormat、Caption(前 30 字)
+  - 操作列:"展开详情"按钮 → 行内展开卡片展示 blockData 格式化 JSON + bbox[text0,y0,x1,y1] + mineruScore 与 V1 Score 明确区分标签
+- **状态**:空结果(.empty-state) / loading(.spinner 或按钮禁用文案) / 错误(console.error)保持 V1 风格
 
 ## 5. 样式规范
 
