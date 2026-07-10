@@ -92,7 +92,7 @@ DocLibrary 为**内网管理后台**,不实现应用层认证:
   - V1 列:#、文档标题、页码(显示 page_idx+1)、匹配类型、BM25 相关度、匹配文本、Segment ID、创建时间
   - minerU 列:块类型(从 blockData.type 解析)、subType、矿工 U 置信度(mineruScore)、textFormat、Caption(前 30 字)
   - 操作列:"展开详情"按钮 → 行内展开卡片展示 blockData 格式化 JSON + bbox[text0,y0,x1,y1] + mineruScore 与 V1 Score 明确区分标签
-- **状态**(ADR-001 迁移后):空结果(`<ElEmpty>`) / loading(`v-loading` 指令或 `<ElSkeleton>`) / 错误(`ElMessage.error`)
+- **状态**(ADR-001 迁移后):空结果由 `hasSearched` 标志位控制——仅点击搜索按钮执行过检索后才显示"无匹配结果";输入过程中(未搜索)显示"输入查询词后点击搜索"提示。loading 用 `v-loading` 指令;错误用 `ElMessage.error`
 
 ## 5. 样式规范
 

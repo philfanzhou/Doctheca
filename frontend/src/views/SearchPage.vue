@@ -14,6 +14,7 @@ const searchLoading = ref(false)
 const searchResults = ref<SearchResult[]>([])
 const searchTotalCount = ref(0)
 const searchNextToken = ref('')
+const hasSearched = ref(false)
 
 // [Gen-2] minerU advanced filter state — RED LINE: all 8 filters must be preserved
 const showAdvancedFilter = ref(false)
@@ -72,6 +73,7 @@ async function handleSearch() {
     searchResults.value = response.results
     searchTotalCount.value = response.totalCount
     searchNextToken.value = response.nextPageToken
+    hasSearched.value = true
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : '检索失败')
   } finally {
@@ -85,6 +87,7 @@ function clearSearch() {
   searchResults.value = []
   searchTotalCount.value = 0
   searchNextToken.value = ''
+  hasSearched.value = false
 }
 
 function clearFilters() {
@@ -193,7 +196,7 @@ function mineruScoreText(score?: number): string {
       :data="searchResults"
       stripe
       border
-      :empty-text="searchQuery && !searchLoading ? '无匹配结果' : '输入查询词后点击搜索'"
+      :empty-text="hasSearched && !searchLoading ? '无匹配结果' : '输入查询词后点击搜索'"
     >
       <el-table-column type="expand">
         <!-- RED LINE: row expand blockData detail (formatBlockData + formatBbox + mineruScore) -->
