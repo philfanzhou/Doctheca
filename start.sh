@@ -7,6 +7,7 @@ IMAGE_NAME="ruoyu.doclibrary:${IMAGE_TAG}"
 CONTAINER_NAME="ruoyu-doclibrary"
 NETWORK_NAME="ruoyu-net"
 HTTP_PORT="5012"
+
 CONSUL_HTTP_ADDR="${CONSUL_HTTP_ADDR:-host.docker.internal:8500}"
 CONSUL_TOKEN="${CONSUL_TOKEN:-}"
 
