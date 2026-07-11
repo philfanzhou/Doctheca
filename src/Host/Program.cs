@@ -10,14 +10,17 @@ using Ruoyu.Study.DocLibrary.Domain.Repositories;
 using Ruoyu.Study.DocLibrary.Domain.Services;
 using Ruoyu.Study.DocLibrary.Service;
 using Ruoyu.Study.DocLibrary.Host;
+using Ruoyu.Study.Consul.Shared;
 
 var builder = WebApplication.CreateBuilder(args);
 
+builder.Configuration.AddRuoyuConsulConfiguration(builder.Configuration);
+
 // ========== Serilog (Console + Grafana Loki) ==========
-// LOKI_URI environment variable injects Loki address (overrides appsettings.json fallback).
+// Loki 地址优先由共享 Consul 配置中的 Loki:Uri 提供，本地 appsettings 作为兜底。
 // Loki Sink throws ArgumentNullException when uri is null; fallback uri in config ensures startup.
 // Loki unreachable: Sink retries asynchronously, does not affect service.
-var lokiUri = Environment.GetEnvironmentVariable("LOKI_URI");
+var lokiUri = builder.Configuration["Loki:Uri"];
 if (!string.IsNullOrWhiteSpace(lokiUri))
 {
     builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
@@ -26,6 +29,9 @@ if (!string.IsNullOrWhiteSpace(lokiUri))
     });
 }
 builder.Host.UseAgentSerilog("Ruoyu.Study.DocLibrary");
+
+var consulOptions = RuoyuConsulOptions.Bind(builder.Configuration);
+var consulRuntimeState = RuoyuConsulRuntimeState.Instance;
 
 var httpPort = builder.Configuration.GetValue<int?>("Endpoints:Http") ?? 5012;
 
@@ -39,7 +45,8 @@ builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(optio
     options.MultipartBodyLengthLimit = 200 * 1024 * 1024;
 });
 
-var connectionString = builder.Configuration.GetConnectionString("Default")
+var fallbackConnectionString = builder.Configuration.GetConnectionString("Default");
+var connectionString = SharedPostgreSqlConnectionStringFactory.BuildOrFallback(builder.Configuration, fallbackConnectionString)
     ?? throw new InvalidOperationException("ConnectionStrings:Default is not configured");
 builder.Services.AddDbContext<DocLibraryDbContext>(options =>
 {
@@ -120,10 +127,27 @@ var app = builder.Build();
 
 app.Logger.LogInformation("DocLibrary Service starting");
 app.Logger.LogInformation("Endpoints: HTTP={HttpPort}", httpPort);
+app.Logger.LogInformation(
+    "Consul startup diagnostics: Address={Address}, Token={Token}, Source={Source}, KeyCount={KeyCount}, Prefixes={Prefixes}, LastError={LastError}",
+    $"{consulOptions.Host}:{consulOptions.Port}",
+    StartupDiagnosticsFormatter.MaskSecret(consulOptions.Token),
+    consulRuntimeState.Source,
+    consulRuntimeState.KeyCount,
+    StartupDiagnosticsFormatter.SummarizePrefixes(consulRuntimeState.LoadedPrefixes),
+    StartupDiagnosticsFormatter.SummarizeError(consulRuntimeState.LastError));
 {
     var csb = new DbConnectionStringBuilder { ConnectionString = connectionString };
     app.Logger.LogInformation("Database: PostgreSQL {Host}:{Port}/{Database}", csb["Host"], csb.TryGetValue("Port", out var dbPort) ? dbPort : "5432", csb["Database"]);
 }
+app.Logger.LogInformation(
+    "Effective configuration diagnostics: PostgreSqlHost={PostgreSqlHost}, PostgreSqlPort={PostgreSqlPort}, PostgreSqlUsername={PostgreSqlUsername}, PostgreSqlPassword={PostgreSqlPassword}, DatabaseName={DatabaseName}, LokiUri={LokiUri}, OpenSearchUrl={OpenSearchUrl}",
+    StartupDiagnosticsFormatter.SummarizeValue(builder.Configuration["PostgreSql:Host"]),
+    StartupDiagnosticsFormatter.SummarizeValue(builder.Configuration["PostgreSql:Port"]),
+    StartupDiagnosticsFormatter.SummarizeValue(builder.Configuration["PostgreSql:Username"]),
+    StartupDiagnosticsFormatter.SummarizePassword(builder.Configuration["PostgreSql:Password"]),
+    StartupDiagnosticsFormatter.SummarizeValue(builder.Configuration["Database:Name"]),
+    StartupDiagnosticsFormatter.SummarizeValue(builder.Configuration["Loki:Uri"]),
+    StartupDiagnosticsFormatter.SummarizeValue(builder.Configuration["OpenSearch:Url"]));
 app.Logger.LogInformation("OSS: {OssType}", useLocalOss ? "local" : "S3");
 app.Logger.LogInformation("OpenSearch: {Url}", builder.Configuration["OpenSearch:Url"] ?? "(not configured)");
 
