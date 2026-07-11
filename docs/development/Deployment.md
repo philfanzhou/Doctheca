@@ -24,7 +24,7 @@
 
 以下配置迁入共享 Consul KV：
 
-- `config/ruoyu/infrastructure.json`
+- `config/ruoyu/shared.json`
   - `PostgreSql:Host`
   - `PostgreSql:Port`
   - `PostgreSql:Username`
