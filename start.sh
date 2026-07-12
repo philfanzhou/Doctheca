@@ -2,8 +2,7 @@
 set -e
 
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-IMAGE_TAG="20260619"
-IMAGE_NAME="ruoyu.doclibrary:${IMAGE_TAG}"
+IMAGE_NAME="ruoyu.doclibrary:20260619"
 CONTAINER_NAME="ruoyu-doclibrary"
 NETWORK_NAME="ruoyu-net"
 HTTP_PORT="5012"
