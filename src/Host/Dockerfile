@@ -19,11 +19,13 @@ COPY src/services/ruoyu.doclibrary/src/Service/Ruoyu.Study.DocLibrary.Service.cs
 COPY src/services/ruoyu.doclibrary/src/Host/Ruoyu.Study.DocLibrary.Host.csproj ./src/services/ruoyu.doclibrary/src/Host/
 COPY src/services/ruoyu.common/src/Ruoyu.Study.Common/Ruoyu.Study.Common.csproj ./src/services/ruoyu.common/src/Ruoyu.Study.Common/
 COPY src/services/ruoyu.common/src/Ruoyu.Study.Ai.Shared/Ruoyu.Study.Ai.Shared.csproj ./src/services/ruoyu.common/src/Ruoyu.Study.Ai.Shared/
+COPY src/services/ruoyu.common/src/Ruoyu.Study.Consul.Shared/Ruoyu.Study.Consul.Shared.csproj ./src/services/ruoyu.common/src/Ruoyu.Study.Consul.Shared/
 RUN dotnet restore "src/services/ruoyu.doclibrary/src/Host/Ruoyu.Study.DocLibrary.Host.csproj"
 
 COPY src/services/ruoyu.doclibrary/src/ ./src/services/ruoyu.doclibrary/src/
 COPY src/services/ruoyu.common/src/Ruoyu.Study.Common/ ./src/services/ruoyu.common/src/Ruoyu.Study.Common/
 COPY src/services/ruoyu.common/src/Ruoyu.Study.Ai.Shared/ ./src/services/ruoyu.common/src/Ruoyu.Study.Ai.Shared/
+COPY src/services/ruoyu.common/src/Ruoyu.Study.Consul.Shared/ ./src/services/ruoyu.common/src/Ruoyu.Study.Consul.Shared/
 COPY --from=frontend-build /wwwroot ./src/services/ruoyu.doclibrary/src/Host/wwwroot
 RUN dotnet publish "src/services/ruoyu.doclibrary/src/Host/Ruoyu.Study.DocLibrary.Host.csproj" -c Release -o /app/publish /p:UseAppHost=false --no-restore
 
