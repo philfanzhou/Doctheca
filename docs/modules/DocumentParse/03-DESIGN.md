@@ -165,8 +165,24 @@ src/services/ruoyu.doclibrary/
 
 MinerUFileParseWorker.ExecuteAsync (每 5s)
   → parseService.GetPendingJobsAsync()
-  → ProcessFileAsync → 转换/拆分/提交/轮询/下载/持久化
+  → ProcessFileAsync:
+      1. 更新 status=parsing
+      2. 下载源文件
+      3. 非 PDF → 调用 doc-converter 转换为 PDF（转换后 PDF 用于后续页数计算和分片）
+      4. 算 PDF 页数
+      5a. ≤200 页 → ProcessSingleFileAsync:
+          - 若为转换后 PDF：上传到 OSS 临时路径 mineru/converted/{parseId}.pdf
+          - 生成 presigned URL → 提交 MinerU → 轮询 → 下载 ZIP → 持久化
+          - 解析完成后清理临时 OSS 路径
+      5b. >200 页 → ProcessSplitFileAsync:
+          - 用 pdfStream 本地切分为多个 PDF chunk
+          - 每个 chunk 上传 OSS (mineru/splits/{parseId}/chunk_{i}.pdf)
+          - 逐 chunk 提交 MinerU → 轮询 → 下载 ZIP
+          - 合并 markdown / content_list / images（图片名加 chunk{i}_ 前缀）
+          - 解析完成后清理临时 chunk OSS 路径
 ```
+
+> **关键修正（2026-07-13）**：非 PDF 小文件路径原先把转换后 PDF 丢弃，直接把原始 DOCX 的 presigned URL 传给 MinerU，与转换逻辑不一致。现已修复：转换后 PDF 统一上传 OSS，MinerU 始终收到 PDF。
 
 ### 4.2 MinerU ZIP 处理流
 

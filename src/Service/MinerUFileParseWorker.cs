@@ -112,19 +112,12 @@ public class MinerUFileParseWorker : BackgroundService
         // Step 4: Convert non-PDF files to PDF first
         Stream pdfStream;
         bool isConverted = false;
+        string? convertedPdfOssPath = null;
 
         if (!file.ContentType.Equals("application/pdf", StringComparison.OrdinalIgnoreCase)
             && !file.FileName.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase))
         {
             _logger.LogInformation("Non-PDF file detected: {FileName} ({ContentType}), converting to PDF", file.FileName, file.ContentType);
-
-            if (!fileConversionService.IsAvailable)
-            {
-                sourceStream.Dispose();
-                await parseService.UpdateStatusAsync(parse.Id, DocumentParseStatus.Failed,
-                    errorMessage: "LibreOffice is not installed. Cannot convert non-PDF files to PDF for parsing. Please install LibreOffice or upload PDF files only.");
-                return;
-            }
 
             var convertedStream = await fileConversionService.ConvertToPdfAsync(sourceStream, file.FileName, ct);
             sourceStream.Dispose();
@@ -132,7 +125,7 @@ public class MinerUFileParseWorker : BackgroundService
             if (convertedStream == null)
             {
                 await parseService.UpdateStatusAsync(parse.Id, DocumentParseStatus.Failed,
-                    errorMessage: $"Failed to convert {file.FileName} to PDF. The file may be corrupted or in an unsupported format.");
+                    errorMessage: $"Failed to convert {file.FileName} to PDF via doc-converter. The file may be corrupted, in an unsupported format, or doc-converter service is unavailable.");
                 return;
             }
 
@@ -148,6 +141,27 @@ public class MinerUFileParseWorker : BackgroundService
         // Block service from scope (scoped lifetime)
         var blockService = scopeProvider.GetRequiredService<IDocumentParseBlockService>();
 
+        // If the file was converted to PDF, upload the converted PDF to OSS so that
+        // MinerU receives a PDF URL (not the original DOCX). This ensures behavior
+        // consistency between small-file and large-file (split) paths.
+        string mineruOssPath = file.FilePath;
+        if (isConverted)
+        {
+            pdfStream.Position = 0;
+            using var ms = new MemoryStream();
+            await pdfStream.CopyToAsync(ms, ct);
+            var pdfBytes = ms.ToArray();
+
+            convertedPdfOssPath = await ossService.UploadAsync(
+                pdfBytes,
+                $"{file.FileName}.pdf",
+                "application/pdf",
+                OssBucket.Documents,
+                $"mineru/converted/{parse.Id}");
+            mineruOssPath = convertedPdfOssPath;
+            _logger.LogInformation("Converted PDF uploaded to OSS: {Path}", convertedPdfOssPath);
+        }
+
         try
         {
             // Step 5: Check PDF page count
@@ -157,7 +171,7 @@ public class MinerUFileParseWorker : BackgroundService
             if (pageCount <= MaxPagesPerChunk)
             {
                 // Small file: process directly
-                await ProcessSingleFileAsync(parse, file, ossService, minerUClient, parseService, blockService, scopeProvider, ct);
+                await ProcessSingleFileAsync(parse, file, mineruOssPath, ossService, minerUClient, parseService, blockService, scopeProvider, ct);
             }
             else
             {
@@ -168,15 +182,31 @@ public class MinerUFileParseWorker : BackgroundService
         finally
         {
             pdfStream.Dispose();
+
+            // Clean up temporary converted PDF from OSS
+            if (convertedPdfOssPath != null)
+            {
+                try
+                {
+                    await ossService.DeleteAsync(convertedPdfOssPath);
+                    _logger.LogInformation("Cleaned up temporary converted PDF: {Path}", convertedPdfOssPath);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to clean up temporary converted PDF: {Path}", convertedPdfOssPath);
+                }
+            }
         }
     }
 
     /// <summary>
     /// Process a file that fits within MinerU's page limit (original flow).
+    /// mineruOssPath is the OSS path of the PDF to submit to MinerU (original PDF or converted PDF).
     /// </summary>
     private async Task ProcessSingleFileAsync(
         DocumentParseModel parse,
         DocumentFileModel file,
+        string mineruOssPath,
         IOssService ossService,
         MinerUPrecisionClient minerUClient,
         IDocumentParseService parseService,
@@ -184,8 +214,8 @@ public class MinerUFileParseWorker : BackgroundService
         IServiceProvider scopeProvider,
         CancellationToken ct)
     {
-        var presignedUrl = await ossService.GetPresignedUrlAsync(file.FilePath, 3600);
-        _logger.LogInformation("Generated presigned URL for file {FileId}", file.Id);
+        var presignedUrl = await ossService.GetPresignedUrlAsync(mineruOssPath, 3600);
+        _logger.LogInformation("Generated presigned URL for file {FileId} from {OssPath}", file.Id, mineruOssPath);
 
         var dataId = parse.DocumentFileId.ToString("N")[..16];
         var taskId = await minerUClient.SubmitUrlAsync(presignedUrl, dataId, modelVersion: parse.ModelVersion, ct);
@@ -603,7 +633,7 @@ public class MinerUFileParseWorker : BackgroundService
     /// Merge multiple content_list.json arrays (one per chunk) into a single JSON array.
     /// Block page_id is preserved; sort_index is recomputed in DocumentParseBlockService.
     /// </summary>
-    private static string MergeContentListArrays(List<MinerUParseResult> chunkResults)
+    internal static string MergeContentListArrays(List<MinerUParseResult> chunkResults)
     {
         var allBlocks = new List<JsonElement>();
         foreach (var chunk in chunkResults)

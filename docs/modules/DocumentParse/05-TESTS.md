@@ -2,11 +2,10 @@
 
 ## 测试策略概览
 
-本模块单元测试覆盖 **纯逻辑层**（block 解析、PDF 拆分、转档可用性检测）。以下组件**无单元测试**，需集成测试或手动验证：
+本模块单元测试覆盖 **纯逻辑层**（block 解析、PDF 拆分、远程转换 HTTP 客户端、content_list 合并）。以下组件**无单元测试**，需集成测试或手动验证：
 
-- `MinerUFileParseWorker`（依赖外部 MinerU API + OSS + OpenSearch）
+- `MinerUFileParseWorker`（依赖外部 MinerU API + OSS + OpenSearch，编排逻辑可通过 mock 测试）
 - `MinerUPrecisionClient`（依赖外部 MinerU HTTP API）
-- `LibreOfficeConversionService.ConvertToPdfAsync`（依赖系统 LibreOffice 进程，仅可用性检测可 UT）
 - `DocumentParseEndpoints`（HTTP 集成，需端到端测试）
 
 ## 单元测试 (UT)
@@ -45,14 +44,30 @@
 
 ### FileConversionServiceTests.cs
 
-覆盖 `IFileConversionService.IsAvailable` 构造检测、不可用时抛异常、PDF 检测逻辑。**FR-04 / AC-05**。
+覆盖 `RemoteFileConversionService`（HTTP 调用 doc-converter）的 mock 测试。**FR-04 / AC-05**。
 
 | # | 测试方法 | 覆盖 |
 |---|---------|------|
-| UT-DP-19 | `IsAvailable_ReturnsFalse_WhenLibreOfficeNotInstalled` | 构造时不抛异常（可用性检测） |
-| UT-DP-20 | `ConvertToPdfAsync_Throws_WhenNotAvailable` | 不可用时抛 `InvalidOperationException`（含 "LibreOffice"） |
-| UT-DP-21 | `IsPdfFile_DetectedByContentType` | ContentType `application/pdf` 识别 |
-| UT-DP-22 | `IsPdfFile_DetectedByExtension` | 扩展名 `.pdf` 识别 |
+| UT-DP-19 | `IsAvailable_AlwaysReturnsTrue` | HTTP 服务可用性始终返回 true（懒检查） |
+| UT-DP-20 | `ConvertToPdfAsync_ReturnsStream_OnSuccess` | 成功转换返回 PDF 流 |
+| UT-DP-21 | `ConvertToPdfAsync_ReturnsNull_OnNonSuccessStatusCode` | HTTP 非 2xx 返回 null |
+| UT-DP-22 | `ConvertToPdfAsync_ReturnsNull_OnHttpRequestException` | 网络异常返回 null |
+| UT-DP-23 | `ConvertToPdfAsync_SeeksStreamToStartBeforeReading` | 调用前 reset stream position |
+| UT-DP-24 | `Constructor_SetsBaseUrlAndTimeout` | 构造时正确设置 BaseAddress 和 Timeout |
+| UT-DP-25 | `ConvertToPdfAsync_SendsMultipartFormData` | 请求为 multipart/form-data |
+| UT-DP-26 | `IsPdfFile_DetectedByContentType` | ContentType `application/pdf` 识别 |
+| UT-DP-27 | `IsPdfFile_DetectedByExtension` | 扩展名 `.pdf` 识别 |
+
+### MinerUFileParseWorkerTests.cs
+
+覆盖 `MinerUFileParseWorker` 的 content_list 合并逻辑和编排流程（mock 依赖）。**FR-05 / AC-06**。
+
+| # | 测试方法 | 覆盖 |
+|---|---------|------|
+| UT-DP-28 | `MergeContentListArrays_EmptyList_ReturnsEmptyArray` | 空列表返回 `[]` |
+| UT-DP-29 | `MergeContentListArrays_SingleChunk_ReturnsSameArray` | 单 chunk 原样返回 |
+| UT-DP-30 | `MergeContentListArrays_MultipleChunks_MergesAllBlocks` | 多 chunk 合并所有 block |
+| UT-DP-31 | `MergeContentListArrays_SkipsMalformedJson` | 跳过非法 JSON 的 chunk |
 
 ## 集成测试（规划）
 
