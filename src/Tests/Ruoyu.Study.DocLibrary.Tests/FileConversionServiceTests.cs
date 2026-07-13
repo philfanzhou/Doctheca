@@ -1,5 +1,7 @@
+using System.Net;
 using FluentAssertions;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Moq;
 using Ruoyu.Study.DocLibrary.Service;
 using Xunit;
@@ -8,43 +10,146 @@ namespace Ruoyu.Study.DocLibrary.Tests;
 
 public class FileConversionServiceTests
 {
-    [Fact]
-    public void IsAvailable_ReturnsFalse_WhenLibreOfficeNotInstalled()
+    private static RemoteFileConversionService CreateService(
+        HttpClient httpClient,
+        string baseUrl = "http://doc-converter:5050",
+        int timeoutSeconds = 120)
     {
-        // Arrange
-        var logger = new Mock<ILogger<LibreOfficeConversionService>>().Object;
-
-        // Act
-        var service = new LibreOfficeConversionService(logger);
-
-        // Assert - on Windows dev machine, LibreOffice is likely not in PATH
-        // This test just verifies the service can be constructed
-        service.Should().NotBeNull();
+        var options = Options.Create(new FileConversionOptions
+        {
+            BaseUrl = baseUrl,
+            TimeoutSeconds = timeoutSeconds,
+        });
+        var logger = new Mock<ILogger<RemoteFileConversionService>>().Object;
+        return new RemoteFileConversionService(httpClient, options, logger);
     }
 
     [Fact]
-    public async Task ConvertToPdfAsync_Throws_WhenNotAvailable()
+    public void IsAvailable_AlwaysReturnsTrue()
     {
-        // Arrange
-        var logger = new Mock<ILogger<LibreOfficeConversionService>>().Object;
-        var service = new LibreOfficeConversionService(logger);
+        var service = CreateService(new HttpClient());
+        service.IsAvailable.Should().BeTrue();
+    }
 
-        // If LibreOffice is not available, the method should throw
-        if (!service.IsAvailable)
+    [Fact]
+    public async Task ConvertToPdfAsync_ReturnsStream_OnSuccess()
+    {
+        var fakePdf = new byte[] { 0x25, 0x50, 0x44, 0x46 }; // %PDF
+        var handler = new StubHttpHandler(_ => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
         {
-            using var ms = new MemoryStream(System.Text.Encoding.UTF8.GetBytes("test"));
-            var act = () => service.ConvertToPdfAsync(ms, "test.docx");
+            Content = new ByteArrayContent(fakePdf),
+        }));
+        var client = new HttpClient(handler);
+        var service = CreateService(client);
 
-            // Act & Assert
-            await act.Should().ThrowAsync<InvalidOperationException>()
-                .WithMessage("*LibreOffice*");
+        using var sourceStream = new MemoryStream(new byte[] { 1, 2, 3 });
+        var result = await service.ConvertToPdfAsync(sourceStream, "test.docx");
+
+        result.Should().NotBeNull();
+        result!.Length.Should().Be(fakePdf.Length);
+    }
+
+    [Fact]
+    public async Task ConvertToPdfAsync_ReturnsNull_OnNonSuccessStatusCode()
+    {
+        var handler = new StubHttpHandler(_ => Task.FromResult(new HttpResponseMessage(HttpStatusCode.InternalServerError)
+        {
+            Content = new StringContent("{\"error\":\"LibreOffice not available\"}"),
+        }));
+        var client = new HttpClient(handler);
+        var service = CreateService(client);
+
+        using var sourceStream = new MemoryStream(new byte[] { 1, 2, 3 });
+        var result = await service.ConvertToPdfAsync(sourceStream, "test.docx");
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task ConvertToPdfAsync_ReturnsNull_OnHttpRequestException()
+    {
+        var handler = new StubHttpHandler(_ => throw new HttpRequestException("connection refused"));
+        var client = new HttpClient(handler);
+        var service = CreateService(client);
+
+        using var sourceStream = new MemoryStream(new byte[] { 1, 2, 3 });
+        var result = await service.ConvertToPdfAsync(sourceStream, "test.docx");
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task ConvertToPdfAsync_SeeksStreamToStartBeforeReading()
+    {
+        byte[]? capturedBody = null;
+        var handler = new StubHttpHandler(async req =>
+        {
+            capturedBody = await req.Content!.ReadAsByteArrayAsync();
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new ByteArrayContent(new byte[] { 0x25 }),
+            };
+        });
+        var client = new HttpClient(handler);
+        var service = CreateService(client);
+
+        var data = new byte[] { 1, 2, 3, 4, 5 };
+        using var sourceStream = new MemoryStream(data);
+        sourceStream.Position = 2; // Non-zero position
+
+        await service.ConvertToPdfAsync(sourceStream, "test.docx");
+
+        // Multipart body includes boundary headers, so length > 5.
+        // Verify the original 5 bytes are all present (position was reset to 0).
+        capturedBody.Should().NotBeNull();
+        foreach (var b in data)
+        {
+            capturedBody.Should().Contain(b);
         }
+    }
+
+    [Fact]
+    public void Constructor_SetsBaseUrlAndTimeout()
+    {
+        var options = Options.Create(new FileConversionOptions
+        {
+            BaseUrl = "http://my-converter:9999/",
+            TimeoutSeconds = 30,
+        });
+        var logger = new Mock<ILogger<RemoteFileConversionService>>().Object;
+        var client = new HttpClient();
+
+        _ = new RemoteFileConversionService(client, options, logger);
+
+        client.BaseAddress.Should().Be(new Uri("http://my-converter:9999/"));
+        client.Timeout.Should().Be(TimeSpan.FromSeconds(30));
+    }
+
+    [Fact]
+    public async Task ConvertToPdfAsync_SendsMultipartFormData()
+    {
+        string? capturedContentType = null;
+        var handler = new StubHttpHandler(req =>
+        {
+            capturedContentType = req.Content?.Headers.ContentType?.MediaType;
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new ByteArrayContent(new byte[] { 0x25 }),
+            });
+        });
+        var client = new HttpClient(handler);
+        var service = CreateService(client);
+
+        using var sourceStream = new MemoryStream(new byte[] { 1 });
+        await service.ConvertToPdfAsync(sourceStream, "test.docx");
+
+        // Should be multipart/form-data
+        capturedContentType.Should().Be("multipart/form-data");
     }
 
     [Fact]
     public void IsPdfFile_DetectedByContentType()
     {
-        // Verify our PDF detection logic
         var pdfContentType = "application/pdf";
         var docxContentType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 
@@ -55,11 +160,28 @@ public class FileConversionServiceTests
     [Fact]
     public void IsPdfFile_DetectedByExtension()
     {
-        // Verify our PDF detection logic
         var pdfFile = "document.pdf";
         var docxFile = "document.docx";
 
         pdfFile.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase).Should().BeTrue();
         docxFile.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase).Should().BeFalse();
+    }
+
+    /// <summary>
+    /// Stub HttpHandler for testing HttpClient-based code without a real server.
+    /// </summary>
+    private sealed class StubHttpHandler : HttpMessageHandler
+    {
+        private readonly Func<HttpRequestMessage, Task<HttpResponseMessage>> _handler;
+
+        public StubHttpHandler(Func<HttpRequestMessage, Task<HttpResponseMessage>> handler)
+        {
+            _handler = handler;
+        }
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            return _handler(request);
+        }
     }
 }

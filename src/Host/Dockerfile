@@ -32,13 +32,9 @@ RUN dotnet publish "src/services/ruoyu.doclibrary/src/Host/Ruoyu.Study.DocLibrar
 # ========== Stage 3: Runtime ==========
 FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS final
 
-# Configure apt mirror for Chinese network and install LibreOffice
-RUN sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list.d/debian.sources 2>/dev/null || \
-    sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list 2>/dev/null || true && \
-    apt-get update && \
-    apt-get install -y --no-install-recommends libreoffice-writer libreoffice-impress && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
+# LibreOffice dependency removed: document-to-PDF conversion is now handled
+# by the standalone doc-converter service (src/foundation/doc-converter).
+# See docs/modules/DocumentParse/03-DESIGN.md for details.
 
 WORKDIR /app
 COPY --from=backend-build /app/publish .

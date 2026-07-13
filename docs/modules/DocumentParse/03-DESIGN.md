@@ -12,7 +12,7 @@ src/services/ruoyu.doclibrary/
 │   │   ├── MinerUPrecisionClient.cs              # MinerU API 客户端（Singleton，含 MinerUParseResult / MinerUOptions / ImageMetadata）
 │   │   ├── MinerUFileParseWorker.cs              # MinerU 文件解析后台 Worker（BackgroundService）
 │   │   ├── PdfSplitService.cs                    # PDF 分页服务（Singleton，含 IPdfSplitService）
-│   │   └── LibreOfficeConversionService.cs       # LibreOffice 转档服务（Singleton，含 IFileConversionService）
+│   │   └── RemoteFileConversionService.cs        # 远程转换服务（Singleton，HTTP 调用 doc-converter，含 IFileConversionService）
 │   ├── Domain/
 │   │   ├── Models/
 │   │   │   ├── DocumentParseModel.cs             # 解析领域模型
@@ -211,16 +211,19 @@ DELETE /admin/document-parses/{parseId}
 | `IDocumentAnalysisService` | LLM 元数据分析（可选，best-effort） | `Ruoyu.Study.DocLibrary.Domain.Repositories` |
 | `IOssService` | OSS 上传/下载/删除/presigned URL | `Ruoyu.Study.Common.Oss` |
 | MinerU Precision API | 文档解析（外部 HTTP） | `https://mineru.net` |
-| LibreOffice | DOC/PPT → PDF（外部进程） | 系统安装 |
+| doc-converter | DOC/PPT → PDF（外部 HTTP 服务） | `src/foundation/doc-converter`（独立部署，容器名 `doc-converter:5050`） |
+
+> **变更说明（2026-07-13）**：原 `LibreOfficeConversionService`（本地进程调用 LibreOffice）已替换为 `RemoteFileConversionService`（HTTP 调用独立的 doc-converter 基础服务）。改造原因：剥离 LibreOffice 重依赖，加快 doclibrary 镜像构建；doc-converter 镜像构建一次可长期复用。详见 `src/foundation/doc-converter/docs/design.md`。
 
 ## 6. DI 注册
 
 ```csharp
 // Program.cs
 builder.Services.Configure<MinerUOptions>(builder.Configuration.GetSection(MinerUOptions.SectionName));
+builder.Services.Configure<FileConversionOptions>(builder.Configuration.GetSection(FileConversionOptions.SectionName));
+builder.Services.AddHttpClient<IFileConversionService, RemoteFileConversionService>();
 builder.Services.AddSingleton<MinerUPrecisionClient>();
 builder.Services.AddSingleton<IPdfSplitService, PdfSplitService>();
-builder.Services.AddSingleton<IFileConversionService, LibreOfficeConversionService>();
 
 builder.Services.AddScoped<IDocumentParseRepository, DocumentParseRepository>();
 builder.Services.AddScoped<IDocumentParseImageRepository, DocumentParseImageRepository>();
@@ -231,7 +234,7 @@ builder.Services.AddScoped<IDocumentParseService, DocumentParseService>();
 builder.Services.AddHostedService<MinerUFileParseWorker>();
 ```
 
-注册关系到文件：`MinerUPrecisionClient`、`PdfSplitService`、`LibreOfficeConversionService` 为 Singleton；`MinerUFileParseService` 为 HostedService（内部使用 `IServiceProvider.CreateScope` 解析 Scoped 服务）。
+注册关系到文件：`MinerUPrecisionClient`、`PdfSplitService` 为 Singleton；`RemoteFileConversionService` 通过 `AddHttpClient` 注册为 Singleton（HttpClientFactory 管理 HttpClient 生命周期）；`MinerUFileParseService` 为 HostedService（内部使用 `IServiceProvider.CreateScope` 解析 Scoped 服务）。
 
 ## 7. 配置
 
@@ -241,6 +244,10 @@ builder.Services.AddHostedService<MinerUFileParseWorker>();
     "ApiToken": "eyJ0eXAi...",
     "BaseUrl": "https://mineru.net",
     "ModelVersion": "vlm"
+  },
+  "FileConversion": {
+    "BaseUrl": "http://doc-converter:5050",
+    "TimeoutSeconds": 120
   }
 }
 ```
@@ -250,8 +257,10 @@ builder.Services.AddHostedService<MinerUFileParseWorker>();
 | `MinerU:ApiToken` | Bearer Token（免费额度 1000 页/天） |
 | `MinerU:BaseUrl` | API 地址（默认 `https://mineru.net`） |
 | `MinerU:ModelVersion` | 默认模型版本（`vlm` / `pipeline`），可被请求参数覆盖 |
+| `FileConversion:BaseUrl` | doc-converter 服务地址（默认 `http://doc-converter:5050`） |
+| `FileConversion:TimeoutSeconds` | HTTP 调用超时（默认 120 秒，略大于 doc-converter 内部 60 秒转换超时） |
 
-Section 常量：`MinerUOptions.SectionName = "MinerU"`。
+Section 常量：`MinerUOptions.SectionName = "MinerU"`、`FileConversionOptions.SectionName = "FileConversion"`。
 
 ## 8. 安全
 

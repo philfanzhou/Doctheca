@@ -112,9 +112,10 @@ builder.Services.AddScoped<IQuestionBankImportService, QuestionBankImportService
 
 // MinerU Precision API Client
 builder.Services.Configure<MinerUOptions>(builder.Configuration.GetSection(MinerUOptions.SectionName));
+builder.Services.Configure<FileConversionOptions>(builder.Configuration.GetSection(FileConversionOptions.SectionName));
+builder.Services.AddHttpClient<IFileConversionService, RemoteFileConversionService>();
 builder.Services.AddSingleton<MinerUPrecisionClient>();
 builder.Services.AddSingleton<IPdfSplitService, PdfSplitService>();
-builder.Services.AddSingleton<IFileConversionService, LibreOfficeConversionService>();
 
 // Background Workers
 builder.Services.AddHostedService<MinerUFileParseWorker>();
