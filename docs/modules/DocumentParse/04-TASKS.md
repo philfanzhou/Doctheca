@@ -28,7 +28,7 @@
 
 | ID | 任务 | 代码落点 | 状态 |
 |----|------|---------|------|
-| DP-13 | `IFileConversionService` / `LibreOfficeConversionService`（DOC/PPT → PDF，60s 超时） | `src/Service/LibreOfficeConversionService.cs` | completed |
+| DP-13 | `IFileConversionService` / `RemoteFileConversionService`（DOC/PPT → PDF，HTTP 调用 doc-converter，120s 超时） | `src/Service/RemoteFileConversionService.cs` | completed |
 | DP-14 | `IPdfSplitService` / `PdfSplitService`（GetPageCount / SplitPdf，PdfSharpCore） | `src/Service/PdfSplitService.cs` | completed |
 | DP-15 | 大文件分块解析（ProcessSplitFileAsync：分块上传 / 逐块提交 / 合并 / 清理临时文件） | `src/Service/MinerUFileParseWorker.cs` | completed |
 | DP-16 | `PersistMergedChunkResultsAsync`（Markdown 拼接 / content_list 合并 / 图片名前缀 / 状态判定） | `src/Service/MinerUFileParseWorker.cs` | completed |

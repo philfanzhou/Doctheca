@@ -86,8 +86,7 @@ POST /admin/document-files/{id}/parse?modelVersion=vlm
 2. `fileService.GetByIdAsync` → 文件不存在抛异常（外层捕获标记 failed）
 3. `ossService.DownloadAsync(file.FilePath)` → 下载源文件
 4. **非 PDF 转档**：`ContentType` 非 `application/pdf` 且文件名不以 `.pdf` 结尾 → 调用 `IFileConversionService.ConvertToPdfAsync`
-   - `IsAvailable == false` → 标记 failed，错误信息提示 LibreOffice 未安装
-   - 返回 `null` → 标记 failed，提示转档失败
+   - 返回 `null`（doc-converter 不可用 / 超时 / HTTP 错误 / 非 2xx）→ 标记 failed，错误信息提示转档失败
 5. **页数检测**：`pdfSplitService.GetPageCount(pdfStream)`
 6. **分支**：
    - `pageCount <= MaxPagesPerChunk (200)` → `ProcessSingleFileAsync`
@@ -172,17 +171,17 @@ POST /admin/document-files/{id}/parse?modelVersion=vlm
 
 ## 5. 转档服务规格
 
-定义于 `Service/LibreOfficeConversionService.cs`，接口 `IFileConversionService` 同文件。
+定义于 `Service/RemoteFileConversionService.cs`，接口 `IFileConversionService`、配置类 `FileConversionOptions` 同文件。
 
-- `IsAvailable`：构造时通过 `which` 或文件存在性检测 LibreOffice 路径（`libreoffice`、`/usr/bin/libreoffice`、`soffice`、`/usr/bin/soffice`）
+- `IsAvailable`：恒为 `true`（HTTP 服务的可用性在首次调用时惰性检测，不再构造时检测本地进程）
 - `ConvertToPdfAsync`：
-  - 不可用 → 抛 `InvalidOperationException`
-  - 写源文件到临时目录 `/tmp/{guid}/`
-  - 执行 `libreoffice --headless --convert-to pdf --outdir "{workDir}" "{sourcePath}"`
-  - 超时 60 秒 → 终止进程并抛 `TimeoutException`
-  - 非零 exit code → 返回 `null`
-  - 查找生成的 PDF（精确文件名 → 回退到首个 `.pdf` 文件）→ 读取为 `MemoryStream`
-  - `finally` 清理临时目录
+  - 以 `multipart/form-data` 方式 POST 文件到 doc-converter 的 `/convert` 端点
+  - HTTP 超时由 `FileConversionOptions.TimeoutSeconds` 控制（默认 120 秒，略大于 doc-converter 内部 60 秒转换超时）
+  - `TaskCanceledException`（内含 `TimeoutException`）→ 记 LogError，返回 `null`
+  - `HttpRequestException` → 记 LogError，返回 `null`
+  - 非 2xx 状态码 → 记 LogError，返回 `null`
+  - 成功 → 读取响应体为 `MemoryStream` 返回
+- 配置：`FileConversion:BaseUrl`（默认 `http://doc-converter:5050`）、`FileConversion:TimeoutSeconds`（默认 120）
 
 ## 6. PDF 分页服务规格
 
@@ -264,7 +263,7 @@ Task<MinerUParseResult> DownloadAndProcessZipAsync(string zipUrl, string taskId,
 | 解析记录不存在 | `DeleteDocumentParse` 返回 404 | `DOCLIBRARY_PARSE_NOT_FOUND` |
 | MinerU 提交失败 | `SubmitUrlAsync` 抛异常 → Worker 捕获 | 标记 `failed`，记录 `error_message` |
 | MinerU 轮询失败/超时 | `PollAndDownloadAsync` 抛异常 | 标记 `failed` |
-| 转档失败（LibreOffice 不可用） | `ProcessFileAsync` 分支 | 标记 `failed`，明确错误信息 |
+| 转档失败（doc-converter 不可用） | `ProcessFileAsync` 分支 | 标记 `failed`，明确错误信息 |
 | 转档失败（返回 null） | `ConvertToPdfAsync` 返回 null | 标记 `failed` |
 | 大文件分块部分失败 | `ProcessSplitFileAsync` 收集错误 | 合并成功块但仍标记 `failed`，`error_message` 含失败块信息 |
 | OSS 图片删除失败 | `DeleteDocumentParse` catch | 记 Warning，不阻塞 |
@@ -294,4 +293,4 @@ Task<MinerUParseResult> DownloadAndProcessZipAsync(string zipUrl, string taskId,
 
 ### 9.3 测试限制
 
-本模块的 Worker、MinerUPrecisionClient、LibreOfficeConversionService 依赖外部 HTTP / 进程，**无单元测试覆盖**（PdfSplitServiceTests 仅覆盖 PdfSharpCore 拆分纯逻辑）。端到端解析流程需集成测试或手动验证。
+本模块的 Worker、MinerUPrecisionClient 依赖外部 HTTP，**无单元测试覆盖**（PdfSplitServiceTests 仅覆盖 PdfSharpCore 拆分纯逻辑；FileConversionServiceTests 使用 `StubHttpHandler` 覆盖 `RemoteFileConversionService` 的 HTTP 调用路径）。端到端解析流程需集成测试或手动验证。

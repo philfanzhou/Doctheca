@@ -8,7 +8,7 @@
 | API 客户端 | 服务名 + `Client` 后缀 | `MinerUPrecisionClient` |
 | 端点类 | 静态类，PascalCase + `Endpoints` 后缀 | `DocumentParseEndpoints` |
 | 端点方法 | 私有静态，PascalCase | `ListDocumentParses`、`DeleteDocumentParse` |
-| 转档/分页服务 | 类名 + `Service` 后缀，接口前缀 `I` | `LibreOfficeConversionService` / `IFileConversionService`、`PdfSplitService` / `IPdfSplitService` |
+| 转档/分页服务 | 类名 + `Service` 后缀，接口前缀 `I` | `RemoteFileConversionService` / `IFileConversionService`、`PdfSplitService` / `IPdfSplitService` |
 | 领域服务 | 接口前缀 `I`，实现类名 + `Service` | `IDocumentParseService` / `DocumentParseService` |
 | 配置类 | PascalCase + `Options` 后缀 | `MinerUOptions` |
 | record（服务层） | PascalCase | `ImageMetadata`、`MinerUParseResult` |
@@ -17,7 +17,7 @@
 
 ## 文件组织约定
 
-- 小型服务（转档、分页）的接口与实现**合并在一个 `.cs` 文件中**（`PdfSplitService.cs`、`LibreOfficeConversionService.cs`、`DocumentParseBlockService.cs`），避免碎片化
+- 小型服务（转档、分页）的接口与实现**合并在一个 `.cs` 文件中**（`PdfSplitService.cs`、`RemoteFileConversionService.cs`、`DocumentParseBlockService.cs`），避免碎片化
 - 大型客户端（`MinerUPrecisionClient`）的 record 与配置类**同文件定义**（`MinerUParseResult`、`MinerUOptions`、`ImageMetadata`）
 - 端点类为 `static class`，通过 `WebApplication.MapXxxEndpoints` 扩展方法注册
 
@@ -50,7 +50,7 @@
 - **Worker 轮询层 catch**：异常记 `LogError`，下一轮继续（不退出 Worker）
 - **OSS 操作失败**：best-effort，记 `LogWarning`，不阻塞主流程
 - **OpenSearch 索引失败**：best-effort，记 `LogWarning`，不阻塞解析/删除
-- **LibreOffice 不可用**：转档前检测 `IsAvailable`，不可用时标记 `failed` 并给出明确错误信息
+- **doc-converter 不可用**：转档 HTTP 调用失败/超时返回 `null`，标记 `failed` 并给出明确错误信息
 - **MinerU API 失败**：`SubmitUrlAsync` / `PollStatusAsync` 抛 `InvalidOperationException`，Worker 外层捕获标记 `failed`
 - **OperationCanceledException**：在 `ExecuteAsync` / `ProcessFileAsync` 中识别停止信号，rethrow 以优雅退出
 

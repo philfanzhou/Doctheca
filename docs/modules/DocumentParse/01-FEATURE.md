@@ -12,7 +12,7 @@
 2. **后台异步解析**：`MinerUFileParseWorker`（`BackgroundService`，每 5 秒轮询）拉取 `pending` 任务，依次执行"格式转换 → 页数检测 → 提交 MinerU → 轮询状态 → 下载 ZIP → 持久化"全流程。解析状态全部持久化在数据库中，前端无状态、刷新安全。
 3. **解析记录管理**：`GET /admin/document-parses` 分页列出所有解析记录（含按文件名模糊搜索），`DELETE /admin/document-parses/{parseId}` 删除单条解析记录并联动物理图片、数据库记录、OpenSearch 索引的清理。
 
-支持的文档格式：PDF、DOC、DOCX、PPT、PPTX（≤200MB）。非 PDF 文件先由 LibreOffice headless 转为 PDF；超过 200 页的大文档由 PdfSplitService 拆分为多个子文档分别解析后合并结果。
+支持的文档格式：PDF、DOC、DOCX、PPT、PPTX（≤200MB）。非 PDF 文件先由 doc-converter 基础服务（HTTP）转为 PDF；超过 200 页的大文档由 PdfSplitService 拆分为多个子文档分别解析后合并结果。
 
 ## 背景
 
@@ -36,7 +36,7 @@ MinerU Precision API 的解析耗时从数十秒到数十分钟不等（取决�
 
 ### FR-02:MinerU 后台解析 Worker
 - `MinerUFileParseWorker`（`BackgroundService`）轮询 `pending` 解析任务
-- 非 PDF 文件通过 `IFileConversionService`（LibreOffice headless）转为 PDF
+- 非 PDF 文件通过 `IFileConversionService`（HTTP 调用 doc-converter 基础服务）转为 PDF
 - ≤200 页：直接提交 MinerU；>200 页：`IPdfSplitService` 拆分为多个子文档逐块提交后合并
 - 持久化：ZIP 上传 OSS、图片上传 OSS 并替换 Markdown 路径、blocks 入库、状态更新为 `parsed`
 - 解析完成后的 best-effort 后置步骤：OpenSearch 索引 blocks、LLM 分析元数据
@@ -48,9 +48,10 @@ MinerU Precision API 的解析耗时从数十秒到数十分钟不等（取决�
 - 图片上传 OSS（路径 `mineru/{taskId}/`），Markdown 中的相对路径替换为完整 OSS 路径
 
 ### FR-04:转档服务
-- `IFileConversionService` / `LibreOfficeConversionService`（Singleton）：DOC/DOCX/PPT/PPTX → PDF
-- `IsAvailable` 属性检测 LibreOffice 是否安装；不可用时解析标记 `failed`
-- 超时 60 秒；临时目录在转档后清理
+- `IFileConversionService` / `RemoteFileConversionService`（通过 `AddHttpClient` 注册）：DOC/DOCX/PPT/PPTX → PDF
+- HTTP 调用独立的 doc-converter 基础服务（`POST /convert`，multipart/form-data）
+- `IsAvailable` 恒为 `true`（HTTP 可用性在首次调用时惰性检测）；转档失败（超时/HTTP 错误/非 2xx）返回 `null`，解析标记 `failed`
+- 超时由 `FileConversion:TimeoutSeconds` 控制（默认 120 秒）
 
 ### FR-05:PDF 分页服务
 - `IPdfSplitService` / `PdfSplitService`（Singleton，基于 PdfSharpCore）
@@ -83,7 +84,7 @@ MinerU Precision API 的解析耗时从数十秒到数十分钟不等（取决�
 | AC-02 | 同文件同 modelVersion 已有 `pending`/`parsing` 解析时，再次触发返回 422 `DOCLIBRARY_PARSE_IN_PROGRESS` |
 | AC-03 | MinerU Token 未配置时返回 503 `DOCLIBRARY_MINERU_NOT_CONFIGURED` |
 | AC-04 | Worker 完成解析后，`status="parsed"`，`markdown_content` 非空，`document_parse_images` 有记录，blocks 入库 |
-| AC-05 | 非 PDF 文件自动通过 LibreOffice 转 PDF 后解析；LibreOffice 不可用时标记 `failed` |
+| AC-05 | 非 PDF 文件自动通过 doc-converter 转 PDF 后解析；转档失败时标记 `failed` |
 | AC-06 | >200 页 PDF 自动分块解析并合并结果，存为一条 parse 记录 |
 | AC-07 | 解析失败（MinerU 返回失败/超时）时 `status="failed"`，`error_message` 非空 |
 | AC-08 | `GET /admin/document-parses` 分页返回解析记录，支持 `search` 按文件名过滤 |
@@ -117,7 +118,7 @@ MinerU Precision API 的解析耗时从数十秒到数十分钟不等（取决�
 |------|------|
 | `MinerUFileParseWorker` | 新增 BackgroundService（轮询 + 解析流程编排） |
 | `MinerUPrecisionClient` | 新增 Singleton（提交/轮询/下载 ZIP） |
-| `IFileConversionService` / `LibreOfficeConversionService` | 新增 Singleton（非 PDF → PDF） |
+| `IFileConversionService` / `RemoteFileConversionService` | 新增（HTTP 调用 doc-converter，非 PDF → PDF） |
 | `IPdfSplitService` / `PdfSplitService` | 新增 Singleton（页数检测/拆分） |
 | `DocumentParseEndpoints` | 新增 `/admin/document-parses` 端点组（列表/删除） |
 | `IDocumentParseService` | 新增解析服务接口（CRUD + 状态管理 + 列表/删除） |
