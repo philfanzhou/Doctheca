@@ -56,8 +56,55 @@
 | OpenSearch | 9200 | 全文检索索引 |
 | MinIO / SeaweedFS | 8333 | 对象存储（S3 兼容） |
 | Consul | 8500 | 共享配置读取与服务注册 |
+| Loki | 3100 | 日志聚合（通过 Consul `Loki:Uri` 配置） |
 
 > **不依赖 QuantumZhou.Identity**：内网管理后台，访问控制由部署层网络隔离实现。
+
+## 日志配置
+
+DocLibrary 使用 Serilog 替代原生 Microsoft.Extensions.Logging，双写到 Console + Grafana Loki。接入方式与 Identity 服务完全一致。
+
+### Serilog 配置
+
+服务通过 `builder.Host.UseAgentSerilog("Ruoyu.Study.DocLibrary")` 配置 Serilog。`appsettings.json` 中的 `Logging` 节仅保留给未走 Serilog 的少量运行时组件，**业务日志级别以 Serilog 配置为准**。
+
+| 配置键 | 默认值 | 说明 |
+|--------|--------|------|
+| `Serilog:MinimumLevel:Default` | Information | 默认日志级别 |
+| `Serilog:MinimumLevel:Override:Microsoft.AspNetCore` | Warning | ASP.NET Core 日志级别 |
+| `Serilog:MinimumLevel:Override:Microsoft.EntityFrameworkCore.Database.Command` | Warning | EF Core 日志级别 |
+| `Serilog:WriteTo:0:Name` | Console | 控制台 Sink（数组下标 0） |
+| `Serilog:WriteTo:1:Name` | GrafanaLoki | Loki Sink（数组下标 1） |
+| `Serilog:WriteTo:1:Args:uri` | http://ruoyu-loki:3100 | Loki 地址（最终由 `Loki:Uri` 覆盖） |
+| `Serilog:WriteTo:1:Args:labels:0:key` | service | Loki 标签键 |
+| `Serilog:WriteTo:1:Args:labels:0:value` | Ruoyu.Study.DocLibrary | Loki 标签值（service 标签） |
+
+### 日志 Enricher
+
+每条日志自动携带以下字段：
+
+| 字段 | 来源 | 说明 |
+|------|------|------|
+| ServiceName | UseAgentSerilog 参数 | 固定为 `Ruoyu.Study.DocLibrary` |
+| ServiceVersion | UseAgentSerilog 参数 | 默认 `1.0.0` |
+| InstanceId | Environment.MachineName | 实例标识 |
+| MachineName | Enrichers.Environment | 主机名 |
+| ThreadId | Enrichers.Thread | 线程 ID |
+
+### Loki 地址注入
+
+Loki 地址统一通过 `Loki:Uri` 配置键进入 `Serilog:WriteTo:1:Args:uri`：
+
+| 来源 | 示例值 | 说明 |
+|------|--------|------|
+| `Loki:Uri` 配置键 | http://ruoyu-loki:3100 | 推荐由 Consul `config/ruoyu/shared.json` 提供 |
+| `Loki:Uri`（fallback） | http://localhost:3100 | appsettings.json 中的兜底地址 |
+
+> **容错机制**：如果 `Loki:Uri` 未设置，Loki Sink 使用 appsettings.json 中 `Serilog:WriteTo:1:Args:uri` 的 fallback 地址。Loki 不可达时 Sink 异步重试，不影响服务启动。`start.sh` 不传 `LOKI_URI` 环境变量，Loki 地址完全由 Consul 提供。
+
+### 启动诊断
+
+服务启动时会输出 Consul 拉取过程和最终生效配置摘要，包括 `LokiUri` 字段，便于排查 Loki 地址是否正确从 Consul 加载。
 
 ## 数据库配置
 

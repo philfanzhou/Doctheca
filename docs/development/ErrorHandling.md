@@ -48,17 +48,18 @@ HTTP 端点实现中必须使用标准的 HTTP 状态码，不得自定义状态
 
 ### Serilog + Loki 日志系统
 
-DocLibrary 使用 Serilog 替代原生 Microsoft.Extensions.Logging，双写到 Console + Grafana Loki。
+DocLibrary 使用 Serilog 替代原生 Microsoft.Extensions.Logging，双写到 Console + Grafana Loki。与 Identity 服务接入方式完全一致。
 
 配置入口：`Program.cs` 中 `UseAgentSerilog("Ruoyu.Study.DocLibrary")`，读取 `appsettings.json` 中 `Serilog` 配置节。
 
-Loki 地址通过短环境变量 `LOKI_URI` 注入，`Program.cs` 启动时读取并覆盖 `Serilog:WriteTo:1:Args:uri` 配置键：
+Loki 地址统一通过配置键 `Loki:Uri` 注入，`Program.cs` 启动时读取并覆盖 `Serilog:WriteTo:1:Args:uri` 配置键：
 
-| 环境变量 | 示例值 | 说明 |
-|----------|--------|------|
-| LOKI_URI | http://ruoyu-loki:3100 | Loki 地址（Docker 部署时必须设置） |
+| 配置键 | 来源 | 示例值 | 说明 |
+|--------|------|--------|------|
+| `Loki:Uri` | Consul `config/ruoyu/shared.json` | http://ruoyu-loki:3100 | 推荐由 Consul 共享配置提供 |
+| `Loki:Uri`（fallback） | `appsettings.json` | http://localhost:3100 | Consul 不可达时的兜底地址 |
 
-> **容错机制**：如果 `LOKI_URI` 未设置，Loki Sink 使用 appsettings.json 中的 fallback 地址。Loki 不可达时 Sink 异步重试，不影响服务启动。
+> **容错机制**：如果 `Loki:Uri` 未设置（Consul 和 appsettings 均未提供），Loki Sink 使用 appsettings.json 中 `Serilog:WriteTo:1:Args:uri` 的 fallback 地址 `http://ruoyu-loki:3100`。Loki 不可达时 Sink 异步重试，不影响服务启动。`start.sh` 不传 `LOKI_URI` 环境变量，Loki 地址完全由 Consul 提供。
 
 ### 敏感字段脱敏
 
