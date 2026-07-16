@@ -6,8 +6,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\..\..\ruoyu.common\src\Ruoyu.Study.Common\Ruoyu.Study.Common.csproj" />
-    <ProjectReference Include="..\..\..\..\ruoyu.common\src\Ruoyu.Study.Ai.Shared\Ruoyu.Study.Ai.Shared.csproj" />
+    <ProjectReference Include="..\..\..\..\ruoyu.common\backend\Ruoyu.Study.Common\Ruoyu.Study.Common.csproj" />
+    <ProjectReference Include="..\..\..\..\ruoyu.common\backend\Ruoyu.Study.Ai.Shared\Ruoyu.Study.Ai.Shared.csproj" />
   </ItemGroup>
 
   <PropertyGroup>
