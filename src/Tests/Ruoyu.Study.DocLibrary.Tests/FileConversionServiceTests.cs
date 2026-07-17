@@ -17,7 +17,7 @@ public class FileConversionServiceTests
     {
         var options = Options.Create(new FileConversionOptions
         {
-            BaseUrl = baseUrl,
+            Url = baseUrl,
             TimeoutSeconds = timeoutSeconds,
         });
         var logger = new Mock<ILogger<RemoteFileConversionService>>().Object;
@@ -109,11 +109,11 @@ public class FileConversionServiceTests
     }
 
     [Fact]
-    public void Constructor_SetsBaseUrlAndTimeout()
+    public void Constructor_SetsUrlAndTimeout()
     {
         var options = Options.Create(new FileConversionOptions
         {
-            BaseUrl = "http://my-converter:9999/",
+            Url = "http://my-converter:9999/",
             TimeoutSeconds = 30,
         });
         var logger = new Mock<ILogger<RemoteFileConversionService>>().Object;

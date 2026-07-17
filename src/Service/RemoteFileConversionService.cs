@@ -28,7 +28,7 @@ public class FileConversionOptions
     public const string SectionName = "FileConversion";
 
     /// <summary>Base URL of the doc-converter service (e.g. http://doc-converter:5050).</summary>
-    public string BaseUrl { get; set; } = "http://doc-converter:5050";
+    public string Url { get; set; } = "http://doc-converter:5050";
 
     /// <summary>HTTP request timeout in seconds (should be slightly larger than doc-converter's internal conversion timeout).</summary>
     public int TimeoutSeconds { get; set; } = 120;
@@ -52,12 +52,12 @@ public class RemoteFileConversionService : IFileConversionService
         _options = options.Value;
         _logger = logger;
 
-        httpClient.BaseAddress = new Uri(_options.BaseUrl.TrimEnd('/') + "/");
+        httpClient.BaseAddress = new Uri(_options.Url.TrimEnd('/') + "/");
         httpClient.Timeout = TimeSpan.FromSeconds(_options.TimeoutSeconds);
         _httpClient = httpClient;
 
-        _logger.LogInformation("RemoteFileConversionService configured: BaseUrl={BaseUrl}, Timeout={TimeoutSeconds}s",
-            _options.BaseUrl, _options.TimeoutSeconds);
+        _logger.LogInformation("RemoteFileConversionService configured: Url={Url}, Timeout={TimeoutSeconds}s",
+            _options.Url, _options.TimeoutSeconds);
     }
 
     /// <inheritdoc />
