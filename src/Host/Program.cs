@@ -103,7 +103,26 @@ builder.Services.AddScoped<IQuestionBankImportService, QuestionBankImportService
 // MinerU Precision API Client
 builder.Services.Configure<MinerUOptions>(builder.Configuration.GetSection(MinerUOptions.SectionName));
 builder.Services.Configure<FileConversionOptions>(builder.Configuration.GetSection(FileConversionOptions.SectionName));
-builder.Services.AddHttpClient<IFileConversionService, RemoteFileConversionService>();
+
+// FileConversion: 命名 HttpClient + Singleton 包装。
+// AddHttpClient<TInterface, TImplementation>() 默认注册为 Transient，MinerUFileParseWorker 每 5 秒
+// CreateScope().GetRequiredService<IFileConversionService>() 会重复 new 实例（构造函数日志被重复打印）。
+// 改用 AddHttpClient("FileConversion") 注册命名 HttpClient（HttpClientFactory 池化 Handler），
+// 再用 AddSingleton<IFileConversionService> 工厂方式包装，确保真正的 Singleton 生命周期。
+builder.Services.AddHttpClient("FileConversion", client =>
+{
+    var url = builder.Configuration["FileConversionService:Url"] ?? "http://doc-converter:5050";
+    client.BaseAddress = new Uri(url.TrimEnd('/') + "/");
+    client.Timeout = TimeSpan.FromSeconds(180);
+});
+builder.Services.AddSingleton<IFileConversionService>(sp =>
+{
+    var factory = sp.GetRequiredService<IHttpClientFactory>();
+    var options = sp.GetRequiredService<IOptions<FileConversionOptions>>();
+    var logger = sp.GetRequiredService<ILogger<RemoteFileConversionService>>();
+    return new RemoteFileConversionService(factory.CreateClient("FileConversion"), options, logger);
+});
+
 builder.Services.AddSingleton<MinerUPrecisionClient>();
 builder.Services.AddSingleton<IPdfSplitService, PdfSplitService>();
 
