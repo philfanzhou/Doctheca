@@ -181,7 +181,7 @@ POST /admin/document-files/{id}/parse?modelVersion=vlm
   - `HttpRequestException` → 记 LogError，返回 `null`
   - 非 2xx 状态码 → 记 LogError，返回 `null`
   - 成功 → 读取响应体为 `MemoryStream` 返回
-- 配置：`FileConversion:Url`（默认 `http://doc-converter:5050`）、`FileConversion:TimeoutSeconds`（默认 120）
+- 配置：`FileConversionService:Url`（默认 `http://doc-converter:5050`）、`FileConversionService:TimeoutSeconds`（默认 120）
 
 ## 6. PDF 分页服务规格
 

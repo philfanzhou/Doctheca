@@ -25,7 +25,7 @@ public interface IFileConversionService
 /// </summary>
 public class FileConversionOptions
 {
-    public const string SectionName = "FileConversion";
+    public const string SectionName = "FileConversionService";
 
     /// <summary>Base URL of the doc-converter service (e.g. http://doc-converter:5050).</summary>
     public string Url { get; set; } = "http://doc-converter:5050";
