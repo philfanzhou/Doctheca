@@ -176,12 +176,12 @@ POST /admin/document-files/{id}/parse?modelVersion=vlm
 - `IsAvailable`：恒为 `true`（HTTP 服务的可用性在首次调用时惰性检测，不再构造时检测本地进程）
 - `ConvertToPdfAsync`：
   - 以 `multipart/form-data` 方式 POST 文件到 doc-converter 的 `/convert` 端点
-  - HTTP 超时由 `FileConversionOptions.TimeoutSeconds` 控制（默认 120 秒，略大于 doc-converter 内部 60 秒转换超时）
+  - HTTP 超时硬编码 180s（略大于 doc-converter 内部 60 秒转换超时），无需配置
   - `TaskCanceledException`（内含 `TimeoutException`）→ 记 LogError，返回 `null`
   - `HttpRequestException` → 记 LogError，返回 `null`
   - 非 2xx 状态码 → 记 LogError，返回 `null`
   - 成功 → 读取响应体为 `MemoryStream` 返回
-- 配置：`FileConversionService:Url`（默认 `http://doc-converter:5050`）、`FileConversionService:TimeoutSeconds`（默认 120）
+- 配置：`FileConversionService:Url`（默认 `http://doc-converter:5050`）；超时硬编码 180s，无需配置
 
 ## 6. PDF 分页服务规格
 

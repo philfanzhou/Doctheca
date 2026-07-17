@@ -29,9 +29,6 @@ public class FileConversionOptions
 
     /// <summary>Base URL of the doc-converter service (e.g. http://doc-converter:5050).</summary>
     public string Url { get; set; } = "http://doc-converter:5050";
-
-    /// <summary>HTTP request timeout in seconds (should be slightly larger than doc-converter's internal conversion timeout).</summary>
-    public int TimeoutSeconds { get; set; } = 120;
 }
 
 /// <summary>
@@ -53,11 +50,11 @@ public class RemoteFileConversionService : IFileConversionService
         _logger = logger;
 
         httpClient.BaseAddress = new Uri(_options.Url.TrimEnd('/') + "/");
-        httpClient.Timeout = TimeSpan.FromSeconds(_options.TimeoutSeconds);
+        httpClient.Timeout = TimeSpan.FromSeconds(180);
         _httpClient = httpClient;
 
-        _logger.LogInformation("RemoteFileConversionService configured: Url={Url}, Timeout={TimeoutSeconds}s",
-            _options.Url, _options.TimeoutSeconds);
+        _logger.LogInformation("RemoteFileConversionService configured: Url={Url}, Timeout=180s",
+            _options.Url);
     }
 
     /// <inheritdoc />
@@ -94,8 +91,8 @@ public class RemoteFileConversionService : IFileConversionService
         }
         catch (TaskCanceledException ex) when (ex.InnerException is TimeoutException)
         {
-            _logger.LogError(ex, "HTTP call to doc-converter timed out for {FileName} (timeout={Timeout}s)",
-                fileName, _options.TimeoutSeconds);
+            _logger.LogError(ex, "HTTP call to doc-converter timed out for {FileName} (timeout=180s)",
+                fileName);
             return null;
         }
         catch (HttpRequestException ex)

@@ -273,8 +273,7 @@ builder.Services.AddHostedService<MinerUFileParseWorker>();
 | `MinerU:ApiToken` | Bearer Token（免费额度 1000 页/天） |
 | `MinerU:BaseUrl` | API 地址（默认 `https://mineru.net`） |
 | `MinerU:ModelVersion` | 默认模型版本（`vlm` / `pipeline`），可被请求参数覆盖 |
-| `FileConversionService:Url` | doc-converter 服务地址（默认 `http://doc-converter:5050`） |
-| `FileConversion:TimeoutSeconds` | HTTP 调用超时（默认 120 秒，略大于 doc-converter 内部 60 秒转换超时） |
+| `FileConversionService:Url` | doc-converter 服务地址（默认 `http://doc-converter:5050`）；HTTP 调用超时硬编码 180s |
 
 Section 常量：`MinerUOptions.SectionName = "MinerU"`、`FileConversionOptions.SectionName = "FileConversionService"`。
 

@@ -12,13 +12,11 @@ public class FileConversionServiceTests
 {
     private static RemoteFileConversionService CreateService(
         HttpClient httpClient,
-        string baseUrl = "http://doc-converter:5050",
-        int timeoutSeconds = 120)
+        string baseUrl = "http://doc-converter:5050")
     {
         var options = Options.Create(new FileConversionOptions
         {
             Url = baseUrl,
-            TimeoutSeconds = timeoutSeconds,
         });
         var logger = new Mock<ILogger<RemoteFileConversionService>>().Object;
         return new RemoteFileConversionService(httpClient, options, logger);
@@ -114,7 +112,6 @@ public class FileConversionServiceTests
         var options = Options.Create(new FileConversionOptions
         {
             Url = "http://my-converter:9999/",
-            TimeoutSeconds = 30,
         });
         var logger = new Mock<ILogger<RemoteFileConversionService>>().Object;
         var client = new HttpClient();
@@ -122,7 +119,7 @@ public class FileConversionServiceTests
         _ = new RemoteFileConversionService(client, options, logger);
 
         client.BaseAddress.Should().Be(new Uri("http://my-converter:9999/"));
-        client.Timeout.Should().Be(TimeSpan.FromSeconds(30));
+        client.Timeout.Should().Be(TimeSpan.FromSeconds(180));
     }
 
     [Fact]

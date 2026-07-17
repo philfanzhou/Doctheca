@@ -51,7 +51,7 @@ MinerU Precision API 的解析耗时从数十秒到数十分钟不等（取决�
 - `IFileConversionService` / `RemoteFileConversionService`（通过 `AddHttpClient` 注册）：DOC/DOCX/PPT/PPTX → PDF
 - HTTP 调用独立的 doc-converter 基础服务（`POST /convert`，multipart/form-data）
 - `IsAvailable` 恒为 `true`（HTTP 可用性在首次调用时惰性检测）；转档失败（超时/HTTP 错误/非 2xx）返回 `null`，解析标记 `failed`
-- 超时由 `FileConversion:TimeoutSeconds` 控制（默认 120 秒）
+- HTTP 超时硬编码 180s，无需配置
 
 ### FR-05:PDF 分页服务
 - `IPdfSplitService` / `PdfSplitService`（Singleton，基于 PdfSharpCore）
