@@ -17,18 +17,8 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Configuration.AddRuoyuConsulConfiguration(builder.Configuration);
 
 // ========== Serilog (Console + Grafana Loki) ==========
-// Loki 地址优先由共享 Consul 配置中的 Loki:Uri 提供，本地 appsettings 作为兜底。
-// Loki Sink throws ArgumentNullException when uri is null; fallback uri in config ensures startup.
-// Loki unreachable: Sink retries asynchronously, does not affect service.
-var lokiUri = builder.Configuration["Loki:Uri"];
-if (!string.IsNullOrWhiteSpace(lokiUri))
-{
-    builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
-    {
-        ["Serilog:WriteTo:1:Args:uri"] = lokiUri
-    });
-}
-builder.Host.UseAgentSerilog("Ruoyu.Study.DocLibrary");
+builder.Configuration.AddRuoyuLokiSink();
+builder.Host.UseRuoyuSerilog("Ruoyu.Study.DocLibrary");
 
 var consulOptions = RuoyuConsulOptions.Bind(builder.Configuration);
 var consulRuntimeState = RuoyuConsulRuntimeState.Instance;
