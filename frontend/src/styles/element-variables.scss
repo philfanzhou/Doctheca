@@ -1,39 +1,39 @@
 // ADR-001 §5.2 SCSS token 覆写模板
-// Inject brand values before EP defaults; $colors / $text-color / $border-color / $bg-color /
-// $border-radius / $box-shadow / $transition-duration all mapped from legacy style.css :root.
+// 2026-07-20 重设计：主色由 #2563eb 调整为 #4F46E5（与样稿一致）
+// 详见 docs/overview/Redesign-2026-07-Admin-Console.md
 @forward 'element-plus/theme-chalk/src/common/var.scss' with (
   $colors: (
-    'primary': ('base': #2563eb),
+    'primary': ('base': #4f46e5),
     'success': ('base': #10b981),
-    'warning': ('base': #f59e0b),
+    'warning': ('base': #d97706),
     'danger':  ('base': #ef4444),
     'error':   ('base': #ef4444),
-    'info':    ('base': #3b82f6),
+    'info':    ('base': #0ea5e9),
   ),
   $text-color: (
-    'primary':   #111827,
-    'regular':   #6b7280,
-    'secondary': #9ca3af,
+    'primary':   #161927,
+    'regular':   #586076,
+    'secondary': #9aa0b6,
     'placeholder': #c0c4cc,
   ),
   $border-color: (
-    'base':   #e5e7eb,
-    'light':  #f3f4f6,
-    'lighter': #f3f4f6,
+    'base':   #e5e7ef,
+    'light':  #eef0f6,
+    'lighter': #eef0f6,
   ),
   $bg-color: (
-    '':        #f5f7fa,
-    'page':    #f5f7fa,
+    '':        #f5f6f8,
+    'page':    #f5f6f8,
     'overlay': #ffffff,
   ),
   $border-radius: (
-    'small':  4px,
-    'medium': 6px,
-    'large':  8px,
+    'small':  6px,
+    'medium': 8px,
+    'large':  12px,
   ),
   $box-shadow: (
-    'light':  0 1px 2px 0 rgba(0,0,0,0.05),
-    '':       (0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06)),
+    'light':  0 6px 16px -6px rgba(22, 25, 39, 0.12),
+    '':       (0 16px 40px -12px rgba(22, 25, 39, 0.18), 0 4px 10px -4px rgba(22, 25, 39, 0.08)),
   ),
   $transition-duration: (
     '':     0.2s,
@@ -41,5 +41,4 @@
   )
 );
 
-// Explicit EP base styles import (ADR-001 §5.2 last line)
 @use 'element-plus/theme-chalk/src/index.scss' as *;

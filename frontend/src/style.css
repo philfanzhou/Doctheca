@@ -1,75 +1,12 @@
 /*
- * style.css — ADR-001 migration residue
+ * style.css — Redesign 2026-07
  *
- * After migrating to Element Plus, the legacy 914-line handwritten stylesheet
- * is reduced to:
- *   1. :root brand tokens (kept as EP SCSS supplement; EP variables are the
- *      authoritative source in element-variables.scss, these remain for any
- *      scoped style that still references var(--*) and for ADR §5.3 transition
- *      tightening).
- *   2. Base resets (box-sizing / body / #app).
- *   3. Typography helpers (page-header / page-title / page-subtitle) shared by
- *      the three migrated pages.
- *
- * All component classes replaced by Element Plus (.btn / .card / .data-table /
- * .tag / .empty-state / .status-badge / .pagination-bar / .sidebar / .input-wrap
- * / .select-wrap / .upload-progress / .nav-* / .main-content / .top-header ...)
- * have been removed. Page-specific layout is now scoped inside each .vue file.
+ * Tokens moved to styles/tokens.scss.
+ * Component classes ported to styles/app.scss (verbatim from prototype).
+ * This file only retains typography helpers (page-header / page-title / page-subtitle)
+ * that pre-date the redesign and are referenced by legacy scoped styles.
  */
 
-:root {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue', Arial, sans-serif;
-  color: #1f2937;
-  background: #f5f7fa;
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-
-  /* Brand tokens (supplement to EP SCSS; kept for scoped var(--*) references) */
-  --primary-color: #2563eb;
-  --primary-light: #eff6ff;
-  --primary-dark: #1d4ed8;
-  --success-color: #10b981;
-  --danger-color: #ef4444;
-  --warning-color: #f59e0b;
-  --info-color: #3b82f6;
-  --text-primary: #111827;
-  --text-secondary: #6b7280;
-  --text-muted: #9ca3af;
-  --border-color: #e5e7eb;
-  --border-light: #f3f4f6;
-  --card-bg: #ffffff;
-  --hover-bg: #f9fafb;
-  --bg-secondary: #f9fafb;
-  --bg-color: #f5f7fa;
-  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-  --radius-sm: 4px;
-  --radius-md: 6px;
-  --radius-lg: 8px;
-  --transition-fast: 150ms ease;
-  --transition-base: 200ms ease;
-
-  /* ADR §5.3 — tighten EP default 0.3s transitions to 0.15/0.2s */
-  --el-transition-duration: 0.2s;
-  --el-transition-duration-fast: 0.15s;
-}
-
-* {
-  box-sizing: border-box;
-}
-
-body {
-  margin: 0;
-  background: #f5f7fa;
-}
-
-#app {
-  min-height: 100vh;
-}
-
-/* ========== Typography helpers (shared by migrated pages) ========== */
 .page-header {
   margin-bottom: 16px;
 }
@@ -77,12 +14,12 @@ body {
 .page-title {
   font-size: 16px;
   font-weight: 600;
-  color: var(--text-primary);
+  color: var(--text);
   margin: 0 0 2px 0;
 }
 
 .page-subtitle {
   font-size: 13px;
-  color: var(--text-secondary);
+  color: var(--text-2);
   margin: 0;
 }

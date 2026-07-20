@@ -1,11 +1,15 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import { Upload, Search } from '@element-plus/icons-vue'
+import { ref, onMounted, onUnmounted, computed } from 'vue'
+import { ElMessageBox } from 'element-plus'
 import { createDocApiClient, type DocumentFile } from '../services/docApi'
-import { formatTime, getFileStatusLabel, getFileStatusType } from '../utils/format'
+import { formatTime, getFileStatusLabel } from '../utils/format'
+import { useToast } from '../composables/useToast'
+import { iconHtml } from '../utils/icons'
+import StatusStrip from '../components/StatusStrip.vue'
+import { inject } from 'vue'
 
 const client = createDocApiClient()
+const { success: toastSuccess, error: toastError } = useToast()
 
 const fileList = ref<DocumentFile[]>([])
 const fileTotal = ref(0)
@@ -18,6 +22,9 @@ const fileUploadProgress = ref(0)
 const parseFileParsing = ref(false)
 const pollTimer = ref<number | null>(null)
 const listLoading = ref(false)
+const filterStatus = ref<string>('all')
+
+const openDocDetail = inject<(id: string) => void>('openDocDetail')
 
 async function loadFileList() {
   listLoading.value = true
@@ -31,7 +38,7 @@ async function loadFileList() {
     fileList.value = response.data as DocumentFile[]
     fileTotal.value = response.total
   } catch (e) {
-    ElMessage.error(e instanceof Error ? e.message : '加载文件列表失败')
+    toastError(e instanceof Error ? e.message : '加载文件列表失败')
   } finally {
     listLoading.value = false
   }
@@ -66,19 +73,17 @@ async function handleFileUploadChange(event: Event) {
         fileUploadProgress.value = Math.round((progressEvent.loaded / progressEvent.total) * 100)
       }
     })
-
     filePage.value = 1
     fileNameSearch.value = ''
     await loadFileList()
-    ElMessage.success('上传成功')
+    toastSuccess('上传成功')
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : '上传失败'
-    ElMessage.error(msg)
+    toastError(msg)
   } finally {
     fileUploading.value = false
     fileUploadProgress.value = 0
   }
-
   input.value = ''
 }
 
@@ -88,10 +93,10 @@ async function handleParseFile(id: string, modelVersion: string) {
     await client.parseDocumentFile(id, modelVersion)
     await loadFileList()
     startPolling()
-    ElMessage.success('已触发解析')
+    toastSuccess(`已触发 ${modelVersion === 'vlm' ? 'VLM' : 'Pipeline'} 解析`)
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : '解析请求失败'
-    ElMessage.error(msg)
+    toastError(msg)
   } finally {
     parseFileParsing.value = false
   }
@@ -102,7 +107,7 @@ async function handleDeleteFile(id: string) {
     await ElMessageBox.confirm('确定删除此文件？', '删除确认', {
       confirmButtonText: '删除',
       cancelButtonText: '取消',
-      type: 'warning'
+      type: 'warning',
     })
   } catch {
     return
@@ -113,10 +118,10 @@ async function handleDeleteFile(id: string) {
       filePage.value--
     }
     await loadFileList()
-    ElMessage.success('删除成功')
+    toastSuccess('删除成功')
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : '删除失败'
-    ElMessage.error(msg)
+    toastError(msg)
   }
 }
 
@@ -124,7 +129,9 @@ function startPolling() {
   if (pollTimer.value !== null) return
   pollTimer.value = window.setInterval(async () => {
     await loadFileList()
-    const hasActive = fileList.value.some(f => f.parseStatus === 'pending' || f.parseStatus === 'parsing')
+    const hasActive = fileList.value.some(
+      (f) => f.parseStatus === 'pending' || f.parseStatus === 'parsing'
+    )
     if (!hasActive) {
       stopPolling()
     }
@@ -138,9 +145,70 @@ function stopPolling() {
   }
 }
 
+const stripItems = computed(() => {
+  const all = fileTotal.value
+  const unparsed = fileList.value.filter((f) => f.parseStatus === null || f.parseStatus === 'unparsed').length
+  const parsing = fileList.value.filter((f) => f.parseStatus === 'parsing' || f.parseStatus === 'pending').length
+  const failed = fileList.value.filter((f) => f.parseStatus === 'failed').length
+  return [
+    { key: 'all', label: '全部文档', count: all, color: '#4F46E5' },
+    { key: 'unparsed', label: '待解析', count: unparsed, color: '#9AA0B6' },
+    { key: 'parsing', label: '解析中', count: parsing, color: '#0EA5E9' },
+    { key: 'failed', label: '解析失败', count: failed, color: '#EF4444' },
+  ]
+})
+
+function selectStrip(key: string) {
+  filterStatus.value = key
+  filePage.value = 1
+  loadFileList()
+}
+
+function fileIconCls(contentType: string): string {
+  const t = contentType.toLowerCase()
+  if (t.includes('pdf')) return 'pdf'
+  if (t.includes('ppt')) return 'ppt'
+  if (t.includes('word') || t.includes('docx') || t.includes('doc')) return 'docx'
+  return 'docx'
+}
+
+function fileExtLabel(contentType: string): string {
+  const t = contentType.toLowerCase()
+  if (t.includes('pdf')) return 'PDF'
+  if (t.includes('ppt')) return 'PPT'
+  if (t.includes('word') || t.includes('docx')) return 'DOCX'
+  return 'FILE'
+}
+
+function statusBadgeHtml(status: string | null): string {
+  if (status === 'parsed')
+    return `<span class="badge green"><span class="dot"></span>${getFileStatusLabel(status)}</span>`
+  if (status === 'failed')
+    return `<span class="badge red"><span class="dot"></span>${getFileStatusLabel(status)}</span>`
+  if (status === 'parsing' || status === 'pending')
+    return `<span class="badge blue"><span class="dot pulse"></span>${getFileStatusLabel(status)}</span>`
+  return `<span class="badge gray"><span class="dot"></span>${getFileStatusLabel(status)}</span>`
+}
+
+function onRowClick(f: DocumentFile) {
+  openDocDetail?.(f.id)
+}
+
+function handleDrop(e: DragEvent) {
+  e.preventDefault()
+  const input = fileUploadInput.value
+  if (!input || !e.dataTransfer?.files.length) return
+  const dt = new DataTransfer()
+  dt.items.add(e.dataTransfer.files[0])
+  input.files = dt.files
+  handleFileUploadChange({ target: input } as unknown as Event)
+}
+
 onMounted(async () => {
   await loadFileList()
-  const hasActive = fileList.value.some(f => f.parseStatus === 'pending' || f.parseStatus === 'parsing')
+  const hasActive = fileList.value.some(
+    (f) => f.parseStatus === 'pending' || f.parseStatus === 'parsing'
+  )
   if (hasActive) startPolling()
 })
 
@@ -150,129 +218,148 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="page-header">
-    <h1 class="page-title">文档管理</h1>
-    <p class="page-subtitle">管理文档的上传和解析</p>
-  </div>
-
-  <el-card shadow="never" class="page-card">
-    <template #header>
-      <div class="card-header">
-        <span>文档列表</span>
-        <div class="card-header-actions">
-          <el-input
-            v-model="fileNameSearch"
-            :prefix-icon="Search"
-            placeholder="搜索文件名..."
-            clearable
-            style="width: 220px"
-            @keyup.enter="filePage = 1; loadFileList()"
-          />
-          <el-button size="small" @click="filePage = 1; loadFileList()">搜索</el-button>
-          <el-button type="primary" size="small" :icon="Upload" :loading="fileUploading" @click="triggerFileUpload">
-            上传文件
-          </el-button>
-          <input ref="fileUploadInput" type="file" accept=".pdf,.docx,.doc,.pptx,.ppt" hidden @change="handleFileUploadChange" />
-        </div>
+  <div>
+    <div class="page-head">
+      <div>
+        <div class="page-title">文档管理</div>
+        <div class="page-sub">原始教材文件的上传与解析任务调度</div>
       </div>
-    </template>
+    </div>
 
-    <el-progress
-      v-if="fileUploading"
-      :percentage="fileUploadProgress"
-      :stroke-width="6"
-      status="success"
-      style="margin-bottom: 12px"
-    />
+    <StatusStrip :items="stripItems" :active="filterStatus" @select="selectStrip" />
 
-    <el-table
-      v-loading="listLoading"
-      :data="fileList"
-      stripe
-      border
-      empty-text="暂无文件，点击上方按钮上传"
+    <div
+      class="upload-zone"
+      :class="{ drag: false }"
+      @click="triggerFileUpload"
+      @dragover.prevent
+      @drop="handleDrop"
     >
-      <el-table-column prop="fileName" label="文件名" min-width="220" show-overflow-tooltip />
-      <el-table-column prop="contentType" label="类型" width="140" />
-      <el-table-column label="上传时间" width="180">
-        <template #default="{ row }">{{ formatTime(row.createdAt) }}</template>
-      </el-table-column>
-      <el-table-column label="解析状态" width="120">
-        <template #default="{ row }">
-          <el-tag :type="getFileStatusType(row.parseStatus)" size="small">
-            {{ getFileStatusLabel(row.parseStatus) }}
-          </el-tag>
-        </template>
-      </el-table-column>
-      <el-table-column label="操作" width="340">
-        <template #default="{ row }">
-          <div class="table-actions">
-            <template v-if="row.parseStatus === null || row.parseStatus === 'unparsed' || row.parseStatus === 'failed'">
-              <el-button type="primary" size="small" :disabled="parseFileParsing" @click="handleParseFile(row.id, 'vlm')">VLM 解析</el-button>
-              <el-button size="small" :disabled="parseFileParsing" @click="handleParseFile(row.id, 'pipeline')">Pipeline 解析</el-button>
-            </template>
-            <template v-else-if="row.parseStatus === 'pending' || row.parseStatus === 'parsing'">
-              <span class="text-muted-sm">{{ getFileStatusLabel(row.parseStatus) }}</span>
-            </template>
-            <template v-else-if="row.parseStatus === 'parsed'">
-              <el-button type="primary" size="small" :disabled="parseFileParsing" @click="handleParseFile(row.id, 'vlm')">VLM 重新解析</el-button>
-              <el-button size="small" :disabled="parseFileParsing" @click="handleParseFile(row.id, 'pipeline')">Pipeline 重新解析</el-button>
-            </template>
-            <el-button type="danger" size="small" text @click="handleDeleteFile(row.id)">删除</el-button>
-          </div>
-        </template>
-      </el-table-column>
-    </el-table>
-
-    <div v-if="fileTotal > 0" class="pagination-wrap">
-      <el-pagination
-        v-model:current-page="filePage"
-        v-model:page-size="filePageSize"
-        :total="fileTotal"
-        :page-sizes="[20, 50, 100]"
-        layout="total, sizes, prev, pager, next, jumper"
-        background
-        @current-change="handlePageChange"
-        @size-change="handlePageSizeChange"
+      <span v-html="iconHtml('upload')"></span>
+      <div class="upload-title">
+        {{ fileUploading ? `正在上传 ${fileUploadProgress}%` : '点击或拖拽文件到此处上传' }}
+      </div>
+      <div class="upload-hint">支持 PDF / DOCX / PPTX，单文件不超过 200 MB</div>
+      <div
+        v-if="fileUploading"
+        class="progress-track"
+        style="max-width: 340px; margin: 12px auto 0"
+      >
+        <div class="progress-fill" :style="{ width: fileUploadProgress + '%' }"></div>
+      </div>
+      <input
+        ref="fileUploadInput"
+        type="file"
+        accept=".pdf,.docx,.doc,.pptx,.ppt"
+        hidden
+        @change="handleFileUploadChange"
       />
     </div>
-  </el-card>
+
+    <div class="card section-gap">
+      <div class="card-head">
+        <div>
+          <div class="card-title">文档列表</div>
+          <div class="card-sub">共 {{ fileTotal }} 份文档</div>
+        </div>
+        <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap">
+          <div style="position: relative; width: 220px">
+            <span
+              v-html="iconHtml('search')"
+              style="position: absolute; left: 10px; top: 9px; color: var(--text-3); width: 15px; height: 15px"
+            ></span>
+            <input
+              v-model="fileNameSearch"
+              class="input"
+              style="padding-left: 32px"
+              placeholder="搜索文件名…"
+              @keyup.enter="filePage = 1; loadFileList()"
+            />
+          </div>
+          <button class="btn btn-ghost btn-sm" @click="filePage = 1; loadFileList()">搜索</button>
+        </div>
+      </div>
+
+      <div v-loading="listLoading" style="min-height: 200px">
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>文件名</th>
+                <th>类型</th>
+                <th>上传时间</th>
+                <th>解析状态</th>
+                <th style="text-align: right">操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr
+                v-for="f in fileList"
+                :key="f.id"
+                class="clickable"
+                @click="onRowClick(f)"
+              >
+                <td>
+                  <div class="cell-flex">
+                    <div class="file-ico" :class="fileIconCls(f.contentType)">{{ fileExtLabel(f.contentType) }}</div>
+                    <div>
+                      <div class="td-main" style="max-width: 360px">{{ f.fileName }}</div>
+                    </div>
+                  </div>
+                </td>
+                <td>
+                  <span class="mono" style="font-size: 12px; color: var(--text-2)">{{ f.contentType }}</span>
+                </td>
+                <td style="color: var(--text-3); font-size: 12.5px; font-variant-numeric: tabular-nums">
+                  {{ formatTime(f.createdAt) }}
+                </td>
+                <td>
+                  <span v-html="statusBadgeHtml(f.parseStatus)"></span>
+                </td>
+                <td style="text-align: right; white-space: nowrap" @click.stop>
+                  <template
+                    v-if="f.parseStatus === null || f.parseStatus === 'unparsed' || f.parseStatus === 'failed'"
+                  >
+                    <button class="btn btn-sm" :disabled="parseFileParsing" @click="handleParseFile(f.id, 'vlm')">VLM 解析</button>
+                    <button class="btn btn-ghost btn-sm" :disabled="parseFileParsing" @click="handleParseFile(f.id, 'pipeline')">Pipeline</button>
+                  </template>
+                  <template v-else-if="f.parseStatus === 'pending' || f.parseStatus === 'parsing'">
+                    <span class="badge blue"><span class="dot pulse"></span>解析中</span>
+                  </template>
+                  <template v-else-if="f.parseStatus === 'parsed'">
+                    <button class="btn btn-sm" :disabled="parseFileParsing" @click="handleParseFile(f.id, 'vlm')">重新解析</button>
+                  </template>
+                  <button class="btn btn-danger btn-sm" @click="handleDeleteFile(f.id)">
+                    <span v-html="iconHtml('trash')"></span>删除
+                  </button>
+                </td>
+              </tr>
+              <tr v-if="!fileList.length && !listLoading">
+                <td colspan="5">
+                  <div class="empty">
+                    <span v-html="iconHtml('file')"></span><br />
+                    暂无文件，点击上方上传
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div v-if="fileTotal > 0" class="pager">
+        <span class="total">共 {{ fileTotal }} 份文档</span>
+        <el-pagination
+          v-model:current-page="filePage"
+          v-model:page-size="filePageSize"
+          :total="fileTotal"
+          :page-sizes="[20, 50, 100]"
+          layout="sizes, prev, pager, next, jumper"
+          background
+          @current-change="handlePageChange"
+          @size-change="handlePageSizeChange"
+        />
+      </div>
+    </div>
+  </div>
 </template>
-
-<style scoped>
-.page-card {
-  border-radius: 8px;
-}
-
-.card-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  font-weight: 600;
-  font-size: 13px;
-}
-
-.card-header-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.table-actions {
-  display: flex;
-  gap: 4px;
-  align-items: center;
-  flex-wrap: wrap;
-}
-
-.text-muted-sm {
-  color: var(--el-text-color-secondary);
-  font-size: 12px;
-}
-
-.pagination-wrap {
-  margin-top: 12px;
-  display: flex;
-  justify-content: flex-end;
-}
-</style>

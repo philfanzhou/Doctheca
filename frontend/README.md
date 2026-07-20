@@ -24,14 +24,18 @@ npm run preview
 
 ## 前端规范
 
+详细规范见 [`docs/frontend-spec.md`](docs/frontend-spec.md)。
+
 ### 技术栈
 
 | 项目 | 技术 |
 |------|------|
 | 框架 | Vue 3.5 + TypeScript |
-| UI | 纯手写 CSS（不使用 UI 组件库） |
+| UI | Element Plus（表单/分页控件）+ 手写 SCSS design-token 系统（展示层组件）|
 | HTTP 客户端 | Axios |
 | 构建工具 | Vite |
+| 图表 | 原生 SVG 描画（ChartLine / ChartDonut 组件）|
+| 图标 | 自维护 `utils/icons.ts`（27 个线性 SVG）|
 
 ### 响应式设计要求
 

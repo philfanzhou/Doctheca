@@ -4,33 +4,32 @@
 
 DocLibrary Admin 是文档库的管理后台前端,供本地管理员上传文档、触发 MinerU 解析、查看解析结果、测试检索功能。
 
-- 技术栈:Vue 3.5 + TypeScript + Vite + Element Plus(SCSS design-token 覆写,按 ADR-001 §5)
+- 技术栈:Vue 3.5 + TypeScript + Vite + Element Plus(表单/分页控件)+ 手写 SCSS design-token 系统(展示层组件)
 - 部署:由 DocLibrary 后端 Host 静态托管(`wwwroot/`),与后端同源,无需独立部署
 - 访问:HTTP `:5012`
 
 ## 2. 依赖策略
 
-**Element Plus 作为唯一 UI 组件库,纯手写 CSS 改为 SCSS design-token 覆写。**
+**Element Plus 作为表单/分页 UI 库(按 ADR-001 引入),展示层组件(button / card / table / drawer / modal / toast / sidebar / topbar 等)按 2026-07-20 重设计稿手写实现。**
 
-迁移令：ADR-001（docs/overview/ADR-001-frontend-element-plus.md）。
+迁移令:ADR-001 + Redesign-2026-07-Admin-Console.md(`docs/overview/`)。
 
 | 依赖 | 用途 | 必要性 |
 |------|------|--------|
 | `vue` | 框架(3.5) | 必需 |
-| `typescript` | 类型(~) | 必需 |
+| `typescript` | 类型 | 必需 |
 | `vite` | 构建 | 必需 |
 | `axios` | HTTP 请求 | 必需 |
-| `element-plus` | UI 组件库 | 必需 |
-| `element-plus/theme-chalk` | SCSS 主题覆写源 | 必需(按 ADR-001 §5 映射表) |
-| `sass` | SCSS 编译(element-plus 主题必需) | 必需(迁移期间引入) |
-
-**历史决策(已撤销):**
-- `element-plus` / `@element-plus/icons-vue` — 曾在早期被移除,本次由 ADR-001 重新引入
-- `marked` — 未使用(解析结果 Markdown 以 `<pre>` 原文展示,不渲染)
+| `element-plus` | 表单/分页控件(ElInput/ElSelect/ElInputNumber/ElPagination/ElSwitch/ElCheckbox/ElMessageBox) | 必需 |
+| `element-plus/theme-chalk` | SCSS 主题(主色 token 镜像) | 必需 |
+| `sass` | SCSS 编译 | 必需 |
+| `unplugin-auto-import` / `unplugin-vue-components` | EP 组件按需自动导入 | 必需 |
 
 **不在依赖内:**
-- 其他 UI 库(Naive / Arco / Ant Design Vue / Vuetify) — ADR-001 已排除
-- `element-plus` 图标如用 iconfont 单独处理,否则使用 `@element-plus/icons-vue`(按需)
+- 其他 UI 库(Naive / Arco / Ant Design Vue / Vuetify)
+- 图表库(SVG 折线/甜甜圈图由 `ChartLine.vue` / `ChartDonut.vue` 原生描画)
+- `marked`(解析结果 Markdown 以 `<pre>` 原文展示)
+- `@element-plus/icons-vue`(改用自维护 `utils/icons.ts`,27 个线性 SVG 图标)
 
 ## 3. 访问控制
 
@@ -48,102 +47,125 @@ DocLibrary 为**内网管理后台**,不实现应用层认证:
 ### 4.1 整体布局(App.vue)
 
 ```
-┌─────────────────────────────────────────┐
-│ Sidebar │  TopHeader(面包屑)            │
-│  - Logo ├───────────────────────────────┤
-│  - 导航  │  ContentArea                  │
-│    文档管理│  (动态组件:DocManagePage /   │
-│    解析结果│   ParseResultsPage /         │
-│    检索测试│   SearchPage)                │
-└─────────────────────────────────────────┘
+┌────────────────────────────────────────────┐
+│ Sidebar  │ Topbar(面包屑 + 时钟 + env-tag) │
+│ 深色侧栏  ├────────────────────────────────┤
+│  - Brand  │  #view(动态视图)                │
+│  - 概览    │   - OverviewPage (#overview)    │
+│  - 文档管理│   - DocManagePage (#docs)       │
+│  - 解析结果│   - DocDetailPage (#detail/:id) │
+│  - 检索测试│   - ParseResultsPage (#results) │
+│  - Foot   │   - SearchPage (#search)        │
+└────────────────────────────────────────────┘
 ```
 
-- 侧边栏可折叠(桌面 ≥768px,el-aside + el-menu :collapse)/ 抽屉式(移动端 <768px,el-drawer direction="ltr")
-- 折叠状态持久化:localStorage(`docSidebarCollapsed`)
-- 导航项:文档管理、解析结果、检索测试
-- 无登录页、无用户区域、无登出按钮
+- **路由**:Hash 路由(`#overview` / `#docs` / `#detail/:id` / `#results` / `#search`),由 `App.vue` 解析,不引入 vue-router
+- **视图切换过渡**:`#view` 容器在切换时添加 `.leaving` class 触发 150ms 模糊+位移过渡,结束后 swap 内容
+- **导航项**:概览、文档管理、解析结果、检索测试(4 项);`detail` 状态下侧栏高亮"文档管理"
+- **侧栏指示器**:`Sidebar.vue` 内置 `.nav-indicator` 滑块,active 切换时 0.22s spring translateY 跟随
+- **移动端**:`window.innerWidth < 900` 时,Topbar 显示 hamburger 按钮,侧栏转为抽屉式
+- **provide/inject**:`navigate` / `openDocDetail` / `backToDocs` 三个函数 provide 给后代视图
 
-### 4.2 DocManagePage(文档管理)
+### 4.2 OverviewPage(概览,新增)
 
-- 功能:上传文件(PDF/DOCX/PPT)、查看文件列表、触发解析(VLM/Pipeline)、删除文件
-- 上传进度条
-- 文件列表表格:文件名、类型、上传时间、解析状态、操作
-- 解析中状态自动轮询(5s 间隔,无活跃任务时停止)
-- 分页
+- **数据来源**:`client.listDocumentFiles(1, 100)` + `client.listDocumentParses(1, 100)` 并发拉取
+- **4 张统计卡**(`StatCard.vue`):文档总数、解析中、已解析、解析失败,数字滚动 0.9s cubic ease-out
+- **解析状态甜甜圈**(`ChartDonut.vue`):4 段(已解析/未解析/解析中/失败),stroke-dasharray 描画动画 0.9s,逐段 0.12s 错峰;中心显示总数
+- **解析吞吐折线**(`ChartLine.vue`):近 30 天完成的解析任务数(由 parses.parsedAt 分桶),Catmull-Rom 平滑曲线,stroke-dashoffset 描画动画 1.1s
+- **最近上传 Feed**:前 5 条文档记录,点击行 inject 调用 `openDocDetail(f.id)` 进入详情页
 
-### 4.3 ParseResultsPage(解析结果)
+### 4.3 DocManagePage(文档管理)
 
-- 功能:查看所有解析记录、查看 Markdown/HTML/JSON/V2/Model/Layout/图片、导出 MD/HTML、删除解析
-- **VLM 和 Pipeline 模式统一显示所有按钮**(按钮不再按 modelVersion 过滤)
-- 按钮显示逻辑:status=parsed 时显示操作按钮;点击 JSON/V2/Model/Layout 按钮时,从详情接口获取数据,有值则新窗口展示,无值则 toast 提示
-- 分页
+- **StatusStrip**:4 档状态切换(全部/待解析/解析中/失败),active 态 primary 边框 + 3px ring
+- **upload-zone**:点击 + 拖拽上传,进度条 `progress-track` + `progress-fill`
+- **table.data-table**:自定义表格(文件名/类型/上传时间/解析状态/操作),行可点击进入详情
+- **轮询**:解析中状态自动轮询(5s 间隔,无活跃任务时停止)
+- **分页**:EP `el-pagination`
+- **业务逻辑保留**:`client.listDocumentFiles / uploadDocumentFile / parseDocumentFile / deleteDocumentFile`,删除确认 `ElMessageBox.confirm`
 
-### 4.4 SearchPage(检索测试)
+### 4.4 DocDetailPage(文档详情,新增)
 
-- 功能:关键词检索 + 高级筛选(minerU 字段)双区 + 结果表格(V1 列 + minerU 列) + 行展开 blockData 详情
-- **V1 关键词区**(保留):关键词输入框 + 短语查询开关 + 搜索按钮
-- **[Gen-2] 高级筛选抽屉**(可折叠,默认收起):
-  - blockType(datalist 候选:text/title/image/table/chart/list/interline_equation/code/algorithm/equation/phonetic/ref_text/header/footer/page_number/aside_text/page_footnote)
-  - blockSubType(自由输入,如 table_caption / code / algorithm)
-  - pageNumber(0-based page_idx)、textLevel(0=正文/1=h1/2=h2)
-  - textFormat(latex/markdown/none)、parseId、documentFileId、hasImage
-  - "应用筛选" / "清空筛选" 按钮;所有 minerU filter 可选,空值不透传(零回归)
-- **结果表格**(V1 列保留 + minerU 列追加):
-  - V1 列:#、文档标题、页码(显示 page_idx+1)、匹配类型、BM25 相关度、匹配文本、Segment ID、创建时间
-  - minerU 列:块类型(从 blockData.type 解析)、subType、矿工 U 置信度(mineruScore)、textFormat、Caption(前 30 字)
-  - 操作列:"展开详情"按钮 → 行内展开卡片展示 blockData 格式化 JSON + bbox[text0,y0,x1,y1] + mineruScore 与 V1 Score 明确区分标签
-- **状态**(ADR-001 迁移后):空结果由 `hasSearched` 标志位控制——仅点击搜索按钮执行过检索后才显示"无匹配结果";输入过程中(未搜索)显示"输入查询词后点击搜索"提示。loading 用 `v-loading` 指令;错误用 `ElMessage.error`
+- **数据来源**:`client.getDocumentFile(id)`(返回 `DocumentFileDetail`,含 parses 数组)
+- **路由参数**:`docId` prop,由 `App.vue` 注入
+- **页面结构**:返回按钮 + 文件信息(文件名/类型/上传时间)+ 4 张迷你统计卡(已解析/解析中/失败/VLM/Pipeline 计数)+ parses 列表
+- **每条 parse 卡片**:
+  - 顶部:模型 badge(VLM=amber / Pipeline=green)+ 状态 badge + 解析时间 + 删除按钮
+  - 错误信息:error-box(红色背景)
+  - 操作按钮组(parsed 状态):Markdown / HTML 预览 / JSON / V2 / Model / Layout / 图片 / 导出 MD / 导出 HTML
+  - 解析中状态:渐变进度条 + "5 秒后自动刷新"提示
+- **业务逻辑保留**:与 ParseResultsPage 等价的 preview/export/delete 调用,使用 `useToast` 替代 `ElMessage`
+- **轮询**:有 pending/parsing 状态时 5s 轮询 `getDocumentFile(id)`
+
+### 4.5 ParseResultsPage(解析结果)
+
+- **StatusStrip**:4 档状态切换(全部/已解析/解析中/失败)
+- **table.data-table**:文件名/模型/状态/解析时间/错误信息/操作列
+- **按钮显示逻辑**:status=parsed 时显示所有预览/导出按钮;始终显示删除按钮
+- **VLM 和 Pipeline 模式统一显示所有按钮**(不再按 modelVersion 过滤)
+- **业务逻辑保留**:`client.listDocumentParses / deleteDocumentParse / exportParseMarkdown / exportParseHtml`,以及 `client.getDocumentFile(fileId)` 拉取详情后调用 `parse.{markdownContent|contentList|contentListV2|modelJson|layoutJson|images}`
+- **分页**:EP `el-pagination`
+- **新窗口预览**:Markdown / JSON / Images 均通过 `window.open('', '_blank')` + `document.write` 在新窗口展示
+
+### 4.6 SearchPage(检索测试)
+
+- **检索栏**:关键词输入 + 短语查询 checkbox + 搜索按钮 + 高级筛选按钮(带 active dot)+ 清空按钮 + Dev 模式切换
+- **结果列表**(卡片式,取代 el-table):
+  - 卡片头:页码 badge + 块类型 badge + subType + 匹配类型 badge + textFormat badge + 序号
+  - 卡片体:文档标题 + 匹配文本(关键词 `<mark>` 高亮)+ caption 预览
+  - 卡片底:BM25 score bar + mineruScore score bar + textLevel + bbox + 创建时间 + "查看 blockData"展开按钮
+- **展开详情**:BM25 / mineruScore / bbox / textLevel / Segment ID 5 张 detail-cell + Dev 模式下展示 dev-block(blockData 原始 JSON,深色背景)
+- **[Gen-2] 高级筛选抽屉**(AppDrawer):
+  - blockType(el-select filterable + allow-create,候选见原 spec)
+  - blockSubType / pageNumber / textLevel / textFormat / parseId / documentFileId / hasImage
+  - 8 个 minerU 过滤参数全部保留;空值不透传(零回归)
+- **业务逻辑保留**:`client.searchTest(query, phrase, 20, undefined, ...8个minerU参数)`,调用顺序与原 ParseResultsPage 一致
+- **检索关键词高亮**:`highlightText(text, query)` 用 `<mark>` 包裹命中词,匹配文本通过 `v-html` 渲染,使用 `escapeHtml` 安全转义
 
 ## 5. 样式规范
 
-### 5.1 全局样式(style.css)
+### 5.1 全局样式层级
 
-ADR-001 迁移后,`src/style.css` 仅保留:
-- `:root` 品牌色 / 间距 / 圆角 / 过渡 token(作为 EP SCSS 的补充,EP 变量权威源在 `src/styles/element-variables.scss`)
-- ADR §5.3 过渡收紧:`--el-transition-duration: 0.2s` / `--el-transition-duration-fast: 0.15s`
-- 基础重置(box-sizing / body / #app)
-- 排版辅助类:`.page-header` / `.page-title` / `.page-subtitle`(三页面共用)
+`main.ts` 引入顺序(后者覆盖前者):
 
-> 手写组件类(`.btn` / `.card` / `.data-table` / `.tag` / `.status-badge` / `.pagination-bar` / `.input-wrap` / `.sidebar` / `.empty-state` / `.upload-progress` 等)已全部移除,功能由 Element Plus 组件承担。页面级布局类在各 `.vue` 文件 `<style scoped>` 内定义。**禁止内联 `style="..."`**(进度条等动态宽度除外,用 `:style` 绑定)。
+1. `./styles/element-variables.scss` — EP 主题 SCSS(`@forward` + `@use` 注入主色 `#4F46E5`)
+2. `./styles/tokens.scss` — `:root` CSS 变量(逐字搬运自样稿,与 EP 变量镜像)
+3. `./styles/app.scss` — 完整组件类库(buttons / cards / tables / badges / chips / drawer / modal / toast / chart / feed / stat / strip / pager / md-preview 等)
+4. `./style.css` — 排版辅助类(`.page-header` / `.page-title` / `.page-subtitle`)
 
-### 5.2 EP SCSS 主题覆写(element-variables.scss)
+### 5.2 Design Token(tokens.scss)
 
-按 ADR-001 §5.2 模板,`src/styles/element-variables.scss` 通过 `@forward 'element-plus/theme-chalk/src/common/var.scss' with (...)` 注入品牌值,并 `@use 'element-plus/theme-chalk/src/index.scss'` 一次性编译完整主题样式。`main.ts` 引入一次即生效全量 themed CSS。
-
-| EP SCSS 变量 | 品牌值 | 对应旧 CSS 变量 |
+| Token 类别 | 关键变量 | 来源 |
 |------|------|------|
-| `$colors.primary.base` | `#2563eb` | `--primary-color` |
-| `$colors.success/danger/warning/info.base` | `#10b981` / `#ef4444` / `#f59e0b` / `#3b82f6` | 语义色 |
-| `$text-color.primary/regular/secondary` | `#111827` / `#6b7280` / `#9ca3af` | 文字色阶 |
-| `$border-color.base/light` | `#e5e7eb` / `#f3f4f6` | 边框色 |
-| `$bg-color.(''/page/overlay)` | `#f5f7fa` / `#f5f7fa` / `#ffffff` | 背景色 |
-| `$border-radius.small/medium/large` | `4px` / `6px` / `8px` | 圆角 |
-| `$box-shadow.light/''` | 品牌阴影 | `--shadow-sm/md` |
-| `$transition-duration.(''/fast)` | `0.2s` / `0.15s` | 过渡收紧(ADR §5.3) |
+| 主色 | `--primary: #4f46e5` / `--primary-hover: #4338ca` / `--primary-soft: #eef2ff` / `--primary-line: #c7d2fe` | 样稿 |
+| 文字色 | `--ink: #0f172a` / `--text: #1f2937` / `--text-2: #475569` / `--text-3: #94a3b8` | 样稿 |
+| 背景/表面 | `--bg: #f8fafc` / `--surface: #ffffff` / `--surface-2: #f1f5f9` | 样稿 |
+| 边框 | `--border: #e2e8f0` / `--border-2: #eef2f7` | 样稿 |
+| 阴影 | `--shadow-sm` / `--shadow` / `--shadow-hover` / `--shadow-float` | 样稿 |
+| 动效曲线 | `--ease: cubic-bezier(0.4, 0, 0.2, 1)` / `--spring: cubic-bezier(0.34, 1.56, 0.64, 1)` | 样稿 |
+| 字体 | `--mono: 'SF Mono', Menlo, Monaco, Consolas, monospace` | 样稿 |
+| EP 镜像 | `--el-color-primary: var(--primary)` 等 | 同步主色 |
 
-> 运行时 EP CSS 变量(`--el-color-primary` / `--el-text-color-secondary` / `--el-border-color-lighter` / `--el-fill-color-light` 等)由 themed SCSS 编译产出,页面 scoped 样式可直接引用。
+### 5.3 组件映射
 
-### 5.3 组件映射(手写类 → Element Plus)
-
-ADR-001 迁移后,所有手写组件类替换为 EP 组件:
-
-| 旧手写类 | Element Plus 组件 |
+| 组件类别 | 实现方式 |
 |------|------|
-| `.btn` / `.btn-primary` / `.btn-secondary` / `.btn-danger` / `.btn-link` / `.btn-small` | `ElButton`(type / size / text / loading / disabled) |
-| `.input-wrap input` / `.select-wrap select` | `ElInput` / `ElInputNumber` / `ElSelect` |
-| `.checkbox-wrap` | `ElCheckbox` / `ElSwitch` |
-| `.card` / `.card-header` / `.card-body` | `ElCard` + `#header` slot |
-| `.data-table` | `ElTable` + `ElTableColumn`(stripe / border / show-overflow-tooltip / type="expand") |
-| `.pagination-bar` / `.page-btn` | `ElPagination`(layout="total, sizes, prev, pager, next, jumper") |
-| `.tag` / `.status-badge` | `ElTag`(type="success/info/warning/danger") |
-| `.empty-state` | `ElEmpty` |
-| `.spinner` / "加载中..."文字 | `v-loading` 指令 / `ElSkeleton` |
-| `.upload-progress` | `ElProgress` |
-| `window.confirm` / `alert` | `ElMessageBox.confirm` / `ElMessage` |
-| 手写 SVG 图标 | `@element-plus/icons-vue`(Document / Files / Search / Upload / Filter / Menu / Expand / Fold) |
-| 高级筛选 inline 折叠 | `ElDrawer`(direction="rtl") |
+| 按钮(`.btn` / `.btn-ghost` / `.btn-danger` / `.btn-sm`) | 手写 SCSS class,设计 token 驱动 |
+| 卡片(`.card` / `.hoverable` / `.card-head` / `.card-title` / `.card-sub`) | 手写 SCSS class |
+| 表格(`table.data-table` / `.table-wrap`) | 手写原生 `<table>` + SCSS |
+| 徽章(`.badge.gray/green/amber/red/blue/indigo` + `.dot` + `.pulse`) | 手写 SCSS class |
+| Chips / Strip / Stat / Feed | 手写 SCSS class(`StatusStrip.vue` / `StatCard.vue` 等组件使用) |
+| 抽屉(`AppDrawer.vue` + `.drawer` + `.overlay`) | Teleport + 手写 SCSS,spring 入场 0.3s |
+| 弹窗(`AppModal.vue` + `.modal` + `.overlay`) | Teleport + 手写 SCSS,scale + translateY spring 入场 |
+| Toast(`AppToast.vue` + `.toast` + `useToast`) | Teleport + 全局单例,success/error 两态,spring 入场 0.3s |
+| 图表(`ChartLine.vue` / `ChartDonut.vue`) | 原生 SVG,stroke-dashoffset/dasharray 描画动画 |
+| 图标(`Icon` / `iconHtml(name)`) | `utils/icons.ts`,27 个线性 SVG,stroke 1.6 round |
+| 输入框 / Select / 数字输入 / Switch / Checkbox | EP 组件(`el-input` / `el-select` / `el-input-number` / `el-switch` / `el-checkbox`) |
+| 分页 | EP `el-pagination`(layout="sizes, prev, pager, next, jumper") |
+| 确认对话框 | EP `ElMessageBox.confirm`(保留,与 window.confirm 等价) |
+| Loading | EP `v-loading` 指令 |
+| 错误/成功提示 | `useToast()` composable,替代 `ElMessage` |
 
-> 状态映射:`format.ts` 的 `getFileStatusType(status)` 返回 EP `ElTag` type(success/danger/warning/info),替代旧 `getFileStatusClass`。
+> 状态映射:`getFileStatusLabel(status)` 返回中文标签;`statusBadgeHtml(status)` 返回 badge HTML 字符串。
 
 ### 5.4 已清理的死代码
 
@@ -151,12 +173,11 @@ ADR-001 迁移后,所有手写组件类替换为 EP 组件:
 - Segment Refinement 相关(`.segment-*`、`.split-*`、`.profile-*`)
 - 旧版弹窗(`.dialog-*`、`.modal-*`)
 - 未使用的过滤器栏(`.filter-bar*`、`.filter-input`)
-- 未使用的按钮变体(`.btn-link-success`、`.btn-link-warning`、`.btn-link-danger`、`.btn-success`)
-- 未使用的统计卡片(`.stat-card`、`.stat-item`、`.stats-bar*`)
-- 未使用的 Markdown 预览(`.markdown-preview`)
-- ADR-001 迁移:全部手写组件类(见 §5.3 映射表)
+- 2026-07-20 重设计:从 ADR-001 EP 组件包装切换为样稿对齐的手写 SCSS class(EP 仅保留表单/分页)
 
 ## 6. API 客户端(docApi.ts)
+
+> **业务逻辑零改动**:与 ADR-001 时一致,本次重设计未触及任何 API 端点、参数、请求/响应处理。
 
 | 方法 | 端点 | 说明 |
 |------|------|------|
@@ -169,17 +190,27 @@ ADR-001 迁移后,所有手写组件类替换为 EP 组件:
 | `listDocumentParses` | `GET /admin/document-parses` | 解析记录列表 |
 | `deleteDocumentParse` | `DELETE /admin/document-parses/:id` | 删除解析记录 |
 | `exportParseMarkdown` / `exportParseHtml` | `GET /admin/document-parses/:id/export/*` | 导出解析结果 |
-| `searchTest` | `GET /admin/documents/search` | 检索测试 |
+| `searchTest` | `GET /admin/documents/search` | 检索测试(8 个 minerU 过滤参数透传) |
 
 ## 7. 测试
 
 前端**无单元测试框架**(package.json 未配置 vitest/jest)。验证方式:
-1. `npm run build`(vue-tsc 类型检查 + vite 构建)必须通过
+1. `npm run build`(vue-tsc 类型检查 + vite 构建)必须通过,零错误零警告
 2. 人工验证页面功能
 
 后端 UT 不受前端重构影响(前端重构不改变 API 契约)。
 
 ## 8. 重构记录
+
+### 2026-07-20: 高保真还原样稿重设计
+
+- **输入**:`prototype/admin-console-redesign.html`(样稿,DocLibrary 部分)
+- **输出**:5 个视图(OverviewPage 新增 / DocManagePage 重写 / DocDetailPage 新增 / ParseResultsPage 重写 / SearchPage 重写)+ 8 个组件(Sidebar / Topbar / AppDrawer / AppModal / AppToast / ChartLine / ChartDonut / StatCard / StatusStrip)+ 3 个 composables(useToast / useCountUp)+ 1 个 icons 工具
+- **样式**:`tokens.scss`(CSS 变量)+ `app.scss`(组件类库)+ `element-variables.scss`(EP 主色 `#4F46E5`)+ `style.css`(排版 helper)
+- **路由**:Hash 路由(4 主页 + detail 子页),provide/inject 跨层级通信
+- **业务逻辑零改动**:`git diff` 纯展示层,API 端点/参数/校验/轮询/确认框完全等价(自查见 `Redesign-2026-07-Admin-Console.md` §业务零改动自查清单)
+- **设计文档**:`docs/overview/Redesign-2026-07-Admin-Console.md`(权威规格,含 design token / 组件模式 / 文件清单 / 业务零改动自查)
+- **EP 保留范围**:el-input / el-select / el-input-number / el-pagination / el-switch / el-checkbox / ElMessageBox(表单与分页控件);其余展示层组件(button / card / table / drawer / modal / toast / sidebar / topbar / charts)全部手写以达高保真
 
 ### 2026-07-04: 移除 Identity 鉴权
 
@@ -188,26 +219,17 @@ ADR-001 迁移后,所有手写组件类替换为 EP 组件:
 - `docApi.ts` 改用普通 axios,移除 `createAuthenticatedClient`
 - 后端移除 `AuthEndpoints.cs`、JWT Bearer 中间件、IdentityService HttpClient
 - `.gitignore` 移除 `authService.js` 条目
-- 详见后端 `docs/overview/Design.md` 与 `docs/overview/Integration.md`
-
-### 2026-07-03: UI 重构
-
-- 移除 element-plus / @element-plus/icons-vue / marked / @types/marked 依赖
-- main.ts 移除 ElementPlus 全局注册
-- style.css 清理约 600 行死代码,统一 CSS 变量命名
-- SearchPage/DocManagePage/ParseResultsPage 消除所有内联样式
-- ParseResultsPage 修复 VLM 模式按钮显示(移除 modelVersion === 'pipeline' 限制)
-- App.vue 移除未使用的 lastRefreshTime
 
 ### 2026-07-10: ADR-001 迁移到 Element Plus
 
 - 重新引入 element-plus ^2.10.0 / @element-plus/icons-vue ^2.3.1 / sass ^1.80.0 / unplugin-auto-import ^0.18.3 / unplugin-vue-components ^0.27.4
 - vite.config.ts 启用 AutoImport + Components(ElementPlusResolver,importStyle: false)
-- 新增 `src/styles/element-variables.scss`(@forward + @use 注入品牌 SCSS token,见 §5.2)
+- 新增 `src/styles/element-variables.scss`(@forward + @use 注入品牌 SCSS token)
 - main.ts 引入 element-variables.scss 编译全量 themed CSS
-- App.vue 改为 el-container / el-aside(el-menu 折叠) / el-header(面包屑) / el-main;移动端 el-drawer
-- 三页面(DocManagePage / ParseResultsPage / SearchPage)全部手写组件类替换为 EP 组件(见 §5.3 映射表)
-- window.confirm → ElMessageBox.confirm;alert/console.error → ElMessage
-- style.css 从 ~914 行清理至 ~89 行,仅保留 :root tokens + 排版辅助类
-- 保留 minerU 第 2 代检索能力(DS-13~DS-18):8 个 minerU 过滤参数 + 行展开 blockData 详情 + mineruScore 独立列
-- 实施偏差 1:移除 vite.config.ts `additionalData` SCSS 注入(导致 module loop),改用 importStyle: false,themed CSS 由 element-variables.scss 一次性编译(详见 ADR-001 ### 实施偏差 1)
+- 保留 minerU 第 2 代检索能力(DS-13~DS-18):8 个 minerU 过滤参数 + 行展开 blockData 详情 + mineruScore 独立展示
+
+### 2026-07-03: UI 重构
+
+- 移除 element-plus / @element-plus/icons-vue / marked / @types/marked 依赖
+- style.css 清理约 600 行死代码,统一 CSS 变量命名
+- (注:此次重构后被 ADR-001 部分回滚,再被 2026-07-20 重设计进一步演进)

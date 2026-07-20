@@ -1,0 +1,72 @@
+// Design Tokens — sourced verbatim from prototype/admin-console-redesign.html :root
+// SCSS variables are not used; only :root CSS custom properties are emitted so that
+// runtime CSS (both handwritten classes and Element Plus scoped overrides) can reference
+// them via var(--*). See docs/overview/Redesign-2026-07-Admin-Console.md §Design Token.
+
+:root {
+  --primary: #4f46e5;
+  --primary-hover: #4338ca;
+  --primary-soft: #eef2ff;
+  --primary-line: #c7d2fe;
+
+  --ink-0: #0d0f1e;
+  --ink-1: #141731;
+  --ink-2: #1d2142;
+  --ink-line: #262b52;
+  --ink-text: #e7e9f5;
+  --ink-text-2: #9ba1c4;
+  --ink-text-3: #5d6388;
+
+  --bg: #f5f6f8;
+  --surface: #ffffff;
+  --surface-2: #f8f9fc;
+  --border: #e5e7ef;
+  --border-2: #eef0f6;
+
+  --text: #161927;
+  --text-2: #586076;
+  --text-3: #9aa0b6;
+
+  --success: #10b981;
+  --success-soft: #ecfdf5;
+  --success-line: #a7f3d0;
+
+  --warning: #d97706;
+  --warning-soft: #fffbeb;
+  --warning-line: #fde68a;
+
+  --danger: #ef4444;
+  --danger-soft: #fef2f2;
+  --danger-line: #fecaca;
+
+  --info: #0ea5e9;
+  --info-soft: #f0f9ff;
+  --info-line: #bae6fd;
+
+  --r-card: 12px;
+  --r-btn: 8px;
+  --r-input: 6px;
+
+  --shadow-hover: 0 6px 16px -6px rgba(22, 25, 39, 0.12),
+    0 2px 4px -2px rgba(22, 25, 39, 0.06);
+  --shadow-float: 0 16px 40px -12px rgba(22, 25, 39, 0.18),
+    0 4px 10px -4px rgba(22, 25, 39, 0.08);
+
+  --ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+  --spring: cubic-bezier(0.34, 1.35, 0.44, 1);
+
+  --mono: ui-monospace, 'SF Mono', 'Cascadia Code', 'JetBrains Mono', Consolas,
+    monospace;
+
+  // Sync Element Plus runtime tokens so EP components share the same primary color
+  // (authoritative source is element-variables.scss; this is a runtime mirror for
+  // any code that reads --el-color-primary directly).
+  --el-color-primary: var(--primary);
+  --el-color-primary-light-3: #7c75ed;
+  --el-color-primary-light-5: #a5a0f3;
+  --el-color-primary-light-7: #c7d2fe;
+  --el-color-primary-light-9: var(--primary-soft);
+  --el-color-primary-dark-2: var(--primary-hover);
+  --el-transition-duration: 0.2s;
+  --el-transition-duration-fast: 0.15s;
+}
