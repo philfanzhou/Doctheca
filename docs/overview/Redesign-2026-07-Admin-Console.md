@@ -56,7 +56,7 @@ Sidebar（深色 ink 渐变）
 Topbar
   - 面包屑：文档库 › 当前页
   - env-tag「内网环境」+ 实时时钟（每秒更新）
-Main（#view，200ms 模糊过渡）
+Main（.view，200ms 模糊过渡）
   - 概览页 / 文档管理 / 文档详情 / 检索测试
 ```
 
@@ -90,7 +90,7 @@ Main（#view，200ms 模糊过渡）
 - 抽屉入场：translateX 36→0 + opacity，300ms ease
 - 弹窗入场：scale(.96)→1 + translateY 8→0，260ms spring
 - Toast 入场：translateX 24→0 + opacity，300ms spring
-- 视图切换：#view opacity 0 + blur 6px + translateY 5px，150ms ease（leaving）→ 切换 → 恢复
+- 视图切换：.view opacity 0 + blur 6px + translateY 5px，150ms ease（leaving）→ 切换 → 恢复
 - 侧栏 nav-indicator 滑动：translateY 跟随当前 active 项，340ms spring
 
 ## 现有工程映射
