@@ -108,7 +108,7 @@ Loki 地址统一通过 `Loki:Uri` 配置键进入 `Serilog:WriteTo:1:Args:uri`�
 
 ## 数据库配置
 
-代码硬编码 `UseNpgsql`，**无 SQLite 回退**（相关描述已废弃）。本地开发请运行 PostgreSQL。
+代码使用 `UseNpgsql`。本地开发请运行 PostgreSQL。
 
 数据库连接字符串在运行时由以下两部分拼合得到：
 

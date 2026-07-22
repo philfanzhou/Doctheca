@@ -23,5 +23,5 @@
 ## 数据库配置
 
 - **数据库名**：`ruoyu_study_doclibrary`
-- **引擎**：PostgreSQL（代码硬编码 `UseNpgsql`，无 SQLite 回退）
+- **引擎**：PostgreSQL
 - **连接字符串**：`ConnectionStrings:Default`

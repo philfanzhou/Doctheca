@@ -50,7 +50,7 @@
 | 框架 | .NET 8 | ASP.NET Core HTTP |
 | 通信 | HTTP REST (JSON) | Admin API + 搜索 |
 | ORM | EF Core 8.0 | Npgsql |
-| 数据库 | PostgreSQL | 代码硬编码 UseNpgsql，无 SQLite 回退 |
+| 数据库 | PostgreSQL | UseNpgsql |
 | 对象映射 | Mapster 10.0 | Entity ↔ Model 映射 |
 | 文档解析 | MinerU Precision API | 在线解析（含图片输出，Token 认证） |
 | 搜索引擎 | OpenSearch 2.19 (Docker) / OpenSearch.Net 1.8 (NuGet) | 外部全文检索 |

@@ -28,8 +28,6 @@
 Host=localhost;Port=5432;Database=ruoyu_study_doclibrary;Username=phil
 ```
 
-> **不提供 SQLite 切换**：代码硬编码 `UseNpgsql`，没有 SQLite 回退（相关文档描述已废弃）。本地开发请运行 PostgreSQL（Docker:`ruoyu-postgres`）。
-
 数据库和表会在启动时通过 `DatabaseInitializer.InitializeAsync` 自动创建（`CREATE TABLE IF NOT EXISTS`）。
 
 ## 运行服务
