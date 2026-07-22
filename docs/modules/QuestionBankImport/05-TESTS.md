@@ -4,6 +4,7 @@
 
 - **测试框架**:xUnit + Moq + FluentAssertions(与项目现有测试栈一致)
 - **DbContext**:使用 EF Core InMemory provider 构造 `DocLibraryDbContext`,避免依赖真实 PostgreSQL
+- **共享 helper**:`TestHelpers/InMemoryDbContextFactory.cs` 创建隔离内存库;`TestHelpers/QuestionBankTestData.cs` 提供 `SeedParsedParse`/`AddBlock`/`AddImage` 复用数据种子
 - **依赖 Mock**:
   - `IDocumentParseImportRepository`:Mock `GetByParseIdAsync` / `AddAsync` / `UpdateAsync`(仅 `UpsertImportStatusAsync` 测试使用;`GetImportableListAsync` 测试直接 seed DbContext,不走 Repository)
   - `IOssService`:Mock `DownloadAsync` / `GetPresignedUrlAsync` 成功与异常

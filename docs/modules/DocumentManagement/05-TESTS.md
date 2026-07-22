@@ -1,14 +1,16 @@
 # DocumentManagement — 测试文档
 
-## 单元测试（DocumentFileServiceTests.cs）
+## 单元测试（`DocumentFileServiceTests/` 文件夹）
 
-| # | 测试方法 | 覆盖 | 状态 |
-|---|---------|------|------|
-| UT-DF-01 | `CreateAsync_SetsCreatedAtAndReturnsModel` — 创建文件设置 CreatedAt 并返回模型 | FR-01 | completed |
-| UT-DF-02 | `GetByIdAsync_ReturnsModel_WhenExists` — 存在时返回模型 | FR-03 | completed |
-| UT-DF-03 | `GetByIdAsync_ReturnsNull_WhenNotExists` — 不存在时返回 null | FR-03 | completed |
-| UT-DF-04 | `GetListAsync_ReturnsPagedResults` — 分页返回结果 | FR-02 | completed |
-| UT-DF-05 | `DeleteAsync_DelegatesToRepository` — 删除委托给仓储 | FR-05 | completed |
+按操作分组，每个场景一个测试类：
+
+| # | 测试方法 | 覆盖 | 状态 | 所在文件 |
+|---|---------|------|------|---------|
+| UT-DF-01 | `CreateAsync_SetsCreatedAtAndReturnsModel` — 创建文件设置 CreatedAt 并返回模型 | FR-01 | completed | `DocumentFileServiceCreateTests.cs` |
+| UT-DF-02 | `GetByIdAsync_ReturnsModel_WhenExists` — 存在时返回模型 | FR-03 | completed | `DocumentFileServiceGetByIdTests.cs` |
+| UT-DF-03 | `GetByIdAsync_ReturnsNull_WhenNotExists` — 不存在时返回 null | FR-03 | completed | `DocumentFileServiceGetByIdTests.cs` |
+| UT-DF-04 | `GetListAsync_ReturnsPagedResults` — 分页返回结果 | FR-02 | completed | `DocumentFileServiceListTests.cs` |
+| UT-DF-05 | `DeleteAsync_DelegatesToRepository` — 删除委托给仓储 | FR-05 | completed | `DocumentFileServiceDeleteTests.cs` |
 
 ## 单元测试（DocumentFileDeleteCleanupTests.cs）
 
@@ -52,7 +54,7 @@
 
 ```bash
 # 运行本模块相关单元测试
-dotnet test src/Tests/Ruoyu.Study.DocLibrary.Tests --filter "FullyQualifiedName~DocumentFileService"
+dotnet test src/Tests/Ruoyu.Study.DocLibrary.Tests --filter "FullyQualifiedName~DocumentFileServiceTests"
 dotnet test src/Tests/Ruoyu.Study.DocLibrary.Tests --filter "FullyQualifiedName~DocumentFileDeleteCleanup"
 
 # 运行所有测试

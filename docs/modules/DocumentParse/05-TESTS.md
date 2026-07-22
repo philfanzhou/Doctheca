@@ -26,6 +26,31 @@
 | UT-DP-08 | `InsertBlocksFromContentListAsync_DefaultsPageIdToZero_WhenMissing` | 缺 `page_id` 时默认 0 |
 | UT-DP-09 | `InsertBlocksFromContentListAsync_ExtractsTextFromContentOrBodyField` | 文本提取优先级 `text` → `content` → `body`（table HTML） |
 
+## 单元测试（`DocumentParseServiceTests/` 文件夹）
+
+覆盖 `DocumentParseService` 生命周期方法（创建、查询、状态更新、图片、删除）。按操作分组：
+
+| # | 测试方法 | 覆盖 |
+|---|---------|------|
+| UT-DPS-01 | `CreateAsync_SetsStatusToPendingAndReturnsModel` | 创建解析记录，状态为 pending |
+| UT-DPS-02 | `CreateAsync_SetsModelVersion_ToVlm_ByDefault` | 默认 modelVersion 为 vlm |
+| UT-DPS-03 | `CreateAsync_SetsModelVersion_ToPipeline_WhenSpecified` | 可指定 modelVersion |
+| UT-DPS-04 | `GetByIdAsync_ReturnsModel_WhenExists` | 按 ID 查询 |
+| UT-DPS-05 | `GetLatestByFileIdAndModelAsync_ReturnsParseForSpecificModel` | 按文件 ID + model 查询最新 |
+| UT-DPS-06 | `GetLatestByFileIdAsync_ReturnsLatestParse` | 按文件 ID 查询最新 |
+| UT-DPS-07 | `UpdateStatusAsync_UpdatesStatusAndFields` | 更新状态与 externalTaskId |
+| UT-DPS-08 | `UpdateStatusAsync_SetsParsedAt_WhenStatusIsParsed` | parsed 状态时设置 ParsedAt 与 Markdown |
+| UT-DPS-09 | `UpdateStatusAsync_ThrowsKeyNotFound_WhenNotExists` | 记录不存在抛 KeyNotFoundException |
+| UT-DPS-10 | `UpdateStatusAsync_SetsErrorMessage_WhenProvided` | 设置错误信息 |
+| UT-DPS-11 | `UpdateStatusAsync_SetsLayoutJson_WhenProvided` | 设置 layout JSON |
+| UT-DPS-12 | `UpdateStatusAsync_DoesNotOverwriteLayoutJson_WhenNull` | null layout 不覆盖现有值 |
+| UT-DPS-13 | `GetPendingJobsAsync_ReturnsOnlyPendingJobs` | 返回 pending 任务 |
+| UT-DPS-14 | `AddImageAsync_CallsRepository` | 添加图片记录 |
+| UT-DPS-15 | `GetImagesByParseIdAsync_ReturnsImages` | 按 parseId 查询图片 |
+| UT-DPS-16 | `GetImagesByFileIdAsync_ReturnsImages` | 按 fileId 查询图片 |
+| UT-DPS-17 | `DeleteParseAsync_DeletesImagesAndParse` | 删除解析记录与关联图片 |
+| UT-DPS-18 | `DeleteParseAsync_ReturnsFalse_WhenNotFound` | 记录不存在时返回 false |
+
 ### PdfSplitServiceTests.cs
 
 覆盖 `IPdfSplitService.GetPageCount` / `SplitPdf`，以及 Markdown 分隔符拼接、图片名前缀冲突避免的纯逻辑。**FR-05 / AC-06**。
@@ -89,9 +114,10 @@
 
 | 测试文件 | 所属模块 |
 |---------|---------|
-| `DocumentFileServiceTests.cs` | DocumentManagement |
+| `DocumentFileServiceTests/` | DocumentManagement |
 | `DocumentFileDeleteCleanupTests.cs` | DocumentManagement |
 | `DocumentExportLogicTests.cs` | DocumentExport |
+| `OpenSearch/` | DocumentSearch |
 | `OpenSearchIndexServiceTests.cs` | DocumentSearch |
 | `SearchDomainServiceTests.cs` | DocumentSearch |
 | `QuestionBankImportServiceTests.cs` | QuestionBankImport |

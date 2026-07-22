@@ -3,6 +3,8 @@
 测试工具：`xUnit` + `Moq` + `FluentAssertions`。
 
 现有测试文件（代码中实际存在）：
+- `src/Tests/Ruoyu.Study.DocLibrary.Tests/OpenSearch/OpenSearchQueryBuilderTests.cs`
+- `src/Tests/Ruoyu.Study.DocLibrary.Tests/OpenSearch/OpenSearchResponseParserTests.cs`
 - `src/Tests/Ruoyu.Study.DocLibrary.Tests/OpenSearchIndexServiceTests.cs`
 - `src/Tests/Ruoyu.Study.DocLibrary.Tests/SearchDomainServiceTests.cs`
 
@@ -13,14 +15,14 @@
 ```bash
 dotnet test src/services/ruoyu.doclibrary/src/Tests/Ruoyu.Study.DocLibrary.Tests \
   --configuration Release \
-  --filter "FullyQualifiedName~OpenSearchIndexServiceTests|FullyQualifiedName~SearchDomainServiceTests"
+  --filter "FullyQualifiedName~OpenSearchQueryBuilderTests|FullyQualifiedName~OpenSearchResponseParserTests|FullyQualifiedName~OpenSearchIndexServiceTests|FullyQualifiedName~SearchDomainServiceTests"
 ```
 
 ## 单元测试清单（真实方法名）
 
-### OpenSearchIndexServiceTests（`OpenSearchIndexServiceTests.cs`）
+### OpenSearchQueryBuilderTests（`OpenSearch/OpenSearchQueryBuilderTests.cs`）
 
-纯逻辑测试（`internal static` 方法），不依赖 OpenSearch HTTP。
+纯逻辑测试（`OpenSearchQueryBuilder.BuildSearchBody`），不依赖 OpenSearch HTTP。
 
 | 测试方法 | 覆盖 |
 |---------|------|
@@ -34,6 +36,13 @@ dotnet test src/services/ruoyu.doclibrary/src/Tests/Ruoyu.Study.DocLibrary.Tests
 | `BuildSearchBody_WithNullOrEmptyPageToken_DoesNotIncludeSearchAfter` | null/空 pageToken 不生成 `search_after`（FR-07） |
 | `BuildSearchBody_AlwaysIncludesSizeSortAndHighlight` | 始终包含 `size`/`sort`/`highlight`（FR-07） |
 | `BuildSearchBody_SortUsesBlockIdNotLegacyFields` | 排序使用 `block_id`，不含 legacy 字段（FR-07） |
+
+### OpenSearchResponseParserTests（`OpenSearch/OpenSearchResponseParserTests.cs`）
+
+纯逻辑测试（`OpenSearchResponseParser.ParseSearchResponse`），不依赖 OpenSearch HTTP。
+
+| 测试方法 | 覆盖 |
+|---------|------|
 | `ParseSearchResponse_WithValidJson_ReturnsResultsWithBlockFields` | 正常解析：字段映射、`MatchType=Stemmed`、offset=0（FR-07, AC-06） |
 | `ParseSearchResponse_WithPhraseQuery_SetsExactPhraseMatchType` | phrase 查询设置 `MatchType=ExactPhrase`（FR-07, AC-07） |
 | `ParseSearchResponse_WithHighlight_UsesHighlightedText` | highlight 优先于 `_source.text`（FR-07） |
@@ -43,6 +52,13 @@ dotnet test src/services/ruoyu.doclibrary/src/Tests/Ruoyu.Study.DocLibrary.Tests
 | `ParseSearchResponse_WithMissingFields_UsesDefaults` | `_source` 缺失字段使用默认值（FR-07） |
 | `ParseSearchResponse_WithMissingScore_DefaultsToZero` | `_score` 缺失时默认为 0（FR-07） |
 | `ParseSearchResponse_WithNoHitsProperty_ReturnsEmptyResults` | 无 `hits` 属性时返回空结果（健壮性） |
+
+### OpenSearchIndexServiceTests（`OpenSearchIndexServiceTests.cs`）
+
+纯逻辑测试（`OpenSearchIndexService.BuildIndexBody` 透传至 `OpenSearchIndexManager`），不依赖 OpenSearch HTTP。
+
+| 测试方法 | 覆盖 |
+|---------|------|
 | `BuildIndexBody_IncludesBlockPipelineFields` | mapping 包含 blocks 字段且类型正确（FR-06） |
 | `BuildIndexBody_DoesNotContainLegacyFields` | mapping 不含 legacy 字段（FR-06） |
 | `BuildIndexBody_RetainsSharedFieldsAndAnalyzers` | 保留共享字段和分析器（`english_custom`/`english_phrase`/子字段 `exact`）（FR-06） |
@@ -102,24 +118,34 @@ Mock `ISearchIndexService`，验证领域服务委托与降级。
 | `ExactSearchAsync_PropagatesMinerUFilterToIndexService` | FR-10 | — |
 | `ExactSearchAsync_WithMinerUFilterAndIndexServiceThrow_ReturnsEmpty` | 降级 | — |
 
-### 第 2 代单元测试（追加到 `OpenSearchIndexServiceTests.cs` / `SearchDomainServiceTests.cs` / `DocumentParseBlockServiceTests.cs`，已实现）
+### 第 2 代单元测试（追加到 `OpenSearch/OpenSearchQueryBuilderTests.cs`、`OpenSearch/OpenSearchResponseParserTests.cs`、`OpenSearchIndexServiceTests.cs` / `SearchDomainServiceTests.cs` / `DocumentParseBlockServiceTests.cs`，已实现）
 
 在现有 V1 测试方法集中追加 minerU 断言（不新增独立测试方法类）。共 15 个测试方法，分布如下：
 
-#### OpenSearchIndexServiceTests（10 个）
+#### OpenSearchQueryBuilderTests（5 个）
 
 | 测试方法 | 覆盖 |
 |---------|------|
-| `BuildIndexBody_IncludesMinerUFields` | mapping 含 x0/y0/x1/y1/score/has_image/sub_type/text_level/text_format/caption/_meta（FR-12） |
 | `BuildSearchBody_WithBlockTypeFilter_IncludesTerm` | minerU `blockType` 走 `filter: { block_type }`（FR-10） |
 | `BuildSearchBody_WithPageNumberAndHasImage_WrapsAllInFilter` | 多 minerU 条件全走 `filter` 子句（FR-10, FR-12） |
 | `BuildSearchBody_WithNoMinerUFilter_OutputEqualsV1` | 无 minerU filter 时 `BuildSearchBody` 输出与 V1 完全一致（零回归，AC-17） |
 | `BuildSearchBody_WithKeywordAndMinerUFilter_SplitsMustAndFilter` | keyword 走 `must`、minerU 精确项走 `filter`（FR-10, FR-12） |
 | `BuildSearchBody_WithAllMinerUFilters_IncludesAllTerms` | 8 个 minerU filter 全部命中（FR-10, FR-12） |
+
+#### OpenSearchResponseParserTests（4 个）
+
+| 测试方法 | 覆盖 |
+|---------|------|
 | `ParseSearchResponse_WithBlockData_ReturnsBlockResultFields` | `_source._meta.block_data` 映射到 `BlockData`（FR-11, AC-18, AC-20） |
 | `ParseSearchResponse_BboxAndScoreFields_MappedCorrectly` | `x0/y0/x1/y1` 组合为 `Bbox`，`score` 字段回挂为 `MineruScore`（FR-11, AC-19） |
 | `ParseSearchResponse_WithMissingMinerUFields_FallsBackToNull` | minerU 字段缺失时 `BlockData`/`Bbox`/`MineruScore` = null（健壮性） |
 | `ParseSearchResponse_WithPartialBbox_StillConstructsArray` | 部分 bbox 分量存在时仍构造 float[4]（健壮性） |
+
+#### OpenSearchIndexServiceTests（1 个）
+
+| 测试方法 | 覆盖 |
+|---------|------|
+| `BuildIndexBody_IncludesMinerUFields` | mapping 含 x0/y0/x1/y1/score/has_image/sub_type/text_level/text_format/caption/_meta（FR-12） |
 
 #### SearchDomainServiceTests（2 个）
 
