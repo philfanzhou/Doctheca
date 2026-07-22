@@ -337,7 +337,7 @@ LLM 分析完成后，调用 `UpdateDocumentFileMetadataAsync(documentFileId, ne
 
 ### 11.1 单元测试（UT）
 
-纯逻辑测试（`internal static` 方法），不依赖 OpenSearch HTTP。已实现于 `OpenSearchIndexServiceTests.cs` 与 `SearchDomainServiceTests.cs`。
+纯逻辑测试（`internal static` 方法），不依赖 OpenSearch HTTP。已实现于 `OpenSearchIndexServiceTests.cs` 与 `SearchDomainServiceTests.cs`，底层分别调用 `OpenSearchIndexManager.BuildIndexBody`、`OpenSearchQueryBuilder.BuildSearchBody`、`OpenSearchResponseParser.ParseSearchResponse`。
 
 - `BuildSearchBody`：query 构建、filter 构建、search_after、sort、highlight。
 - `ParseSearchResponse`：正常解析、phrase MatchType、highlight 优先、nextToken 生成、空结果、缺失字段默认值。
@@ -362,7 +362,7 @@ LLM 分析完成后，调用 `UpdateDocumentFileMetadataAsync(documentFileId, ne
 | 文件 | 影响 |
 |------|------|
 | `ISearchIndexService.cs` | 6 个方法签名 |
-| `OpenSearchIndexService.cs` | 实现全部方法；`BuildIndexBody` / `BuildSearchBody` / `ParseSearchResponse` 为 `internal static` |
+| `OpenSearchIndexService.cs` | `ISearchIndexService` facade；实际逻辑委托给 `OpenSearch/` 下的辅助类 |
 | `ISearchDomainService.cs` / `SearchDomainService.cs` | 薄封装 + 降级 |
 | `DocumentSearchEndpoints.cs` | `GET /admin/documents/search` |
 | `MinerUFileParseWorker.cs` | 解析完成后索引（best-effort） |
@@ -679,7 +679,7 @@ _meta         = new { block_data = block.BlockData }   // 整块回挂（V1 mine
 | 文件 | 影响 |
 |------|------|
 | `ISearchIndexService.cs` | V1 6 个方法签名不变；实现追加 minerU 字段索引（第 2 代） |
-| `OpenSearchIndexService.cs` | V1 实现追加 minerU 字段；`BuildIndexBody` 追加 minerU 维度映射；`ExactSearchAsync` / `BuildSearchBody` / `ParseSearchResponse` 内追加 minerU filter + 回挂分支（V1 方法内扩展，不新增方法） |
+| `OpenSearchIndexService.cs` | V1 facade 追加 minerU 字段；`OpenSearchIndexManager.BuildIndexBody` 追加 minerU 维度映射；`OpenSearchQueryBuilder.BuildSearchBody` / `OpenSearchResponseParser.ParseSearchResponse` 内追加 minerU filter + 回挂分支 |
 | `ISearchDomainService.cs` / `SearchDomainService.cs` | `ExactSearchAsync` 内追加 minerU filter 透传与回挂字段解析（V1 方法内扩展） |
 | `DocumentSearchEndpoints.cs`（扩展，同一文件） | `GET /admin/documents/search` 追加可选 minerU 入参（V1 原有入参与校验保留） |
 | `MinerUFileParseWorker.cs` | `IndexBlocksToSearchAsync` 追加 minerU 维度字段（同一 bulk） |

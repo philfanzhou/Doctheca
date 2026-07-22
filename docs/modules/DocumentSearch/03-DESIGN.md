@@ -159,7 +159,12 @@ src/services/ruoyu.doclibrary/
 │   ├── Service/
 │   │   ├── Endpoints/
 │   │   │   └── DocumentSearchEndpoints.cs         # GET /admin/documents/search（第 2 代演进扩展入参与响应）
-│   │   ├── OpenSearchIndexService.cs              # OpenSearch 索引服务（mapping + 写入扩展）
+│   │   ├── OpenSearch/
+│   │   │   ├── OpenSearchIndexManager.cs          # 索引生命周期管理（创建/删除/版本检查）
+│   │   │   ├── OpenSearchQueryBuilder.cs          # 搜索请求体构造（BuildSearchBody）
+│   │   │   ├── OpenSearchResponseParser.cs        # 搜索响应解析（ParseSearchResponse）
+│   │   │   └── OpenSearchJsonHelper.cs            # OpenSearch JSON 字段安全读取辅助方法
+│   │   ├── OpenSearchIndexService.cs              # OpenSearch 索引服务 facade（组合上述类，实现 ISearchIndexService）
 │   │   └── MinerUFileParseWorker.cs               # 解析完成后索引（best-effort，追加 minerU 字段）
 │   └── Host/
 │       ├── frontend/                              # doclibrary 自带前端
