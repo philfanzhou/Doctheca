@@ -107,10 +107,11 @@ public class MinerUFileParseWorker : BackgroundService
             ?? throw new InvalidOperationException($"Document file not found: {parse.DocumentFileId}");
 
         // Step 3: Download source file
-        var sourceStream = await ossService.DownloadAsync(file.FilePath);
+        using var sourceStream = await ossService.DownloadAsync(file.FilePath);
 
         // Step 4: Convert non-PDF files to PDF first
-        Stream pdfStream;
+        Stream? pdfStream = null;
+        var pdfStreamIsSource = false;
         bool isConverted = false;
         string? convertedPdfOssPath = null;
 
@@ -120,7 +121,6 @@ public class MinerUFileParseWorker : BackgroundService
             _logger.LogInformation("Non-PDF file detected: {FileName} ({ContentType}), converting to PDF", file.FileName, file.ContentType);
 
             var convertedStream = await fileConversionService.ConvertToPdfAsync(sourceStream, file.FileName, ct);
-            sourceStream.Dispose();
 
             if (convertedStream == null)
             {
@@ -136,6 +136,7 @@ public class MinerUFileParseWorker : BackgroundService
         else
         {
             pdfStream = sourceStream;
+            pdfStreamIsSource = true;
         }
 
         // Block service from scope (scoped lifetime)
@@ -181,7 +182,10 @@ public class MinerUFileParseWorker : BackgroundService
         }
         finally
         {
-            pdfStream.Dispose();
+            if (pdfStream is not null && !pdfStreamIsSource)
+            {
+                pdfStream.Dispose();
+            }
 
             // Clean up temporary converted PDF from OSS
             if (convertedPdfOssPath != null)

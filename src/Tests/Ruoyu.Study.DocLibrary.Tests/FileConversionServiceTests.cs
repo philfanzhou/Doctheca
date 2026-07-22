@@ -14,6 +14,11 @@ public class FileConversionServiceTests
         HttpClient httpClient,
         string baseUrl = "http://doc-converter:5050")
     {
+        // Mimic Program.cs named HttpClient configuration so the service no longer
+        // mutates the client in its constructor.
+        httpClient.BaseAddress = new Uri(baseUrl.TrimEnd('/') + "/");
+        httpClient.Timeout = TimeSpan.FromSeconds(180);
+
         var options = Options.Create(new FileConversionOptions
         {
             Url = baseUrl,
@@ -107,19 +112,25 @@ public class FileConversionServiceTests
     }
 
     [Fact]
-    public void Constructor_SetsUrlAndTimeout()
+    public void Constructor_DoesNotMutatePreconfiguredClient()
     {
         var options = Options.Create(new FileConversionOptions
         {
             Url = "http://my-converter:9999/",
         });
         var logger = new Mock<ILogger<RemoteFileConversionService>>().Object;
-        var client = new HttpClient();
+        var expectedBaseAddress = new Uri("http://preconfigured:1234/");
+        var expectedTimeout = TimeSpan.FromSeconds(30);
+        var client = new HttpClient
+        {
+            BaseAddress = expectedBaseAddress,
+            Timeout = expectedTimeout,
+        };
 
         _ = new RemoteFileConversionService(client, options, logger);
 
-        client.BaseAddress.Should().Be(new Uri("http://my-converter:9999/"));
-        client.Timeout.Should().Be(TimeSpan.FromSeconds(180));
+        client.BaseAddress.Should().Be(expectedBaseAddress);
+        client.Timeout.Should().Be(expectedTimeout);
     }
 
     [Fact]

@@ -13,7 +13,7 @@ using Ruoyu.Study.DocLibrary.Domain.Repositories;
 
 namespace Ruoyu.Study.DocLibrary.Service;
 
-public class OpenSearchIndexService : ISearchIndexService
+public class OpenSearchIndexService : ISearchIndexService, IDisposable
 {
     /// <summary>
     /// Current index mapping version. Increment when BuildIndexBody mapping changes.
@@ -39,6 +39,14 @@ public class OpenSearchIndexService : ISearchIndexService
         var config = new ConnectionConfiguration(new Uri(_options.Url))
             .RequestTimeout(TimeSpan.FromSeconds(30));
         _client = new OpenSearchLowLevelClient(config);
+    }
+
+    /// <summary>
+    /// Releases the OpenSearch low-level client resources.
+    /// </summary>
+    public void Dispose()
+    {
+        (_client as IDisposable)?.Dispose();
     }
 
     public async Task EnsureIndexAsync()

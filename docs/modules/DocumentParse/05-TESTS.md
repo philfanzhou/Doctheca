@@ -53,7 +53,7 @@
 | UT-DP-21 | `ConvertToPdfAsync_ReturnsNull_OnNonSuccessStatusCode` | HTTP 非 2xx 返回 null |
 | UT-DP-22 | `ConvertToPdfAsync_ReturnsNull_OnHttpRequestException` | 网络异常返回 null |
 | UT-DP-23 | `ConvertToPdfAsync_SeeksStreamToStartBeforeReading` | 调用前 reset stream position |
-| UT-DP-24 | `Constructor_SetsBaseUrlAndTimeout` | 构造时正确设置 BaseAddress 和 Timeout |
+| UT-DP-24 | `Constructor_DoesNotMutatePreconfiguredClient` | 构造时不修改已预配置 BaseAddress / Timeout 的 HttpClient |
 | UT-DP-25 | `ConvertToPdfAsync_SendsMultipartFormData` | 请求为 multipart/form-data |
 | UT-DP-26 | `IsPdfFile_DetectedByContentType` | ContentType `application/pdf` 识别 |
 | UT-DP-27 | `IsPdfFile_DetectedByExtension` | 扩展名 `.pdf` 识别 |

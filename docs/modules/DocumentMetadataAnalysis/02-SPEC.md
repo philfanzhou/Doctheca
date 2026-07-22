@@ -216,15 +216,15 @@ public record DocumentMetadataAnalysis
 ### 5.1 DocumentAnalysisService.AnalyzeMetadataAsync
 
 ```
-1. await InitializeAsync(ct)  // 首次调用时解析 ContextLength、计算 ChunkSize
+1. await InitializeAsync(ct)  // 首次调用时解析 ContextLength、计算内部字段 _chunkSize / _maxTokensValue，不修改注入的 DocumentAnalysisOptions
 2. if textPreview is null/whitespace → return null, log warning "Empty text preview provided for metadata analysis"
 3. if ChunkSize <= 0 || MaxTokensValue <= 0 (LLM 初始化失败/未配置)→ return null, log info
 4. truncate textPreview to first 2000 chars
-5. BuildMetadataAnalysisPrompt(preview)
+5. DocumentAnalysisPromptBuilder.BuildMetadataAnalysisPrompt(preview)
 6. BuildRequestBody(prompt) → system="直接返回JSON，不要解释。" + user prompt, stream=true
 7. try:
    - CallStreamingAsync(requestBody, ct)
-   - ParseMetadataAnalysis(response): 去 markdown 代码块包装、反序列化、空字符串/空白/"null"字面量→null
+   - DocumentAnalysisResponseParser.ParseMetadataAnalysis(response, _logger, JsonOptions): 去 markdown 代码块包装、反序列化、空字符串/空白/"null"字面量→null
    - return result
 8. catch any exception:
    - log warning(ex) "LLM metadata analysis failed, returning null"
@@ -313,21 +313,25 @@ AnalyzeMetadataIfMissingAsync(documentFileId, markdownContent, scopeProvider, ct
 
 ### 7.2 建议单元测试方向 (UT)
 
-以下测试方向基于 `DocumentAnalysisService` 中 `internal` 可测方法(`BuildMetadataAnalysisPrompt`、`ParseMetadataAnalysis`、`ParseTokenCount`)设计,均为纯逻辑测试,不依赖 LLM HTTP 或数据库:
+以下测试方向基于纯逻辑 `internal` 可测方法设计,不依赖 LLM HTTP 或数据库:
+
+- `DocumentAnalysisPromptBuilder.BuildMetadataAnalysisPrompt(string textPreview)`
+- `DocumentAnalysisResponseParser.ParseMetadataAnalysis(string response, ILogger<DocumentAnalysisService> logger, JsonSerializerOptions jsonOptions)`
+- `DocumentAnalysisService.ParseTokenCount(string? value)`
 
 | # | 建议覆盖方向 | 涉及方法 | 覆盖 |
 |---|------------|---------|------|
 | UT-DM-01 | 空文本/空白文本 → `AnalyzeMetadataAsync` 返回 null | `AnalyzeMetadataAsync` | FR-04, FR-05 |
 | UT-DM-02 | `ChunkSize <= 0`(LLM 未初始化)→ 返回 null | `AnalyzeMetadataAsync` | FR-05 |
-| UT-DM-03 | 有效 JSON 响应 → 返回正确 subject/grade/year | `ParseMetadataAnalysis` | FR-03, FR-04 |
-| UT-DM-04 | JSON 中字段为空字符串 / 空白 → 视为 null | `ParseMetadataAnalysis` | FR-04 |
-| UT-DM-05 | JSON 中字段为 `"null"` 字符串字面量 → 视为 null | `ParseMetadataAnalysis` | FR-04 |
-| UT-DM-06 | 无效 JSON → 返回 null | `ParseMetadataAnalysis` | FR-05 |
+| UT-DM-03 | 有效 JSON 响应 → 返回正确 subject/grade/year | `DocumentAnalysisResponseParser.ParseMetadataAnalysis` | FR-03, FR-04 |
+| UT-DM-04 | JSON 中字段为空字符串 / 空白 → 视为 null | `DocumentAnalysisResponseParser.ParseMetadataAnalysis` | FR-04 |
+| UT-DM-05 | JSON 中字段为 `"null"` 字符串字面量 → 视为 null | `DocumentAnalysisResponseParser.ParseMetadataAnalysis` | FR-04 |
+| UT-DM-06 | 无效 JSON → 返回 null | `DocumentAnalysisResponseParser.ParseMetadataAnalysis` | FR-05 |
 | UT-DM-07 | 长文本输入 → 截断到 2000 字符 | `AnalyzeMetadataAsync` | FR-04 |
-| UT-DM-08 | `BuildMetadataAnalysisPrompt` 包含学科/年级/年份说明 | `BuildMetadataAnalysisPrompt` | FR-04 |
-| UT-DM-09 | `BuildMetadataAnalysisPrompt` 不含拆段策略关键词 | `BuildMetadataAnalysisPrompt` | FR-04 |
-| UT-DM-10 | markdown 代码块包装的 JSON 可正确解析 | `ParseMetadataAnalysis` | FR-04 |
-| UT-DM-11 | `"128K"` / `"1M"` / 纯数字 → 正确解析 token 数 | `ParseTokenCount` | 初始化逻辑 |
+| UT-DM-08 | `BuildMetadataAnalysisPrompt` 包含学科/年级/年份说明 | `DocumentAnalysisPromptBuilder.BuildMetadataAnalysisPrompt` | FR-04 |
+| UT-DM-09 | `BuildMetadataAnalysisPrompt` 不含拆段策略关键词 | `DocumentAnalysisPromptBuilder.BuildMetadataAnalysisPrompt` | FR-04 |
+| UT-DM-10 | markdown 代码块包装的 JSON 可正确解析 | `DocumentAnalysisResponseParser.ParseMetadataAnalysis` | FR-04 |
+| UT-DM-11 | `"128K"` / `"1M"` / 纯数字 → 正确解析 token 数 | `DocumentAnalysisService.ParseTokenCount` | 初始化逻辑 |
 
 ### 7.3 建议集成测试方向 (IT)
 

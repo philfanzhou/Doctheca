@@ -22,6 +22,9 @@ src/services/ruoyu.doclibrary/
 │   │       └── (DocumentFileRepository.cs)           # 文件仓储实现 (private MapToEntity/MapToModel)
 │   ├── Service/
 │   │   ├── DocumentAnalysisService.cs               # LLM 分析实现 (OpenAiCompatibleClient 流式 SSE)
+│   │   ├── Analysis/
+│   │   │   ├── DocumentAnalysisPromptBuilder.cs     # prompt 构建 (纯静态逻辑)
+│   │   │   └── DocumentAnalysisResponseParser.cs    # 响应解析 (含 response records、ExtractJson)
 │   │   ├── MinerUFileParseWorker.cs                 # 后台解析 Worker (含 AnalyzeMetadataIfMissingAsync)
 │   │   ├── OpenSearchIndexService.cs                # OpenSearch 索引服务 (含 UpdateDocumentFileMetadataAsync)
 │   │   └── Endpoints/
@@ -102,20 +105,20 @@ Response 404: { "success": false, "message": "File not found", "errorCode": "DOC
 
 ### DocumentAnalysisService.AnalyzeMetadataAsync
 
-- **初始化**：`InitializeAsync`(启动时调用 + 首次 `AnalyzeMetadataAsync` 时懒加载)。解析 `ContextLength` 配置(支持 `"128K"` / `"1M"` / 纯数字),若未配置则调用 `TryFetchContextLengthAsync`(GET `/v1/models/{Model}`)动态获取。根据 context 计算 `ChunkSize`(`(contextLength - 200 - MaxTokens) × 0.8 × 1.5`,cap `2500`)。无 context 时禁用 LLM(`ChunkSize = MaxTokensValue = 0`)。
+- **初始化**：`InitializeAsync`(启动时调用 + 首次 `AnalyzeMetadataAsync` 时懒加载)。解析 `ContextLength` 配置(支持 `"128K"` / `"1M"` / 纯数字),若未配置则调用 `TryFetchContextLengthAsync`(GET `/v1/models/{Model}`)动态获取。根据 context 计算内部字段 `_chunkSize`(`(contextLength - 200 - _maxTokensValue) × 0.8 × 1.5`,cap `2500`)与 `_maxTokensValue`(默认 `4096`)。无 context 时禁用 LLM(`_chunkSize = _maxTokensValue = 0`)。服务不再修改注入的 `DocumentAnalysisOptions` POCO。
 - **输入截断**：取 Markdown 前 2000 字符(`textPreview[..2000]`)。注: `MinerUFileParseWorker.AnalyzeMetadataIfMissingAsync` 在调用前已截断一次,此处为冗余保护。
-- **请求体**：`BuildRequestBody` 组装 — system prompt `"直接返回JSON，不要解释。"` + user prompt(`BuildMetadataAnalysisPrompt`)、`max_tokens = MaxTokensValue`、`temperature = 0.1`(只读属性)、`stream = true`。
+- **请求体**：`BuildRequestBody` 组装 — system prompt `"直接返回JSON，不要解释。"` + user prompt(`DocumentAnalysisPromptBuilder.BuildMetadataAnalysisPrompt`)、`max_tokens = _maxTokensValue`、`temperature = 0.1`(只读属性)、`stream = true`。
 - **流式 SSE 调用**：通过共享的 `OpenAiCompatibleClient.CallStreamingAsync` (`Ruoyu.Study.Common.Ai` 命名空间,底层 `OpenAiSseReader`),per-attempt timeout + SSE idle timeout(`StreamIdleTimeoutSeconds` 默认 60s)由客户端保障。
-- **响应解析**：`ParseMetadataAnalysis` — `ExtractJson` 去 ```json``` / ```` ``` 包装;`JsonSerializer.Deserialize` 使用 `SnakeCaseLower` + `WhenWritingNull`;空字符串/空白/`"null"` 字面量一律视为 null。
+- **响应解析**：`DocumentAnalysisResponseParser.ParseMetadataAnalysis` — `DocumentAnalysisResponseParser.ExtractJson` 去 ```json``` / ```` ``` 包装;`JsonSerializer.Deserialize` 使用 `SnakeCaseLower` + `WhenWritingNull`;空字符串/空白/`"null"` 字面量一律视为 null。
 - **失败处理**：任何异常 catch 后 `LogWarning` 并返回 null,Worker 层按 best-effort 处理。
 
 ### 关键 internal 测试入口
 
 以下 `internal` 方法为纯逻辑测试入口(需 `InternalsVisibleTo` 测试项目):
 
-- `BuildMetadataAnalysisPrompt(string textPreview)` — 静态,返回 user prompt
-- `ParseMetadataAnalysis(string response)` — 解析 LLM 原始响应
-- `ParseTokenCount(string? value)` — 解析 `"128K"` / `"1M"` / 纯数字
+- `DocumentAnalysisPromptBuilder.BuildMetadataAnalysisPrompt(string textPreview)` — 静态,返回 user prompt
+- `DocumentAnalysisResponseParser.ParseMetadataAnalysis(string response, ILogger<DocumentAnalysisService> logger, JsonSerializerOptions jsonOptions)` — 解析 LLM 原始响应
+- `DocumentAnalysisService.ParseTokenCount(string? value)` — 解析 `"128K"` / `"1M"` / 纯数字
 
 ## 错误处理
 

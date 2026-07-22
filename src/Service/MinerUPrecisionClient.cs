@@ -183,7 +183,7 @@ public class MinerUPrecisionClient
         var contentListJson = FindAndReadJsonEntry(archive, "content_list.json",
             suffixPattern: "_content_list.json",
             subDirPattern: "/content_list.json",
-            fallback: "[]");
+            fallback: "[]") ?? "[]";
         if (contentListJson == "[]")
             _logger.LogWarning("ZIP does not contain content_list.json for task {TaskId}", taskId);
 
@@ -301,33 +301,4 @@ public class MinerUPrecisionClient
         using var reader = new StreamReader(stream);
         return reader.ReadToEnd();
     }
-}
-
-/// <summary>
-/// All parsed artifacts from a single MinerU task ZIP.
-/// </summary>
-public record MinerUParseResult(
-    byte[] ZipBytes,
-    string Markdown,
-    string ContentListJson,
-    string? ContentListV2Json,
-    string? ModelJson,
-    string? LayoutJson,
-    List<ImageMetadata> Images);
-
-/// <summary>
-/// Configuration options for MinerU Precision API.
-/// </summary>
-public class MinerUOptions
-{
-    public const string SectionName = "MinerU";
-
-    /// <summary>Bearer Token for Precision Extract API.</summary>
-    public string? ApiToken { get; set; }
-
-    /// <summary>Base URL for MinerU API.</summary>
-    public string? BaseUrl { get; set; } = "https://mineru.net";
-
-    /// <summary>Model version: "vlm" (default) or "pipeline". Both modes may produce layout.json/content_list_v2.json/model.json depending on MinerU API version.</summary>
-    public string? ModelVersion { get; set; }
 }

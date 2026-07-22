@@ -9,7 +9,11 @@ src/services/ruoyu.doclibrary/
 │   │   ├── Endpoints/
 │   │   │   ├── DocumentParseEndpoints.cs         # 解析记录端点（列表/删除）
 │   │   │   └── DocumentFileEndpoints.cs          # 触发解析端点（POST /{id}/parse，属于本模块流程但归属文件管理）
-│   │   ├── MinerUPrecisionClient.cs              # MinerU API 客户端（Singleton，含 MinerUParseResult / MinerUOptions / ImageMetadata）
+│   │   ├── MinerUPrecisionClient.cs              # MinerU API 客户端（Singleton，仅含客户端类）
+│   │   ├── MinerU/                               # MinerU 相关类型与配置
+│   │   │   ├── MinerUParseResult.cs              # MinerU ZIP 解析结果 record
+│   │   │   ├── MinerUOptions.cs                  # MinerU 配置选项
+│   │   │   └── ImageMetadata.cs                  # 图片元数据 record
 │   │   ├── MinerUFileParseWorker.cs              # MinerU 文件解析后台 Worker（BackgroundService）
 │   │   ├── PdfSplitService.cs                    # PDF 分页服务（Singleton，含 IPdfSplitService）
 │   │   └── RemoteFileConversionService.cs        # 远程转换服务（Singleton，HTTP 调用 doc-converter，含 IFileConversionService）
@@ -285,8 +289,7 @@ builder.Services.AddHostedService<MinerUFileParseWorker>();
     "ModelVersion": "vlm"
   },
   "FileConversionService": {
-    "Url": "http://doc-converter:5050",
-    "TimeoutSeconds": 120
+    "Url": "http://doc-converter:5050"
   }
 }
 ```
@@ -296,7 +299,7 @@ builder.Services.AddHostedService<MinerUFileParseWorker>();
 | `MinerU:ApiToken` | Bearer Token（免费额度 1000 页/天） |
 | `MinerU:BaseUrl` | API 地址（默认 `https://mineru.net`） |
 | `MinerU:ModelVersion` | 默认模型版本（`vlm` / `pipeline`），可被请求参数覆盖 |
-| `FileConversionService:Url` | doc-converter 服务地址（默认 `http://doc-converter:5050`）；HTTP 调用超时硬编码 180s |
+| `FileConversionService:Url` | doc-converter 服务地址（默认 `http://doc-converter:5050`）；HTTP 调用超时在 `Program.cs` 的命名 HttpClient 中硬编码为 180s |
 
 Section 常量：`MinerUOptions.SectionName = "MinerU"`、`FileConversionOptions.SectionName = "FileConversionService"`。
 

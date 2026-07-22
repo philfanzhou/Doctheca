@@ -182,15 +182,22 @@ src/services/ruoyu.doclibrary/
 
 ```csharp
 // OpenSearchIndexService 构造函数
-public OpenSearchIndexService(
-    IOptions<OpenSearchOptions> options,
-    IServiceProvider serviceProvider,
-    ILogger<OpenSearchIndexService> logger)
+public class OpenSearchIndexService : ISearchIndexService, IDisposable
+{
+    public OpenSearchIndexService(
+        IOptions<OpenSearchOptions> options,
+        IServiceProvider serviceProvider,
+        ILogger<OpenSearchIndexService> logger)
+    {
+        // ...
+    }
+}
 ```
 
 - `IOptions<OpenSearchOptions>`：OpenSearch 配置。
 - `IServiceProvider`：用于创建 scope 解析 `IDocumentParseBlockRepository`（scoped 生命周期）。
 - `ILogger<OpenSearchIndexService>`：结构化日志。
+- `OpenSearchLowLevelClient` 在构造函数中 `new` 创建；服务实现 `IDisposable`，`Dispose()` 调用 `(_client as IDisposable)?.Dispose()`，由 DI 容器在 Singleton 销毁时释放。当前引用的 `OpenSearch.Net` 1.8.0 包中 `OpenSearchLowLevelClient` 未公开 `Dispose()` 方法，因此采用防御式转换；如未来版本实现 `IDisposable`，释放将自动生效。
 
 ```csharp
 // SearchDomainService 构造函数

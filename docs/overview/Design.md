@@ -17,7 +17,7 @@
 │  Endpoints/DocumentExportEndpoints.cs           │
 │  Endpoints/QuestionBankImportEndpoints.cs       │
 │  MinerUFileParseWorker.cs: 后台解析任务          │
-│  MinerUPrecisionClient.cs: MinerU Precision API 客户端  │
+│  MinerUPrecisionClient.cs: MinerU Precision API 客户端（类型已拆分至 MinerU/） │
 │  OpenSearchIndexService.cs: 搜索索引            │
 └───────────────┬─────────────────────────────────┘
                 │
@@ -96,7 +96,7 @@ DocLibrary 作为内网管理后台运行，**不实现应用层认证**：
 | [DocumentExportEndpoints.cs](../../src/Service/Endpoints/DocumentExportEndpoints.cs) | 导出 HTTP API |
 | [QuestionBankImportEndpoints.cs](../../src/Service/Endpoints/QuestionBankImportEndpoints.cs) | QuestionBank 拉模式导入 HTTP API |
 | [MinerUFileParseWorker.cs](../../src/Service/MinerUFileParseWorker.cs) | 后台解析 Worker（MinerU 链路） |
-| [MinerUPrecisionClient.cs](../../src/Service/MinerUPrecisionClient.cs) | MinerU Precision API 客户端（含图片） |
+| [MinerUPrecisionClient.cs](../../src/Service/MinerUPrecisionClient.cs) | MinerU Precision API 客户端（含图片；MinerUParseResult / MinerUOptions / ImageMetadata 位于 Service/MinerU/） |
 | [SearchDomainService.cs](../../src/Domain/Services/SearchDomainService.cs) | 搜索领域逻辑 |
 | [OpenSearchIndexService.cs](../../src/Service/OpenSearchIndexService.cs) | OpenSearch 索引服务（基于 parse_blocks） |
 | [DatabaseInitializer.cs](../../src/Database/DatabaseInitializer.cs) | 表初始化 |

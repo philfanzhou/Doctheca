@@ -48,13 +48,9 @@ public class RemoteFileConversionService : IFileConversionService
     {
         _options = options.Value;
         _logger = logger;
-
-        httpClient.BaseAddress = new Uri(_options.Url.TrimEnd('/') + "/");
-        httpClient.Timeout = TimeSpan.FromSeconds(180);
         _httpClient = httpClient;
 
-        _logger.LogInformation("RemoteFileConversionService configured: Url={Url}, Timeout=180s",
-            _options.Url);
+        _logger.LogInformation("RemoteFileConversionService configured: Url={Url}", _options.Url);
     }
 
     /// <inheritdoc />
