@@ -9,6 +9,7 @@ using Ruoyu.Study.DocLibrary.Domain.Models;
 using Ruoyu.Study.DocLibrary.Domain.Repositories;
 using Ruoyu.Study.DocLibrary.Domain.Services;
 using Ruoyu.Study.DocLibrary.Service;
+using Ruoyu.Study.DocLibrary.Service.Parsing;
 using Ruoyu.Study.DocLibrary.Host;
 using Ruoyu.Study.Consul.Shared;
 
@@ -127,6 +128,8 @@ builder.Services.AddSingleton<MinerUPrecisionClient>();
 builder.Services.AddSingleton<IPdfSplitService, PdfSplitService>();
 
 // Background Workers
+builder.Services.AddScoped<MinerUParseOrchestrator>();
+builder.Services.AddScoped<MinerUResultPersistence>();
 builder.Services.AddHostedService<MinerUFileParseWorker>();
 
 // Note: DocLibrary 是内网管理后台，无应用层认证。

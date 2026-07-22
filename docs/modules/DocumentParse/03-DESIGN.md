@@ -10,7 +10,10 @@ src/services/ruoyu.doclibrary/
 │   │   │   ├── DocumentParseEndpoints.cs         # 解析记录端点（列表/删除）
 │   │   │   └── DocumentFileEndpoints.cs          # 触发解析端点（POST /{id}/parse，属于本模块流程但归属文件管理）
 │   │   ├── MinerUPrecisionClient.cs              # MinerU API 客户端（Singleton，含 MinerUParseResult / MinerUOptions / ImageMetadata）
-│   │   ├── MinerUFileParseWorker.cs              # MinerU 文件解析后台 Worker（BackgroundService）
+│   │   ├── MinerUFileParseWorker.cs              # MinerU 文件解析后台 Worker（BackgroundService），仅保留轮询循环与 best-effort 后处理
+│   │   ├── Parsing/
+│   │   │   ├── MinerUParseOrchestrator.cs        # 解析流程编排：单文件 / 分块路径调度
+│   │   │   └── MinerUResultPersistence.cs        # 解析结果持久化：ZIP / images / blocks / 状态更新
 │   │   ├── PdfSplitService.cs                    # PDF 分页服务（Singleton，含 IPdfSplitService）
 │   │   └── RemoteFileConversionService.cs        # 远程转换服务（Singleton，HTTP 调用 doc-converter，含 IFileConversionService）
 │   ├── Domain/
@@ -165,21 +168,25 @@ src/services/ruoyu.doclibrary/
 
 MinerUFileParseWorker.ExecuteAsync (每 5s)
   → parseService.GetPendingJobsAsync()
-  → ProcessFileAsync:
+  → MinerUParseOrchestrator.ProcessFileAsync:
       1. 更新 status=parsing
       2. 下载源文件
       3. 非 PDF → 调用 doc-converter 转换为 PDF（转换后 PDF 用于后续页数计算和分片）
       4. 算 PDF 页数
       5a. ≤200 页 → ProcessSingleFileAsync:
           - 若为转换后 PDF：上传到 OSS 临时路径 mineru/converted/{parseId}.pdf
-          - 生成 presigned URL → 提交 MinerU → 轮询 → 下载 ZIP → 持久化
+          - 生成 presigned URL → 提交 MinerU → 轮询 → 下载 ZIP → 调用 MinerUResultPersistence.PersistParseResultAsync 持久化
           - 解析完成后清理临时 OSS 路径
       5b. >200 页 → ProcessSplitFileAsync:
           - 用 pdfStream 本地切分为多个 PDF chunk
           - 每个 chunk 上传 OSS (mineru/splits/{parseId}/chunk_{i}.pdf)
           - 逐 chunk 提交 MinerU → 轮询 → 下载 ZIP
           - 合并 markdown / content_list / images（图片名加 chunk{i}_ 前缀）
+          - 调用 MinerUResultPersistence.PersistMergedChunkResultsAsync 持久化
           - 解析完成后清理临时 chunk OSS 路径
+  → 成功后（返回非空 markdown）：
+      - IndexBlocksToSearchAsync (OpenSearch)
+      - AnalyzeMetadataIfMissingAsync (LLM)
 ```
 
 > **关键修正（2026-07-13）**：非 PDF 小文件路径原先把转换后 PDF 丢弃，直接把原始 DOCX 的 presigned URL 传给 MinerU，与转换逻辑不一致。现已修复：转换后 PDF 统一上传 OSS，MinerU 始终收到 PDF。
@@ -199,13 +206,26 @@ MinerUPrecisionClient.DownloadAndProcessZipAsync
 ### 4.3 持久化流
 
 ```
-PersistParseResultAsync
+MinerUResultPersistence.PersistParseResultAsync
   → 上传 ZIP 到 OSS (mineru/{fileId}/mineru-output.zip)
   → 写入 document_parse_images (每张图片)
   → blockService.InsertBlocksFromContentListAsync (blocks 覆盖写入)
   → parseService.UpdateStatusAsync(Parsed, markdown, contentList, ...)
-  → best-effort: IndexBlocksToSearchAsync (OpenSearch)
-  → best-effort: AnalyzeMetadataIfMissingAsync (LLM)
+
+MinerUResultPersistence.PersistMergedChunkResultsAsync
+  → 合并所有 chunk 的 markdown / content_list / images
+  → 上传第一个 chunk 的 ZIP 到 OSS (mineru/{fileId}/mineru-output.zip)
+  → 写入 document_parse_images（图片名加 chunk{i}_ 前缀）
+  → blockService.InsertBlocksFromContentListAsync (blocks 覆盖写入)
+  → parseService.UpdateStatusAsync(status, markdown, contentList, ...)
+```
+
+解析成功后，Worker 再执行 best-effort 后置：
+
+```
+MinerUFileParseWorker
+  → IndexBlocksToSearchAsync (OpenSearch)
+  → AnalyzeMetadataIfMissingAsync (LLM)
 ```
 
 ### 4.4 删除联动流
@@ -267,13 +287,18 @@ builder.Services.AddScoped<IDocumentParseBlockRepository, DocumentParseBlockRepo
 builder.Services.AddScoped<IDocumentParseBlockService, DocumentParseBlockService>();
 builder.Services.AddScoped<IDocumentParseService, DocumentParseService>();
 
+// 解析流程编排与结果持久化（Worker 每轮通过 CreateScope 解析 Scoped 实例）
+builder.Services.AddScoped<MinerUParseOrchestrator>();
+builder.Services.AddScoped<MinerUResultPersistence>();
+
 builder.Services.AddHostedService<MinerUFileParseWorker>();
 ```
 
 注册关系到文件：
 - `MinerUPrecisionClient`、`PdfSplitService`、`RemoteFileConversionService`（`IFileConversionService`）为 Singleton。
 - `RemoteFileConversionService` 通过 `AddHttpClient("FileConversion", ...)` 注册命名 HttpClient（HttpClientFactory 池化 Handler 生命周期，默认 2 分钟）+ `AddSingleton<IFileConversionService>` 工厂方式包装（只 new 一次），实现真正的 Singleton 生命周期。
-- `MinerUFileParseWorker` 为 HostedService（内部每 5 秒 `CreateScope()` 解析 Scoped 服务，但解析 Singleton 的 `IFileConversionService` 不会重复创建实例）。
+- `MinerUParseOrchestrator`、`MinerUResultPersistence` 为 Scoped，由 `MinerUFileParseWorker` 在每轮 `CreateScope()` 中解析。
+- `MinerUFileParseWorker` 为 HostedService（Singleton），仅负责轮询与 best-effort 后处理。
 
 ## 7. 配置
 
