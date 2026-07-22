@@ -131,8 +131,9 @@
 
 ## Bulk / HTTP 客户端约定
 
-- `OpenSearchLowLevelClient` 在构造函数中 `new` 创建（使用 `ConnectionConfiguration`，请求超时 30s）。
-- 纯逻辑提取为 `internal static` 方法（`BuildIndexBody` / `BuildSearchBody` / `ParseSearchResponse`），便于单元测试。
+- `OpenSearchLowLevelClient` 在 `OpenSearchIndexService` 构造函数中 `new` 创建（使用 `ConnectionConfiguration`，请求超时 30s）。
+- 纯逻辑提取为 `internal static` 方法（`BuildIndexBody` / `BuildSearchBody` / `ParseSearchResponse`），分别由 `OpenSearchIndexManager`、`OpenSearchQueryBuilder`、`OpenSearchResponseParser` 承载，便于单元测试。
+- `OpenSearchJsonHelper` 提供 `_source` JSON 字段的安全读取辅助方法。
 - 通过 `InternalsVisibleTo` 暴露给测试程序集。
 
 ## 测试工具与风格

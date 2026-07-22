@@ -1,6 +1,7 @@
 using System.Text.Json;
 using FluentAssertions;
 using Ruoyu.Study.DocLibrary.Service;
+using Ruoyu.Study.DocLibrary.Service.Parsing;
 using Xunit;
 
 namespace Ruoyu.Study.DocLibrary.Tests;
@@ -22,7 +23,7 @@ public class MinerUFileParseWorkerTests
     [Fact]
     public void MergeContentListArrays_EmptyList_ReturnsEmptyArray()
     {
-        var result = MinerUFileParseWorker.MergeContentListArrays(new List<MinerUParseResult>());
+        var result = MinerUResultPersistence.MergeContentListArrays(new List<MinerUParseResult>());
 
         result.Should().Be("[]");
     }
@@ -33,7 +34,7 @@ public class MinerUFileParseWorkerTests
         var json = """[{"type":"text","text":"hello","page_id":0}]""";
         var chunks = new List<MinerUParseResult> { CreateChunkResult(json) };
 
-        var result = MinerUFileParseWorker.MergeContentListArrays(chunks);
+        var result = MinerUResultPersistence.MergeContentListArrays(chunks);
 
         using var doc = JsonDocument.Parse(result);
         doc.RootElement.ValueKind.Should().Be(JsonValueKind.Array);
@@ -52,7 +53,7 @@ public class MinerUFileParseWorkerTests
             CreateChunkResult(json2),
         };
 
-        var result = MinerUFileParseWorker.MergeContentListArrays(chunks);
+        var result = MinerUResultPersistence.MergeContentListArrays(chunks);
 
         using var doc = JsonDocument.Parse(result);
         doc.RootElement.GetArrayLength().Should().Be(3);
@@ -72,7 +73,7 @@ public class MinerUFileParseWorkerTests
             CreateChunkResult(malformedJson),
         };
 
-        var result = MinerUFileParseWorker.MergeContentListArrays(chunks);
+        var result = MinerUResultPersistence.MergeContentListArrays(chunks);
 
         using var doc = JsonDocument.Parse(result);
         doc.RootElement.GetArrayLength().Should().Be(1);
@@ -91,7 +92,7 @@ public class MinerUFileParseWorkerTests
             CreateChunkResult(null!),
         };
 
-        var result = MinerUFileParseWorker.MergeContentListArrays(chunks);
+        var result = MinerUResultPersistence.MergeContentListArrays(chunks);
 
         using var doc = JsonDocument.Parse(result);
         doc.RootElement.GetArrayLength().Should().Be(1);
@@ -103,7 +104,7 @@ public class MinerUFileParseWorkerTests
         var json = """[{"type":"text","text":"hello","page_id":2,"block_id":"abc123","extra":"field"}]""";
         var chunks = new List<MinerUParseResult> { CreateChunkResult(json) };
 
-        var result = MinerUFileParseWorker.MergeContentListArrays(chunks);
+        var result = MinerUResultPersistence.MergeContentListArrays(chunks);
 
         using var doc = JsonDocument.Parse(result);
         var block = doc.RootElement[0];

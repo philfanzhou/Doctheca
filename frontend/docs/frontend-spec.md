@@ -76,12 +76,13 @@ DocLibrary 为**内网管理后台**,不实现应用层认证:
 
 ### 4.3 DocManagePage(文档管理)
 
-- **StatusStrip**:4 档状态切换(全部/待解析/解析中/失败),active 态 primary 边框 + 3px ring
+- **StatusStrip**:4 档状态切换(全部/待解析/解析中/失败),active 态 primary 边框 + 3px ring;选中状态会作为 `parseStatus` 参数传给 `client.listDocumentFiles`,触发后端过滤
 - **upload-zone**:点击 + 拖拽上传,进度条 `progress-track` + `progress-fill`
 - **table.data-table**:自定义表格(文件名/类型/上传时间/解析状态/操作),行可点击进入详情
 - **轮询**:解析中状态自动轮询(5s 间隔,无活跃任务时停止)
 - **分页**:EP `el-pagination`
 - **业务逻辑保留**:`client.listDocumentFiles / uploadDocumentFile / parseDocumentFile / deleteDocumentFile`,删除确认 `ElMessageBox.confirm`
+- **目录结构**:逻辑抽取到 `views/DocManagePage/useDocManage.ts`,子组件为 `FileUploadZone.vue` / `FileListTable.vue`
 
 ### 4.4 DocDetailPage(文档详情,新增)
 
@@ -95,16 +96,19 @@ DocLibrary 为**内网管理后台**,不实现应用层认证:
   - 解析中状态:渐变进度条 + "5 秒后自动刷新"提示
 - **业务逻辑保留**:与 ParseResultsPage 等价的 preview/export/delete 调用,使用 `useToast` 替代 `ElMessage`
 - **轮询**:有 pending/parsing 状态时 5s 轮询 `getDocumentFile(id)`
+- **安全预览**:Markdown / JSON / Images 预览统一走 `utils/preview.ts`,通过 `Blob` + `URL.createObjectURL` 打开新窗口,避免 `document.write`;新窗口带 `noopener,noreferrer`
+- **目录结构**:逻辑抽取到 `views/DocDetailPage/useDocumentDetail.ts`,子组件为 `FileHeader.vue` / `FileInfoCard.vue` / `ParseStatsCard.vue` / `ParseRecordCard.vue`
 
 ### 4.5 ParseResultsPage(解析结果)
 
-- **StatusStrip**:4 档状态切换(全部/已解析/解析中/失败)
+- **StatusStrip**:4 档状态切换(全部/已解析/解析中/失败);选中状态会作为 `status` 参数传给 `client.listDocumentParses`,触发后端过滤
 - **table.data-table**:文件名/模型/状态/解析时间/错误信息/操作列
 - **按钮显示逻辑**:status=parsed 时显示所有预览/导出按钮;始终显示删除按钮
 - **VLM 和 Pipeline 模式统一显示所有按钮**(不再按 modelVersion 过滤)
 - **业务逻辑保留**:`client.listDocumentParses / deleteDocumentParse / exportParseMarkdown / exportParseHtml`,以及 `client.getDocumentFile(fileId)` 拉取详情后调用 `parse.{markdownContent|contentList|contentListV2|modelJson|layoutJson|images}`
 - **分页**:EP `el-pagination`
-- **新窗口预览**:Markdown / JSON / Images 均通过 `window.open('', '_blank')` + `document.write` 在新窗口展示
+- **安全预览**:Markdown / JSON / Images 预览统一走 `utils/preview.ts`,通过 `Blob` + `URL.createObjectURL` 打开新窗口,避免 `document.write`;新窗口带 `noopener,noreferrer`
+- **目录结构**:逻辑抽取到 `views/ParseResultsPage/useParseResults.ts`,子组件为 `ParseResultsTable.vue`
 
 ### 4.6 SearchPage(检索测试)
 
@@ -120,6 +124,7 @@ DocLibrary 为**内网管理后台**,不实现应用层认证:
   - 8 个 minerU 过滤参数全部保留;空值不透传(零回归)
 - **业务逻辑保留**:`client.searchTest(query, phrase, 20, undefined, ...8个minerU参数)`,调用顺序与原 ParseResultsPage 一致
 - **检索关键词高亮**:`highlightText(text, query)` 用 `<mark>` 包裹命中词,匹配文本通过 `v-html` 渲染,使用 `escapeHtml` 安全转义
+- **目录结构**:逻辑抽取到 `views/SearchPage/useSearch.ts` + `searchFormatters.ts`,子组件为 `SearchBar.vue` / `SearchFiltersDrawer.vue` / `SearchResultCard.vue`
 
 ## 5. 样式规范
 
@@ -129,8 +134,13 @@ DocLibrary 为**内网管理后台**,不实现应用层认证:
 
 1. `./styles/element-variables.scss` — EP 主题 SCSS(`@forward` + `@use` 注入主色 `#4F46E5`)
 2. `./styles/tokens.scss` — `:root` CSS 变量(逐字搬运自样稿,与 EP 变量镜像)
-3. `./styles/app.scss` — 完整组件类库(buttons / cards / tables / badges / chips / drawer / modal / toast / chart / feed / stat / strip / pager / md-preview 等)
+3. `./styles/app.scss` — `@use` 聚合入口,按职责拆分为 SCSS partials(`base/` / `layout/` / `components/` / `pages/` / `utilities/`)
 4. `./style.css` — 排版辅助类(`.page-header` / `.page-title` / `.page-subtitle`)
+
+`app.scss` 不再包含全局元素 reset 或 ID 选择器:
+- reset 限定在 `.doclibrary-admin *` 作用域内
+- `#app` / `#view` / `#toast-root` 改为 `.app` / `.view` / `.toast-root`
+- 元素选择器迁移到对应 class,避免污染 Element Plus 默认样式
 
 ### 5.2 Design Token(tokens.scss)
 
@@ -157,7 +167,7 @@ DocLibrary 为**内网管理后台**,不实现应用层认证:
 | 抽屉(`AppDrawer.vue` + `.drawer` + `.overlay`) | Teleport + 手写 SCSS,spring 入场 0.3s |
 | 弹窗(`AppModal.vue` + `.modal` + `.overlay`) | Teleport + 手写 SCSS,scale + translateY spring 入场 |
 | Toast(`AppToast.vue` + `.toast` + `useToast`) | Teleport + 全局单例,success/error 两态,spring 入场 0.3s |
-| 图表(`ChartLine.vue` / `ChartDonut.vue`) | 原生 SVG,stroke-dashoffset/dasharray 描画动画 |
+| 图表(`ChartLine.vue` / `ChartDonut.vue`) | 原生 SVG,stroke-dashoffset/dasharray 描画动画;`ChartLine` 的 `labels` 在拼入 SVG 前经 HTML/SVG 转义 |
 | 图标(`Icon` / `iconHtml(name)`) | `utils/icons.ts`,27 个线性 SVG,stroke 1.6 round |
 | 输入框 / Select / 数字输入 / Switch / Checkbox | EP 组件(`el-input` / `el-select` / `el-input-number` / `el-switch` / `el-checkbox`) |
 | 分页 | EP `el-pagination`(layout="sizes, prev, pager, next, jumper") |
@@ -175,19 +185,31 @@ DocLibrary 为**内网管理后台**,不实现应用层认证:
 - 未使用的过滤器栏(`.filter-bar*`、`.filter-input`)
 - 2026-07-20 重设计:从 ADR-001 EP 组件包装切换为样稿对齐的手写 SCSS class(EP 仅保留表单/分页)
 
-## 6. API 客户端(docApi.ts)
+## 6. API 客户端
 
-> **业务逻辑零改动**:与 ADR-001 时一致,本次重设计未触及任何 API 端点、参数、请求/响应处理。
+> **业务逻辑零改动**:API 端点、请求/响应结构、参数顺序与 ADR-001 时保持一致。
+
+客户端按领域拆分为多个模块,`services/docApi.ts` 继续作为兼容 facade 导出 `createDocApiClient` 与所有类型:
+
+| 文件 | 职责 |
+|------|------|
+| `services/types.ts` | 共享接口类型(`SearchResult` / `DocumentFile` / `DocumentFileDetail` / `DocumentParse` / `ApiResponse` / `DocPagedResponse`) |
+| `services/documentApi.ts` | 文档文件相关:上传、列表、详情、解析、删除、导出 Markdown/HTML |
+| `services/parseApi.ts` | 解析记录相关:列表、删除、导出 Markdown/HTML |
+| `services/searchApi.ts` | 检索测试:searchTest |
+| `services/exportApi.ts` | 导出下载:Markdown / HTML blob 下载辅助 |
+| `services/error.ts` | `getDocErrorMessage` |
+| `services/docApi.ts` | 兼容 facade:内部委托到各模块,保留原有导出签名 |
 
 | 方法 | 端点 | 说明 |
 |------|------|------|
 | `uploadDocumentFile` | `POST /admin/document-files/upload` | 上传文件(multipart) |
-| `listDocumentFiles` | `GET /admin/document-files` | 文件列表(分页+筛选) |
+| `listDocumentFiles` | `GET /admin/document-files` | 文件列表(分页+parseStatus+fileName筛选) |
 | `getDocumentFile` | `GET /admin/document-files/:id` | 文件详情(含 parses + images) |
 | `parseDocumentFile` | `POST /admin/document-files/:id/parse` | 触发解析(modelVersion 参数) |
 | `deleteDocumentFile` | `DELETE /admin/document-files/:id` | 删除文件 |
 | `exportMarkdown` / `exportHtml` | `GET /admin/document-files/:id/export/*` | 导出 |
-| `listDocumentParses` | `GET /admin/document-parses` | 解析记录列表 |
+| `listDocumentParses` | `GET /admin/document-parses` | 解析记录列表(分页+status+search筛选) |
 | `deleteDocumentParse` | `DELETE /admin/document-parses/:id` | 删除解析记录 |
 | `exportParseMarkdown` / `exportParseHtml` | `GET /admin/document-parses/:id/export/*` | 导出解析结果 |
 | `searchTest` | `GET /admin/documents/search` | 检索测试(8 个 minerU 过滤参数透传) |
@@ -201,6 +223,26 @@ DocLibrary 为**内网管理后台**,不实现应用层认证:
 后端 UT 不受前端重构影响(前端重构不改变 API 契约)。
 
 ## 8. 重构记录
+
+### 2026-07-22: 前端大文件重构与问题修复
+
+- **输入**:`docs/development/frontend-audit-2026-07.md` 审计结论 + 任务计划 task-10-15
+- **问题修复**:
+  - StatusStrip 在 `DocManagePage` / `ParseResultsPage` 中未实际过滤列表 — 已传入 `parseStatus`/`status` 参数
+  - `document.write` 新窗口预览存在 XSS 风险 — 统一迁移到 `utils/preview.ts`,使用 `Blob` + `URL.createObjectURL`,新窗口带 `noopener,noreferrer`
+  - `ChartLine.vue` 的 `labels` 未转义拼入 SVG — 已增加 HTML/SVG 转义
+- **大文件拆分**:
+  - `styles/app.scss`(1668 行)拆分为 SCSS partials:base/reset、layout/shell、components、pages、utilities
+  - `SearchPage.vue`(610 行)拆分为 `SearchPage/` 目录(SearchPage.vue / SearchBar.vue / SearchFiltersDrawer.vue / SearchResultCard.vue / useSearch.ts / searchFormatters.ts)
+  - `DocDetailPage.vue`(571 行)拆分为 `DocDetailPage/` 目录(DocDetailPage.vue / FileHeader.vue / FileInfoCard.vue / ParseStatsCard.vue / ParseRecordCard.vue / useDocumentDetail.ts)
+  - `ParseResultsPage.vue`(448 行)拆分为 `ParseResultsPage/` 目录(ParseResultsPage.vue / ParseResultsTable.vue / useParseResults.ts)
+  - `DocManagePage.vue`(365 行)拆分为 `DocManagePage/` 目录(DocManagePage.vue / FileUploadZone.vue / FileListTable.vue / useDocManage.ts)
+  - `services/docApi.ts`(252 行)按领域拆分为 `types.ts` / `documentApi.ts` / `parseApi.ts` / `searchApi.ts` / `exportApi.ts` / `error.ts`,`docApi.ts` 保留为兼容 facade
+- **样式污染整改**:
+  - `* { ... }` reset 限定在 `.doclibrary-admin *`
+  - `#app` / `#view` / `#toast-root` 改为 `.app` / `.view` / `.toast-root`
+  - 同步更新 `App.vue` / `index.html` / `AppToast.vue`
+- **业务逻辑零改动**:API 端点/参数/校验/轮询/确认框完全等价
 
 ### 2026-07-20: 高保真还原样稿重设计
 

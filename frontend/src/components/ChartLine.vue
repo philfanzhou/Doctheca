@@ -8,6 +8,15 @@ const props = defineProps<{
   height?: number
 }>()
 
+function escHtml(s: string): string {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
 const svgWrap = ref<HTMLElement | null>(null)
 const w = props.width ?? 620
 const h = props.height ?? 200
@@ -34,7 +43,7 @@ function buildPath(): { line: string; area: string; dots: string; grid: string; 
   const lbls = props.labels ?? defaultLabels
   const labels = lbls.map((t, i) => {
     const idx = Math.round((i * (data.length - 1)) / Math.max(lbls.length - 1, 1))
-    return `<text class="chart-axis" x="${X(idx)}" y="${h - 8}" text-anchor="middle">${t}</text>`
+    return `<text class="chart-axis" x="${X(idx)}" y="${h - 8}" text-anchor="middle">${escHtml(t)}</text>`
   }).join('')
   return {
     line: d,

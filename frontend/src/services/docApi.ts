@@ -1,252 +1,42 @@
-import axios from 'axios'
+// Compatibility facade for the legacy DocApiClient.
+// New code may import directly from the domain modules below; this file keeps
+// existing imports working by re-exporting the same names and createDocApiClient().
 
-export interface DocPagedResponse<T> {
-  success: boolean
-  data: T[]
-  total: number
-  page: number
-  pageSize: number
-  totalPages: number
-}
+import * as documentApi from './documentApi'
+import * as parseApi from './parseApi'
+import * as searchApi from './searchApi'
+import * as exportApi from './exportApi'
+import { getDocErrorMessage } from './error'
 
-export interface ApiResponse<T> {
-  success: boolean
-  data: T
-}
-
-export interface SearchResult {
-  documentName: string
-  pageNumber: number
-  associatedText: string
-  score: number
-  matchType: string
-  segmentId: string
-  startOffset: number
-  endOffset: number
-  createdAt: string | null
-  // [Gen-2] minerU block-level fields (optional, absent when V1 zero-regression path)
-  blockData?: string
-  bbox?: number[]
-  mineruScore?: number
-  subType?: string
-  textLevel?: number
-  textFormat?: string
-  caption?: string
-}
-
-
-
-export interface DocumentFile {
-  id: string
-  fileName: string
-  contentType: string
-  createdAt: string
-  createdBy: string | null
-  parseStatus: string | null
-  parsedAt: string | null
-}
-
-export interface DocumentFileDetail {
-  id: string
-  fileName: string
-  contentType: string
-  createdAt: string
-  parses: Array<{
-    id: string
-    modelVersion: string
-    status: string
-    markdownContent: string | null
-    contentList: string | null
-    contentListV2: string | null
-    modelJson: string | null
-    layoutJson: string | null
-    errorMessage: string | null
-    parsedAt: string | null
-    images: Array<{
-      id: string
-      imageName: string
-      imageUrl: string
-    }>
-  }>
-}
-
-export interface DocumentParse {
-  id: string
-  fileId: string
-  fileName: string
-  modelVersion: string   // 'vlm' or 'pipeline'
-  status: string
-  parsedAt: string | null
-  errorMessage: string | null
-}
+export * from './types'
+export * from './documentApi'
+export * from './parseApi'
+export * from './searchApi'
+export * from './exportApi'
+export { getDocErrorMessage }
 
 class DocApiClient {
-  private client = axios.create({
-    timeout: 30000
-  })
+  // Search
+  searchTest = searchApi.searchTest
 
-  async searchTest(
-    query: string,
-    phrase: boolean = false,
-    pageSize: number = 20,
-    pageToken?: string,
-    // [Gen-2] minerU block-level filters (all optional; undefined/null → not sent → zero regression)
-    blockType?: string,
-    blockSubType?: string,
-    pageNumber?: number,
-    textLevel?: number,
-    textFormat?: string,
-    parseId?: string,
-    documentFileId?: string,
-    hasImage?: boolean
-  ): Promise<{ results: SearchResult[]; totalCount: number; nextPageToken: string }> {
-    const params: Record<string, unknown> = { query, phrase, pageSize }
-    if (pageToken) params.pageToken = pageToken
-    // Only forward minerU filters that are actually set (avoid backend treating empty string as filter)
-    if (blockType) params.blockType = blockType
-    if (blockSubType) params.blockSubType = blockSubType
-    if (pageNumber !== undefined && pageNumber !== null) params.pageNumber = pageNumber
-    if (textLevel !== undefined && textLevel !== null) params.textLevel = textLevel
-    if (textFormat) params.textFormat = textFormat
-    if (parseId) params.parseId = parseId
-    if (documentFileId) params.documentFileId = documentFileId
-    if (hasImage !== undefined && hasImage !== null) params.hasImage = hasImage
-    const response = await this.client.get('/admin/documents/search', { params })
-    return response.data
-  }
+  // Document files
+  uploadDocumentFile = documentApi.uploadDocumentFile
+  listDocumentFiles = documentApi.listDocumentFiles
+  getDocumentFile = documentApi.getDocumentFile
+  parseDocumentFile = documentApi.parseDocumentFile
+  deleteDocumentFile = documentApi.deleteDocumentFile
 
-  // ========== Document Files (Persistent MinerU Flow) ==========
+  // Document parses
+  listDocumentParses = parseApi.listDocumentParses
+  deleteDocumentParse = parseApi.deleteDocumentParse
 
-  async uploadDocumentFile(
-    file: File,
-    onUploadProgress?: (progressEvent: { loaded: number; total?: number }) => void
-  ): Promise<ApiResponse<{ id: string; fileName: string }>> {
-    const formData = new FormData()
-    formData.append('file', file)
-    const response = await this.client.post('/admin/document-files/upload', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-      onUploadProgress
-    })
-    return response.data
-  }
-
-  async listDocumentFiles(
-    page: number = 1,
-    pageSize: number = 20,
-    parseStatus?: string,
-    fileName?: string
-  ): Promise<DocPagedResponse<DocumentFile>> {
-    const params: Record<string, unknown> = { page, pageSize }
-    if (parseStatus) params.parseStatus = parseStatus
-    if (fileName) params.fileName = fileName
-    const response = await this.client.get('/admin/document-files', { params })
-    return response.data
-  }
-
-  async getDocumentFile(id: string): Promise<ApiResponse<DocumentFileDetail>> {
-    const response = await this.client.get(`/admin/document-files/${id}`)
-    return response.data
-  }
-
-  async parseDocumentFile(id: string, modelVersion: string = 'vlm'): Promise<ApiResponse<{ id: string; status: string; modelVersion: string }>> {
-    const response = await this.client.post(`/admin/document-files/${id}/parse`, null, {
-      params: { modelVersion }
-    })
-    return response.data
-  }
-
-  async deleteDocumentFile(id: string): Promise<ApiResponse<{ id: string; deleted: boolean }>> {
-    const response = await this.client.delete(`/admin/document-files/${id}`)
-    return response.data
-  }
-
-  getExportMarkdownUrl(id: string): string {
-    return `/admin/document-files/${id}/export/markdown`
-  }
-
-  getExportHtmlUrl(id: string): string {
-    return `/admin/document-files/${id}/export/html`
-  }
-
-  async exportMarkdown(id: string): Promise<{ blob: Blob; fileName: string }> {
-    const response = await this.client.get(`/admin/document-files/${id}/export/markdown`, {
-      responseType: 'blob'
-    })
-    const fileName = extractFileName(response, 'document_markdown.zip')
-    return { blob: response.data as Blob, fileName }
-  }
-
-  async exportHtml(id: string): Promise<{ blob: Blob; fileName: string }> {
-    const response = await this.client.get(`/admin/document-files/${id}/export/html`, {
-      responseType: 'blob'
-    })
-    const fileName = extractFileName(response, 'document.html')
-    return { blob: response.data as Blob, fileName }
-  }
-
-  // ========== Document Parses ==========
-
-  async listDocumentParses(
-    page: number = 1,
-    pageSize: number = 20,
-    search?: string
-  ): Promise<DocPagedResponse<DocumentParse>> {
-    const params: Record<string, unknown> = { page, pageSize }
-    if (search) params.search = search
-    const response = await this.client.get('/admin/document-parses', { params })
-    return response.data
-  }
-
-  async deleteDocumentParse(parseId: string): Promise<ApiResponse<{ id: string; deleted: boolean }>> {
-    const response = await this.client.delete(`/admin/document-parses/${parseId}`)
-    return response.data
-  }
-
-  async exportParseMarkdown(parseId: string): Promise<{ blob: Blob; fileName: string }> {
-    const response = await this.client.get(`/admin/document-parses/${parseId}/export/markdown`, {
-      responseType: 'blob'
-    })
-    const fileName = extractFileName(response, 'document_markdown.zip')
-    return { blob: response.data as Blob, fileName }
-  }
-
-  async exportParseHtml(parseId: string): Promise<{ blob: Blob; fileName: string }> {
-    const response = await this.client.get(`/admin/document-parses/${parseId}/export/html`, {
-      responseType: 'blob'
-    })
-    const fileName = extractFileName(response, 'document.html')
-    return { blob: response.data as Blob, fileName }
-  }
-}
-
-function extractFileName(response: { headers: Record<string, unknown> }, fallback: string): string {
-  const disposition = response.headers['content-disposition'] as string | undefined
-  if (disposition) {
-    const match = disposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/)
-    if (match && match[1]) {
-      return match[1].replace(/['"]/g, '')
-    }
-  }
-  return fallback
+  // Exports
+  exportMarkdown = exportApi.exportMarkdown
+  exportHtml = exportApi.exportHtml
+  exportParseMarkdown = exportApi.exportParseMarkdown
+  exportParseHtml = exportApi.exportParseHtml
 }
 
 export function createDocApiClient(): DocApiClient {
   return new DocApiClient()
-}
-
-export function getDocErrorMessage(error: unknown): string {
-  if (error && typeof error === 'object' && 'isAxiosError' in error) {
-    const axiosError = error as unknown as { response?: { data?: { message?: string } }; message: string }
-    const data = axiosError.response?.data as { message?: string } | undefined
-    if (data?.message) {
-      return data.message
-    }
-    return axiosError.message
-  }
-
-  if (error instanceof Error) {
-    return error.message
-  }
-
-  return 'An unknown error occurred'
 }

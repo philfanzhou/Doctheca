@@ -18,7 +18,7 @@ const rendered = computed(() =>
 
 <template>
   <Teleport to="body">
-    <div id="toast-root">
+    <div class="toast-root">
       <div
         v-for="t in rendered"
         :key="t.id"

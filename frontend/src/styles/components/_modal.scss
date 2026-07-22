@@ -1,0 +1,57 @@
+.modal-wrap {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.modal {
+  width: 460px;
+  max-width: 100%;
+  background: var(--surface);
+  border-radius: 14px;
+  box-shadow: var(--shadow-float);
+  padding: 26px;
+  transform: scale(0.96) translateY(8px);
+  opacity: 0;
+  transition: transform 0.26s var(--spring), opacity 0.2s;
+  max-height: 88vh;
+  overflow-y: auto;
+}
+
+.modal.open {
+  transform: scale(1) translateY(0);
+  opacity: 1;
+}
+
+.modal-title {
+  font-size: 16px;
+  font-weight: 650;
+  letter-spacing: -0.2px;
+}
+
+.modal-sub {
+  font-size: 12.5px;
+  color: var(--text-3);
+  margin: 4px 0 18px;
+}
+
+.check-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-2);
+  cursor: pointer;
+  user-select: none;
+}
+
+.check-line input {
+  accent-color: var(--primary);
+  width: 15px;
+  height: 15px;
+  cursor: pointer;
+}
