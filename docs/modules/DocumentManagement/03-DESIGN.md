@@ -23,7 +23,15 @@ src/services/ruoyu.doclibrary/
 │   ├── Service/
 │   │   ├── MarkdownExportHelper.cs                    # Markdown 图片路径→presigned URL 替换
 │   │   └── Endpoints/
-│   │       └── DocumentFileEndpoints.cs                # HTTP 端点映射
+│   │       ├── DocumentFileEndpoints.cs                # HTTP 端点注册入口
+│   │       ├── DocumentFileUploadEndpoint.cs           # POST /upload
+│   │       ├── DocumentFileListEndpoint.cs             # GET /
+│   │       ├── DocumentFileDetailEndpoint.cs           # GET /{id}
+│   │       ├── DocumentFileParseEndpoint.cs            # POST /{id}/parse
+│   │       ├── DocumentFileMetadataEndpoint.cs         # PUT /{id}/metadata
+│   │       ├── DocumentFileDeleteEndpoint.cs           # DELETE /{id}
+│   │       └── Models/
+│   │           └── UpdateMetadataRequest.cs            # 元数据更新请求 DTO
 │   └── Database/
 │       ├── Entities/
 │       │   ├── DocumentFileEntity.cs                   # 文件实体（document_files 表）

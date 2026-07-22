@@ -18,6 +18,7 @@
 | DF-10 | DI 注册（Program.cs AddScoped/AddSingleton） | completed |
 | DF-11 | 单元测试 DocumentFileServiceTests（5 tests） | completed |
 | DF-12 | 单元测试 DocumentFileDeleteCleanupTests（3 tests） | completed |
+| DF-13 | 拆分 DocumentFileEndpoints.cs 为单端点文件并提取 UpdateMetadataRequest | completed |
 
 ## 命令速查
 
