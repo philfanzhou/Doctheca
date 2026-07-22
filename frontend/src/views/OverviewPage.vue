@@ -7,6 +7,7 @@ import { useCountUp } from '../composables/useCountUp'
 import ChartLine from '../components/ChartLine.vue'
 import ChartDonut from '../components/ChartDonut.vue'
 import { iconHtml } from '../utils/icons'
+import { fileIconCls, fileExtLabel } from '../utils/file'
 
 const client = createDocApiClient()
 const { error: toastError } = useToast()
@@ -58,22 +59,6 @@ const trend = computed(() => {
 })
 
 const recentFiles = computed(() => files.value.slice(0, 5))
-
-const fileIconCls = (contentType: string): string => {
-  const t = contentType.toLowerCase()
-  if (t.includes('pdf')) return 'pdf'
-  if (t.includes('ppt')) return 'ppt'
-  if (t.includes('word') || t.includes('docx') || t.includes('doc')) return 'docx'
-  return 'docx'
-}
-
-const fileExtLabel = (contentType: string): string => {
-  const t = contentType.toLowerCase()
-  if (t.includes('pdf')) return 'PDF'
-  if (t.includes('ppt')) return 'PPT'
-  if (t.includes('word') || t.includes('docx')) return 'DOCX'
-  return 'FILE'
-}
 
 const fileStatusBadge = (status: string | null): string => {
   if (status === 'parsed') return `<span class="badge green"><span class="dot"></span>${getFileStatusLabel(status)}</span>`
