@@ -1,13 +1,13 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick, provide } from 'vue'
 import Sidebar from './components/Sidebar.vue'
 import Topbar from './components/Topbar.vue'
 import AppToast from './components/AppToast.vue'
 import OverviewPage from './views/OverviewPage.vue'
-import DocManagePage from './views/DocManagePage.vue'
-import DocDetailPage from './views/DocDetailPage.vue'
-import ParseResultsPage from './views/ParseResultsPage.vue'
-import SearchPage from './views/SearchPage.vue'
+import DocManagePage from './views/DocManagePage/DocManagePage.vue'
+import DocDetailPage from './views/DocDetailPage/DocDetailPage.vue'
+import ParseResultsPage from './views/ParseResultsPage/ParseResultsPage.vue'
+import SearchPage from './views/SearchPage/SearchPage.vue'
 import { useToast } from './composables/useToast'
 import type { IconName } from './utils/icons'
 
@@ -33,11 +33,11 @@ const isMobile = ref(false)
 const viewRef = ref<HTMLElement | null>(null)
 const sidebarComp = ref<InstanceType<typeof Sidebar> | null>(null)
 
-const { success: toastSuccess, error: toastError } = useToast()
+const { error: toastError } = useToast()
 // expose globally for legacy inline calls (optional)
 if (typeof window !== 'undefined') {
   ;(window as unknown as { __toast: { success: (m: string) => void; error: (m: string) => void } }).__toast = {
-    success: toastSuccess,
+    success: (m: string) => useToast().success(m),
     error: toastError,
   }
 }
@@ -135,14 +135,13 @@ onUnmounted(() => {
 })
 
 // Provide openDocDetail/backToDocs/navigate to descendant views
-import { provide } from 'vue'
 provide('navigate', navigate)
 provide('openDocDetail', openDocDetail)
 provide('backToDocs', backToDocs)
 </script>
 
 <template>
-  <div class="admin-shell">
+  <div class="admin-shell doclibrary-admin">
     <Sidebar
       ref="sidebarComp"
       :active="currentNavKey"
@@ -158,7 +157,7 @@ provide('backToDocs', backToDocs)
         :sidebar-open="sidebarOpen"
         @toggle-sidebar="toggleSidebar"
       />
-      <main id="view" ref="viewRef">
+      <main class="view" ref="viewRef">
         <component :is="currentComponent" :doc-id="state.docId" />
       </main>
     </div>

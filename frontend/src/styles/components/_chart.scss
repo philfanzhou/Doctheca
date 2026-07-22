@@ -1,0 +1,102 @@
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.stat-card {
+  position: relative;
+  overflow: hidden;
+}
+
+.stat-label {
+  font-size: 12.5px;
+  color: var(--text-2);
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.stat-label svg {
+  width: 14px;
+  height: 14px;
+  color: var(--text-3);
+}
+
+.stat-num {
+  font-size: 29px;
+  font-weight: 680;
+  letter-spacing: -0.8px;
+  margin-top: 9px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+
+.stat-foot {
+  font-size: 12px;
+  color: var(--text-3);
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.trend-up {
+  color: var(--success);
+  font-weight: 600;
+}
+
+.trend-down {
+  color: var(--danger);
+  font-weight: 600;
+}
+
+.chart-box {
+  position: relative;
+}
+
+.chart-axis {
+  font-size: 10.5px;
+  fill: var(--text-3);
+}
+
+.chart-grid-line {
+  stroke: var(--border-2);
+  stroke-width: 1;
+}
+
+.chart-line {
+  fill: none;
+  stroke: var(--primary);
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.chart-area {
+  fill: url(#areaGrad);
+  opacity: 0;
+}
+
+.chart-dot {
+  fill: #fff;
+  stroke: var(--primary);
+  stroke-width: 2;
+  opacity: 0;
+}
+
+.legend {
+  display: flex;
+  gap: 16px;
+  font-size: 12px;
+  color: var(--text-2);
+}
+
+.legend i {
+  width: 8px;
+  height: 8px;
+  border-radius: 3px;
+  display: inline-block;
+  margin-right: 6px;
+}

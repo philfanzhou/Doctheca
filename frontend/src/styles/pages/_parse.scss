@@ -1,0 +1,84 @@
+.back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-2);
+  margin-bottom: 14px;
+  transition: color 0.15s;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+}
+
+.back-btn:hover {
+  color: var(--primary);
+}
+
+.back-btn svg {
+  width: 15px;
+  height: 15px;
+}
+
+.parse-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px 20px;
+}
+
+.parse-card .mono {
+  font-size: 12px;
+  color: var(--text-3);
+}
+
+.parse-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.parse-item {
+  border: 1px solid var(--border-2);
+  border-radius: 10px;
+  padding: 14px;
+  background: var(--surface);
+}
+
+.parse-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.parse-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.error-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #b91c1c;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 12.5px;
+  margin-bottom: 10px;
+}
+
+.error-box svg {
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+}
+
+.parsing-box {
+  margin-top: 4px;
+}

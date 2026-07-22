@@ -1,0 +1,93 @@
+.result-card {
+  padding: 18px 22px;
+}
+
+.result-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+
+.result-doc {
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
+.result-page {
+  font-size: 11.5px;
+  color: var(--text-2);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 2px 7px;
+  font-variant-numeric: tabular-nums;
+}
+
+.result-snippet {
+  font-size: 13px;
+  color: var(--text-2);
+  line-height: 1.7;
+}
+
+.result-snippet mark {
+  background: linear-gradient(
+    180deg,
+    transparent 62%,
+    rgba(99, 102, 241, 0.3) 62%
+  );
+  color: var(--text);
+  padding: 0 1px;
+  border-radius: 2px;
+  font-weight: 600;
+}
+
+.result-foot {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 12px;
+  flex-wrap: wrap;
+}
+
+.score-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11.5px;
+  color: var(--text-3);
+}
+
+.score-track {
+  width: 90px;
+  height: 4px;
+  border-radius: 4px;
+  background: var(--border-2);
+  overflow: hidden;
+}
+
+.score-fill {
+  height: 100%;
+  border-radius: 4px;
+  background: linear-gradient(90deg, #818cf8, var(--primary));
+  width: 0;
+  transition: width 0.8s var(--ease) 0.15s;
+}
+
+.dev-block {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border-radius: 8px;
+  background: #0f1122;
+  color: #c6cbe8;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  line-height: 1.7;
+  overflow-x: auto;
+  white-space: pre;
+}
+
+.dev-block .k {
+  color: #818cf8;
+}
