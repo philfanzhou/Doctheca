@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
-using System.Threading;
 using System.Threading.Tasks;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
@@ -15,6 +14,7 @@ using Ruoyu.Study.DocLibrary.Database.Entities;
 using Ruoyu.Study.DocLibrary.Domain.Models;
 using Ruoyu.Study.DocLibrary.Domain.Repositories;
 using Ruoyu.Study.DocLibrary.Service;
+using Ruoyu.Study.DocLibrary.Tests.TestHelpers;
 using Xunit;
 
 namespace Ruoyu.Study.DocLibrary.Tests;
@@ -32,15 +32,6 @@ public class QuestionBankImportServiceTests
         _loggerMock = new Mock<ILogger<QuestionBankImportService>>();
     }
 
-    private static DocLibraryDbContext CreateInMemoryContext()
-    {
-        var options = new DbContextOptionsBuilder<DocLibraryDbContext>()
-            .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
-            .Options;
-        var context = new DocLibraryDbContext(options);
-        return context;
-    }
-
     private QuestionBankImportService CreateService(DocLibraryDbContext context)
     {
         return new QuestionBankImportService(
@@ -50,91 +41,15 @@ public class QuestionBankImportServiceTests
             _loggerMock.Object);
     }
 
-    private static (DocumentParseEntity parse, DocumentFileEntity file) SeedParsedParse(
-        DocLibraryDbContext context,
-        string fileName = "test.pdf",
-        string modelVersion = "vlm",
-        DateTimeOffset? parsedAt = null)
-    {
-        var file = new DocumentFileEntity
-        {
-            Id = Guid.NewGuid(),
-            FileName = fileName,
-            FilePath = "uploads/" + fileName,
-            ContentType = "application/pdf",
-            CreatedAt = DateTimeOffset.UtcNow,
-        };
-        context.DocumentFiles.Add(file);
-
-        var parse = new DocumentParseEntity
-        {
-            Id = Guid.NewGuid(),
-            DocumentFileId = file.Id,
-            ModelVersion = modelVersion,
-            Status = DocumentParseStatus.Parsed,
-            ParsedAt = parsedAt ?? DateTimeOffset.UtcNow,
-        };
-        context.DocumentParses.Add(parse);
-        context.SaveChanges();
-        return (parse, file);
-    }
-
-    private static DocumentParseBlockEntity AddBlock(
-        DocLibraryDbContext context,
-        Guid parseId,
-        int pageId,
-        int sortIndex,
-        string blockType,
-        string? textContent = null,
-        Guid? imageId = null,
-        string blockData = "{}")
-    {
-        var block = new DocumentParseBlockEntity
-        {
-            Id = Guid.NewGuid(),
-            ParseId = parseId,
-            PageId = pageId,
-            SortIndex = sortIndex,
-            BlockType = blockType,
-            TextContent = textContent,
-            ImageId = imageId,
-            BlockData = blockData,
-            CreatedAt = DateTimeOffset.UtcNow,
-        };
-        context.DocumentParseBlocks.Add(block);
-        context.SaveChanges();
-        return block;
-    }
-
-    private static DocumentParseImageEntity AddImage(
-        DocLibraryDbContext context,
-        Guid parseId,
-        string imageName = "img.jpg",
-        string imagePath = "images/img.jpg",
-        string contentType = "image/jpeg")
-    {
-        var image = new DocumentParseImageEntity
-        {
-            Id = Guid.NewGuid(),
-            ParseId = parseId,
-            ImageName = imageName,
-            ImagePath = imagePath,
-            ContentType = contentType,
-        };
-        context.DocumentParseImages.Add(image);
-        context.SaveChanges();
-        return image;
-    }
-
     // ========== GetImportableListAsync ==========
 
     [Fact]
     public async Task GetImportableList_OnlyReturnsParsedStatus()
     {
         // UT-QBI-01: 仅返回 status=parsed 的 parse
-        using var context = CreateInMemoryContext();
-        SeedParsedParse(context, "parsed.pdf");
-        var (parse2, _) = SeedParsedParse(context, "pending.pdf");
+        using var context = InMemoryDbContextFactory.CreateInMemoryContext();
+        QuestionBankTestData.SeedParsedParse(context, "parsed.pdf");
+        var (parse2, _) = QuestionBankTestData.SeedParsedParse(context, "pending.pdf");
         parse2.Status = DocumentParseStatus.Pending;
         context.SaveChanges();
 
@@ -150,9 +65,9 @@ public class QuestionBankImportServiceTests
     public async Task GetImportableList_SearchMatchesFileName()
     {
         // UT-QBI-02: search 模糊匹配 file_name
-        using var context = CreateInMemoryContext();
-        SeedParsedParse(context, "2024-英语-期末.pdf");
-        SeedParsedParse(context, "2024-数学-月考.pdf");
+        using var context = InMemoryDbContextFactory.CreateInMemoryContext();
+        QuestionBankTestData.SeedParsedParse(context, "2024-英语-期末.pdf");
+        QuestionBankTestData.SeedParsedParse(context, "2024-数学-月考.pdf");
 
         var service = CreateService(context);
         var (items, total) = await service.GetImportableListAsync(1, 20, search: "期末");
@@ -166,9 +81,9 @@ public class QuestionBankImportServiceTests
     public async Task GetImportableList_ExcludesImportedByDefault()
     {
         // UT-QBI-03: includeImported=false 排除 imported
-        using var context = CreateInMemoryContext();
-        var (parseA, _) = SeedParsedParse(context, "a.pdf");
-        var (parseB, _) = SeedParsedParse(context, "b.pdf");
+        using var context = InMemoryDbContextFactory.CreateInMemoryContext();
+        var (parseA, _) = QuestionBankTestData.SeedParsedParse(context, "a.pdf");
+        var (parseB, _) = QuestionBankTestData.SeedParsedParse(context, "b.pdf");
 
         _importRepoMock
             .Setup(r => r.GetByParseIdAsync(parseB.Id))
@@ -201,9 +116,9 @@ public class QuestionBankImportServiceTests
     public async Task GetImportableList_IncludesImportedWhenFlagTrue()
     {
         // UT-QBI-04: includeImported=true 包含 imported
-        using var context = CreateInMemoryContext();
-        var (parseA, _) = SeedParsedParse(context, "a.pdf");
-        var (parseB, _) = SeedParsedParse(context, "b.pdf");
+        using var context = InMemoryDbContextFactory.CreateInMemoryContext();
+        var (parseA, _) = QuestionBankTestData.SeedParsedParse(context, "a.pdf");
+        var (parseB, _) = QuestionBankTestData.SeedParsedParse(context, "b.pdf");
 
         var importedAt = DateTimeOffset.UtcNow;
         context.DocumentParseImports.Add(new DocumentParseImportEntity
@@ -231,8 +146,8 @@ public class QuestionBankImportServiceTests
     public async Task GetImportableList_FailedStatusNotExcluded()
     {
         // UT-QBI-05: failed 状态不被排除
-        using var context = CreateInMemoryContext();
-        var (parseC, _) = SeedParsedParse(context, "c.pdf");
+        using var context = InMemoryDbContextFactory.CreateInMemoryContext();
+        var (parseC, _) = QuestionBankTestData.SeedParsedParse(context, "c.pdf");
 
         context.DocumentParseImports.Add(new DocumentParseImportEntity
         {
@@ -255,8 +170,8 @@ public class QuestionBankImportServiceTests
     public async Task GetImportableList_PageSizeCappedToMax()
     {
         // UT-QBI-06: 分页参数修正(pageSize > 100)
-        using var context = CreateInMemoryContext();
-        SeedParsedParse(context, "test.pdf");
+        using var context = InMemoryDbContextFactory.CreateInMemoryContext();
+        QuestionBankTestData.SeedParsedParse(context, "test.pdf");
 
         var service = CreateService(context);
         var (items, total) = await service.GetImportableListAsync(0, 200);
@@ -270,13 +185,13 @@ public class QuestionBankImportServiceTests
     public async Task GetImportableList_OrderedByParsedAtDesc()
     {
         // UT-QBI-07: 按 parsed_at DESC 排序
-        using var context = CreateInMemoryContext();
+        using var context = InMemoryDbContextFactory.CreateInMemoryContext();
         var t1 = new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
         var t2 = new DateTimeOffset(2026, 2, 1, 0, 0, 0, TimeSpan.Zero);
         var t3 = new DateTimeOffset(2026, 3, 1, 0, 0, 0, TimeSpan.Zero);
-        SeedParsedParse(context, "oldest.pdf", parsedAt: t1);
-        SeedParsedParse(context, "newest.pdf", parsedAt: t3);
-        SeedParsedParse(context, "middle.pdf", parsedAt: t2);
+        QuestionBankTestData.SeedParsedParse(context, "oldest.pdf", parsedAt: t1);
+        QuestionBankTestData.SeedParsedParse(context, "newest.pdf", parsedAt: t3);
+        QuestionBankTestData.SeedParsedParse(context, "middle.pdf", parsedAt: t2);
 
         var service = CreateService(context);
         var (items, total) = await service.GetImportableListAsync(1, 20);
@@ -293,7 +208,7 @@ public class QuestionBankImportServiceTests
     public async Task GetBlocks_ParseNotFound_ThrowsKeyNotFoundException()
     {
         // UT-QBI-08: parse 不存在抛 KeyNotFoundException
-        using var context = CreateInMemoryContext();
+        using var context = InMemoryDbContextFactory.CreateInMemoryContext();
         var service = CreateService(context);
 
         var act = () => service.GetBlocksAsync(Guid.NewGuid(), null, null, 1, 50);
@@ -305,8 +220,8 @@ public class QuestionBankImportServiceTests
     public async Task GetBlocks_ParseNotParsed_ThrowsInvalidOperationException()
     {
         // UT-QBI-09: parse 状态非 parsed 抛 InvalidOperationException
-        using var context = CreateInMemoryContext();
-        var (parse, _) = SeedParsedParse(context);
+        using var context = InMemoryDbContextFactory.CreateInMemoryContext();
+        var (parse, _) = QuestionBankTestData.SeedParsedParse(context);
         parse.Status = DocumentParseStatus.Parsing;
         context.SaveChanges();
 
@@ -321,11 +236,11 @@ public class QuestionBankImportServiceTests
     public async Task GetBlocks_PageIdZeroFilterWorks()
     {
         // UT-QBI-10: pageId=0 过滤有效(0 是有效值)
-        using var context = CreateInMemoryContext();
-        var (parse, _) = SeedParsedParse(context);
-        AddBlock(context, parse.Id, 0, 0, "text", "page0");
-        AddBlock(context, parse.Id, 1, 0, "text", "page1");
-        AddBlock(context, parse.Id, 2, 0, "text", "page2");
+        using var context = InMemoryDbContextFactory.CreateInMemoryContext();
+        var (parse, _) = QuestionBankTestData.SeedParsedParse(context);
+        QuestionBankTestData.AddBlock(context, parse.Id, 0, 0, "text", "page0");
+        QuestionBankTestData.AddBlock(context, parse.Id, 1, 0, "text", "page1");
+        QuestionBankTestData.AddBlock(context, parse.Id, 2, 0, "text", "page2");
 
         var service = CreateService(context);
         var (items, total) = await service.GetBlocksAsync(parse.Id, 0, null, 1, 50);
@@ -340,11 +255,11 @@ public class QuestionBankImportServiceTests
     public async Task GetBlocks_BlockTypeFilterWorks()
     {
         // UT-QBI-11: blockType 过滤
-        using var context = CreateInMemoryContext();
-        var (parse, _) = SeedParsedParse(context);
-        AddBlock(context, parse.Id, 0, 0, "text", "t1");
-        AddBlock(context, parse.Id, 0, 1, "image", "img1");
-        AddBlock(context, parse.Id, 0, 2, "table", "tab1");
+        using var context = InMemoryDbContextFactory.CreateInMemoryContext();
+        var (parse, _) = QuestionBankTestData.SeedParsedParse(context);
+        QuestionBankTestData.AddBlock(context, parse.Id, 0, 0, "text", "t1");
+        QuestionBankTestData.AddBlock(context, parse.Id, 0, 1, "image", "img1");
+        QuestionBankTestData.AddBlock(context, parse.Id, 0, 2, "table", "tab1");
 
         var service = CreateService(context);
         var (items, total) = await service.GetBlocksAsync(parse.Id, null, "image", 1, 50);
@@ -358,10 +273,10 @@ public class QuestionBankImportServiceTests
     public async Task GetBlocks_ImageBlockReturnsImageFields()
     {
         // UT-QBI-12: image block 返回 imageName/imagePath/imageUrl
-        using var context = CreateInMemoryContext();
-        var (parse, _) = SeedParsedParse(context);
-        var image = AddImage(context, parse.Id, "figure1.jpg", "images/figure1.jpg");
-        AddBlock(context, parse.Id, 0, 0, "image", imageId: image.Id);
+        using var context = InMemoryDbContextFactory.CreateInMemoryContext();
+        var (parse, _) = QuestionBankTestData.SeedParsedParse(context);
+        var image = QuestionBankTestData.AddImage(context, parse.Id, "figure1.jpg", "images/figure1.jpg");
+        QuestionBankTestData.AddBlock(context, parse.Id, 0, 0, "image", imageId: image.Id);
 
         _ossMock
             .Setup(o => o.GetPresignedUrlAsync("images/figure1.jpg", It.IsAny<int>()))
@@ -380,9 +295,9 @@ public class QuestionBankImportServiceTests
     public async Task GetBlocks_TextBlockHasNullImageFields()
     {
         // UT-QBI-13: text block 的图片字段为 null
-        using var context = CreateInMemoryContext();
-        var (parse, _) = SeedParsedParse(context);
-        AddBlock(context, parse.Id, 0, 0, "text", "hello");
+        using var context = InMemoryDbContextFactory.CreateInMemoryContext();
+        var (parse, _) = QuestionBankTestData.SeedParsedParse(context);
+        QuestionBankTestData.AddBlock(context, parse.Id, 0, 0, "text", "hello");
 
         var service = CreateService(context);
         var (items, total) = await service.GetBlocksAsync(parse.Id, null, null, 1, 50);
@@ -397,11 +312,11 @@ public class QuestionBankImportServiceTests
     public async Task GetBlocks_ImageIdSetButImageMissing_ReturnsNullFields()
     {
         // UT-QBI-14: image_id 有值但 image 记录缺失
-        using var context = CreateInMemoryContext();
-        var (parse, _) = SeedParsedParse(context);
+        using var context = InMemoryDbContextFactory.CreateInMemoryContext();
+        var (parse, _) = QuestionBankTestData.SeedParsedParse(context);
         // Add block with image_id pointing to non-existent image
         var phantomImageId = Guid.NewGuid();
-        AddBlock(context, parse.Id, 0, 0, "image", imageId: phantomImageId);
+        QuestionBankTestData.AddBlock(context, parse.Id, 0, 0, "image", imageId: phantomImageId);
 
         var service = CreateService(context);
         var (items, total) = await service.GetBlocksAsync(parse.Id, null, null, 1, 50);
@@ -416,10 +331,10 @@ public class QuestionBankImportServiceTests
     public async Task GetBlocks_OssPresignedUrlFailure_ReturnsNullUrl()
     {
         // UT-QBI-15: OSS 生成 presigned URL 失败时 imageUrl=null
-        using var context = CreateInMemoryContext();
-        var (parse, _) = SeedParsedParse(context);
-        var image = AddImage(context, parse.Id, "broken.jpg", "images/broken.jpg");
-        AddBlock(context, parse.Id, 0, 0, "image", imageId: image.Id);
+        using var context = InMemoryDbContextFactory.CreateInMemoryContext();
+        var (parse, _) = QuestionBankTestData.SeedParsedParse(context);
+        var image = QuestionBankTestData.AddImage(context, parse.Id, "broken.jpg", "images/broken.jpg");
+        QuestionBankTestData.AddBlock(context, parse.Id, 0, 0, "image", imageId: image.Id);
 
         _ossMock
             .Setup(o => o.GetPresignedUrlAsync("images/broken.jpg", It.IsAny<int>()))
@@ -438,10 +353,10 @@ public class QuestionBankImportServiceTests
     public async Task GetBlocks_PageSizeCappedToMax()
     {
         // UT-QBI-16: 分页参数修正(pageSize > 200)
-        using var context = CreateInMemoryContext();
-        var (parse, _) = SeedParsedParse(context);
-        AddBlock(context, parse.Id, 0, 0, "text", "b1");
-        AddBlock(context, parse.Id, 0, 1, "text", "b2");
+        using var context = InMemoryDbContextFactory.CreateInMemoryContext();
+        var (parse, _) = QuestionBankTestData.SeedParsedParse(context);
+        QuestionBankTestData.AddBlock(context, parse.Id, 0, 0, "text", "b1");
+        QuestionBankTestData.AddBlock(context, parse.Id, 0, 1, "text", "b2");
 
         var service = CreateService(context);
         var (items, total) = await service.GetBlocksAsync(parse.Id, null, null, 1, 500);
@@ -454,9 +369,9 @@ public class QuestionBankImportServiceTests
     public async Task GetBlocks_BlockDataValidJson_ReturnsObject()
     {
         // UT-QBI-17: blockData 合法 JSON 解析为对象
-        using var context = CreateInMemoryContext();
-        var (parse, _) = SeedParsedParse(context);
-        AddBlock(context, parse.Id, 0, 0, "text", "hello",
+        using var context = InMemoryDbContextFactory.CreateInMemoryContext();
+        var (parse, _) = QuestionBankTestData.SeedParsedParse(context);
+        QuestionBankTestData.AddBlock(context, parse.Id, 0, 0, "text", "hello",
             blockData: "{\"type\":\"text\",\"text\":\"hello\",\"page_id\":0}");
 
         var service = CreateService(context);
@@ -474,9 +389,9 @@ public class QuestionBankImportServiceTests
     public async Task GetBlocks_BlockDataInvalidJson_ReturnsNull()
     {
         // UT-QBI-18: blockData 非法 JSON 返回 null
-        using var context = CreateInMemoryContext();
-        var (parse, _) = SeedParsedParse(context);
-        AddBlock(context, parse.Id, 0, 0, "text", "hello", blockData: "{ invalid json");
+        using var context = InMemoryDbContextFactory.CreateInMemoryContext();
+        var (parse, _) = QuestionBankTestData.SeedParsedParse(context);
+        QuestionBankTestData.AddBlock(context, parse.Id, 0, 0, "text", "hello", blockData: "{ invalid json");
 
         var service = CreateService(context);
         var (items, _) = await service.GetBlocksAsync(parse.Id, null, null, 1, 50);
@@ -490,7 +405,7 @@ public class QuestionBankImportServiceTests
     public async Task GetImageBlob_ImageNotFound_ThrowsKeyNotFoundException()
     {
         // UT-QBI-19: imageId 不存在抛 KeyNotFoundException
-        using var context = CreateInMemoryContext();
+        using var context = InMemoryDbContextFactory.CreateInMemoryContext();
         var service = CreateService(context);
 
         var act = () => service.GetImageBlobAsync(Guid.NewGuid());
@@ -502,9 +417,9 @@ public class QuestionBankImportServiceTests
     public async Task GetImageBlob_OssDownloadFailure_Throws()
     {
         // UT-QBI-20: OSS 下载失败抛异常
-        using var context = CreateInMemoryContext();
-        var (parse, _) = SeedParsedParse(context);
-        var image = AddImage(context, parse.Id, "lost.jpg", "images/lost.jpg");
+        using var context = InMemoryDbContextFactory.CreateInMemoryContext();
+        var (parse, _) = QuestionBankTestData.SeedParsedParse(context);
+        var image = QuestionBankTestData.AddImage(context, parse.Id, "lost.jpg", "images/lost.jpg");
 
         _ossMock
             .Setup(o => o.DownloadAsync("images/lost.jpg"))
@@ -521,9 +436,9 @@ public class QuestionBankImportServiceTests
     public async Task GetImageBlob_Success_ReturnsBlob()
     {
         // UT-QBI-21: 成功返回 ParseImageBlob
-        using var context = CreateInMemoryContext();
-        var (parse, _) = SeedParsedParse(context);
-        var image = AddImage(context, parse.Id, "ok.png", "images/ok.png", "image/png");
+        using var context = InMemoryDbContextFactory.CreateInMemoryContext();
+        var (parse, _) = QuestionBankTestData.SeedParsedParse(context);
+        var image = QuestionBankTestData.AddImage(context, parse.Id, "ok.png", "images/ok.png", "image/png");
 
         var expectedBytes = new byte[] { 1, 2, 3, 4 };
         _ossMock
@@ -547,7 +462,7 @@ public class QuestionBankImportServiceTests
     public async Task UpsertImportStatus_ParseNotFound_ThrowsKeyNotFoundException()
     {
         // UT-QBI-22: parse 不存在抛 KeyNotFoundException
-        using var context = CreateInMemoryContext();
+        using var context = InMemoryDbContextFactory.CreateInMemoryContext();
         var service = CreateService(context);
 
         var act = () => service.UpsertImportStatusAsync(
@@ -560,8 +475,8 @@ public class QuestionBankImportServiceTests
     public async Task UpsertImportStatus_InvalidStatus_ThrowsArgumentException()
     {
         // UT-QBI-23: status 非法抛 ArgumentException
-        using var context = CreateInMemoryContext();
-        var (parse, _) = SeedParsedParse(context);
+        using var context = InMemoryDbContextFactory.CreateInMemoryContext();
+        var (parse, _) = QuestionBankTestData.SeedParsedParse(context);
         var service = CreateService(context);
 
         var act = () => service.UpsertImportStatusAsync(
@@ -574,8 +489,8 @@ public class QuestionBankImportServiceTests
     public async Task UpsertImportStatus_FirstTimeImported_CallsAddAsync()
     {
         // UT-QBI-24: 首次插入 imported
-        using var context = CreateInMemoryContext();
-        var (parse, _) = SeedParsedParse(context);
+        using var context = InMemoryDbContextFactory.CreateInMemoryContext();
+        var (parse, _) = QuestionBankTestData.SeedParsedParse(context);
         var importedBy = Guid.NewGuid();
 
         _importRepoMock
@@ -610,8 +525,8 @@ public class QuestionBankImportServiceTests
     public async Task UpsertImportStatus_FirstTimeFailed_CallsAddAsync()
     {
         // UT-QBI-25: 首次插入 failed
-        using var context = CreateInMemoryContext();
-        var (parse, _) = SeedParsedParse(context);
+        using var context = InMemoryDbContextFactory.CreateInMemoryContext();
+        var (parse, _) = QuestionBankTestData.SeedParsedParse(context);
 
         _importRepoMock
             .Setup(r => r.GetByParseIdAsync(parse.Id))
@@ -632,8 +547,8 @@ public class QuestionBankImportServiceTests
     public async Task UpsertImportStatus_ImportedToImported_ThrowsInvalidOperationException()
     {
         // UT-QBI-26: imported → imported 抛异常
-        using var context = CreateInMemoryContext();
-        var (parse, _) = SeedParsedParse(context);
+        using var context = InMemoryDbContextFactory.CreateInMemoryContext();
+        var (parse, _) = QuestionBankTestData.SeedParsedParse(context);
 
         _importRepoMock
             .Setup(r => r.GetByParseIdAsync(parse.Id))
@@ -658,8 +573,8 @@ public class QuestionBankImportServiceTests
     public async Task UpsertImportStatus_ImportedToFailed_CallsUpdateAsync()
     {
         // UT-QBI-27: imported → failed 成功覆盖
-        using var context = CreateInMemoryContext();
-        var (parse, _) = SeedParsedParse(context);
+        using var context = InMemoryDbContextFactory.CreateInMemoryContext();
+        var (parse, _) = QuestionBankTestData.SeedParsedParse(context);
         var existingCreatedAt = new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
 
         var existing = new DocumentParseImportModel
@@ -697,8 +612,8 @@ public class QuestionBankImportServiceTests
     public async Task UpsertImportStatus_FailedToImported_CallsUpdateAsync()
     {
         // UT-QBI-28: failed → imported 成功覆盖
-        using var context = CreateInMemoryContext();
-        var (parse, _) = SeedParsedParse(context);
+        using var context = InMemoryDbContextFactory.CreateInMemoryContext();
+        var (parse, _) = QuestionBankTestData.SeedParsedParse(context);
 
         _importRepoMock
             .Setup(r => r.GetByParseIdAsync(parse.Id))
@@ -722,8 +637,8 @@ public class QuestionBankImportServiceTests
     public async Task UpsertImportStatus_FailedToFailed_CallsUpdateAsync()
     {
         // UT-QBI-29: failed → failed 成功覆盖(允许重复 failed)
-        using var context = CreateInMemoryContext();
-        var (parse, _) = SeedParsedParse(context);
+        using var context = InMemoryDbContextFactory.CreateInMemoryContext();
+        var (parse, _) = QuestionBankTestData.SeedParsedParse(context);
 
         _importRepoMock
             .Setup(r => r.GetByParseIdAsync(parse.Id))
