@@ -43,7 +43,7 @@ public sealed class MinerUFileParseWorker : BackgroundService
                     {
                         var markdown = await orchestrator.ProcessFileAsync(job, stoppingToken);
 
-                        if (!string.IsNullOrEmpty(markdown))
+                        if (markdown is not null)
                         {
                             var file = await fileService.GetByIdAsync(job.DocumentFileId)
                                 ?? throw new InvalidOperationException($"Document file not found: {job.DocumentFileId}");

@@ -27,13 +27,11 @@ public sealed class MinerUParseOrchestrator
     public MinerUParseOrchestrator(
         IDocumentFileService fileService,
         IDocumentParseService parseService,
-        IDocumentParseBlockService blockService,
         MinerUPrecisionClient minerUClient,
         IOssService ossService,
         IPdfSplitService pdfSplitService,
         IFileConversionService fileConversionService,
         MinerUResultPersistence persistence,
-        IServiceProvider scopeProvider,
         ILogger<MinerUParseOrchestrator> logger)
     {
         _fileService = fileService;
