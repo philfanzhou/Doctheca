@@ -5,15 +5,13 @@ using Ruoyu.Study.Common.Oss;
 using Ruoyu.Study.DocLibrary.Database;
 using Ruoyu.Study.DocLibrary.Database.Entities;
 using Ruoyu.Study.DocLibrary.Domain.Models;
-using Ruoyu.Study.DocLibrary.Domain.Repositories;
 using Ruoyu.Study.DocLibrary.Domain.Services;
 
 namespace Ruoyu.Study.DocLibrary.Service;
 
 /// <summary>
 /// Implementation of QuestionBank pull-mode integration service.
-/// Reads MinerU parsed data (document_parses / document_parse_blocks / document_parse_images)
-/// and tracks QuestionBank import status (document_parse_imports).
+/// Reads MinerU parsed data (document_parses / document_parse_blocks / document_parse_images).
 /// </summary>
 public class QuestionBankImportService : IQuestionBankImportService
 {
@@ -24,18 +22,15 @@ public class QuestionBankImportService : IQuestionBankImportService
     private const int PresignedUrlExpirySeconds = 3600;
 
     private readonly DocLibraryDbContext _dbContext;
-    private readonly IDocumentParseImportRepository _importRepository;
     private readonly IOssService _ossService;
     private readonly ILogger<QuestionBankImportService> _logger;
 
     public QuestionBankImportService(
         DocLibraryDbContext dbContext,
-        IDocumentParseImportRepository importRepository,
         IOssService ossService,
         ILogger<QuestionBankImportService> logger)
     {
         _dbContext = dbContext;
-        _importRepository = importRepository;
         _ossService = ossService;
         _logger = logger;
     }
@@ -44,8 +39,7 @@ public class QuestionBankImportService : IQuestionBankImportService
     public async Task<(List<ImportableParseItem> Items, int TotalCount)> GetImportableListAsync(
         int page,
         int pageSize,
-        string? search = null,
-        bool includeImported = false)
+        string? search = null)
     {
         if (page <= 0) page = 1;
         if (pageSize <= 0) pageSize = DefaultListPageSize;
@@ -53,20 +47,12 @@ public class QuestionBankImportService : IQuestionBankImportService
 
         var query = from p in _dbContext.DocumentParses
                     join f in _dbContext.DocumentFiles on p.DocumentFileId equals f.Id
-                    join i in _dbContext.DocumentParseImports on p.Id equals i.ParseId into imports
-                    from i in imports.DefaultIfEmpty()
                     where p.Status == DocumentParseStatus.Parsed
-                    select new { p, f, i };
+                    select new { p, f };
 
         if (!string.IsNullOrWhiteSpace(search))
         {
             query = query.Where(x => x.f.FileName.Contains(search));
-        }
-
-        if (!includeImported)
-        {
-            // Exclude parses already marked as 'imported'; 'failed' and NULL are still listed
-            query = query.Where(x => x.i == null || x.i.Status != ParseImportStatus.Imported);
         }
 
         var totalCount = await query.CountAsync();
@@ -81,9 +67,7 @@ public class QuestionBankImportService : IQuestionBankImportService
                 x.f.Id,
                 x.f.FileName,
                 x.p.ModelVersion,
-                x.p.ParsedAt,
-                x.i != null ? x.i.Status : null,
-                x.i != null ? x.i.CreatedAt : (DateTimeOffset?)null))
+                x.p.ParsedAt))
             .ToListAsync();
 
         return (rows, totalCount);
@@ -205,62 +189,6 @@ public class QuestionBankImportService : IQuestionBankImportService
         return new ParseImageBlob(image.ImageName, image.ContentType, stream);
     }
 
-    /// <inheritdoc />
-    public async Task<ImportStatusResult> UpsertImportStatusAsync(
-        Guid parseId,
-        Guid importedBy,
-        string status,
-        string? note,
-        string? importedQuestionIds)
-    {
-        if (status != ParseImportStatus.Imported && status != ParseImportStatus.Failed)
-            throw new ArgumentException($"Status must be '{ParseImportStatus.Imported}' or '{ParseImportStatus.Failed}'");
-
-        // Verify parse exists
-        var parse = await _dbContext.DocumentParses.FindAsync(parseId)
-            ?? throw new KeyNotFoundException($"Document parse not found: {parseId}");
-
-        var existing = await _importRepository.GetByParseIdAsync(parseId);
-
-        if (existing != null)
-        {
-            // Prevent re-importing an already-imported parse (allow imported->failed and failed->imported)
-            if (existing.Status == ParseImportStatus.Imported && status == ParseImportStatus.Imported)
-            {
-                throw new InvalidOperationException("Parse is already marked as imported");
-            }
-
-            existing.Status = status;
-            existing.Note = note;
-            existing.ImportedQuestionIds = importedQuestionIds;
-            await _importRepository.UpdateAsync(existing);
-
-            return new ImportStatusResult(
-                parseId,
-                status,
-                existing.CreatedAt,
-                DateTimeOffset.UtcNow);
-        }
-
-        var model = new DocumentParseImportModel
-        {
-            ParseId = parseId,
-            ImportedBy = importedBy,
-            Status = status,
-            Note = note,
-            ImportedQuestionIds = importedQuestionIds,
-            CreatedAt = DateTimeOffset.UtcNow,
-        };
-
-        var created = await _importRepository.AddAsync(model);
-
-        return new ImportStatusResult(
-            parseId,
-            status,
-            created.CreatedAt,
-            null);
-    }
-
     /// <summary>
     /// Parse block_data JSON string into an object. Returns null on failure.
     /// </summary>
@@ -275,7 +203,7 @@ public class QuestionBankImportService : IQuestionBankImportService
         }
         catch (JsonException ex)
         {
-            _logger.LogWarning(ex, "Failed to parse block_data as JSON, returning null. Data: {Data}", blockData);
+            _logger.LogWarning(ex, "Failed to parse block data as JSON; returning null");
             return null;
         }
     }

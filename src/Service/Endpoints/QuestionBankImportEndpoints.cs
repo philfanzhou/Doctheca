@@ -1,42 +1,39 @@
 using System;
-using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
+using Ruoyu.Study.DocLibrary.Domain.Models;
 using Ruoyu.Study.DocLibrary.Domain.Services;
 
 namespace Ruoyu.Study.DocLibrary.Service;
 
 /// <summary>
 /// HTTP endpoints for QuestionBank pull-mode integration.
-/// Exposes MinerU parsed data (importable list, structured blocks, images)
-/// and accepts import status write-back to prevent duplicate processing.
+/// Exposes MinerU parsed data as a read-only internal integration.
 /// </summary>
 public static class QuestionBankImportEndpoints
 {
     public static WebApplication MapQuestionBankImportEndpoints(this WebApplication app)
     {
-        var group = app.MapGroup("/admin/document-parses")
+        var group = app.MapGroup("/internal/question-bank")
             .RequireAuthorization(DocLibraryAuthorizationPolicies.QuestionBank);
 
-        group.MapGet("/importable", ListImportableParses);
-        group.MapGet("/{parseId:guid}/blocks", GetParseBlocks);
-        group.MapGet("/images/{imageId:guid}", GetImage);
-        group.MapPost("/{parseId:guid}/import-status", UpsertImportStatus);
+        group.MapGet("/document-parses", ListDocumentParsesAsync);
+        group.MapGet("/document-parses/{parseId:guid}/blocks", GetParseBlocksAsync);
+        group.MapGet("/images/{imageId:guid}", GetImageAsync);
 
         return app;
     }
 
-    private static async Task<IResult> ListImportableParses(
+    private static async Task<IResult> ListDocumentParsesAsync(
         [FromServices] IQuestionBankImportService importService,
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 20,
-        [FromQuery] string? search = null,
-        [FromQuery] bool includeImported = false)
+        [FromQuery] string? search = null)
     {
-        var (items, totalCount) = await importService.GetImportableListAsync(page, pageSize, search, includeImported);
+        var (items, totalCount) = await importService.GetImportableListAsync(page, pageSize, search);
 
         var data = items.Select(x => new
         {
@@ -45,8 +42,6 @@ public static class QuestionBankImportEndpoints
             fileName = x.FileName,
             modelVersion = x.ModelVersion,
             parsedAt = x.ParsedAt?.UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'"),
-            importStatus = x.ImportStatus,
-            importedAt = x.ImportedAt?.UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'"),
         }).ToList();
 
         return Results.Ok(new
@@ -60,7 +55,7 @@ public static class QuestionBankImportEndpoints
         });
     }
 
-    private static async Task<IResult> GetParseBlocks(
+    private static async Task<IResult> GetParseBlocksAsync(
         Guid parseId,
         [FromServices] IQuestionBankImportService importService,
         [FromServices] ILoggerFactory loggerFactory,
@@ -112,7 +107,7 @@ public static class QuestionBankImportEndpoints
         });
     }
 
-    private static async Task<IResult> GetImage(
+    private static async Task<IResult> GetImageAsync(
         Guid imageId,
         [FromServices] IQuestionBankImportService importService,
         [FromServices] ILoggerFactory loggerFactory)
@@ -137,68 +132,4 @@ public static class QuestionBankImportEndpoints
 
         return Results.Stream(blob.Stream, blob.ContentType, blob.ImageName);
     }
-
-    private static async Task<IResult> UpsertImportStatus(
-        Guid parseId,
-        [FromServices] IQuestionBankImportService importService,
-        [FromBody] ImportStatusRequest body,
-        [FromServices] ILoggerFactory loggerFactory)
-    {
-        var logger = loggerFactory.CreateLogger(nameof(QuestionBankImportEndpoints));
-
-        // Validate status
-        if (body.Status != "imported" && body.Status != "failed")
-            return Results.BadRequest(new { success = false, message = "Status must be 'imported' or 'failed'", errorCode = "DOCLIBRARY_IMPORT_STATUS_INVALID" });
-
-        // Validate importedBy
-        if (body.ImportedBy == Guid.Empty)
-            return Results.BadRequest(new { success = false, message = "importedBy is required and must be a valid UUID", errorCode = "DOCLIBRARY_IMPORT_STATUS_INVALID" });
-
-        // Serialize importedQuestionIds if provided
-        string? importedQuestionIdsJson = null;
-        if (body.ImportedQuestionIds != null && body.ImportedQuestionIds.Count > 0)
-        {
-            importedQuestionIdsJson = JsonSerializer.Serialize(body.ImportedQuestionIds);
-        }
-
-        ImportStatusResult result;
-        try
-        {
-            result = await importService.UpsertImportStatusAsync(parseId, body.ImportedBy, body.Status, body.Note, importedQuestionIdsJson);
-        }
-        catch (KeyNotFoundException)
-        {
-            return Results.NotFound(new { success = false, message = "Parse record not found", errorCode = "DOCLIBRARY_PARSE_NOT_FOUND" });
-        }
-        catch (ArgumentException)
-        {
-            return Results.BadRequest(new { success = false, message = "Status must be 'imported' or 'failed'", errorCode = "DOCLIBRARY_IMPORT_STATUS_INVALID" });
-        }
-        catch (InvalidOperationException ex)
-        {
-            return Results.Json(new { success = false, message = ex.Message, errorCode = "DOCLIBRARY_PARSE_ALREADY_IMPORTED" },
-                statusCode: StatusCodes.Status422UnprocessableEntity);
-        }
-
-        return Results.Ok(new
-        {
-            success = true,
-            data = new
-            {
-                parseId = result.ParseId.ToString(),
-                importStatus = result.ImportStatus,
-                importedAt = result.ImportedAt.UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'"),
-                updatedAt = result.UpdatedAt?.UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'"),
-            }
-        });
-    }
 }
-
-/// <summary>
-/// Request body for POST /admin/document-parses/{parseId}/import-status
-/// </summary>
-public record ImportStatusRequest(
-    Guid ImportedBy,
-    string Status,
-    string? Note,
-    List<string>? ImportedQuestionIds);

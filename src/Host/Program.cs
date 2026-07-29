@@ -173,7 +173,6 @@ builder.Services.AddScoped<IDocumentParseRepository, DocumentParseRepository>();
 builder.Services.AddScoped<IDocumentParseImageRepository, DocumentParseImageRepository>();
 builder.Services.AddScoped<IDocumentParseBlockRepository, DocumentParseBlockRepository>();
 builder.Services.AddScoped<IDocumentParseBlockService, DocumentParseBlockService>();
-builder.Services.AddScoped<IDocumentParseImportRepository, DocumentParseImportRepository>();
 builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
 
 // Domain Services

@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -109,6 +110,38 @@ public class AuthorizationBoundaryTests
     }
 
     [Fact]
+    public async Task QuestionBankReadApi_CorrectServiceKey_ReachesRealEndpoint()
+    {
+        await using var app = await CreateAppAsync();
+        var request = new HttpRequestMessage(
+            HttpMethod.Get,
+            "/internal/question-bank/document-parses");
+        request.Headers.Add(
+            DocLibraryAuthenticationConstants.QuestionBankHeaderName,
+            "question-bank-key");
+
+        var response = await app.GetTestClient().SendAsync(request);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+
+    [Theory]
+    [InlineData("/admin/document-parses/importable")]
+    [InlineData("/admin/document-parses/{parseId:guid}/import-status")]
+    public async Task LegacyQuestionBankRoutes_AreNotMapped(string routePattern)
+    {
+        await using var app = await CreateAppAsync();
+
+        var mappedPatterns = app.Services
+            .GetRequiredService<EndpointDataSource>()
+            .Endpoints
+            .OfType<RouteEndpoint>()
+            .Select(endpoint => endpoint.RoutePattern.RawText);
+
+        mappedPatterns.Should().NotContain(routePattern);
+    }
+
+    [Fact]
     public async Task InternalPolicy_AdminCookieOnly_Returns401()
     {
         await using var app = await CreateAppAsync();
@@ -154,6 +187,13 @@ public class AuthorizationBoundaryTests
         builder.Services.AddSingleton(Mock.Of<IDocumentFileService>());
         builder.Services.AddSingleton(Mock.Of<IOssService>());
         builder.Services.AddSingleton(Mock.Of<ISearchIndexService>());
+        var questionBankService = new Mock<IQuestionBankImportService>();
+        questionBankService.Setup(x => x.GetImportableListAsync(
+                It.IsAny<int>(),
+                It.IsAny<int>(),
+                It.IsAny<string>()))
+            .ReturnsAsync((new List<ImportableParseItem>(), 0));
+        builder.Services.AddSingleton(questionBankService.Object);
 
         builder.Services.Configure<InternalAuthOptions>(
             builder.Configuration.GetSection(InternalAuthOptions.SectionName));
@@ -211,6 +251,7 @@ public class AuthorizationBoundaryTests
         app.UseAuthentication();
         app.UseAuthorization();
         app.MapDocumentParseEndpoints();
+        app.MapQuestionBankImportEndpoints();
         app.MapGet("/internal/question-bank/test", () => Results.Ok())
             .RequireAuthorization(DocLibraryAuthorizationPolicies.QuestionBank);
         app.MapGet("/health", () => Results.Ok());
