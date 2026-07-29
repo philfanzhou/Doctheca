@@ -45,8 +45,6 @@ builder.Services.Configure<IdentityServiceOptions>(
     builder.Configuration.GetSection(IdentityServiceOptions.SectionName));
 builder.Services.Configure<DocLibraryCookieOptions>(
     builder.Configuration.GetSection(DocLibraryCookieOptions.SectionName));
-builder.Services.Configure<InternalAuthOptions>(
-    builder.Configuration.GetSection(InternalAuthOptions.SectionName));
 builder.Services.AddHttpClient<IIdentityAuthenticationService, IdentityAuthenticationService>(
     (serviceProvider, client) =>
     {
@@ -92,11 +90,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                 return Task.CompletedTask;
             }
         };
-    })
-    .AddScheme<Microsoft.AspNetCore.Authentication.AuthenticationSchemeOptions,
-        QuestionBankServiceKeyAuthenticationHandler>(
-        DocLibraryAuthenticationConstants.QuestionBankScheme,
-        _ => { });
+    });
 builder.Services.AddAuthorization(options =>
 {
     options.AddPolicy(DocLibraryAuthorizationPolicies.Admin, policy =>
@@ -108,12 +102,6 @@ builder.Services.AddAuthorization(options =>
             && context.User.Claims.Any(claim =>
                 claim.Type is "role" or ClaimTypes.Role
                 && string.Equals(claim.Value, "admin", StringComparison.OrdinalIgnoreCase)));
-    });
-    options.AddPolicy(DocLibraryAuthorizationPolicies.QuestionBank, policy =>
-    {
-        policy.AddAuthenticationSchemes(
-            DocLibraryAuthenticationConstants.QuestionBankScheme);
-        policy.RequireAuthenticatedUser();
     });
 });
 
@@ -179,7 +167,6 @@ builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
 builder.Services.AddScoped<ISearchDomainService, SearchDomainService>();
 builder.Services.AddScoped<IDocumentFileService, DocumentFileService>();
 builder.Services.AddScoped<IDocumentParseService, DocumentParseService>();
-builder.Services.AddScoped<IQuestionBankImportService, QuestionBankImportService>();
 
 // MinerU Precision API Client
 builder.Services.Configure<MinerUOptions>(builder.Configuration.GetSection(MinerUOptions.SectionName));
@@ -308,7 +295,6 @@ app.MapAdminAuthEndpoints();
 // Web Admin API endpoints
 app.MapDocumentFileEndpoints();
 app.MapDocumentParseEndpoints();
-app.MapQuestionBankImportEndpoints();
 app.MapDocumentExportEndpoints();
 app.MapDocumentSearchEndpoints();
 

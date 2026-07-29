@@ -8,6 +8,4 @@ public sealed class IdentityServiceOptions
     public string Issuer { get; set; } = "QuantumZhou.Identity";
     public string Audience { get; set; } = "QuantumZhou.microservices";
     public bool RequireHttpsMetadata { get; set; }
-    public string AppId { get; set; } = string.Empty;
-    public string AppSecret { get; set; } = string.Empty;
 }

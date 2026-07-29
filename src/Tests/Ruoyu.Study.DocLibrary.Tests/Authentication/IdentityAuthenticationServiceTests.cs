@@ -3,7 +3,6 @@ using System.Text;
 using System.Text.Json;
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Extensions.Options;
 using Ruoyu.Study.DocLibrary.Host.Authentication;
 using Xunit;
 
@@ -12,7 +11,7 @@ namespace Ruoyu.Study.DocLibrary.Tests.Authentication;
 public class IdentityAuthenticationServiceTests
 {
     [Fact]
-    public async Task PasswordGrantAsync_UsesCamelCaseContractAndConfiguredAppHeaders()
+    public async Task PasswordGrantAsync_UsesCamelCaseContractWithoutAppHeaders()
     {
         HttpRequestMessage? captured = null;
         var handler = new StubHttpMessageHandler(async request =>
@@ -28,14 +27,14 @@ public class IdentityAuthenticationServiceTests
                 }
                 """);
         });
-        var service = CreateService(handler, appId: "doclibrary", appSecret: "secret");
+        var service = CreateService(handler);
 
         var result = await service.PasswordGrantAsync("admin", "password-value", CancellationToken.None);
 
         result.Status.Should().Be(IdentityExchangeStatus.Succeeded);
         captured.Should().NotBeNull();
-        captured!.Headers.GetValues("X-Admin-AppId").Should().ContainSingle("doclibrary");
-        captured.Headers.GetValues("X-Admin-AppSecret").Should().ContainSingle("secret");
+        captured!.Headers.Contains("X-Admin-AppId").Should().BeFalse();
+        captured.Headers.Contains("X-Admin-AppSecret").Should().BeFalse();
         using var json = JsonDocument.Parse(await captured.Content!.ReadAsStringAsync());
         json.RootElement.GetProperty("grantType").GetString().Should().Be("password");
         json.RootElement.GetProperty("username").GetString().Should().Be("admin");
@@ -125,35 +124,14 @@ public class IdentityAuthenticationServiceTests
         json.RootElement.GetProperty("refreshToken").GetString().Should().Be("refresh-to-revoke");
     }
 
-    [Theory]
-    [InlineData("only-id", "")]
-    [InlineData("", "only-secret")]
-    public void Constructor_UnpairedAppCredentials_Throws(string appId, string appSecret)
-    {
-        var action = () => CreateService(new StubHttpMessageHandler(_ =>
-            Task.FromResult(JsonResponse("{}"))), appId, appSecret);
-
-        action.Should().Throw<OptionsValidationException>();
-    }
-
-    private static IdentityAuthenticationService CreateService(
-        HttpMessageHandler handler,
-        string appId = "",
-        string appSecret = "")
+    private static IdentityAuthenticationService CreateService(HttpMessageHandler handler)
     {
         var client = new HttpClient(handler)
         {
             BaseAddress = new Uri("http://identity.test")
         };
-        var options = Options.Create(new IdentityServiceOptions
-        {
-            Authority = "http://identity.test",
-            AppId = appId,
-            AppSecret = appSecret
-        });
         return new IdentityAuthenticationService(
             client,
-            options,
             NullLogger<IdentityAuthenticationService>.Instance);
     }
 

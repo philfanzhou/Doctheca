@@ -10,22 +10,7 @@ HTTP_PORT="5012"
 CONSUL_HTTP_ADDR="${CONSUL_HTTP_ADDR:-host.docker.internal:8500}"
 CONSUL_TOKEN="${CONSUL_TOKEN:-}"
 
-IDENTITY_AUTHORITY="${IDENTITY_AUTHORITY:-http://ruoyu-identity:5002}"
-IDENTITY_APP_ID="${IDENTITY_APP_ID:-}"
-IDENTITY_APP_SECRET="${IDENTITY_APP_SECRET:-}"
 DOCLIBRARY_COOKIE_SECURE="${DOCLIBRARY_COOKIE_SECURE:-false}"
-DOCLIBRARY_QUESTIONBANK_KEY="${DOCLIBRARY_QUESTIONBANK_KEY:-}"
-
-if { [ -n "$IDENTITY_APP_ID" ] && [ -z "$IDENTITY_APP_SECRET" ]; } ||
-   { [ -z "$IDENTITY_APP_ID" ] && [ -n "$IDENTITY_APP_SECRET" ]; }; then
-    echo "Identity AppId and AppSecret must be configured together." >&2
-    exit 1
-fi
-
-if [ -z "$DOCLIBRARY_QUESTIONBANK_KEY" ]; then
-    echo "DOCLIBRARY_QUESTIONBANK_KEY is required." >&2
-    exit 1
-fi
 
 OPENSEARCH_INDEX="doclibrary-segments"
 
@@ -59,11 +44,7 @@ docker run -d \
   -e CONSUL_TOKEN="${CONSUL_TOKEN}" \
   -e Endpoints__Http="${HTTP_PORT}" \
   -e Database__Name="${DB_NAME}" \
-  -e IdentityService__Authority="${IDENTITY_AUTHORITY}" \
-  -e IdentityService__AppId="${IDENTITY_APP_ID}" \
-  -e IdentityService__AppSecret="${IDENTITY_APP_SECRET}" \
   -e Authentication__CookieSecure="${DOCLIBRARY_COOKIE_SECURE}" \
-  -e InternalAuth__QuestionBankKey="${DOCLIBRARY_QUESTIONBANK_KEY}" \
   -e OpenSearch__IndexName="${OPENSEARCH_INDEX}" \
   -e LlmDocumentAnalysis__ApiKey="${LLM_API_KEY}" \
   -e LlmDocumentAnalysis__BaseUrl="${LLM_BASE_URL}" \

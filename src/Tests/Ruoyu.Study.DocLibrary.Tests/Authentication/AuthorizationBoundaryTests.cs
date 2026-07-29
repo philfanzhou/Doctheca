@@ -3,16 +3,13 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Security.Claims;
 using System.Text;
-using System.Text.Json;
 using FluentAssertions;
-using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.TestHost;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Tokens;
 using Moq;
@@ -82,73 +79,12 @@ public class AuthorizationBoundaryTests
     }
 
     [Theory]
-    [InlineData(null)]
-    [InlineData("wrong-key")]
-    public async Task InternalPolicy_MissingOrWrongServiceKey_Returns401(string? serviceKey)
-    {
-        await using var app = await CreateAppAsync();
-        var request = new HttpRequestMessage(HttpMethod.Get, "/internal/question-bank/test");
-        if (serviceKey != null)
-        {
-            request.Headers.Add(DocLibraryAuthenticationConstants.QuestionBankHeaderName, serviceKey);
-        }
-
-        var response = await app.GetTestClient().SendAsync(request);
-
-        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
-    }
-
-    [Fact]
-    public async Task InternalPolicy_CorrectServiceKey_ReachesEndpoint()
-    {
-        await using var app = await CreateAppAsync();
-        var request = new HttpRequestMessage(HttpMethod.Get, "/internal/question-bank/test");
-        request.Headers.Add(DocLibraryAuthenticationConstants.QuestionBankHeaderName, "question-bank-key");
-
-        var response = await app.GetTestClient().SendAsync(request);
-
-        response.StatusCode.Should().Be(HttpStatusCode.OK);
-    }
-
-    [Fact]
-    public async Task QuestionBankReadApi_CorrectServiceKey_ReachesRealEndpoint()
-    {
-        await using var app = await CreateAppAsync();
-        var request = new HttpRequestMessage(
-            HttpMethod.Get,
-            "/internal/question-bank/document-parses");
-        request.Headers.Add(
-            DocLibraryAuthenticationConstants.QuestionBankHeaderName,
-            "question-bank-key");
-
-        var response = await app.GetTestClient().SendAsync(request);
-
-        response.StatusCode.Should().Be(HttpStatusCode.OK);
-    }
-
-    [Fact]
-    public async Task QuestionBankReadApi_InvalidPagination_IsNormalized()
-    {
-        await using var app = await CreateAppAsync();
-        var request = new HttpRequestMessage(
-            HttpMethod.Get,
-            "/internal/question-bank/document-parses?page=0&pageSize=0");
-        request.Headers.Add(
-            DocLibraryAuthenticationConstants.QuestionBankHeaderName,
-            "question-bank-key");
-
-        var response = await app.GetTestClient().SendAsync(request);
-
-        response.StatusCode.Should().Be(HttpStatusCode.OK);
-        var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-        body.RootElement.GetProperty("page").GetInt32().Should().Be(1);
-        body.RootElement.GetProperty("pageSize").GetInt32().Should().Be(20);
-    }
-
-    [Theory]
+    [InlineData("/internal/question-bank/document-parses")]
+    [InlineData("/internal/question-bank/document-parses/{parseId:guid}/blocks")]
+    [InlineData("/internal/question-bank/images/{imageId:guid}")]
     [InlineData("/admin/document-parses/importable")]
     [InlineData("/admin/document-parses/{parseId:guid}/import-status")]
-    public async Task LegacyQuestionBankRoutes_AreNotMapped(string routePattern)
+    public async Task RemovedQuestionBankAndLegacyRoutes_AreNotMapped(string routePattern)
     {
         await using var app = await CreateAppAsync();
 
@@ -159,20 +95,6 @@ public class AuthorizationBoundaryTests
             .Select(endpoint => endpoint.RoutePattern.RawText);
 
         mappedPatterns.Should().NotContain(routePattern);
-    }
-
-    [Fact]
-    public async Task InternalPolicy_AdminCookieOnly_Returns401()
-    {
-        await using var app = await CreateAppAsync();
-        var request = new HttpRequestMessage(HttpMethod.Get, "/internal/question-bank/test");
-        request.Headers.Add(
-            "Cookie",
-            $"{DocLibraryAuthenticationConstants.AccessCookieName}={CreateToken("admin")}");
-
-        var response = await app.GetTestClient().SendAsync(request);
-
-        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
     [Theory]
@@ -192,10 +114,6 @@ public class AuthorizationBoundaryTests
     {
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseTestServer();
-        builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
-        {
-            ["InternalAuth:QuestionBankKey"] = "question-bank-key"
-        });
 
         var parseService = new Mock<IDocumentParseService>();
         parseService.Setup(x => x.GetListAsync(
@@ -207,16 +125,7 @@ public class AuthorizationBoundaryTests
         builder.Services.AddSingleton(Mock.Of<IDocumentFileService>());
         builder.Services.AddSingleton(Mock.Of<IOssService>());
         builder.Services.AddSingleton(Mock.Of<ISearchIndexService>());
-        var questionBankService = new Mock<IQuestionBankImportService>();
-        questionBankService.Setup(x => x.GetImportableListAsync(
-                It.IsAny<int>(),
-                It.IsAny<int>(),
-                It.IsAny<string>()))
-            .ReturnsAsync((new List<ImportableParseItem>(), 0));
-        builder.Services.AddSingleton(questionBankService.Object);
 
-        builder.Services.Configure<InternalAuthOptions>(
-            builder.Configuration.GetSection(InternalAuthOptions.SectionName));
         builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             .AddJwtBearer(options =>
             {
@@ -245,10 +154,7 @@ public class AuthorizationBoundaryTests
                         return Task.CompletedTask;
                     }
                 };
-            })
-            .AddScheme<AuthenticationSchemeOptions, QuestionBankServiceKeyAuthenticationHandler>(
-                DocLibraryAuthenticationConstants.QuestionBankScheme,
-                _ => { });
+            });
         builder.Services.AddAuthorization(options =>
         {
             options.AddPolicy(DocLibraryAuthorizationPolicies.Admin, policy =>
@@ -259,21 +165,12 @@ public class AuthorizationBoundaryTests
                     claim.Type == "role"
                     && string.Equals(claim.Value, "admin", StringComparison.OrdinalIgnoreCase)));
             });
-            options.AddPolicy(DocLibraryAuthorizationPolicies.QuestionBank, policy =>
-            {
-                policy.AddAuthenticationSchemes(
-                    DocLibraryAuthenticationConstants.QuestionBankScheme);
-                policy.RequireAuthenticatedUser();
-            });
         });
 
         var app = builder.Build();
         app.UseAuthentication();
         app.UseAuthorization();
         app.MapDocumentParseEndpoints();
-        app.MapQuestionBankImportEndpoints();
-        app.MapGet("/internal/question-bank/test", () => Results.Ok())
-            .RequireAuthorization(DocLibraryAuthorizationPolicies.QuestionBank);
         app.MapGet("/health", () => Results.Ok());
         app.MapGet("/", () => Results.Ok());
         app.MapFallback(() => Results.Ok());

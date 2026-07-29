@@ -1,32 +1,20 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
-using Microsoft.Extensions.Options;
 
 namespace Ruoyu.Study.DocLibrary.Host.Authentication;
 
 public sealed class IdentityAuthenticationService : IIdentityAuthenticationService
 {
     private readonly HttpClient _httpClient;
-    private readonly IdentityServiceOptions _options;
     private readonly ILogger<IdentityAuthenticationService> _logger;
 
     public IdentityAuthenticationService(
         HttpClient httpClient,
-        IOptions<IdentityServiceOptions> options,
         ILogger<IdentityAuthenticationService> logger)
     {
         _httpClient = httpClient;
-        _options = options.Value;
         _logger = logger;
-
-        if (string.IsNullOrWhiteSpace(_options.AppId) != string.IsNullOrWhiteSpace(_options.AppSecret))
-        {
-            throw new OptionsValidationException(
-                IdentityServiceOptions.SectionName,
-                typeof(IdentityServiceOptions),
-                ["IdentityService AppId and AppSecret must be configured together."]);
-        }
     }
 
     public Task<IdentityTokenExchangeResult> PasswordGrantAsync(
@@ -130,19 +118,11 @@ public sealed class IdentityAuthenticationService : IIdentityAuthenticationServi
         }
     }
 
-    private HttpRequestMessage CreateRequest(HttpMethod method, string path, HttpContent content)
+    private static HttpRequestMessage CreateRequest(HttpMethod method, string path, HttpContent content)
     {
-        var request = new HttpRequestMessage(method, path)
+        return new HttpRequestMessage(method, path)
         {
             Content = content
         };
-
-        if (!string.IsNullOrWhiteSpace(_options.AppId))
-        {
-            request.Headers.TryAddWithoutValidation("X-Admin-AppId", _options.AppId);
-            request.Headers.TryAddWithoutValidation("X-Admin-AppSecret", _options.AppSecret);
-        }
-
-        return request;
     }
 }
