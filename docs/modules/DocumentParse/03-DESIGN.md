@@ -327,7 +327,7 @@ Section 常量：`MinerUOptions.SectionName = "MinerU"`、`FileConversionOptions
 
 ## 8. 安全
 
-DocLibrary 为内网管理后台，所有 `/admin/*` 端点 `AllowAnonymous`，访问控制由部署层网络隔离实现。`MinerU:ApiToken` 通过 `appsettings.json` 或环境变量注入，不在 API 响应中暴露（日志中 SensitiveDataMasker 脱敏）。
+所有 `/admin/*` 解析端点要求 `DocLibraryAdmin` 策略和 Identity `role=admin`。`MinerU:ApiToken` 通过配置注入，不在 API 响应中暴露，并在日志中脱敏。
 
 ## 9. 关键 record / 模型
 

@@ -10,7 +10,7 @@
 | `file_name` | VARCHAR(500) | NOT NULL | 文件名 |
 | `file_path` | VARCHAR(500) | NOT NULL | OSS 存储路径（用户上传的原文件） |
 | `content_type` | VARCHAR(100) | NOT NULL | MIME 类型（如 `application/pdf`） |
-| `created_by` | UUID | NULL | 上传者用户 ID（当前为 null，内网无认证） |
+| `created_by` | UUID | NULL | 上传者 Identity account ID；JWT `sub` 缺失或非 UUID 时为 null |
 | `subject` | VARCHAR(50) | NULL | 学科元数据 |
 | `grade` | VARCHAR(20) | NULL | 年级元数据 |
 | `year` | VARCHAR(10) | NULL | 年份元数据 |
@@ -203,12 +203,12 @@ public record UpdateMetadataRequest
 4. 打开 stream，ext = Path.GetExtension(file.FileName) ?? ".bin"
 5. objectName = $"{Guid.NewGuid()}{ext}"
 6. filePath = await ossService.UploadAsync(stream, objectName, contentType, OssBucket.Documents, "doclibrary-files")
-7. 构建 DocumentFileModel { FileName, FilePath, ContentType, CreatedBy = null }
+7. 从已验证管理员 JWT `sub` 解析 CreatedBy，构建 DocumentFileModel
 8. created = await fileService.CreateAsync(model)
 9. 返回 200 { id, fileName, contentType }
 ```
 
-> `CreatedBy = null` 注释:DocLibrary 是内网管理后台,无应用层认证(2026-07-04 移除 JWT)。`created_by` 字段保留为 null。
+> `created_by` 保持可空，以兼容历史数据和缺少 UUID `sub` 的受信 Token；授权仍由 `role=admin` 独立保证。
 
 ### 4.2 ListDocumentFiles
 

@@ -1,5 +1,26 @@
 # KeyFlows — 关键业务流程
 
+## 0. Identity 管理员登录与 Cookie 会话
+
+```text
+Admin Browser        DocLibrary                 Identity
+     │ POST /admin/auth/login                       │
+     ├────────────────►│                            │
+     │                 │ POST /api/auth/token       │
+     │                 ├───────────────────────────►│
+     │                 │ access + refresh token     │
+     │                 │◄───────────────────────────┤
+     │                 │ OIDC/JWKS 验证 + role=admin│
+     │ HttpOnly Cookie │                            │
+     │◄────────────────┤                            │
+     │ GET/POST /admin/*（Cookie 自动携带）          │
+     ├────────────────►│                            │
+```
+
+Access Token 过期时，浏览器调用 `/admin/auth/refresh`；DocLibrary 使用 HttpOnly Refresh Cookie向 Identity 换取并验证新 Token 对。退出时 best-effort 撤销 Refresh Token并清理 Cookie。
+
+---
+
 ## 1. 文件上传 → MinerU 解析 → 可搜索
 
 ```
@@ -62,3 +83,19 @@
 **降级**：OpenSearch 不可用时返回空结果并记录 LogWarning
 
 ---
+
+## 3. QuestionBank 只读拉取
+
+```text
+QuestionBank                    DocLibrary
+     │ GET /internal/question-bank/document-parses
+     ├─────────────────────────►│ 仅返回 parsed parse
+     │ GET .../{parseId}/blocks │
+     ├─────────────────────────►│
+     │ GET .../images/{imageId} │
+     ├─────────────────────────►│
+     │                          │
+     │ 自身事务：拆题入库 + source parseId 唯一记录
+```
+
+三个请求都要求服务密钥。DocLibrary 不接收导入状态写回，同一 parse 可重复查询；QuestionBank 在自己的数据库中保证幂等。

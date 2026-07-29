@@ -1,122 +1,131 @@
 # Verification Guide
 
-How to verify `ruoyu.doclibrary` is running correctly.
+## 前置条件
 
-## Health Check
+- DocLibrary：`http://localhost:5012`
+- Identity：`http://localhost:5002`
+- Identity 已通过 `AdminBootstrap` 植入管理员
+- 管理员密码来自 Identity 部署环境的 `ADMIN_BOOTSTRAP_PASSWORD`
+- DocLibrary 已配置 `IdentityService:Authority`
+- internal API 已配置 `InternalAuth:QuestionBankKey`
 
-```bash
-curl http://localhost:5012/health
-```
+不得把真实密码、Token、Cookie、AppSecret 或服务密钥提交到仓库或粘贴到测试报告。
 
-Expected response:
-
-```json
-{ "status": "healthy", "timestamp": "..." }
-```
-
-## Upload Document File
+## 匿名入口
 
 ```bash
-curl -X POST http://localhost:5012/admin/document-files/upload \
+curl -i http://localhost:5012/
+curl -i http://localhost:5012/health
+```
+
+预期均非 401。健康检查返回 200。
+
+## 未登录管理 API
+
+```bash
+curl -i http://localhost:5012/admin/document-files
+```
+
+预期：401。
+
+## 管理员登录
+
+```bash
+curl -i -X POST http://localhost:5012/admin/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"admin","password":"<ADMIN_BOOTSTRAP_PASSWORD>"}' \
+  -c doclibrary.cookies
+```
+
+预期：200；响应体不含 `accessToken` 或 `refreshToken`；`Set-Cookie` 包含 HttpOnly 的 `doclibraryAccessToken` 和 `doclibraryRefreshToken`。
+
+用户名来自 Identity `AdminBootstrap:Username` 配置，不应由 DocLibrary 前端硬编码。
+
+## 错误密码与普通账户
+
+```bash
+curl -i -X POST http://localhost:5012/admin/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"admin","password":"wrong-password"}'
+```
+
+预期：401，统一错误消息，不设置认证 Cookie。
+
+使用正确的普通 Identity 账户密码重复调用，预期：403，不设置认证 Cookie。
+
+## 会话与管理操作
+
+```bash
+curl -i http://localhost:5012/admin/auth/session -b doclibrary.cookies
+curl -i http://localhost:5012/admin/document-files -b doclibrary.cookies
+```
+
+预期：200，session 的 `roles` 包含 `admin`，响应不包含 Token。
+
+上传、解析、元数据、删除、搜索和导出请求都必须携带 Cookie。例如：
+
+```bash
+curl -i -X POST http://localhost:5012/admin/document-files/upload \
+  -b doclibrary.cookies \
   -F "file=@test.pdf"
 ```
 
-Required form field: `file`（multipart/form-data）。元数据（`subject`/`grade`/`year`）不在上传时填写，需通过 `PUT /admin/document-files/{id}/metadata` 后续设置，或在 MinerU 解析完成后由 LLM 自动填充。
-
-Supported file types: PDF, Word (.doc/.docx), PowerPoint (.ppt/.pptx). Max size: 200 MB.
-
-Expected response:
-
-```json
-{
-  "success": true,
-  "data": {
-    "fileId": "...",
-    "fileName": "test.pdf",
-    "status": "uploaded"
-  }
-}
-```
-
-## List Document Files
+## 刷新
 
 ```bash
-curl http://localhost:5012/admin/document-files
+curl -i -X POST http://localhost:5012/admin/auth/refresh \
+  -b doclibrary.cookies \
+  -c doclibrary.cookies
 ```
 
-Query parameters: `page`, `pageSize`, `status`, `subject`, `grade`, `year`, `search`.
+预期：200，轮换两个 Cookie，响应体不含 Token。无效 Refresh Cookie返回 401 并清除认证 Cookie。
 
-With filters:
+## 登出
 
 ```bash
-curl "http://localhost:5012/admin/document-files?subject=English&grade=G10&page=1&pageSize=10"
+curl -i -X POST http://localhost:5012/admin/auth/logout \
+  -b doclibrary.cookies \
+  -c doclibrary.cookies
+
+curl -i http://localhost:5012/admin/document-files -b doclibrary.cookies
 ```
 
-## Get Document File Detail
+预期：登出返回 200；后续管理请求返回 401。
 
-Replace `{id}` with the `fileId` from upload response:
+## QuestionBank 只读接口
 
 ```bash
-curl http://localhost:5012/admin/document-files/{id}
+curl -i http://localhost:5012/internal/question-bank/document-parses \
+  -H "X-DocLibrary-Service-Key: <QUESTIONBANK_SERVICE_KEY>"
 ```
 
-## Trigger MinerU Parse
+预期：正确密钥返回 200；缺少或错误密钥返回 401。
+
+其他接口：
 
 ```bash
-curl -X POST http://localhost:5012/admin/document-files/{id}/parse
+curl -i "http://localhost:5012/internal/question-bank/document-parses/{parseId}/blocks?page=1&pageSize=50" \
+  -H "X-DocLibrary-Service-Key: <QUESTIONBANK_SERVICE_KEY>"
+
+curl -i "http://localhost:5012/internal/question-bank/images/{imageId}" \
+  -H "X-DocLibrary-Service-Key: <QUESTIONBANK_SERVICE_KEY>"
 ```
 
-## Check Parse Status
+不存在任何 QuestionBank 导入状态写回接口；旧 `/admin/document-parses/importable` 和 `POST .../import-status` 不应再映射。
 
-Replace `{parseId}` with the parse ID returned from parse trigger:
+## 自动化验证
 
 ```bash
-curl http://localhost:5012/admin/document-parses/{parseId}
+cd src/services/ruoyu.doclibrary
+dotnet test src/Tests/Ruoyu.Study.DocLibrary.Tests/Ruoyu.Study.DocLibrary.Tests.csproj --configuration Release
+dotnet build src/Ruoyu.Study.DocLibrary.sln --configuration Release
+
+cd frontend
+npm run build
 ```
 
-Parse status flow: `pending` -> `parsing` -> `parsed` (or `failed`).
-
-## Update Document File Metadata
+完整仓库快速验证：
 
 ```bash
-curl -X PUT http://localhost:5012/admin/document-files/{id}/metadata \
-  -H "Content-Type: application/json" \
-  -d '{"subject":"English","grade":"G11","year":"2025"}'
-```
-
-## Delete Document File
-
-```bash
-curl -X DELETE http://localhost:5012/admin/document-files/{id}
-```
-
-## Search Test Endpoint
-
-Requires OpenSearch to be available:
-
-```bash
-curl "http://localhost:5012/admin/documents/search?query=algebra&pageSize=5"
-```
-
-With filters:
-
-```bash
-curl "http://localhost:5012/admin/documents/search?query=algebra&subject=English&grade=G10&pageSize=5"
-```
-
-Query parameters: `query` (required), `phrase` (boolean, default false), `pageSize` (1-100, default 20), `pageToken` (optional cursor), `subject`, `grade`, `year`, `documentTitle` (optional filters).
-
-## Run Unit Tests
-
-From `src/services/ruoyu.doclibrary/` directory:
-
-```bash
-dotnet test src/Tests/Ruoyu.Study.DocLibrary.Tests
-```
-
-Filter by module:
-
-```bash
-dotnet test src/Tests/Ruoyu.Study.DocLibrary.Tests --filter "FullyQualifiedName~DocumentFileService"
-dotnet test src/Tests/Ruoyu.Study.DocLibrary.Tests --filter "FullyQualifiedName~SearchDomainService"
+./tests/integration/scripts/pre-commit.sh --skip-docker --skip-e2e
 ```

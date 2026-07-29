@@ -14,7 +14,8 @@
 | FR-04 | 文档元数据分析：MinerU 解析完成后，文档缺 `subject`/`grade`/`year` 时由 LLM best-effort 自动填充 | [DocumentMetadataAnalysis](../modules/DocumentMetadataAnalysis/01-FEATURE.md) |
 | FR-05 | 更新文档元数据：通过 `PUT /admin/document-files/{id}/metadata` 修改 `subject`/`grade`/`year`，同步刷新 OpenSearch 索引 | [DocumentSearch](../modules/DocumentSearch/01-FEATURE.md) |
 | FR-06 | 精确搜索：基于 OpenSearch 的关键词匹配，支持 subject/grade/year/documentTitle 过滤；含索引写入（解析完成后自动索引） | [DocumentSearch](../modules/DocumentSearch/01-FEATURE.md) |
-| FR-07 | QuestionBank 拉模式导入：向 QuestionBank 服务暴露解析产出（可导入列表、结构化块、图片、导入状态回写） | [QuestionBankImport](../modules/QuestionBankImport/01-FEATURE.md) |
+| FR-07 | QuestionBank 只读消费：通过独立 internal 路径和服务密钥暴露 parsed parse、结构化块和图片；导入幂等由 QuestionBank 自己负责 | [QuestionBankImport](../modules/QuestionBankImport/01-FEATURE.md) |
+| FR-08 | 管理员认证：使用 Identity bootstrap 管理员登录，所有浏览器管理 API 要求有效 `role=admin`，Token 仅存于 HttpOnly Cookie | [AdminAuthentication](../modules/AdminAuthentication/01-FEATURE.md) |
 
 ## 非功能需求
 
@@ -25,3 +26,5 @@
 | NFR-03 | OpenSearch 索引失败不阻塞解析主流程，仅记日志 |
 | NFR-04 | 数据库使用 PostgreSQL（代码硬编码 `UseNpgsql`） |
 | NFR-05 | 服务单端口：HTTP(5012) |
+| NFR-06 | 管理认证校验 JWT issuer、audience、签名和有效期；普通用户 JWT 必须返回 403 |
+| NFR-07 | SPA、静态文件和健康检查保持匿名，管理 API 与 QuestionBank internal API 使用互不替代的身份 |

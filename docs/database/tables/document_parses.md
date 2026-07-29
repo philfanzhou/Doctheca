@@ -40,4 +40,4 @@
 ## 特殊说明
 
 - **多模型版本并存**：同一个 `document_file_id` 可以同时拥有 `vlm` 和 `pipeline` 两种解析记录，互不影响。重新解析时创建新记录，旧记录保留。
-- 删除 `document_file` 时，所有关联的 `document_parses` 记录通过 CASCADE 自动删除，同时 `document_parse_blocks`、`document_parse_images` 和 `document_parse_imports` 也被 CASCADE 删除
+- 删除 `document_file` 时，所有关联的 `document_parses` 记录通过 CASCADE 自动删除，同时 `document_parse_blocks` 和 `document_parse_images` 也被 CASCADE 删除

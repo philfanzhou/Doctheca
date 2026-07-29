@@ -96,7 +96,7 @@ POST   /admin/document-files/{id}/parse       触发 MinerU 解析
 1. HTTP 层校验 multipart/form-data、file 非空、size ≤ 200MB、ContentType 在白名单
 2. 打开文件流，生成 `objectName = $"{Guid.NewGuid()}{ext}"`
 3. `IOssService.UploadAsync(stream, objectName, contentType, OssBucket.Documents, "doclibrary-files")` → 返回 `filePath`
-4. 构建 `DocumentFileModel`（`CreatedBy = null`）
+4. 从 `HttpContext.User` 的 `sub`/NameIdentifier 解析管理员 UUID，构建 `DocumentFileModel`
 5. `IDocumentFileService.CreateAsync(model)` → Repository 写入 `document_files` 表，回写 `model.Id`
 6. 返回 `{ id, fileName, contentType }`
 
@@ -163,10 +163,11 @@ POST   /admin/document-files/{id}/parse       触发 MinerU 解析
 - **理由**:同一文件可能在 vlm 和 pipeline 两种模式下分别解析，但同一模式下不允许重复触发。避免重复提交 MinerU 任务浪费资源
 - **状态定义**:`DocumentParseStatus.Pending = "pending"`、`DocumentParseStatus.Parsing = "parsing"`
 
-### 5. 无应用层认证
+### 5. 管理员授权
 
-- **理由**:DocLibrary 是内网管理后台，访问控制由部署层网络隔离实现（仅内网可访问 :5012 端口）。2026-07-04 移除 JWT 后 `created_by` 字段保留为 null
-- **注意**:所有 `/admin/*` 端点 `AllowAnonymous`，后续接入审计场景时再恢复 `created_by`
+- `/admin/document-files/*` route group 统一要求 `DocLibraryAdmin` 策略。
+- 策略验证 Identity JWT 并要求 `role=admin`。
+- `created_by` 优先记录 JWT `sub`；历史 null 数据保持兼容。
 
 ## 外部依赖
 

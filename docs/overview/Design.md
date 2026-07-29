@@ -2,101 +2,60 @@
 
 ## 分层架构
 
-```
-┌─────────────────────────────────────────────────┐
-│  Host (Ruoyu.Study.DocLibrary.Host)           │
-│  Program.cs: DI, Kestrel, HTTP                  │
-│  appsettings.json: 配置管理                      │
-└───────────────┬─────────────────────────────────┘
-                │
-┌───────────────▼─────────────────────────────────┐
-│  Service (Ruoyu.Study.DocLibrary.Service)     │
-│  Endpoints/DocumentFileEndpoints.cs             │
-│  Endpoints/DocumentParseEndpoints.cs            │
-│  Endpoints/DocumentSearchEndpoints.cs           │
-│  Endpoints/DocumentExportEndpoints.cs           │
-│  Endpoints/QuestionBankImportEndpoints.cs       │
-│  MinerUFileParseWorker.cs: 后台解析任务          │
-│  MinerUPrecisionClient.cs: MinerU Precision API 客户端（类型已拆分至 MinerU/） │
-│  OpenSearchIndexService.cs: 搜索索引            │
-└───────────────┬─────────────────────────────────┘
-                │
-┌───────────────▼─────────────────────────────────┐
-│  Domain (Ruoyu.Study.DocLibrary.Domain)       │
-│  Services/DocumentFileService.cs: 文件管理       │
-│  Services/DocumentParseService.cs: 解析管理      │
-│  Services/SearchDomainService.cs: 搜索逻辑       │
-│  Services/DocumentAnalysisService.cs: LLM 元数据分析 │
-│  Repositories/: 各仓储接口（每接口一文件）       │
-│  Exceptions/DocLibraryValidationException.cs   │
-│  Models/: 各模型（每模型一文件）                 │
-└───────────────┬─────────────────────────────────┘
-                │
-┌───────────────▼─────────────────────────────────┐
-│  Database (Ruoyu.Study.DocLibrary.Database)   │
-│  Entities/: EF Core Entity                      │
-│  Repositories/: Repository 实现                  │
-│  DocLibraryDbContext.cs: EF DbContext          │
-│  DatabaseInitializer.cs: SQL 初始化              │
-└─────────────────────────────────────────────────┘
+```text
+Host
+  Program.cs: DI / Kestrel / Authentication / Authorization / static SPA
+  Auth configuration and internal service-key policy
+        │
+Service
+  AdminAuthEndpoints / IdentityAuthenticationService / IdentityTokenValidator
+  Document*Endpoints / QuestionBankImportEndpoints
+  MinerU worker / OpenSearch / conversion / analysis
+        │
+Domain
+  document and parse services, repositories, models
+        │
+Database
+  EF Core repositories + SQL DatabaseInitializer
 ```
 
-> **注**: Contract 层（gRPC proto 定义）已于 2026-07 移除。搜索功能迁移至 HTTP 端点 `GET /admin/documents/search`。
-
-## 技术栈
-
-| 组件 | 技术 | 说明 |
-|------|------|------|
-| 框架 | .NET 8 | ASP.NET Core HTTP |
-| 通信 | HTTP REST (JSON) | Admin API + 搜索 |
-| ORM | EF Core 8.0 | Npgsql |
-| 数据库 | PostgreSQL | UseNpgsql |
-| 对象映射 | Mapster 10.0 | Entity ↔ Model 映射 |
-| 文档解析 | MinerU Precision API | 在线解析（含图片输出，Token 认证） |
-| 搜索引擎 | OpenSearch 2.19 (Docker) / OpenSearch.Net 1.8 (NuGet) | 外部全文检索 |
-| LLM | OpenAI 兼容 | 文档元数据（subject/grade/year）分析，best-effort |
-| 测试 | xUnit + Moq + FluentAssertions | 三层测试 |
+技术栈：.NET 8、ASP.NET Core Minimal APIs、EF Core 8/Npgsql、Mapster、OpenSearch.Net、Vue 3.5/TypeScript/Vite/Element Plus。
 
 ## 访问控制架构
 
-### 方案：内网管理后台，无应用层认证
+### 浏览器管理员
 
-DocLibrary 作为内网管理后台运行，**不实现应用层认证**：
+- Identity password grant 验证用户名和密码。
+- Identity bootstrap 管理员在密码登录时自动获得 `role=admin`。
+- DocLibrary 在登录和刷新时使用 Identity OIDC/JWKS 完整验证 Access Token。
+- Access/Refresh Token 仅存放在 HttpOnly、SameSite=Strict Cookie。
+- `DocLibraryAdmin` 策略保护管理 route group，要求有效 JWT 和 `role=admin`。
+- 静态文件和 SPA fallback 保持匿名，避免登录死锁。
 
-- 所有 `/admin/*` 端点 `AllowAnonymous`，直接接受请求
-- 后端无 JWT Bearer 中间件、无 Authentication / Authorization 中间件、无 Identity 集成
-- 前端无登录页、无 Token 存储、无 axios 拦截器
-- 访问控制由**部署层网络隔离**实现：仅内网可访问 `:5012` 端口
+### 内部 QuestionBank
 
-### 历史背景
+- 三个只读 GET 位于 `/internal/question-bank/*`。
+- `QuestionBankService` 策略验证专用服务密钥。
+- 服务密钥与管理员 JWT 完全隔离。
+- DocLibrary 不承担 QuestionBank 导入幂等状态。
 
-原实现通过 JWT Bearer Token 调用 QuantumZhou.Identity 进行认证。考虑到 DocLibrary 仅为内网管理页面，无高并发与外部访问需求，应用层认证增加复杂度而无实际收益，已于 2026-07-04 移除。`AuthEndpoints.cs`、`LoginPage.vue`、`authService.ts` 已删除。
-
-## 关键设计决策
+## 关键决策
 
 | 决策 | 理由 |
 |------|------|
-| 异步解析（Worker 模式） | MinerU 解析耗时，避免阻塞上传请求 |
-| 原生 SQL 建表（OSS 可选 LocalFile） | OSS 支持 LocalFile / S3 切换（`USE_LOCAL_OSS` 环境变量控制），无需对象存储即可本地运行 |
-| 原生 SQL 建表（非 Migration） | 简化部署，避免 Migration 版本冲突 |
-| OSS 支持 LocalFile / S3 切换 | 环境变量 `USE_LOCAL_OSS` 控制 |
-| 移除 Identity 鉴权，改为内网部署隔离 | 内网管理后台，应用层认证增加复杂度无实际收益 |
-| MinerU Precision API 在线解析 | 含图片输出，Token 认证，每日 1000 页免费额度 |
-| 移除 gRPC，统一使用 HTTP REST | DocLibrary 为低并发管理服务，gRPC 无性能优势且增加维护成本；无外部 gRPC 消费者 |
-| LLM 仅用于元数据分析 | 解析完成后对缺失的 subject/grade/year 做 best-effort 自动填充，不影响主流程 |
+| 恢复应用层认证并强制 admin 角色 | 内网隔离不能阻止任何可达调用者读写管理数据 |
+| HttpOnly Cookie 而非 localStorage | 前端 JavaScript 不接触 Token，降低 XSS Token窃取风险 |
+| Refresh Token轮换与登出撤销 | 保持会话体验并在退出后关闭刷新能力 |
+| 登录阶段再次验证 JWT | 不只信任下游 JSON roles，确保签名和标准 Claim有效 |
+| 静态 SPA 匿名 | 未登录用户必须先加载登录页 |
+| 管理与内部路由分离 | URL 与权限边界一致，避免给服务调用套管理员身份 |
+| QuestionBank 只读、幂等归 QuestionBank | 避免跨两个数据库的非原子状态双写 |
+| 不自动删除遗留 import 表 | 数据删除必须由单独、显式、可审查的运维变更执行 |
+| 保持单端口单镜像 | 延续自包含前端、静态托管和现有 Docker 部署 |
 
-##### 关键源文件
+## 关键文档
 
-| 文件 | 用途 |
-|------|------|
-| [Program.cs](../../src/Host/Program.cs) | 服务启动配置（无鉴权中间件） |
-| [DocumentFileEndpoints.cs](../../src/Service/Endpoints/DocumentFileEndpoints.cs) | 文件上传/列表/删除/元数据更新 HTTP API |
-| [DocumentParseEndpoints.cs](../../src/Service/Endpoints/DocumentParseEndpoints.cs) | 解析触发/状态查询/删除 HTTP API |
-| [DocumentSearchEndpoints.cs](../../src/Service/Endpoints/DocumentSearchEndpoints.cs) | 精确搜索 HTTP API |
-| [DocumentExportEndpoints.cs](../../src/Service/Endpoints/DocumentExportEndpoints.cs) | 导出 HTTP API |
-| [QuestionBankImportEndpoints.cs](../../src/Service/Endpoints/QuestionBankImportEndpoints.cs) | QuestionBank 拉模式导入 HTTP API |
-| [MinerUFileParseWorker.cs](../../src/Service/MinerUFileParseWorker.cs) | 后台解析 Worker（MinerU 链路） |
-| [MinerUPrecisionClient.cs](../../src/Service/MinerUPrecisionClient.cs) | MinerU Precision API 客户端（含图片；MinerUParseResult / MinerUOptions / ImageMetadata 位于 Service/MinerU/） |
-| [SearchDomainService.cs](../../src/Domain/Services/SearchDomainService.cs) | 搜索领域逻辑 |
-| [OpenSearchIndexService.cs](../../src/Service/OpenSearchIndexService.cs) | OpenSearch 索引服务（基于 parse_blocks） |
-| [DatabaseInitializer.cs](../../src/Database/DatabaseInitializer.cs) | 表初始化 |
+- [管理员认证规格](../modules/AdminAuthentication/02-SPEC.md)
+- [QuestionBank 只读接口规格](../modules/QuestionBankImport/02-SPEC.md)
+- [部署说明](../development/Deployment.md)
+- [验证说明](../development/verification.md)

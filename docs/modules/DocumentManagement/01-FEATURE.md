@@ -25,7 +25,7 @@ DocLibrary 是内网管理后台，文档文件是 MinerU 解析流程的入口�
 - 最大文件大小:200MB
 - 文件上传至 OSS bucket `Documents`，object name 为 `{Guid}{ext}`
 - 返回文件 ID、文件名、MIME 类型
-- 上传时 `created_by` 为 null（内网管理后台无应用层认证）
+- 上传时从已验证管理员 JWT 的 `sub` 写入 `created_by`；缺失或非 UUID 时保持 null，不影响上传
 
 ### FR-02:分页列出文档文件
 - `GET /admin/document-files`
@@ -86,7 +86,7 @@ DocLibrary 是内网管理后台，文档文件是 MinerU 解析流程的入口�
 | NFR-01 | 文件本体存储于 OSS（S3/MinIO），数据库仅存元数据与路径 |
 | NFR-02 | 删除联动 OSS/OpenSearch 为 best-effort，单条失败不阻塞整体删除 |
 | NFR-03 | 列表的 parseStatus 过滤在内存中完成（先拉取数据再过滤），非 DB 查询 |
-| NFR-04 | 无应用层认证（内网管理后台，访问控制由部署层网络隔离实现） |
+| NFR-04 | 所有文档管理端点要求 `DocLibraryAdmin` 策略和 `role=admin` |
 | NFR-05 | 图片 presigned URL 有效期 3600 秒 |
 | NFR-06 | 上传使用 `multipart/form-data`，form file 字段名为 `file` |
 

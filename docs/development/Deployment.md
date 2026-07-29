@@ -32,6 +32,10 @@
   - `Oss:*`
   - `OpenSearch:Url`
   - `Loki:Uri`
+- `config/ruoyu/service-endpoints.json`
+  - `IdentityService:Authority`
+  - `IdentityService:Audience`
+  - `IdentityService:RequireHttpsMetadata`
 - `config/ruoyu/serilog.json`
   - `Serilog:MinimumLevel:*`
 
@@ -47,6 +51,10 @@
 | `CONSUL_CACHE_DIR` | `./data/consul` | Consul 本地缓存目录 |
 | `USE_LOCAL_OSS` | （未设置） | 设为 `1` 使用本地文件系统存储代替 S3 |
 | `OSS_LOCAL_PATH` | `data/oss` | 本地文件存储目录（仅在 `USE_LOCAL_OSS=1` 时使用） |
+| `IdentityService__AppId` | （空） | 可选；已注册 DocLibrary Identity 应用的 AppId |
+| `IdentityService__AppSecret` | （空） | 可选；与 AppId 同时配置，不得写入日志或源码 |
+| `Authentication__CookieSecure` | `false` | 纯 HTTP 内网兼容值；HTTPS 生产部署必须设为 `true` |
+| `InternalAuth__QuestionBankKey` | 无默认值 | QuestionBank 只读 internal API 服务密钥；缺失时接口 fail-closed |
 
 ## 下游依赖
 
@@ -57,8 +65,43 @@
 | MinIO / SeaweedFS | 8333 | 对象存储（S3 兼容） |
 | Consul | 8500 | 共享配置读取与服务注册 |
 | Loki | 3100 | 日志聚合（通过 Consul `Loki:Uri` 配置） |
+| QuantumZhou.Identity | 5002 | 管理员登录、Token刷新/撤销、OIDC discovery/JWKS |
 
-> **不依赖 QuantumZhou.Identity**：内网管理后台，访问控制由部署层网络隔离实现。
+QuestionBank 通过 `X-DocLibrary-Service-Key` 调用三个 `/internal/question-bank/*` GET。DocLibrary 与 QuestionBank 必须配置相同的高熵服务密钥；密钥不得进入前端构建产物。
+
+## 管理员认证配置
+
+最小配置：
+
+```json
+{
+  "IdentityService": {
+    "Authority": "http://ruoyu-identity:5002",
+    "Issuer": "QuantumZhou.Identity",
+    "Audience": "QuantumZhou.microservices",
+    "RequireHttpsMetadata": false
+  },
+  "Authentication": {
+    "CookieSecure": false
+  },
+  "InternalAuth": {
+    "QuestionBankKey": "<deployment secret>"
+  }
+}
+```
+
+Identity `POST /api/auth/token` 支持不带 AppId/AppSecret 的密码登录，bootstrap 管理员角色注入不依赖 portal callback。因此 DocLibrary 接入不要求修改 Identity `AdminBootstrap`。如部署要求为登录请求记录应用归属，可单独注册 DocLibrary App并同时配置 AppId/AppSecret。
+
+生产环境必须在浏览器与 DocLibrary 之间使用 HTTPS，并设置 `Authentication:CookieSecure=true`。`RequireHttpsMetadata=false` 只适用于容器内 HTTP Authority 或本地开发。
+
+Cookie 名称和路径：
+
+| Cookie | Path | 用途 |
+|--------|------|------|
+| `doclibraryAccessToken` | `/admin` | 管理 API JWT |
+| `doclibraryRefreshToken` | `/admin/auth` | 刷新与登出 |
+
+两个 Cookie 均为 HttpOnly、SameSite=Strict，不向前端 JavaScript 暴露。
 
 ## 日志配置
 

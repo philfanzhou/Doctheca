@@ -56,7 +56,7 @@ HTTP 响应消息使用中文（面向终端用户），但代码内部异常消
 
 | 值 | 语义 |
 |----|------|
-| `DocumentFileModel.CreatedBy = null` | 无应用层认证（内网管理后台） |
+| `DocumentFileModel.CreatedBy = null` | 历史数据，或已验证 Token 的 `sub` 不是 UUID |
 | `UpdateMetadataRequest.Subject = null` | 不修改该字段 |
 | `UpdateMetadataRequest.Subject = ""` | 清空该字段（写入空串） |
 | `DocumentFileModel.Subject = null` | 未设置学科元数据 |

@@ -10,13 +10,12 @@
 | `document_parses` | 解析记录表 | 本服务独写 |
 | `document_parse_blocks` | 解析 block 表 | 本服务独写 |
 | `document_parse_images` | 解析图片表 | 本服务独写 |
-| `document_parse_imports` | 导入状态表 | 本服务独写（由 QuestionBank 服务通过 API 触发写入） |
 
 ## 本服务引用的外部数据（只读引用）
 
 | 外部数据 | 来源 | 读取方式 | 说明 |
 |---------|------|---------|------|
-| （无跨服务数据引用） | — | — | DocLibrary 不读取其他 Ruoyu 微服务的数据 |
+| Identity JWT | QuantumZhou.Identity | OIDC/JWKS + HTTP token API | 只消费管理员身份，不持久化 Identity 账户 |
 
 ## 外部系统依赖
 
@@ -29,5 +28,6 @@
 ## 双写禁区
 
 - 本服务不写入任何其他 Ruoyu 微服务的数据库
-- 其他服务不应直接写入本服务的 5 张表
+- 其他服务不应直接写入本服务的 4 张业务表
+- QuestionBank 的导入状态和题目 ID 由 QuestionBank 自己持久化，DocLibrary 不保存副本
 - OSS 文件路径格式由本服务内部控制，其他服务不应直接操作

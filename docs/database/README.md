@@ -10,7 +10,8 @@
 | `document_parses` | 解析记录表（MinerU 管线） | [tables/document_parses.md](tables/document_parses.md) |
 | `document_parse_blocks` | 解析 block 表（MinerU 管线） | [tables/document_parse_blocks.md](tables/document_parse_blocks.md) |
 | `document_parse_images` | 解析图片表（MinerU 管线） | [tables/document_parse_images.md](tables/document_parse_images.md) |
-| `document_parse_imports` | 导入状态表（QuestionBank 拉模式） | [tables/document_parse_imports.md](tables/document_parse_imports.md) |
+
+遗留 `document_parse_imports` 表已退出运行时模型；升级不自动删除已有表，兼容说明见 [tables/document_parse_imports.md](tables/document_parse_imports.md)。
 
 ## 实体关系
 

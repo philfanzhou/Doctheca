@@ -1,47 +1,12 @@
-# document_parse_imports — 导入状态表
+# document_parse_imports — 遗留兼容表
 
-> 本文件是 `document_parse_imports` 表的唯一事实源。
+`document_parse_imports` 曾用于由 QuestionBank 向 DocLibrary 回写导入状态。该设计无法与 QuestionBank 题目写入处于同一数据库事务，不能可靠防止重复导入，并造成跨服务数据所有权混乱。
 
-## 设计背景
+当前设计已将导入幂等责任移交 QuestionBank：
 
-`document_parse_imports` 表记录 QuestionBank 服务对某个 parse 的导入状态，用于防重复处理与状态追踪。由 [QuestionBankImport 模块](../../modules/QuestionBankImport/01-FEATURE.md) 引入。
+- DocLibrary 运行时不再映射、查询、创建或更新此表。
+- `DatabaseInitializer` 不再创建此表。
+- 升级过程不会自动执行 `DROP TABLE`，已有环境中的表和数据保持不动。
+- 如需删除遗留表，必须通过单独的备份、影响检查和显式 SQL 变更完成。
 
-## 字段清单
-
-| 字段名 | 类型 | 约束 | 默认值 | 说明 |
-|--------|------|------|--------|------|
-| `id` | `UUID` | PRIMARY KEY | | 主键 |
-| `parse_id` | `UUID` | NOT NULL, FK → `document_parses(id)` ON DELETE CASCADE, UNIQUE | | 关联 parse（一个 parse 至多一条导入记录） |
-| `imported_by` | `UUID` | NOT NULL | | 导入操作者（QuestionBank 服务账号 ID） |
-| `status` | `VARCHAR(20)` | NOT NULL | | `imported` / `failed` |
-| `note` | `TEXT` | NULL | | 备注（如失败原因、导入题目数等） |
-| `imported_question_ids` | `TEXT` | NULL | | 导入的 QuestionBank 题目 ID 列表（JSON 数组字符串） |
-| `created_at` | `TIMESTAMP WITH TIME ZONE` | NOT NULL | | 创建时间 |
-| `updated_at` | `TIMESTAMP WITH TIME ZONE` | NULL | | 最后更新时间 |
-
-## 索引
-
-| 索引名 | 列 | 说明 |
-|--------|-----|------|
-| `PK_document_parse_imports` | `id` | 主键 |
-| `IX_document_parse_imports_parse_id` | `parse_id` | UNIQUE，一个 parse 至多一条导入记录 |
-
-## 外键
-
-- `parse_id` → `document_parses(id)` ON DELETE CASCADE（parse 删除时联动清除导入记录）
-
-## 状态流转
-
-```
-首次写入 → 插入 status=imported 或 status=failed
-重复写入 → UPDATE 已有记录的 status / note / imported_question_ids / updated_at
-  ├─ imported → imported：拒绝（422 DOCLIBRARY_PARSE_ALREADY_IMPORTED）
-  ├─ imported → failed：允许
-  └─ failed → imported / failed：允许
-```
-
-## 特殊说明
-
-- **UNIQUE 约束保证并发安全**：`parse_id` 上有 UNIQUE 约束，并发写入时捕获 UniqueViolation 后转为 UPDATE。
-- **ON DELETE CASCADE**：删除 `document_parse` 记录时，关联的导入记录自动清除。
-- **只写接口**：本表仅通过 `POST /admin/document-parses/{parseId}/import-status` 写入，由 QuestionBank 服务调用。
+历史字段仅用于识别遗留数据：`id`、`parse_id`、`imported_by`、`status`、`note`、`imported_question_ids`、`created_at`、`updated_at`。

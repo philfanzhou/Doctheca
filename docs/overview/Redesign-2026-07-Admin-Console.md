@@ -8,7 +8,7 @@
 
 依据仓库根目录 `prototype/admin-console-redesign.html` 设计样稿，对 DocLibrary 管理前端进行视觉与交互层的高保真还原。本次重设计**仅做展示层还原**，不修改任何业务逻辑、API 契约、状态管理与数据流（铁律：业务逻辑零改动）。
 
-样稿同时包含 Identity（身份中心）与 DocLibrary（文档库）两套界面，但**本次落地范围仅限 DocLibrary**——目标工程为 `src/services/ruoyu.doclibrary/frontend/`，不涉及 Identity 服务。样稿中 Identity 部分留给后续单独评估。
+样稿同时包含 Identity（身份中心）与 DocLibrary（文档库）两套界面，但界面落地范围仅限 DocLibrary。DocLibrary 管理端通过后端认证代理使用 Identity bootstrap 管理员登录，不复用样稿中的 Identity 管理页面。
 
 ## 设计规格清单（提炼自样稿）
 
@@ -52,7 +52,7 @@ Sidebar（深色 ink 渐变）
     - 概览   (grid)
     - 文档管理 (file)
     - 检索测试 (search)
-  - Sidebar-foot：admin chip（avatar + name + role）—— 本工程无 Identity，仍展示静态「admin / 文档库管理员」
+  - Sidebar-foot：登录后展示当前 Identity 管理员名称、角色与退出入口
 Topbar
   - 面包屑：文档库 › 当前页
   - env-tag「内网环境」+ 实时时钟（每秒更新）
@@ -117,8 +117,8 @@ Main（.view，200ms 模糊过渡）
 | 学科/年级/年份元数据卡片（pgDocDetail 右上） | API `DocumentFile` 无 `subject/grade/year` 字段；为避免静态皮，**省略该卡片**。后端若后续扩展 `DocumentMetadata` 模块，再补回。 |
 | 下游流向卡片（pgDocDetail 右下） | OpenSearch 同步状态 / QuestionBank 导入按钮均无对应 API；**省略**。 |
 | 题库导入 toast 演示 | 样稿为 `App.toastDemo(...)` mock；无对应 API，**不实现**。 |
-| 系统切换器 sys-switch | 本工程无 Identity；**不展示**。 |
-| Identity 全部页面 | 不在范围；**不实现**。 |
+| 系统切换器 sys-switch | DocLibrary 只消费 Identity 认证，不承载 Identity 管理 UI；**不展示**。 |
+| Identity 管理页面 | 不在范围；仅实现 DocLibrary 登录页和 Cookie 会话。 |
 
 ### 样稿没有但工程保留
 

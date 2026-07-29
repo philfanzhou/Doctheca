@@ -33,14 +33,17 @@ DocLibrary Admin 是文档库的管理后台前端,供本地管理员上传文�
 
 ## 3. 访问控制
 
-DocLibrary 为**内网管理后台**,不实现应用层认证:
+DocLibrary 管理后台使用 QuantumZhou.Identity bootstrap 管理员账户登录：
 
-- 部署层网络隔离:仅内网可访问 `:5012` 端口与 `/admin/*` 路径
-- 前端无登录页、无 Token 存储、无 axios 拦截器
-- 后端无 JWT Bearer、无 Authentication / Authorization 中间件、无 Identity 集成
-- 所有 `/admin/*` 端点 `AllowAnonymous`,直接接受请求
+- 应用启动先调用 `GET /admin/auth/session`；有效管理员会话加载管理界面，否则显示登录页。
+- 登录页调用 `POST /admin/auth/login`，不预填或硬编码管理员用户名/密码。
+- Access Token 与 Refresh Token 仅由后端保存到 HttpOnly、SameSite=Strict Cookie；前端不读取 Token，不写入 localStorage/sessionStorage。
+- 共享 Axios 客户端遇到管理 API 401 时只自动调用一次 `/admin/auth/refresh`，并发请求共享同一 refresh Promise；刷新失败回到登录页。
+- 403 显示“无管理员权限”，不自动重试。
+- 退出调用 `/admin/auth/logout`，后端撤销 Refresh Token并清除 Cookie，前端立即回到登录页。
+- 静态文件与登录页面匿名加载，避免“未登录无法加载登录页”的死锁。
 
-> **架构约束**:不再调用 QuantumZhou.Identity。原 AuthEndpoints / LoginPage / authService 已删除。
+> 后端在登录、刷新和每次管理 API 请求中验证 Identity JWT；只有 `role=admin` 可以建立并使用管理会话。
 
 ## 4. 页面结构
 
@@ -187,13 +190,15 @@ DocLibrary 为**内网管理后台**,不实现应用层认证:
 
 ## 6. API 客户端
 
-> **业务逻辑零改动**:API 端点、请求/响应结构、参数顺序与 ADR-001 时保持一致。
+管理业务端点和参数保持不变；所有模块复用带 Cookie 会话与 401/403 处理的共享 Axios 客户端。
 
 客户端按领域拆分为多个模块,`services/docApi.ts` 继续作为兼容 facade 导出 `createDocApiClient` 与所有类型:
 
 | 文件 | 职责 |
 |------|------|
 | `services/types.ts` | 共享接口类型(`SearchResult` / `DocumentFile` / `DocumentFileDetail` / `DocumentParse` / `ApiResponse` / `DocPagedResponse`) |
+| `services/httpClient.ts` | 共享 Axios 实例、单次刷新、401 重试和 403 通知 |
+| `services/authApi.ts` | login / refresh / logout / session，会话状态不含 Token |
 | `services/documentApi.ts` | 文档文件相关:上传、列表、详情、解析、删除、导出 Markdown/HTML |
 | `services/parseApi.ts` | 解析记录相关:列表、删除、导出 Markdown/HTML |
 | `services/searchApi.ts` | 检索测试:searchTest |
@@ -203,6 +208,10 @@ DocLibrary 为**内网管理后台**,不实现应用层认证:
 
 | 方法 | 端点 | 说明 |
 |------|------|------|
+| `login` | `POST /admin/auth/login` | Identity 管理员账号密码登录 |
+| `getSession` | `GET /admin/auth/session` | 获取当前管理员会话 |
+| `refreshSession` | `POST /admin/auth/refresh` | 使用 HttpOnly Refresh Cookie轮换会话 |
+| `logout` | `POST /admin/auth/logout` | 撤销刷新令牌并清理 Cookie |
 | `uploadDocumentFile` | `POST /admin/document-files/upload` | 上传文件(multipart) |
 | `listDocumentFiles` | `GET /admin/document-files` | 文件列表(分页+parseStatus+fileName筛选) |
 | `getDocumentFile` | `GET /admin/document-files/:id` | 文件详情(含 parses + images) |
@@ -218,11 +227,19 @@ DocLibrary 为**内网管理后台**,不实现应用层认证:
 
 前端**无单元测试框架**(package.json 未配置 vitest/jest)。验证方式:
 1. `npm run build`(vue-tsc 类型检查 + vite 构建)必须通过,零错误零警告
-2. 人工验证页面功能
+2. 人工验证匿名加载、错误密码、普通账户拒绝、管理员登录、Cookie 自动刷新、401/403 处理和退出
 
 后端 UT 不受前端重构影响(前端重构不改变 API 契约)。
 
 ## 8. 重构记录
+
+### 2026-07-29: Identity 管理员认证设计
+
+- 管理后台恢复应用层认证，只有 Identity JWT 中包含 `role=admin` 的账户可用。
+- 认证材料改为 Access/Refresh HttpOnly Cookie，前端不持有 Token。
+- 新增登录页、启动会话检查、单次刷新、退出和 401/403 处理。
+- 静态文件和 SPA fallback 保持匿名；所有管理业务 API 要求管理员策略。
+- QuestionBank 接口移出 `/admin`，改为独立的只读 internal API，不复用浏览器管理员会话。
 
 ### 2026-07-22: 前端大文件重构与问题修复
 

@@ -83,4 +83,4 @@ HTTP 响应消息为中文（面向终端用户），错误码为英文常量：
 
 - 使用 `MapGroup` 分组：`/admin/document-files`、`/admin/document-parses`
 - 路径参数约束：`{id:guid}`、`{parseId:guid}`
-- 无应用层认证（内网管理后台，访问控制由部署层网络隔离实现）
+- 导出端点要求 `DocLibraryAdmin` 策略和 Identity `role=admin`

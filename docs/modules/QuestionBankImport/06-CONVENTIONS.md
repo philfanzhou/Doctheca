@@ -1,40 +1,22 @@
-# QuestionBankImport — 命名与风格约定
+# 06-CONVENTIONS — QuestionBank 只读解析数据接口约定
 
-## 命名约定
+## 路由与认证
 
-| 类型 | 约定 | 示例 |
-|------|------|------|
-| 端点类 | 静态类，PascalCase + Endpoints 后缀 | `QuestionBankImportEndpoints` |
-| 端点方法 | 私有静态，PascalCase | `ListImportableParses` |
-| Record（数据传输） | PascalCase | `ImportableParseItem`、`ParseBlockItem`、`ParseImageBlob` |
-| 状态常量 | PascalCase | `ParseImportStatus.Imported`、`ParseImportStatus.Failed` |
+- 服务间路径统一使用 `/internal/question-bank`。
+- 服务密钥请求头固定为 `X-DocLibrary-Service-Key`。
+- 配置键固定为 `InternalAuth:QuestionBankKey`。
+- 管理员 JWT 与服务密钥不能互相替代。
 
-## 日志约定
+## 数据所有权
 
-- 关键操作记录结构化日志
-- 图片下载失败：`LogError`
-- 列表查询：无额外日志（高频操作）
+- DocLibrary 拥有文档、parse、block 和 parse image。
+- QuestionBank 拥有题目、拆题结果和导入幂等状态。
+- DocLibrary 不保存 QuestionBank 题目 ID或导入状态。
+- QuestionBank 使用 DocLibrary `parseId` 作为外部来源标识，不对 DocLibrary 数据库建外键。
 
-关键日志消息：
-```
-"Failed to download image {ImageId} from OSS path {ImagePath}"
-"Block {BlockId} has image_id {ImageId} but image record not found (data inconsistency)"
-```
+## HTTP
 
-## 错误处理约定
-
-- `KeyNotFoundException` → 404（parse/image 不存在）
-- `InvalidOperationException` → 422（状态不满足 / 重复导入）
-- `ArgumentException` → 400（参数非法）
-- OSS 异常向上抛 → 500
-
-## blockData JSON 解析约定
-
-- 使用 `JsonSerializer.Deserialize<JsonElement>` 反序列化
-- 非法 JSON → 返回 null，记录 Warning 日志
-- 空字符串 / "{}" → 正常返回空对象
-
-## Presigned URL 约定
-
-- 过期时间：3600 秒（1 小时）
-- 并行生成：使用 `Task.WhenAll` 批量生成
+- 服务间接口只使用 GET。
+- 错误码继续使用 `DOCLIBRARY_` 前缀。
+- 分页响应保持 `{success,data,total,page,pageSize,totalPages}`。
+- 服务密钥缺失或错误统一返回 401，不区分具体原因。
