@@ -1,6 +1,10 @@
 using System.Data.Common;
+using System.Security.Claims;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using Microsoft.IdentityModel.Protocols;
+using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 using Ruoyu.Study.Common.Ai;
 using Ruoyu.Study.Common.Oss;
 using Ruoyu.Study.DocLibrary.Database;
@@ -11,6 +15,7 @@ using Ruoyu.Study.DocLibrary.Domain.Services;
 using Ruoyu.Study.DocLibrary.Service;
 using Ruoyu.Study.DocLibrary.Service.Parsing;
 using Ruoyu.Study.DocLibrary.Host;
+using Ruoyu.Study.DocLibrary.Host.Authentication;
 using Ruoyu.Study.Consul.Shared;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -34,6 +39,70 @@ builder.WebHost.ConfigureKestrel(options =>
 builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(options =>
 {
     options.MultipartBodyLengthLimit = 200 * 1024 * 1024;
+});
+
+builder.Services.Configure<IdentityServiceOptions>(
+    builder.Configuration.GetSection(IdentityServiceOptions.SectionName));
+builder.Services.Configure<DocLibraryCookieOptions>(
+    builder.Configuration.GetSection(DocLibraryCookieOptions.SectionName));
+builder.Services.AddHttpClient<IIdentityAuthenticationService, IdentityAuthenticationService>(
+    (serviceProvider, client) =>
+    {
+        var options = serviceProvider.GetRequiredService<IOptions<IdentityServiceOptions>>().Value;
+        client.BaseAddress = new Uri(options.Authority.TrimEnd('/') + "/");
+        client.Timeout = TimeSpan.FromSeconds(30);
+    });
+builder.Services.AddSingleton<IConfigurationManager<OpenIdConnectConfiguration>>(serviceProvider =>
+{
+    var options = serviceProvider.GetRequiredService<IOptions<IdentityServiceOptions>>().Value;
+    var documentRetriever = new HttpDocumentRetriever
+    {
+        RequireHttps = options.RequireHttpsMetadata
+    };
+    return new ConfigurationManager<OpenIdConnectConfiguration>(
+        $"{options.Authority.TrimEnd('/')}/.well-known/openid-configuration",
+        new OpenIdConnectConfigurationRetriever(),
+        documentRetriever);
+});
+builder.Services.AddSingleton<IIdentityTokenValidator, IdentityTokenValidator>();
+
+var identityOptions = builder.Configuration
+    .GetSection(IdentityServiceOptions.SectionName)
+    .Get<IdentityServiceOptions>() ?? new IdentityServiceOptions();
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        options.Authority = identityOptions.Authority;
+        options.Audience = identityOptions.Audience;
+        options.RequireHttpsMetadata = identityOptions.RequireHttpsMetadata;
+        options.MapInboundClaims = false;
+        options.TokenValidationParameters =
+            IdentityTokenValidator.CreateValidationParameters(identityOptions);
+        options.Events = new JwtBearerEvents
+        {
+            OnMessageReceived = context =>
+            {
+                if (string.IsNullOrWhiteSpace(context.Token))
+                {
+                    context.Token = context.Request.Cookies[
+                        DocLibraryAuthenticationConstants.AccessCookieName];
+                }
+                return Task.CompletedTask;
+            }
+        };
+    });
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy(DocLibraryAuthorizationPolicies.Admin, policy =>
+    {
+        policy.AddAuthenticationSchemes(JwtBearerDefaults.AuthenticationScheme);
+        policy.RequireAuthenticatedUser();
+        policy.RequireAssertion(context =>
+            context.User.Identities.Any(identity => identity.IsAuthenticated)
+            && context.User.Claims.Any(claim =>
+                claim.Type is "role" or ClaimTypes.Role
+                && string.Equals(claim.Value, "admin", StringComparison.OrdinalIgnoreCase)));
+    });
 });
 
 var fallbackConnectionString = builder.Configuration.GetConnectionString("Default");
@@ -132,10 +201,6 @@ builder.Services.AddScoped<MinerUParseOrchestrator>();
 builder.Services.AddScoped<MinerUResultPersistence>();
 builder.Services.AddHostedService<MinerUFileParseWorker>();
 
-// Note: DocLibrary 是内网管理后台，无应用层认证。
-// 所有 /admin/* 端点 AllowAnonymous，访问控制由部署层网络隔离实现。
-// 详见 docs/overview/Design.md "访问控制架构" 章节。
-
 var app = builder.Build();
 
 app.Logger.LogInformation("DocLibrary Service starting");
@@ -224,7 +289,12 @@ app.UseMiddleware<CorrelationIdMiddleware>();
 app.UseDefaultFiles();
 app.UseStaticFiles();
 
-// Web Admin API endpoints (no authentication — intranet admin service)
+app.UseAuthentication();
+app.UseAuthorization();
+
+app.MapAdminAuthEndpoints();
+
+// Web Admin API endpoints
 app.MapDocumentFileEndpoints();
 app.MapDocumentParseEndpoints();
 app.MapQuestionBankImportEndpoints();
