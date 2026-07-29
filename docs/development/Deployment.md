@@ -21,9 +21,7 @@
 - `OpenSearch:IndexName`
 - `LlmDocumentAnalysis:*`
 - `MinerU:*`
-- `IdentityService:Authority/AppId/AppSecret`
 - `Authentication:CookieSecure`
-- `InternalAuth:QuestionBankKey`
 
 以下配置迁入共享 Consul KV：
 
@@ -54,15 +52,11 @@
 | `CONSUL_CACHE_DIR` | `./data/consul` | Consul 本地缓存目录 |
 | `USE_LOCAL_OSS` | （未设置） | 设为 `1` 使用本地文件系统存储代替 S3 |
 | `OSS_LOCAL_PATH` | `data/oss` | 本地文件存储目录（仅在 `USE_LOCAL_OSS=1` 时使用） |
-| `IDENTITY_AUTHORITY` | `http://ruoyu-identity:5002` | `start.sh` 映射到 `IdentityService__Authority` |
-| `IDENTITY_APP_ID` | （空） | 可选；映射到 `IdentityService__AppId`，必须与 AppSecret 同时设置 |
-| `IDENTITY_APP_SECRET` | （空） | 可选；映射到 `IdentityService__AppSecret`，不得写入日志或源码 |
 | `DOCLIBRARY_COOKIE_SECURE` | `false` | 映射到 `Authentication__CookieSecure`；HTTPS 生产部署必须设为 `true` |
-| `DOCLIBRARY_QUESTIONBANK_KEY` | 无默认值 | 映射到 `InternalAuth__QuestionBankKey`；`start.sh` 缺失时拒绝启动 |
 
 直接运行 Host 时也可使用 .NET 分层配置名
-`IdentityService__*`、`Authentication__CookieSecure` 和
-`InternalAuth__QuestionBankKey`；上述大写变量是 `start.sh` 的部署入口。
+`Authentication__CookieSecure`。`IdentityService:Authority/Audience/RequireHttpsMetadata`
+由 Consul 提供；`appsettings.json` 只保留本地开发 fallback。
 
 ## 下游依赖
 
@@ -75,8 +69,6 @@
 | Loki | 3100 | 日志聚合（通过 Consul `Loki:Uri` 配置） |
 | QuantumZhou.Identity | 5002 | 管理员登录、Token刷新/撤销、OIDC discovery/JWKS |
 
-QuestionBank 通过 `X-DocLibrary-Service-Key` 调用三个 `/internal/question-bank/*` GET。DocLibrary 与 QuestionBank 必须配置相同的高熵服务密钥；密钥不得进入前端构建产物。
-
 ## 管理员认证配置
 
 最小配置：
@@ -85,20 +77,20 @@ QuestionBank 通过 `X-DocLibrary-Service-Key` 调用三个 `/internal/question-
 {
   "IdentityService": {
     "Authority": "http://ruoyu-identity:5002",
-    "Issuer": "QuantumZhou.Identity",
     "Audience": "QuantumZhou.microservices",
     "RequireHttpsMetadata": false
   },
   "Authentication": {
     "CookieSecure": false
-  },
-  "InternalAuth": {
-    "QuestionBankKey": "<deployment secret>"
   }
 }
 ```
 
-Identity `POST /api/auth/token` 支持不带 AppId/AppSecret 的密码登录，bootstrap 管理员角色注入不依赖 portal callback。因此 DocLibrary 接入不要求修改 Identity `AdminBootstrap`。如部署要求为登录请求记录应用归属，可单独注册 DocLibrary App并同时配置 AppId/AppSecret。
+Identity `POST /api/auth/token` 支持不带 AppId/AppSecret 的密码登录，bootstrap
+管理员角色注入不依赖 portal callback。因此 DocLibrary 不注册 Identity App，
+也不配置 AppId/AppSecret。Authority、Audience 和 metadata HTTPS 要求以
+Consul `config/ruoyu/service-endpoints.json` 为部署事实源；上面的
+IdentityService 内容仅表示本地 fallback。
 
 生产环境必须在浏览器与 DocLibrary 之间使用 HTTPS，并设置 `Authentication:CookieSecure=true`。`RequireHttpsMetadata=false` 只适用于容器内 HTTP Authority 或本地开发。
 

@@ -465,7 +465,6 @@ public static async Task<IResults> Search(...)
 
 | 字段 | 证据性质 |
 |------|---------|
-| `bbox` | `[推断]` — 仅 `QuestionBankImport/02-SPEC.md:124` 响应示例出现，非真实 minerU 样本，无代码读取 |
 | `angle` | `[推断]` — `docs/database/tables/document_parse_blocks.md:42` 文档表述，无代码读取 |
 | `formula_latex` | `[推断]` — 同上 |
 

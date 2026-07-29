@@ -47,7 +47,6 @@ Authentication
 Authorization
 Anonymous auth endpoints
 Admin route groups -> DocLibraryAdmin policy
-Internal QuestionBank routes -> QuestionBankService policy
 Anonymous /health
 Anonymous SPA fallback
 ```
@@ -76,7 +75,9 @@ DocLibrary -> Browser: HttpOnly access/refresh cookies + non-sensitive session s
 
 ## QuestionBank 边界
 
-QuestionBank 集成不复用管理员认证。三个只读端点移动到 `/internal/question-bank/*`，使用独立服务密钥策略。服务密钥从 `InternalAuth:QuestionBankKey` 获取，缺失时策略 fail-closed；比较使用固定时间算法。
+当前仓库没有 QuestionBank → DocLibrary 调用方，因此 DocLibrary 不提供
+QuestionBank 专用 HTTP 接口、服务认证策略或服务密钥配置。后续出现真实调用
+需求时重新设计数据契约与认证方式，不预留未使用接口。
 
 原 `POST /admin/document-parses/{parseId}/import-status`、`document_parse_imports` 运行时模型和列表过滤全部移除。已有数据库中的遗留表不在启动时自动删除。
 
@@ -84,5 +85,6 @@ QuestionBank 集成不复用管理员认证。三个只读端点移动到 `/inte
 
 - 前端仍由 DocLibrary Docker 镜像第一阶段构建并复制到 Host `wwwroot`。
 - Host 仍监听单一 HTTP 端口 5012。
-- Identity Authority 复用共享 Consul `IdentityService` 配置。
-- 新增 Cookie 安全配置和 QuestionBank 服务密钥，不新增独立前端容器或反向代理。
+- Identity Authority、Audience 和 metadata HTTPS 要求复用共享 Consul
+  `IdentityService` 配置，`start.sh` 不重复注入。
+- Cookie 安全配置保留为 DocLibrary 本地配置，不新增独立前端容器或反向代理。

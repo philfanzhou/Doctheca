@@ -25,7 +25,7 @@ DocLibrary 管理后台使用 QuantumZhou.Identity 的 bootstrap 管理员账户
 | AC-09 | Access Token 过期后可通过 Refresh Cookie 完成一次性令牌轮换 |
 | AC-10 | 登出调用 Identity 撤销 Refresh Token，并无条件清除本地 Cookie |
 | AC-11 | SPA、登录页、静态文件和 `/health` 保持匿名可访问 |
-| AC-12 | 日志不记录密码、JWT、Refresh Token、Cookie、服务密钥或 Identity AppSecret |
+| AC-12 | 日志不记录密码、JWT、Refresh Token 或 Cookie |
 
 ## 范围
 
@@ -34,7 +34,7 @@ DocLibrary 管理后台使用 QuantumZhou.Identity 的 bootstrap 管理员账户
 - Identity 密码登录代理、JWT 管理员角色验证、Cookie 会话、刷新和登出
 - `/admin/*` 管理端点的管理员授权策略
 - 前端登录页、启动会话检查、自动刷新、401/403 处理和退出入口
-- Identity Authority、Cookie 安全属性和可选 AppId/AppSecret 部署配置
+- Identity Authority 的 Consul 共享配置与 Cookie 安全属性
 - 后端认证/授权测试与前端构建验证
 
 ### 范围外
@@ -42,10 +42,9 @@ DocLibrary 管理后台使用 QuantumZhou.Identity 的 bootstrap 管理员账户
 - 修改 Identity 的 `AdminBootstrap` 植入或 `role=admin` 注入逻辑
 - 在 DocLibrary 创建或管理 Identity 用户
 - 在前端保存或展示任何 Token
-- 为 QuestionBank 内部查询复用管理员 Cookie
+- 预留没有真实调用方的内部服务接口或服务凭据
 
 ## 关联文档
 
 - [02-SPEC.md](./02-SPEC.md)
 - [03-DESIGN.md](./03-DESIGN.md)
-- [QuestionBankImport](../QuestionBankImport/01-FEATURE.md)

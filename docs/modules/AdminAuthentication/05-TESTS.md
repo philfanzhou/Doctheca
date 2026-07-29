@@ -17,21 +17,17 @@
 | AUTH-UT-11 | 登出 | 调用 revoke 并清除 Cookie |
 | AUTH-UT-12 | Identity revoke 不可用时登出 | 仍清除 Cookie并返回 200 |
 | AUTH-UT-13 | `/health`、静态入口和 SPA fallback | 匿名可访问 |
-| AUTH-UT-14 | internal GET 缺少或使用错误服务密钥 | 401 |
-| AUTH-UT-15 | internal GET 使用正确服务密钥 | 允许 |
-| AUTH-UT-16 | 管理员 Cookie调用 internal GET | 401 |
-| AUTH-UT-17 | Identity 请求 JSON | 字段为 `grantType`、`username`、`password` / `refreshToken` |
+| AUTH-UT-14 | `/internal/question-bank/*` 和旧导入状态路径 | 不映射 |
+| AUTH-UT-15 | Identity 请求 JSON | 字段为 `grantType`、`username`、`password` / `refreshToken`，不发送 AppId/AppSecret |
 
 测试使用固定 RSA 测试密钥和受控 Identity HTTP handler，不依赖真实密码或生产密钥。
 
-## QuestionBank 回归
+## 接口移除回归
 
-- 可查询全部 `status=parsed` 的解析记录。
-- 可分页查询指定 parse 的 blocks。
-- 可读取指定 image。
-- 不再返回 `importStatus`、`importedAt`，不再接受 `includeImported`。
+- 不映射任何 `/internal/question-bank/*`。
 - 不存在任何导入状态写接口。
 - DocLibrary 不创建或更新 `document_parse_imports`。
+- `start.sh` 不注入 Identity 或 QuestionBank 配置，只保留 DocLibrary 自身的 Cookie Secure 开关。
 
 ## 前端验证
 

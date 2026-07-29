@@ -120,6 +120,5 @@
 | `OpenSearch/` | DocumentSearch |
 | `OpenSearchIndexServiceTests.cs` | DocumentSearch |
 | `SearchDomainServiceTests.cs` | DocumentSearch |
-| `QuestionBankImportServiceTests.cs` | QuestionBankImport |
 | `ConstantsTests.cs` | 共享 |
 | `SensitiveDataMaskerTests.cs` | 共享 |

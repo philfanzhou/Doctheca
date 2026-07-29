@@ -5,11 +5,11 @@
 ```text
 Host
   Program.cs: DI / Kestrel / Authentication / Authorization / static SPA
-  Auth configuration and internal service-key policy
+  Identity authentication and administrator authorization
         │
 Service
   AdminAuthEndpoints / IdentityAuthenticationService / IdentityTokenValidator
-  Document*Endpoints / QuestionBankImportEndpoints
+  Document*Endpoints
   MinerU worker / OpenSearch / conversion / analysis
         │
 Domain
@@ -32,13 +32,6 @@ Database
 - `DocLibraryAdmin` 策略保护管理 route group，要求有效 JWT 和 `role=admin`。
 - 静态文件和 SPA fallback 保持匿名，避免登录死锁。
 
-### 内部 QuestionBank
-
-- 三个只读 GET 位于 `/internal/question-bank/*`。
-- `QuestionBankService` 策略验证专用服务密钥。
-- 服务密钥与管理员 JWT 完全隔离。
-- DocLibrary 不承担 QuestionBank 导入幂等状态。
-
 ## 关键决策
 
 | 决策 | 理由 |
@@ -48,14 +41,12 @@ Database
 | Refresh Token轮换与登出撤销 | 保持会话体验并在退出后关闭刷新能力 |
 | 登录阶段再次验证 JWT | 不只信任下游 JSON roles，确保签名和标准 Claim有效 |
 | 静态 SPA 匿名 | 未登录用户必须先加载登录页 |
-| 管理与内部路由分离 | URL 与权限边界一致，避免给服务调用套管理员身份 |
-| QuestionBank 只读、幂等归 QuestionBank | 避免跨两个数据库的非原子状态双写 |
+| 不预留未使用的 QuestionBank 接口 | 当前没有调用者，避免维护无消费方的接口、凭据和配置 |
 | 不自动删除遗留 import 表 | 数据删除必须由单独、显式、可审查的运维变更执行 |
 | 保持单端口单镜像 | 延续自包含前端、静态托管和现有 Docker 部署 |
 
 ## 关键文档
 
 - [管理员认证规格](../modules/AdminAuthentication/02-SPEC.md)
-- [QuestionBank 只读接口规格](../modules/QuestionBankImport/02-SPEC.md)
 - [部署说明](../development/Deployment.md)
 - [验证说明](../development/verification.md)

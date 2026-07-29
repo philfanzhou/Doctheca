@@ -7,9 +7,8 @@
 - Identity 已通过 `AdminBootstrap` 植入管理员
 - 管理员密码来自 Identity 部署环境的 `ADMIN_BOOTSTRAP_PASSWORD`
 - DocLibrary 已配置 `IdentityService:Authority`
-- internal API 已配置 `InternalAuth:QuestionBankKey`
 
-不得把真实密码、Token、Cookie、AppSecret 或服务密钥提交到仓库或粘贴到测试报告。
+不得把真实密码、Token 或 Cookie 提交到仓库或粘贴到测试报告。
 
 ## 匿名入口
 
@@ -92,26 +91,10 @@ curl -i http://localhost:5012/admin/document-files -b doclibrary.cookies
 
 预期：登出返回 200；后续管理请求返回 401。
 
-## QuestionBank 只读接口
+## 已移除接口
 
-```bash
-curl -i http://localhost:5012/internal/question-bank/document-parses \
-  -H "X-DocLibrary-Service-Key: <QUESTIONBANK_SERVICE_KEY>"
-```
-
-预期：正确密钥返回 200；缺少或错误密钥返回 401。
-
-其他接口：
-
-```bash
-curl -i "http://localhost:5012/internal/question-bank/document-parses/{parseId}/blocks?page=1&pageSize=50" \
-  -H "X-DocLibrary-Service-Key: <QUESTIONBANK_SERVICE_KEY>"
-
-curl -i "http://localhost:5012/internal/question-bank/images/{imageId}" \
-  -H "X-DocLibrary-Service-Key: <QUESTIONBANK_SERVICE_KEY>"
-```
-
-不存在任何 QuestionBank 导入状态写回接口；旧 `/admin/document-parses/importable` 和 `POST .../import-status` 不应再映射。
+`/internal/question-bank/*`、旧 `/admin/document-parses/importable` 和
+`POST .../import-status` 均不应映射。
 
 ## 自动化验证
 

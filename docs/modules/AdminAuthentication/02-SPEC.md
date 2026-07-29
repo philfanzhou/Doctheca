@@ -46,8 +46,6 @@ DocLibrary 调用 Identity 的请求体固定为：
 }
 ```
 
-若配置了 `IdentityService:AppId` 和 `IdentityService:AppSecret`，通过 `X-Admin-AppId`、`X-Admin-AppSecret` 请求头发送；两者必须同时配置或同时留空。
-
 ### POST `/admin/auth/refresh`
 
 匿名端点，但要求请求携带有效 Refresh Cookie。DocLibrary 调用 Identity：
@@ -83,12 +81,11 @@ DocLibrary 调用 Identity 的请求体固定为：
 
 ## 授权矩阵
 
-| 调用者 | 认证端点 | 其他 `/admin/*` | `/internal/question-bank/*` |
-|--------|----------|-----------------|--------------------------------|
-| 未登录浏览器 | login/logout 允许；session 401 | 401 | 401 |
-| 普通 Identity JWT | login 403；session 403 | 403 | 401 |
-| `role=admin` Identity JWT/Cookie | 允许 | 允许 | 401 |
-| 正确 QuestionBank 服务密钥 | 不适用 | 401 | 允许 |
+| 调用者 | 认证端点 | 其他 `/admin/*` |
+|--------|----------|-----------------|
+| 未登录浏览器 | login/logout 允许；session 401 | 401 |
+| 普通 Identity JWT | login 403；session 403 | 403 |
+| `role=admin` Identity JWT/Cookie | 允许 | 允许 |
 
 ## JWT 验证
 
@@ -125,7 +122,7 @@ DocLibrary 调用 Identity 的请求体固定为：
 ## 安全约束
 
 - 不在前端硬编码管理员用户名或密码。
-- 不把密码、Token、Cookie、内部服务密钥或 AppSecret写入日志、异常消息或 API 响应。
+- 不把密码、Token 或 Cookie 写入日志、异常消息或 API 响应。
 - 登录失败日志只记录通用原因和经过规范化的非敏感关联信息。
 - 管理 API 不启用跨域凭据；前端与后端保持同源。
 - 静态文件和 SPA fallback 必须映射在授权策略之外。
