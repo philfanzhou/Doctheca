@@ -3,6 +3,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Security.Claims;
 using System.Text;
+using System.Text.Json;
 using FluentAssertions;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -123,6 +124,25 @@ public class AuthorizationBoundaryTests
         var response = await app.GetTestClient().SendAsync(request);
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task QuestionBankReadApi_InvalidPagination_IsNormalized()
+    {
+        await using var app = await CreateAppAsync();
+        var request = new HttpRequestMessage(
+            HttpMethod.Get,
+            "/internal/question-bank/document-parses?page=0&pageSize=0");
+        request.Headers.Add(
+            DocLibraryAuthenticationConstants.QuestionBankHeaderName,
+            "question-bank-key");
+
+        var response = await app.GetTestClient().SendAsync(request);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        body.RootElement.GetProperty("page").GetInt32().Should().Be(1);
+        body.RootElement.GetProperty("pageSize").GetInt32().Should().Be(20);
     }
 
     [Theory]

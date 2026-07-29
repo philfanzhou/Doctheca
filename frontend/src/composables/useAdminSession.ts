@@ -58,7 +58,8 @@ async function initialize(): Promise<void> {
 }
 
 async function login(username: string, password: string): Promise<void> {
-  session.value = await loginRequest(username, password)
+  await loginRequest(username, password)
+  session.value = await getSession()
   status.value = 'authenticated'
 }
 

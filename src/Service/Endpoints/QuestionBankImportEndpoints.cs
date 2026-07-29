@@ -33,6 +33,8 @@ public static class QuestionBankImportEndpoints
         [FromQuery] int pageSize = 20,
         [FromQuery] string? search = null)
     {
+        page = Math.Max(page, 1);
+        pageSize = NormalizePageSize(pageSize, 20, 100);
         var (items, totalCount) = await importService.GetImportableListAsync(page, pageSize, search);
 
         var data = items.Select(x => new
@@ -64,6 +66,8 @@ public static class QuestionBankImportEndpoints
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 50)
     {
+        page = Math.Max(page, 1);
+        pageSize = NormalizePageSize(pageSize, 50, 200);
         var logger = loggerFactory.CreateLogger(nameof(QuestionBankImportEndpoints));
 
         List<ParseBlockItem> items;
@@ -132,4 +136,7 @@ public static class QuestionBankImportEndpoints
 
         return Results.Stream(blob.Stream, blob.ContentType, blob.ImageName);
     }
+
+    private static int NormalizePageSize(int pageSize, int defaultValue, int maximum) =>
+        pageSize <= 0 ? defaultValue : Math.Min(pageSize, maximum);
 }

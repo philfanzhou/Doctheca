@@ -21,6 +21,9 @@
 - `OpenSearch:IndexName`
 - `LlmDocumentAnalysis:*`
 - `MinerU:*`
+- `IdentityService:Authority/AppId/AppSecret`
+- `Authentication:CookieSecure`
+- `InternalAuth:QuestionBankKey`
 
 以下配置迁入共享 Consul KV：
 
@@ -51,10 +54,15 @@
 | `CONSUL_CACHE_DIR` | `./data/consul` | Consul 本地缓存目录 |
 | `USE_LOCAL_OSS` | （未设置） | 设为 `1` 使用本地文件系统存储代替 S3 |
 | `OSS_LOCAL_PATH` | `data/oss` | 本地文件存储目录（仅在 `USE_LOCAL_OSS=1` 时使用） |
-| `IdentityService__AppId` | （空） | 可选；已注册 DocLibrary Identity 应用的 AppId |
-| `IdentityService__AppSecret` | （空） | 可选；与 AppId 同时配置，不得写入日志或源码 |
-| `Authentication__CookieSecure` | `false` | 纯 HTTP 内网兼容值；HTTPS 生产部署必须设为 `true` |
-| `InternalAuth__QuestionBankKey` | 无默认值 | QuestionBank 只读 internal API 服务密钥；缺失时接口 fail-closed |
+| `IDENTITY_AUTHORITY` | `http://ruoyu-identity:5002` | `start.sh` 映射到 `IdentityService__Authority` |
+| `IDENTITY_APP_ID` | （空） | 可选；映射到 `IdentityService__AppId`，必须与 AppSecret 同时设置 |
+| `IDENTITY_APP_SECRET` | （空） | 可选；映射到 `IdentityService__AppSecret`，不得写入日志或源码 |
+| `DOCLIBRARY_COOKIE_SECURE` | `false` | 映射到 `Authentication__CookieSecure`；HTTPS 生产部署必须设为 `true` |
+| `DOCLIBRARY_QUESTIONBANK_KEY` | 无默认值 | 映射到 `InternalAuth__QuestionBankKey`；`start.sh` 缺失时拒绝启动 |
+
+直接运行 Host 时也可使用 .NET 分层配置名
+`IdentityService__*`、`Authentication__CookieSecure` 和
+`InternalAuth__QuestionBankKey`；上述大写变量是 `start.sh` 的部署入口。
 
 ## 下游依赖
 
