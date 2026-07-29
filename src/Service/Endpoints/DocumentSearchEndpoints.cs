@@ -14,7 +14,8 @@ public static class DocumentSearchEndpoints
 {
     public static WebApplication MapDocumentSearchEndpoints(this WebApplication app)
     {
-        var group = app.MapGroup("/admin/documents");
+        var group = app.MapGroup("/admin/documents")
+            .RequireAuthorization(DocLibraryAuthorizationPolicies.Admin);
 
         group.MapGet("/search", Search);
 

@@ -15,7 +15,8 @@ public static class DocumentParseEndpoints
 {
     public static WebApplication MapDocumentParseEndpoints(this WebApplication app)
     {
-        var group = app.MapGroup("/admin/document-parses");
+        var group = app.MapGroup("/admin/document-parses")
+            .RequireAuthorization(DocLibraryAuthorizationPolicies.Admin);
 
         group.MapGet("/", ListDocumentParses);
         group.MapDelete("/{parseId:guid}", DeleteDocumentParse);

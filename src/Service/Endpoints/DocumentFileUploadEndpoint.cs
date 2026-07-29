@@ -1,5 +1,6 @@
 using System.IO;
 using System.Linq;
+using System.Security.Claims;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -61,14 +62,18 @@ internal static class DocumentFileUploadEndpoint
             filePath = await ossService.UploadAsync(stream, objectName, file.ContentType, OssBucket.Documents, "doclibrary-files");
         }
 
-        // DocLibrary is an internal admin backend without application-layer authentication (JWT removed 2026-07-04).
-        // documents.created_by is kept null; write it back when audit is required.
+        var subject = request.HttpContext.User.FindFirst("sub")?.Value
+            ?? request.HttpContext.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        var createdBy = Guid.TryParse(subject, out var accountId)
+            ? accountId
+            : (Guid?)null;
+
         var model = new DocumentFileModel
         {
             FileName = file.FileName,
             FilePath = filePath,
             ContentType = file.ContentType,
-            CreatedBy = null,
+            CreatedBy = createdBy,
         };
 
         var created = await fileService.CreateAsync(model);

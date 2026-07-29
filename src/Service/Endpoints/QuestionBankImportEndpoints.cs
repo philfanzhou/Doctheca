@@ -18,7 +18,8 @@ public static class QuestionBankImportEndpoints
 {
     public static WebApplication MapQuestionBankImportEndpoints(this WebApplication app)
     {
-        var group = app.MapGroup("/admin/document-parses");
+        var group = app.MapGroup("/admin/document-parses")
+            .RequireAuthorization(DocLibraryAuthorizationPolicies.QuestionBank);
 
         group.MapGet("/importable", ListImportableParses);
         group.MapGet("/{parseId:guid}/blocks", GetParseBlocks);

@@ -45,6 +45,8 @@ builder.Services.Configure<IdentityServiceOptions>(
     builder.Configuration.GetSection(IdentityServiceOptions.SectionName));
 builder.Services.Configure<DocLibraryCookieOptions>(
     builder.Configuration.GetSection(DocLibraryCookieOptions.SectionName));
+builder.Services.Configure<InternalAuthOptions>(
+    builder.Configuration.GetSection(InternalAuthOptions.SectionName));
 builder.Services.AddHttpClient<IIdentityAuthenticationService, IdentityAuthenticationService>(
     (serviceProvider, client) =>
     {
@@ -90,7 +92,11 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                 return Task.CompletedTask;
             }
         };
-    });
+    })
+    .AddScheme<Microsoft.AspNetCore.Authentication.AuthenticationSchemeOptions,
+        QuestionBankServiceKeyAuthenticationHandler>(
+        DocLibraryAuthenticationConstants.QuestionBankScheme,
+        _ => { });
 builder.Services.AddAuthorization(options =>
 {
     options.AddPolicy(DocLibraryAuthorizationPolicies.Admin, policy =>
@@ -102,6 +108,12 @@ builder.Services.AddAuthorization(options =>
             && context.User.Claims.Any(claim =>
                 claim.Type is "role" or ClaimTypes.Role
                 && string.Equals(claim.Value, "admin", StringComparison.OrdinalIgnoreCase)));
+    });
+    options.AddPolicy(DocLibraryAuthorizationPolicies.QuestionBank, policy =>
+    {
+        policy.AddAuthenticationSchemes(
+            DocLibraryAuthenticationConstants.QuestionBankScheme);
+        policy.RequireAuthenticatedUser();
     });
 });
 

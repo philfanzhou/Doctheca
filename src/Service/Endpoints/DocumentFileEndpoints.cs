@@ -6,7 +6,8 @@ public static class DocumentFileEndpoints
 {
     public static WebApplication MapDocumentFileEndpoints(this WebApplication app)
     {
-        var group = app.MapGroup("/admin/document-files");
+        var group = app.MapGroup("/admin/document-files")
+            .RequireAuthorization(DocLibraryAuthorizationPolicies.Admin);
         group.MapUpload();
         group.MapList();
         group.MapDetail();
