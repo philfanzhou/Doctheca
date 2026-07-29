@@ -9,6 +9,7 @@ import * as exportApi from './exportApi'
 import { getDocErrorMessage } from './error'
 
 export * from './types'
+export * from './authApi'
 export * from './documentApi'
 export * from './parseApi'
 export * from './searchApi'

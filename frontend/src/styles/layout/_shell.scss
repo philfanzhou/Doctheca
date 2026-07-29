@@ -227,6 +227,15 @@
   font-variant-numeric: tabular-nums;
 }
 
+.topbar-user {
+  max-width: 160px;
+  overflow: hidden;
+  color: var(--text-2);
+  font-size: 12.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .env-tag {
   font-size: 11px;
   padding: 3px 8px;
@@ -272,5 +281,9 @@
   }
   .view {
     padding: 20px 18px 60px;
+  }
+  .clock,
+  .topbar-user {
+    display: none;
   }
 }

@@ -1,7 +1,5 @@
-import axios from 'axios'
+import { httpClient } from './httpClient'
 import type { SearchResult } from './types'
-
-const client = axios.create({ timeout: 30000 })
 
 export async function searchTest(
   query: string,
@@ -29,6 +27,6 @@ export async function searchTest(
   if (parseId) params.parseId = parseId
   if (documentFileId) params.documentFileId = documentFileId
   if (hasImage !== undefined && hasImage !== null) params.hasImage = hasImage
-  const response = await client.get('/admin/documents/search', { params })
+  const response = await httpClient.get('/admin/documents/search', { params })
   return response.data
 }

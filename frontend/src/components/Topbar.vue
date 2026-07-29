@@ -6,10 +6,12 @@ const props = defineProps<{
   crumb: string
   showHamburger: boolean
   sidebarOpen: boolean
+  username: string
 }>()
 
 const emit = defineEmits<{
   (e: 'toggle-sidebar'): void
+  (e: 'logout'): void
 }>()
 
 const clock = ref('')
@@ -50,6 +52,10 @@ onUnmounted(() => {
     <div class="top-right">
       <span class="env-tag">内网环境</span>
       <span class="clock">{{ clock }}</span>
+      <span class="topbar-user">{{ props.username }}</span>
+      <button class="btn btn-ghost btn-sm" type="button" @click="emit('logout')">
+        退出
+      </button>
     </div>
   </header>
 </template>

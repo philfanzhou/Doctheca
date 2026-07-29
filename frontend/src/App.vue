@@ -1,14 +1,16 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, nextTick, provide } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick, provide, watch } from 'vue'
 import Sidebar from './components/Sidebar.vue'
 import Topbar from './components/Topbar.vue'
 import AppToast from './components/AppToast.vue'
+import LoginPage from './views/LoginPage.vue'
 import OverviewPage from './views/OverviewPage.vue'
 import DocManagePage from './views/DocManagePage/DocManagePage.vue'
 import DocDetailPage from './views/DocDetailPage/DocDetailPage.vue'
 import ParseResultsPage from './views/ParseResultsPage/ParseResultsPage.vue'
 import SearchPage from './views/SearchPage/SearchPage.vue'
 import { useToast } from './composables/useToast'
+import { useAdminSession } from './composables/useAdminSession'
 import type { IconName } from './utils/icons'
 
 interface NavItem {
@@ -34,6 +36,13 @@ const viewRef = ref<HTMLElement | null>(null)
 const sidebarComp = ref<InstanceType<typeof Sidebar> | null>(null)
 
 const { error: toastError } = useToast()
+const {
+  status: sessionStatus,
+  session,
+  forbiddenSignal,
+  initialize: initializeSession,
+  logout,
+} = useAdminSession()
 // expose globally for legacy inline calls (optional)
 if (typeof window !== 'undefined') {
   ;(window as unknown as { __toast: { success: (m: string) => void; error: (m: string) => void } }).__toast = {
@@ -116,17 +125,28 @@ function toggleSidebar() {
   sidebarOpen.value = !sidebarOpen.value
 }
 
+async function handleLogout(): Promise<void> {
+  await logout().catch(() => undefined)
+}
+
 function onHashChange() {
   parseHash()
   nextTick(() => sidebarComp.value?.moveIndicator())
 }
 
 onMounted(() => {
+  void initializeSession()
   parseHash()
   checkMobile()
   window.addEventListener('resize', checkMobile)
   window.addEventListener('hashchange', onHashChange)
   nextTick(() => sidebarComp.value?.moveIndicator())
+})
+
+watch(forbiddenSignal, (current, previous) => {
+  if (current > previous) {
+    toastError('当前账户没有管理员权限。')
+  }
 })
 
 onUnmounted(() => {
@@ -141,12 +161,21 @@ provide('backToDocs', backToDocs)
 </script>
 
 <template>
-  <div class="admin-shell doclibrary-admin">
+  <div
+    v-if="sessionStatus === 'checking'"
+    class="session-loading doclibrary-admin"
+    role="status"
+  >
+    正在检查登录状态…
+  </div>
+  <LoginPage v-else-if="sessionStatus === 'anonymous'" />
+  <div v-else class="admin-shell doclibrary-admin">
     <Sidebar
       ref="sidebarComp"
       :active="currentNavKey"
       :nav-items="navItems"
       :open="sidebarOpen"
+      :username="session?.username ?? ''"
       @navigate="handleNavigate"
       @close="sidebarOpen = false"
     />
@@ -155,12 +184,14 @@ provide('backToDocs', backToDocs)
         :crumb="currentCrumb"
         :show-hamburger="isMobile"
         :sidebar-open="sidebarOpen"
+        :username="session?.username ?? ''"
         @toggle-sidebar="toggleSidebar"
+        @logout="handleLogout"
       />
       <main class="view" ref="viewRef">
         <component :is="currentComponent" :doc-id="state.docId" />
       </main>
     </div>
-    <AppToast />
   </div>
+  <AppToast />
 </template>

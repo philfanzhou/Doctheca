@@ -1,4 +1,4 @@
-import axios from 'axios'
+import { httpClient } from './httpClient'
 
 function extractFileName(response: { headers: Record<string, unknown> }, fallback: string): string {
   const disposition = response.headers['content-disposition'] as string | undefined
@@ -11,10 +11,8 @@ function extractFileName(response: { headers: Record<string, unknown> }, fallbac
   return fallback
 }
 
-const client = axios.create({ timeout: 30000 })
-
 export async function exportMarkdown(id: string): Promise<{ blob: Blob; fileName: string }> {
-  const response = await client.get(`/admin/document-files/${id}/export/markdown`, {
+  const response = await httpClient.get(`/admin/document-files/${id}/export/markdown`, {
     responseType: 'blob',
   })
   const fileName = extractFileName(response, 'document_markdown.zip')
@@ -22,7 +20,7 @@ export async function exportMarkdown(id: string): Promise<{ blob: Blob; fileName
 }
 
 export async function exportHtml(id: string): Promise<{ blob: Blob; fileName: string }> {
-  const response = await client.get(`/admin/document-files/${id}/export/html`, {
+  const response = await httpClient.get(`/admin/document-files/${id}/export/html`, {
     responseType: 'blob',
   })
   const fileName = extractFileName(response, 'document.html')
@@ -30,7 +28,7 @@ export async function exportHtml(id: string): Promise<{ blob: Blob; fileName: st
 }
 
 export async function exportParseMarkdown(parseId: string): Promise<{ blob: Blob; fileName: string }> {
-  const response = await client.get(`/admin/document-parses/${parseId}/export/markdown`, {
+  const response = await httpClient.get(`/admin/document-parses/${parseId}/export/markdown`, {
     responseType: 'blob',
   })
   const fileName = extractFileName(response, 'document_markdown.zip')
@@ -38,7 +36,7 @@ export async function exportParseMarkdown(parseId: string): Promise<{ blob: Blob
 }
 
 export async function exportParseHtml(parseId: string): Promise<{ blob: Blob; fileName: string }> {
-  const response = await client.get(`/admin/document-parses/${parseId}/export/html`, {
+  const response = await httpClient.get(`/admin/document-parses/${parseId}/export/html`, {
     responseType: 'blob',
   })
   const fileName = extractFileName(response, 'document.html')

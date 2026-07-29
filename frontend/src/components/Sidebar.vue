@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, nextTick } from 'vue'
+import { ref, onMounted, nextTick, computed } from 'vue'
 import { Icon, type IconName } from '../utils/icons'
 
 interface NavItem {
@@ -12,6 +12,7 @@ const props = defineProps<{
   active: string
   navItems: NavItem[]
   open: boolean
+  username: string
 }>()
 
 const emit = defineEmits<{
@@ -21,6 +22,9 @@ const emit = defineEmits<{
 
 const navRef = ref<HTMLElement | null>(null)
 const indicator = ref<HTMLElement | null>(null)
+const initials = computed(() =>
+  props.username.trim().slice(0, 2).toUpperCase() || 'AD'
+)
 
 function moveIndicator() {
   if (!indicator.value || !navRef.value) return
@@ -66,9 +70,9 @@ defineExpose({ moveIndicator })
     </nav>
     <div class="sidebar-foot">
       <div class="admin-chip">
-        <div class="avatar">AD</div>
+        <div class="avatar">{{ initials }}</div>
         <div>
-          <div class="name">admin</div>
+          <div class="name">{{ props.username }}</div>
           <div class="role">文档库管理员</div>
         </div>
       </div>
