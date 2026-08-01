@@ -9,7 +9,7 @@
 | .NET 8 SDK | 是 | 项目目标框架为 `net8.0` |
 | PostgreSQL | 是 | 默认连接字符串指向 `localhost:5432`（`ruoyu_study_doclibrary`）|
 | OpenSearch | 可选 | 全文搜索索引；默认地址为 `http://localhost:9200`；推荐 Docker 镜像版本 `2.19.5`（与 `OpenSearch.Net 1.8.0` 客户端兼容） |
-| MinIO / SeaweedFS | 可选 | S3 兼容的对象存储；默认地址为 `localhost:8333`；可通过 `USE_LOCAL_OSS=1` 切换为本地文件系统存储 |
+| MinIO / SeaweedFS | 可选 | S3 兼容的对象存储；本地 fallback 的 `Oss:InternalEndpoint` 为 `localhost:8333`；可通过 `USE_LOCAL_OSS=1` 切换为本地文件系统存储 |
 
 ## 环境变量
 
@@ -18,7 +18,9 @@
 | `USE_LOCAL_OSS` | （未设置） | 设为 `1` 可使用本地文件系统存储代替 S3，文件保存至 `OSS_LOCAL_PATH` |
 | `OSS_LOCAL_PATH` | `data/oss` | 本地文件存储目录（仅在 `USE_LOCAL_OSS=1` 时使用） |
 
-无需其他环境变量，其余配置均来自 `appsettings.json`。
+无需其他环境变量。直接本地运行时，其余配置来自 `appsettings.json`；接入 Consul 后，
+`Oss:InternalEndpoint`、`Oss:InternalSecure` 和 `Oss:PublicBaseUrl` 等共享配置由
+`config/ruoyu/shared.json` 覆盖。
 
 ## 数据库配置
 

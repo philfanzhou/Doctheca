@@ -30,7 +30,12 @@
   - `PostgreSql:Port`
   - `PostgreSql:Username`
   - `PostgreSql:Password`
-  - `Oss:*`
+  - `Oss:InternalEndpoint`
+  - `Oss:InternalSecure`
+  - `Oss:AccessKey`
+  - `Oss:SecretKey`
+  - `Oss:BucketName`
+  - `Oss:PublicBaseUrl`
   - `OpenSearch:Url`
   - `Loki:Uri`
 - `config/ruoyu/service-endpoints.json`
@@ -54,6 +59,16 @@
 | `OSS_LOCAL_PATH` | `data/oss` | 本地文件存储目录（仅在 `USE_LOCAL_OSS=1` 时使用） |
 | `DOCLIBRARY_COOKIE_SECURE` | `false` | 映射到 `Authentication__CookieSecure`；HTTPS 生产部署必须设为 `true` |
 
+## OSS 地址配置
+
+- `Oss:InternalEndpoint` / `Oss:InternalSecure` 用于服务端上传、下载和桶操作；独立部署
+  SeaweedFS 时填写其服务器 `IP:发布端口` 及实际协议。
+- `Oss:PublicBaseUrl` 用于生成浏览器可访问的预签名地址，生产环境为
+  `https://ry.zhoufan.asia/oss`。
+- OSS 地址来自 Consul `config/ruoyu/shared.json`，修改后重启 DocLibrary 生效。
+- 公网 `/oss/` 的反向代理由 User Web Nginx 管理；它的上游地址不从 Consul 动态生成，
+  SeaweedFS 迁移时需同时修改 User Web 部署目录的 `conf/nginx.conf` 并重启 User Web。
+
 直接运行 Host 时也可使用 .NET 分层配置名
 `Authentication__CookieSecure`。`IdentityService:Authority/Audience/RequireHttpsMetadata`
 由 Consul 提供；`appsettings.json` 只保留本地开发 fallback。
@@ -64,7 +79,7 @@
 |------|------|------|
 | PostgreSQL | 5432 | 主数据库（`ruoyu_study_doclibrary`） |
 | OpenSearch | 9200 | 全文检索索引 |
-| MinIO / SeaweedFS | 8333 | 对象存储（S3 兼容） |
+| MinIO / SeaweedFS | 部署决定（默认 8333） | 对象存储（S3 兼容，地址来自 Consul `Oss:InternalEndpoint`） |
 | Consul | 8500 | 共享配置读取与服务注册 |
 | Loki | 3100 | 日志聚合（通过 Consul `Loki:Uri` 配置） |
 | QuantumZhou.Identity | 5002 | 管理员登录、Token刷新/撤销、OIDC discovery/JWKS |
