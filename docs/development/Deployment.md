@@ -92,7 +92,7 @@
 ```json
 {
   "IdentityService": {
-    "Authority": "http://ruoyu-identity:5002",
+    "Authority": "http://192.168.100.10:5002",
     "Audience": "QuantumZhou.microservices",
     "RequireHttpsMetadata": false
   },
@@ -106,7 +106,7 @@ Identity `POST /api/auth/token` 支持不带 AppId/AppSecret 的密码登录，b
 管理员角色注入不依赖 portal callback。因此 DocLibrary 不注册 Identity App，
 也不配置 AppId/AppSecret。Authority、Audience 和 metadata HTTPS 要求以
 Consul `config/ruoyu/service-endpoints.json` 为部署事实源；上面的
-IdentityService 内容仅表示本地 fallback。
+`192.168.100.10` 仅为仓库假内网示例，部署时替换为实际地址。
 
 生产环境必须在浏览器与 DocLibrary 之间使用 HTTPS，并设置 `Authentication:CookieSecure=true`。`RequireHttpsMetadata=false` 只适用于容器内 HTTP Authority 或本地开发。
 
