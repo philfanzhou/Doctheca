@@ -5,9 +5,10 @@
 //   2. Build    — reuse script/build-script/02-doclibrary.build.sh (docker build)
 //   3. UT       — run unit tests directly on host via dotnet SDK 8.0
 //   4. Deploy   — restart the ruoyu-doclibrary container via start.sh
-//   5. Smoke    — health check on localhost:5012/health
+//   5. Smoke    — health check through the published host port
 //
-// Requires CONSUL_TOKEN to read shared PostgreSQL config from Consul KV.
+// The Jenkins agent must run on the DocLibrary deployment host. Set CONSUL_HTTP_ADDR
+// to the reachable Consul LAN endpoint and provide CONSUL_TOKEN through credentials.
 
 pipeline {
     agent any
@@ -26,6 +27,7 @@ pipeline {
         TEST_PROJ        = "${env.SERVICE_DIR}/src/Tests/Ruoyu.Study.DocLibrary.Tests/Ruoyu.Study.DocLibrary.Tests.csproj"
         START_SCRIPT     = "${env.SERVICE_DIR}/start.sh"
         REPORT_DIR       = "${env.WORKSPACE}/reports"
+        DOCLIBRARY_SMOKE_URL = "${env.DOCLIBRARY_SMOKE_URL ?: 'http://127.0.0.1:5012/health'}"
         NUGET_SOURCE     = 'https://repo.huaweicloud.com/repository/nuget/v3/index.json'
         CONSUL_TOKEN     = credentials('consul-acl-token')
     }
@@ -67,7 +69,7 @@ pipeline {
                     set -e
                     cd "$REPO_DIR"
                     bash "$BUILD_SCRIPT"
-                    docker images ruoyu-doclibrary --format '{{.Repository}}:{{.Tag}} {{.CreatedSince}} {{.Size}}'
+                    docker images ruoyu.doclibrary --format '{{.Repository}}:{{.Tag}} {{.CreatedSince}} {{.Size}}'
                 '''
             }
         }
@@ -106,10 +108,7 @@ pipeline {
                             export CONSUL_TOKEN="$CONSUL_TOKEN_BIND"
                         fi
                         cd "$SERVICE_DIR"
-                        bash "$START_SCRIPT" &
-                        START_PID=$!
-                        sleep 20
-                        kill $START_PID 2>/dev/null || true
+                        bash "$START_SCRIPT"
                         docker ps --filter 'name=ruoyu-doclibrary' --format '{{.Names}} {{.Status}}'
                     '''
                 }
@@ -119,24 +118,16 @@ pipeline {
         stage('Smoke Test') {
             steps {
                 sh '''
-                    set +e
+                    set -e
                     for i in $(seq 1 30); do
-                        CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 3 http://localhost:5012/health 2>/dev/null || echo 000)
-                        if [ "$CODE" = "200" ]; then
+                        if curl -fsS --max-time 3 "$DOCLIBRARY_SMOKE_URL" >/dev/null 2>&1; then
                             echo "DocLibrary ready after ${i}s"
-                            break
+                            exit 0
                         fi
-                        echo "Attempt $i: HTTP $CODE, retrying..."
                         sleep 1
                     done
-                    CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 http://localhost:5012/health 2>/dev/null || echo 000)
-                    if [ "$CODE" = "200" ]; then
-                        echo "DocLibrary smoke test PASSED (HTTP $CODE)"
-                        exit 0
-                    else
-                        echo "DocLibrary smoke test FAILED (HTTP $CODE)"
-                        exit 1
-                    fi
+                    echo "DocLibrary smoke test failed: $DOCLIBRARY_SMOKE_URL"
+                    exit 1
                 '''
             }
         }

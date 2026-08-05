@@ -10,7 +10,7 @@
 
 ## Consul 接入
 
-`ruoyu.doclibrary` 现在固定接入 Consul，通过 `ruoyu.common` 下的共享 Consul 代码读取共享配置并注册服务。
+`ruoyu.doclibrary` 通过 `ruoyu.common` 下的共享 Consul 代码在进程启动时读取共享配置；当前不向 Consul Catalog 注册服务。
 
 启动脚本 `start.sh` 只保留以下几类参数：
 
@@ -42,6 +42,7 @@
   - `IdentityService:Authority`
   - `IdentityService:Audience`
   - `IdentityService:RequireHttpsMetadata`
+  - `DocLibraryService:Url`（供调用方访问 DocLibrary）
 - `config/ruoyu/serilog.json`
   - `Serilog:MinimumLevel:*`
 
@@ -51,7 +52,7 @@
 
 | 变量 | 默认值 | 说明 |
 |------|--------|------|
-| `CONSUL_HTTP_ADDR` | `host.docker.internal:8500` | Consul HTTP API 地址 |
+| `CONSUL_HTTP_ADDR` | `192.168.100.10:8500` | Consul HTTP API 地址；仓库值是示例内网地址，部署时替换为实际地址 |
 | `CONSUL_TOKEN` | （空） | Consul ACL token（启用 ACL 时必需） |
 | `CONSUL_KV_PREFIX` | `config/ruoyu` | Consul 共享 KV 前缀 |
 | `CONSUL_CACHE_DIR` | `./data/consul` | Consul 本地缓存目录 |
@@ -181,13 +182,21 @@ Loki 地址统一通过 `Loki:Uri` 配置键进入 `Serilog:WriteTo:1:Args:uri`�
 dotnet run --project src/Host
 ```
 
-Docker 部署时，`start.sh` 还会补：
+DocLibrary 容器使用 Docker 默认 bridge 网络，不再加入 `ruoyu-net`，也不再依赖 Docker 容器名访问 Consul。部署时必须保证容器能够访问 `CONSUL_HTTP_ADDR` 指向的局域网地址。
 
-```bash
---add-host=host.docker.internal:host-gateway
+调用方通过 Consul `config/ruoyu/service-endpoints.json` 中的 `DocLibraryService:Url` 访问 DocLibrary。跨主机部署时该值必须是调用方可达的局域网 IP 和 host 映射端口，例如：
+
+```json
+{
+  "DocLibraryService": {
+    "Url": "http://192.168.100.10:5012"
+  }
+}
 ```
 
-用于容器在 Linux Docker 环境下访问宿主机上的 Consul。
+Consul 初始化脚本使用 `cas=0`，只创建尚不存在的 KV。修改初始化 JSON 不会覆盖已有值；迁移时还需更新实时 KV。调用方如果只在启动时读取该配置，实时 KV 更新后还需重启调用方。
+
+Jenkins 部署阶段必须运行在 DocLibrary 的目标宿主机上。冒烟检查默认访问 `http://127.0.0.1:5012/health`，可使用 `DOCLIBRARY_SMOKE_URL` 覆盖。
 
 服务启动时自动执行：
 1. `DatabaseInitializer.InitializeAsync` — 建表 + 列迁移（SQL-based，无 EF Core Migration）
