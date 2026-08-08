@@ -14,12 +14,12 @@ OPENSEARCH_INDEX="doclibrary-segments"
 
 DB_NAME="ruoyu_study_doclibrary"
 
-LLM_API_KEY=""
-LLM_BASE_URL="https://api.siliconflow.cn/v1"
-LLM_MODEL="Qwen/Qwen2.5-7B-Instruct"
-LLM_CONTEXT_LENGTH="128K"
+LLM_API_KEY="${LLM_API_KEY:-}"
+LLM_BASE_URL="${LLM_BASE_URL:-https://api.siliconflow.cn/v1}"
+LLM_MODEL="${LLM_MODEL:-Qwen/Qwen2.5-7B-Instruct}"
+LLM_CONTEXT_LENGTH="${LLM_CONTEXT_LENGTH:-128K}"
 
-MINERU_API_TOKEN=""
+MINERU_API_TOKEN="${MINERU_API_TOKEN:-}"
 
 if [ -n "$(docker ps -q --filter "name=^/${CONTAINER_NAME}$")" ]; then
     echo "Container is already running, stopping it..."

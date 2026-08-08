@@ -60,6 +60,15 @@
 | `OSS_LOCAL_PATH` | `data/oss` | 本地文件存储目录（仅在 `USE_LOCAL_OSS=1` 时使用） |
 | `DOCLIBRARY_COOKIE_SECURE` | `false` | 映射到 `Authentication__CookieSecure`；HTTPS 生产部署必须设为 `true` |
 
+LLM 文档分析配置通过 `start.sh` 的环境变量注入，不把密钥提交到仓库：
+
+| 环境变量 | 默认值 | 说明 |
+|------|------|------|
+| `LLM_API_KEY` | 空 | 映射到 `LlmDocumentAnalysis__ApiKey`；启用文档分析时必须设置 |
+| `LLM_BASE_URL` | `https://api.siliconflow.cn/v1` | OpenAI 兼容 API 地址 |
+| `LLM_MODEL` | `Qwen/Qwen2.5-7B-Instruct` | 文档分析模型 |
+| `LLM_CONTEXT_LENGTH` | `128K` | 文档分析上下文长度 |
+
 ## OSS 地址配置
 
 - `Oss:InternalEndpoint` / `Oss:InternalSecure` 用于服务端上传、下载和桶操作；独立部署
@@ -196,7 +205,7 @@ DocLibrary 容器使用 Docker 默认 bridge 网络，不再加入 `ruoyu-net`�
 
 Consul 初始化脚本使用 `cas=0`，只创建尚不存在的 KV。修改初始化 JSON 不会覆盖已有值；迁移时还需更新实时 KV。调用方如果只在启动时读取该配置，实时 KV 更新后还需重启调用方。
 
-Jenkins 部署阶段必须运行在 DocLibrary 的目标宿主机上。冒烟检查默认访问 `http://127.0.0.1:5012/health`，可使用 `DOCLIBRARY_SMOKE_URL` 覆盖。
+部署后的冒烟检查应在 DocLibrary 目标宿主机上访问 `http://127.0.0.1:5012/health`；完整部署联调见 [`docs/deploy-test/`](../../../../../docs/deploy-test/README.md)。
 
 服务启动时自动执行：
 1. `DatabaseInitializer.InitializeAsync` — 建表 + 列迁移（SQL-based，无 EF Core Migration）
