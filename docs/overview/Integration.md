@@ -1,11 +1,11 @@
-# Integration — 集成矩阵
+﻿# Integration — 集成矩阵
 
 ## 集成总表
 
 | 目标 | 协议 | 方向 | 用途 | 安全边界 |
 |------|------|------|------|----------|
 | Admin UI | HTTP 同源 | 入 | 文档管理和搜索 | Identity `role=admin` HttpOnly Cookie/JWT |
-| QuantumZhou.Identity | HTTP/OIDC | 出 | 登录、刷新、撤销、JWKS | Authority 来自 Consul |
+| SignaCore | HTTP/OIDC | 出 | 登录、刷新、撤销、JWKS | Authority 来自 Consul |
 | PostgreSQL | TCP | 出 | 文档/解析数据 CRUD | 服务私有数据库 |
 | MinIO/SeaweedFS | S3 | 出 | 文件和图片 | 共享 Consul 配置 |
 | OpenSearch | HTTP | 出 | block 索引和查询 | 共享 Consul 配置 |

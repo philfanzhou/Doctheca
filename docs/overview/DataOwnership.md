@@ -1,4 +1,4 @@
-# DataOwnership — 数据主责与引用边界
+﻿# DataOwnership — 数据主责与引用边界
 
 ## 本服务拥有的数据实体（主责）
 
@@ -15,7 +15,7 @@
 
 | 外部数据 | 来源 | 读取方式 | 说明 |
 |---------|------|---------|------|
-| Identity JWT | QuantumZhou.Identity | OIDC/JWKS + HTTP token API | 只消费管理员身份，不持久化 Identity 账户 |
+| Identity JWT | SignaCore | OIDC/JWKS + HTTP token API | 只消费管理员身份，不持久化 Identity 账户 |
 
 ## 外部系统依赖
 

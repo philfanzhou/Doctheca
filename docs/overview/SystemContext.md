@@ -1,4 +1,4 @@
-# SystemContext — 服务定位
+﻿# SystemContext — 服务定位
 
 ## 服务定位
 
@@ -14,7 +14,7 @@ Admin Browser
   └─ Identity admin HttpOnly session
           │
           ▼
-DocLibrary :5012 ─────► QuantumZhou.Identity :5002
+DocLibrary :5012 ─────► SignaCore :5002
   │                    password/refresh/revoke + OIDC/JWKS
   ├────► PostgreSQL
   ├────► SeaweedFS/MinIO
@@ -36,7 +36,7 @@ DocLibrary :5012 ─────► QuantumZhou.Identity :5002
 
 | 依赖 | 用途 |
 |------|------|
-| QuantumZhou.Identity | 密码登录、Token 刷新/撤销、OIDC discovery/JWKS |
+| SignaCore | 密码登录、Token 刷新/撤销、OIDC discovery/JWKS |
 | PostgreSQL | 文件和解析数据 |
 | MinIO / SeaweedFS / LocalFile | 源文件与解析图片 |
 | OpenSearch | 解析 block 全文索引 |

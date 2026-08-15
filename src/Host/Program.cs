@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Protocols;
 using Microsoft.IdentityModel.Protocols.OpenIdConnect;
+using Ruoyu.Study.Common.Authentication;
 using Ruoyu.Study.Common.Ai;
 using Ruoyu.Study.Common.Oss;
 using Ruoyu.Study.DocLibrary.Database;
@@ -41,20 +42,18 @@ builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(optio
     options.MultipartBodyLengthLimit = 200 * 1024 * 1024;
 });
 
-builder.Services.Configure<IdentityServiceOptions>(
-    builder.Configuration.GetSection(IdentityServiceOptions.SectionName));
 builder.Services.Configure<DocLibraryCookieOptions>(
     builder.Configuration.GetSection(DocLibraryCookieOptions.SectionName));
 builder.Services.AddHttpClient<IIdentityAuthenticationService, IdentityAuthenticationService>(
     (serviceProvider, client) =>
     {
-        var options = serviceProvider.GetRequiredService<IOptions<IdentityServiceOptions>>().Value;
+        var options = serviceProvider.GetRequiredService<IOptions<IdentityAuthenticationOptions>>().Value;
         client.BaseAddress = new Uri(options.Authority.TrimEnd('/') + "/");
         client.Timeout = TimeSpan.FromSeconds(30);
     });
 builder.Services.AddSingleton<IConfigurationManager<OpenIdConnectConfiguration>>(serviceProvider =>
 {
-    var options = serviceProvider.GetRequiredService<IOptions<IdentityServiceOptions>>().Value;
+    var options = serviceProvider.GetRequiredService<IOptions<IdentityAuthenticationOptions>>().Value;
     var documentRetriever = new HttpDocumentRetriever
     {
         RequireHttps = options.RequireHttpsMetadata
@@ -66,32 +65,17 @@ builder.Services.AddSingleton<IConfigurationManager<OpenIdConnectConfiguration>>
 });
 builder.Services.AddSingleton<IIdentityTokenValidator, IdentityTokenValidator>();
 
-var identityOptions = builder.Configuration
-    .GetSection(IdentityServiceOptions.SectionName)
-    .Get<IdentityServiceOptions>() ?? new IdentityServiceOptions();
-builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-    .AddJwtBearer(options =>
+builder.Services.AddRuoyuJwtBearer(
+    builder.Configuration,
+    builder.Environment,
+    consumer =>
     {
-        options.Authority = identityOptions.Authority;
-        options.Audience = identityOptions.Audience;
-        options.RequireHttpsMetadata = identityOptions.RequireHttpsMetadata;
-        options.MapInboundClaims = false;
-        options.TokenValidationParameters =
-            IdentityTokenValidator.CreateValidationParameters(identityOptions);
-        options.Events = new JwtBearerEvents
-        {
-            OnMessageReceived = context =>
-            {
-                if (string.IsNullOrWhiteSpace(context.Token))
-                {
-                    context.Token = context.Request.Cookies[
-                        DocLibraryAuthenticationConstants.AccessCookieName];
-                }
-                return Task.CompletedTask;
-            }
-        };
-    });
-builder.Services.AddAuthorization(options =>
+        consumer.MapInboundClaims = false;
+        consumer.AccessTokenCookieName = DocLibraryAuthenticationConstants.AccessCookieName;
+        consumer.NameClaimType = "unique_name";
+        consumer.RoleClaimType = "role";
+    },
+    options =>
 {
     options.AddPolicy(DocLibraryAuthorizationPolicies.Admin, policy =>
     {
@@ -199,8 +183,17 @@ builder.Services.AddScoped<MinerUResultPersistence>();
 builder.Services.AddHostedService<MinerUFileParseWorker>();
 
 var app = builder.Build();
+var identityTrust = app.Services
+    .GetRequiredService<IOptions<IdentityAuthenticationOptions>>()
+    .Value;
 
 app.Logger.LogInformation("DocLibrary Service starting");
+app.Logger.LogInformation(
+    "Identity trust: Authority={Authority}, Issuers={Issuers}, Audience={Audience}, RequireHttpsMetadata={RequireHttpsMetadata}",
+    identityTrust.Authority,
+    string.Join(",", identityTrust.GetValidIssuers()),
+    identityTrust.Audience,
+    identityTrust.RequireHttpsMetadata);
 app.Logger.LogInformation("Endpoints: HTTP={HttpPort}", httpPort);
 app.Logger.LogInformation(
     "Consul startup diagnostics: Address={Address}, Token={Token}, Source={Source}, KeyCount={KeyCount}, Prefixes={Prefixes}, LastError={LastError}",
@@ -297,7 +290,8 @@ app.MapDocumentParseEndpoints();
 app.MapDocumentExportEndpoints();
 app.MapDocumentSearchEndpoints();
 
-app.MapGet("/health", () => Results.Ok(new { status = "healthy", timestamp = DateTimeOffset.UtcNow }));
-app.MapFallbackToFile("index.html");
+app.MapGet("/health", () => Results.Ok(new { status = "healthy", timestamp = DateTimeOffset.UtcNow }))
+    .AllowAnonymous();
+app.MapFallbackToFile("index.html").AllowAnonymous();
 
 app.Run();

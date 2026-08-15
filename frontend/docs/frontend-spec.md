@@ -33,7 +33,7 @@ DocLibrary Admin 是文档库的管理后台前端,供本地管理员上传文�
 
 ## 3. 访问控制
 
-DocLibrary 管理后台使用 QuantumZhou.Identity bootstrap 管理员账户登录：
+DocLibrary 管理后台使用 SignaCore bootstrap 管理员账户登录：
 
 - 应用启动先调用 `GET /admin/auth/session`；有效管理员会话加载管理界面，否则显示登录页。
 - 登录页调用 `POST /admin/auth/login`，不预填或硬编码管理员用户名/密码。

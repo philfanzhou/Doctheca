@@ -1,8 +1,8 @@
-# 01-FEATURE — DocLibrary 管理员认证
+﻿# 01-FEATURE — DocLibrary 管理员认证
 
 ## 功能概述
 
-DocLibrary 管理后台使用 QuantumZhou.Identity 的 bootstrap 管理员账户登录。浏览器管理接口只接受签名有效且包含 `role=admin` 的 Identity JWT；普通 Identity 用户即使账号密码正确也不能建立 DocLibrary 管理会话。
+DocLibrary 管理后台使用 SignaCore 的 bootstrap 管理员账户登录。浏览器管理接口只接受签名有效且包含 `role=admin` 的 Identity JWT；普通 Identity 用户即使账号密码正确也不能建立 DocLibrary 管理会话。
 
 管理前端继续由 DocLibrary Host 静态托管并与后端同源部署。Access Token 和 Refresh Token 仅存放在 HttpOnly Cookie 中，不返回给前端 JavaScript，也不写入 localStorage。
 
@@ -39,7 +39,7 @@ DocLibrary 管理后台使用 QuantumZhou.Identity 的 bootstrap 管理员账户
 
 ### 范围外
 
-- 修改 Identity 的 `AdminBootstrap` 植入或 `role=admin` 注入逻辑
+- 修改 SignaCore 初始管理员创建或 `role=admin` 注入逻辑
 - 在 DocLibrary 创建或管理 Identity 用户
 - 在前端保存或展示任何 Token
 - 预留没有真实调用方的内部服务接口或服务凭据

@@ -1,4 +1,4 @@
-# Deployment — 部署与运维
+﻿# Deployment — 部署与运维
 
 ## 服务端口
 
@@ -92,7 +92,7 @@ LLM 文档分析配置通过 `start.sh` 的环境变量注入，不把密钥提�
 | MinIO / SeaweedFS | 部署决定（默认 8333） | 对象存储（S3 兼容，地址来自 Consul `Oss:InternalEndpoint`） |
 | Consul | 8500 | 共享配置读取与服务注册 |
 | Loki | 3100 | 日志聚合（通过 Consul `Loki:Uri` 配置） |
-| QuantumZhou.Identity | 5002 | 管理员登录、Token刷新/撤销、OIDC discovery/JWKS |
+| SignaCore | 5002 | 管理员登录、Token刷新/撤销、OIDC discovery/JWKS |
 
 ## 管理员认证配置
 
@@ -117,7 +117,7 @@ Identity `POST /api/auth/token` 支持不带 AppId/AppSecret 的密码登录，b
 Consul `config/ruoyu/service-endpoints.json` 为部署事实源；上面的
 `192.168.100.10` 仅为仓库假内网示例，部署时替换为实际地址。
 
-生产环境必须在浏览器与 DocLibrary 之间使用 HTTPS，并设置 `Authentication:CookieSecure=true`。`RequireHttpsMetadata=false` 只适用于容器内 HTTP Authority 或本地开发。
+浏览器与 DocLibrary 之间默认使用 HTTPS，并设置 `Authentication:CookieSecure=true`。`RequireHttpsMetadata=false` 仅表示运维显式接受 HTTP Identity metadata；SignaCore 端也必须启用 HTTP issuer，代码不会因为地址是私网、容器名或处于 Development 就自动放宽。
 
 Cookie 名称和路径：
 

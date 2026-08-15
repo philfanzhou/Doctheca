@@ -6,6 +6,7 @@ using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Protocols;
 using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 using Microsoft.IdentityModel.Tokens;
+using Ruoyu.Study.Common.Authentication;
 using Ruoyu.Study.DocLibrary.Host.Authentication;
 using Xunit;
 
@@ -13,7 +14,8 @@ namespace Ruoyu.Study.DocLibrary.Tests.Authentication;
 
 public class IdentityTokenValidatorTests : IDisposable
 {
-    private const string Issuer = "QuantumZhou.Identity";
+    private const string Issuer = "https://identity.test.ruoyu.study";
+    private const string LegacyIssuer = "QuantumZhou.Identity";
     private const string Audience = "QuantumZhou.microservices";
     private readonly RSA _rsa = RSA.Create(2048);
     private readonly RSA _otherRsa = RSA.Create(2048);
@@ -53,6 +55,20 @@ public class IdentityTokenValidatorTests : IDisposable
         result.ExpiresAt.Should().BeGreaterThan(DateTimeOffset.UtcNow.ToUnixTimeSeconds());
     }
 
+    [Theory]
+    [InlineData(Issuer)]
+    [InlineData(LegacyIssuer)]
+    public async Task ValidateTokenAsync_MigrationIssuers_UsesSharedTrustContract(string issuer)
+    {
+        var validator = CreateValidator();
+
+        var result = await validator.ValidateTokenAsync(
+            CreateToken(TokenMutation.None, issuer: issuer),
+            CancellationToken.None);
+
+        result.IsAdministrator.Should().BeTrue();
+    }
+
     private IdentityTokenValidator CreateValidator()
     {
         var signingKey = new RsaSecurityKey(_rsa) { KeyId = "test-key" };
@@ -64,14 +80,19 @@ public class IdentityTokenValidatorTests : IDisposable
         var manager = new StaticConfigurationManager<OpenIdConnectConfiguration>(configuration);
         return new IdentityTokenValidator(
             manager,
-            Options.Create(new IdentityServiceOptions
+            Options.Create(new IdentityAuthenticationOptions
             {
+                Authority = Issuer,
                 Issuer = Issuer,
+                AdditionalValidIssuers = [LegacyIssuer],
                 Audience = Audience
             }));
     }
 
-    private string CreateToken(TokenMutation mutation, string? role = "admin")
+    private string CreateToken(
+        TokenMutation mutation,
+        string? role = "admin",
+        string issuer = Issuer)
     {
         var signingRsa = mutation == TokenMutation.WrongSignature ? _otherRsa : _rsa;
         var key = new RsaSecurityKey(signingRsa) { KeyId = "test-key" };
@@ -87,7 +108,7 @@ public class IdentityTokenValidatorTests : IDisposable
         }
 
         var token = new JwtSecurityToken(
-            issuer: mutation == TokenMutation.WrongIssuer ? "wrong-issuer" : Issuer,
+            issuer: mutation == TokenMutation.WrongIssuer ? "wrong-issuer" : issuer,
             audience: mutation == TokenMutation.WrongAudience ? "wrong-audience" : Audience,
             claims: claims,
             notBefore: now.AddMinutes(-5),

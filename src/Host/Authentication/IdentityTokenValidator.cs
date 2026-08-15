@@ -4,6 +4,7 @@ using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Protocols;
 using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 using Microsoft.IdentityModel.Tokens;
+using Ruoyu.Study.Common.Authentication;
 
 namespace Ruoyu.Study.DocLibrary.Host.Authentication;
 
@@ -14,11 +15,11 @@ public sealed class IdentityTokenValidator : IIdentityTokenValidator
     private static readonly string[] RoleClaimTypes = ["role", ClaimTypes.Role];
 
     private readonly IConfigurationManager<OpenIdConnectConfiguration> _configurationManager;
-    private readonly IdentityServiceOptions _options;
+    private readonly IdentityAuthenticationOptions _options;
 
     public IdentityTokenValidator(
         IConfigurationManager<OpenIdConnectConfiguration> configurationManager,
-        IOptions<IdentityServiceOptions> options)
+        IOptions<IdentityAuthenticationOptions> options)
     {
         _configurationManager = configurationManager;
         _options = options.Value;
@@ -29,7 +30,11 @@ public sealed class IdentityTokenValidator : IIdentityTokenValidator
         CancellationToken cancellationToken)
     {
         var configuration = await _configurationManager.GetConfigurationAsync(cancellationToken);
-        var parameters = CreateValidationParameters(_options, configuration.SigningKeys);
+        var parameters = IdentityTokenValidationParametersFactory.Create(
+            _options,
+            configuration.SigningKeys,
+            nameClaimType: "unique_name",
+            roleClaimType: "role");
         var handler = new JwtSecurityTokenHandler
         {
             MapInboundClaims = false
@@ -54,26 +59,6 @@ public sealed class IdentityTokenValidator : IIdentityTokenValidator
             roles,
             new DateTimeOffset(jwt.ValidTo, TimeSpan.Zero).ToUnixTimeSeconds(),
             roles.Contains("admin", StringComparer.OrdinalIgnoreCase));
-    }
-
-    public static TokenValidationParameters CreateValidationParameters(
-        IdentityServiceOptions options,
-        IEnumerable<SecurityKey>? signingKeys = null)
-    {
-        return new TokenValidationParameters
-        {
-            ValidateIssuerSigningKey = true,
-            IssuerSigningKeys = signingKeys,
-            ValidateIssuer = true,
-            ValidIssuer = options.Issuer,
-            ValidateAudience = true,
-            ValidAudience = options.Audience,
-            ValidateLifetime = true,
-            RequireExpirationTime = true,
-            ClockSkew = TimeSpan.FromSeconds(30),
-            NameClaimType = "unique_name",
-            RoleClaimType = "role"
-        };
     }
 
     private static string FindFirstValue(ClaimsPrincipal principal, IEnumerable<string> claimTypes)

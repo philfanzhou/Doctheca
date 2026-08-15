@@ -1,4 +1,4 @@
-# 02-SPEC — DocLibrary 管理员认证规格
+﻿# 02-SPEC — DocLibrary 管理员认证规格
 
 ## HTTP 契约
 
@@ -92,10 +92,10 @@ DocLibrary 调用 Identity 的请求体固定为：
 | 项目 | 值/来源 |
 |------|---------|
 | Authority | `IdentityService:Authority` |
-| Issuer | `IdentityService:Issuer`，默认 `QuantumZhou.Identity` |
-| Audience | `IdentityService:Audience`，默认 `QuantumZhou.microservices` |
+| Issuer | `IdentityService:Issuer`，必须显式配置；旧 Issuer 仅放在 `AdditionalValidIssuers` |
+| Audience | `IdentityService:Audience`，必须显式配置 |
 | 签名 | Authority OIDC discovery + JWKS，RS256 |
-| 有效期 | 必须校验；ClockSkew 30 秒 |
+| 有效期 | 必须校验；ClockSkew 来自 `IdentityService:ClockSkewSeconds` |
 | 管理员角色 | `role=admin`，大小写不敏感 |
 
 登录和刷新阶段的显式 Token 校验与请求管线中的 JwtBearer 校验必须使用同一组参数。

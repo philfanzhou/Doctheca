@@ -4,8 +4,8 @@
 
 - DocLibrary：`http://localhost:5012`
 - Identity：`http://localhost:5002`
-- Identity 已通过 `AdminBootstrap` 植入管理员
-- 管理员密码来自 Identity 部署环境的 `ADMIN_BOOTSTRAP_PASSWORD`
+- SignaCore 已完成首次应用设置并创建管理员
+- 管理员密码来自部署 secret 中保存的首次设置结果
 - DocLibrary 已配置 `IdentityService:Authority`
 
 不得把真实密码、Token 或 Cookie 提交到仓库或粘贴到测试报告。
@@ -32,13 +32,13 @@ curl -i http://localhost:5012/admin/document-files
 ```bash
 curl -i -X POST http://localhost:5012/admin/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"username":"admin","password":"<ADMIN_BOOTSTRAP_PASSWORD>"}' \
+  -d '{"username":"admin","password":"<SIGNACORE_ADMIN_PASSWORD>"}' \
   -c doclibrary.cookies
 ```
 
 预期：200；响应体不含 `accessToken` 或 `refreshToken`；`Set-Cookie` 包含 HttpOnly 的 `doclibraryAccessToken` 和 `doclibraryRefreshToken`。
 
-用户名来自 Identity `AdminBootstrap:Username` 配置，不应由 DocLibrary 前端硬编码。
+用户名来自 SignaCore 首次设置及数据库中的 `Admin:Username`，不应由 DocLibrary 前端硬编码。
 
 ## 错误密码与普通账户
 

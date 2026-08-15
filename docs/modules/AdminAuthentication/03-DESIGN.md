@@ -1,4 +1,4 @@
-# 03-DESIGN — DocLibrary 管理员认证设计
+﻿# 03-DESIGN — DocLibrary 管理员认证设计
 
 ## 组件边界
 
@@ -16,7 +16,7 @@ DocLibrary Host
   └─ existing /admin domain endpoints
           │
           ▼
-QuantumZhou.Identity
+SignaCore
   ├─ POST /api/auth/token
   ├─ POST /api/auth/revoke
   └─ OIDC discovery + JWKS
