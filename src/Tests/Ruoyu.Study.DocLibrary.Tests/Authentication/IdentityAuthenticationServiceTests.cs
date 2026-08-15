@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Json;
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using Ruoyu.Study.DocLibrary.Host.Authentication;
 using Xunit;
 
@@ -11,7 +12,7 @@ namespace Ruoyu.Study.DocLibrary.Tests.Authentication;
 public class IdentityAuthenticationServiceTests
 {
     [Fact]
-    public async Task PasswordGrantAsync_UsesCamelCaseContractWithoutAppHeaders()
+    public async Task PasswordGrantAsync_UsesCamelCaseContractWithAppHeaders()
     {
         HttpRequestMessage? captured = null;
         var handler = new StubHttpMessageHandler(async request =>
@@ -33,8 +34,8 @@ public class IdentityAuthenticationServiceTests
 
         result.Status.Should().Be(IdentityExchangeStatus.Succeeded);
         captured.Should().NotBeNull();
-        captured!.Headers.Contains("X-Admin-AppId").Should().BeFalse();
-        captured.Headers.Contains("X-Admin-AppSecret").Should().BeFalse();
+        captured!.Headers.GetValues("X-Admin-AppId").Should().ContainSingle("doclibrary-app");
+        captured.Headers.GetValues("X-Admin-AppSecret").Should().ContainSingle("doclibrary-secret");
         using var json = JsonDocument.Parse(await captured.Content!.ReadAsStringAsync());
         json.RootElement.GetProperty("grantType").GetString().Should().Be("password");
         json.RootElement.GetProperty("username").GetString().Should().Be("admin");
@@ -46,8 +47,10 @@ public class IdentityAuthenticationServiceTests
     public async Task RefreshAsync_UsesRefreshTokenGrant()
     {
         string? body = null;
+        HttpRequestMessage? captured = null;
         var handler = new StubHttpMessageHandler(async request =>
         {
+            captured = await CloneAsync(request);
             body = await request.Content!.ReadAsStringAsync();
             return JsonResponse("""
                 {
@@ -66,6 +69,8 @@ public class IdentityAuthenticationServiceTests
         using var json = JsonDocument.Parse(body!);
         json.RootElement.GetProperty("grantType").GetString().Should().Be("refresh_token");
         json.RootElement.GetProperty("refreshToken").GetString().Should().Be("old-refresh");
+        captured!.Headers.GetValues("X-Admin-AppId").Should().ContainSingle("doclibrary-app");
+        captured.Headers.GetValues("X-Admin-AppSecret").Should().ContainSingle("doclibrary-secret");
     }
 
     [Fact]
@@ -80,6 +85,18 @@ public class IdentityAuthenticationServiceTests
 
         result.Status.Should().Be(IdentityExchangeStatus.Rejected);
         result.Message.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task PasswordGrantAsync_IdentityRejectsAppCredentials_ReturnsUnavailable()
+    {
+        var handler = new StubHttpMessageHandler(_ => Task.FromResult(
+            new HttpResponseMessage(HttpStatusCode.Unauthorized)));
+        var service = CreateService(handler);
+
+        var result = await service.PasswordGrantAsync("admin", "password", CancellationToken.None);
+
+        result.Status.Should().Be(IdentityExchangeStatus.Unavailable);
     }
 
     [Fact]
@@ -132,6 +149,11 @@ public class IdentityAuthenticationServiceTests
         };
         return new IdentityAuthenticationService(
             client,
+            Options.Create(new IdentityClientCredentialsOptions
+            {
+                AppId = "doclibrary-app",
+                AppSecret = "doclibrary-secret"
+            }),
             NullLogger<IdentityAuthenticationService>.Instance);
     }
 

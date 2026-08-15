@@ -9,6 +9,8 @@ CONSUL_HTTP_ADDR="${CONSUL_HTTP_ADDR:-192.168.100.10:8500}"
 CONSUL_TOKEN="${CONSUL_TOKEN:-}"
 
 DOCLIBRARY_COOKIE_SECURE="${DOCLIBRARY_COOKIE_SECURE:-false}"
+: "${IDENTITY_APP_ID:?IDENTITY_APP_ID must be the DocLibrary SignaCore AppId}"
+: "${IDENTITY_APP_SECRET:?IDENTITY_APP_SECRET must be the DocLibrary SignaCore AppSecret}"
 
 OPENSEARCH_INDEX="doclibrary-segments"
 
@@ -40,6 +42,8 @@ docker run -d \
   -e Endpoints__Http="${HTTP_PORT}" \
   -e Database__Name="${DB_NAME}" \
   -e Authentication__CookieSecure="${DOCLIBRARY_COOKIE_SECURE}" \
+  -e IdentityService__AppId="${IDENTITY_APP_ID}" \
+  -e IdentityService__AppSecret="${IDENTITY_APP_SECRET}" \
   -e OpenSearch__IndexName="${OPENSEARCH_INDEX}" \
   -e LlmDocumentAnalysis__ApiKey="${LLM_API_KEY}" \
   -e LlmDocumentAnalysis__BaseUrl="${LLM_BASE_URL}" \

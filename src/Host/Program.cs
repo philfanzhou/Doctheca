@@ -44,6 +44,13 @@ builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(optio
 
 builder.Services.Configure<DocLibraryCookieOptions>(
     builder.Configuration.GetSection(DocLibraryCookieOptions.SectionName));
+builder.Services.AddOptions<IdentityClientCredentialsOptions>()
+    .Bind(builder.Configuration.GetSection(IdentityClientCredentialsOptions.SectionName))
+    .Validate(
+        options => !string.IsNullOrWhiteSpace(options.AppId)
+            && !string.IsNullOrWhiteSpace(options.AppSecret),
+        "IdentityService:AppId and IdentityService:AppSecret must be configured for DocLibrary.")
+    .ValidateOnStart();
 builder.Services.AddHttpClient<IIdentityAuthenticationService, IdentityAuthenticationService>(
     (serviceProvider, client) =>
     {

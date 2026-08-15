@@ -18,6 +18,8 @@
 | Authority 配置 | `IdentityService:Authority` |
 | Issuer 配置 | `IdentityService:Issuer` |
 | Audience 配置 | `IdentityService:Audience` |
+| AppId 部署密钥 | `IdentityService:AppId` |
+| AppSecret 部署密钥 | `IdentityService:AppSecret` |
 | Cookie Secure 配置 | `Authentication:CookieSecure` |
 
 ## 错误与日志

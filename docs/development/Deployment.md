@@ -22,6 +22,8 @@
 - `LlmDocumentAnalysis:*`
 - `MinerU:*`
 - `Authentication:CookieSecure`
+- `IdentityService:AppId`
+- `IdentityService:AppSecret`
 
 以下配置迁入共享 Consul KV：
 
@@ -40,8 +42,11 @@
   - `Loki:Uri`
 - `config/ruoyu/service-endpoints.json`
   - `IdentityService:Authority`
+  - `IdentityService:Issuer`
+  - `IdentityService:AdditionalValidIssuers`
   - `IdentityService:Audience`
   - `IdentityService:RequireHttpsMetadata`
+  - `IdentityService:ClockSkewSeconds`
   - `DocLibraryService:Url`（供调用方访问 DocLibrary）
 - `config/ruoyu/serilog.json`
   - `Serilog:MinimumLevel:*`
@@ -59,6 +64,8 @@
 | `USE_LOCAL_OSS` | （未设置） | 设为 `1` 使用本地文件系统存储代替 S3 |
 | `OSS_LOCAL_PATH` | `data/oss` | 本地文件存储目录（仅在 `USE_LOCAL_OSS=1` 时使用） |
 | `DOCLIBRARY_COOKIE_SECURE` | `false` | 映射到 `Authentication__CookieSecure`；HTTPS 生产部署必须设为 `true` |
+| `IDENTITY_APP_ID` | 无 | DocLibrary 在 SignaCore 中的独立 AppId；启动时映射到 `IdentityService__AppId` |
+| `IDENTITY_APP_SECRET` | 无 | DocLibrary AppSecret；只从部署 secret 注入，启动时映射到 `IdentityService__AppSecret` |
 
 LLM 文档分析配置通过 `start.sh` 的环境变量注入，不把密钥提交到仓库：
 
@@ -102,8 +109,11 @@ LLM 文档分析配置通过 `start.sh` 的环境变量注入，不把密钥提�
 {
   "IdentityService": {
     "Authority": "http://192.168.100.10:5002",
+    "Issuer": "http://192.168.100.10:5002",
     "Audience": "QuantumZhou.microservices",
-    "RequireHttpsMetadata": false
+    "RequireHttpsMetadata": false,
+    "AppId": "<deployment-secret>",
+    "AppSecret": "<deployment-secret>"
   },
   "Authentication": {
     "CookieSecure": false
@@ -111,10 +121,11 @@ LLM 文档分析配置通过 `start.sh` 的环境变量注入，不把密钥提�
 }
 ```
 
-Identity `POST /api/auth/token` 支持不带 AppId/AppSecret 的密码登录，bootstrap
-管理员角色注入不依赖 portal callback。因此 DocLibrary 不注册 Identity App，
-也不配置 AppId/AppSecret。Authority、Audience 和 metadata HTTPS 要求以
-Consul `config/ruoyu/service-endpoints.json` 为部署事实源；上面的
+SignaCore `POST /api/auth/token` 对 password 与 refresh grant 都要求应用凭据。因此
+DocLibrary 使用无 callback、短信禁用、Shared audience 的独立 SignaCore App，并在每次
+token 请求中发送 `X-Admin-AppId` / `X-Admin-AppSecret`。bootstrap 管理员角色注入不依赖
+callback。Authority、Issuer、Audience 和 metadata HTTPS 要求以 Consul
+`config/ruoyu/service-endpoints.json` 为部署事实源；AppId/AppSecret 只来自部署 secret。上面的
 `192.168.100.10` 仅为仓库假内网示例，部署时替换为实际地址。
 
 浏览器与 DocLibrary 之间默认使用 HTTPS，并设置 `Authentication:CookieSecure=true`。`RequireHttpsMetadata=false` 仅表示运维显式接受 HTTP Identity metadata；SignaCore 端也必须启用 HTTP issuer，代码不会因为地址是私网、容器名或处于 Development 就自动放宽。

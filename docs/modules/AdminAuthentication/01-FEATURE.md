@@ -19,7 +19,7 @@ DocLibrary 管理后台使用 SignaCore 的 bootstrap 管理员账户登录。�
 | AC-03 | Identity bootstrap 管理员使用正确密码登录成功 |
 | AC-04 | 错误用户名或密码返回统一 401，不泄露账户存在性或密码校验细节 |
 | AC-05 | 正确普通账户登录返回统一 403，不建立 Cookie 会话 |
-| AC-06 | 登录代理使用 `grantType`、`username`、`password` camelCase 字段调用 `POST /api/auth/token` |
+| AC-06 | 登录代理使用 camelCase 请求体及 DocLibrary 独立 App 凭据调用 `POST /api/auth/token` |
 | AC-07 | DocLibrary 在设置 Cookie 前验证 JWT 签名、issuer、audience、有效期和 `role=admin` |
 | AC-08 | Access Token 与 Refresh Token 仅存放在 HttpOnly、SameSite=Strict Cookie 中 |
 | AC-09 | Access Token 过期后可通过 Refresh Cookie 完成一次性令牌轮换 |
@@ -34,7 +34,7 @@ DocLibrary 管理后台使用 SignaCore 的 bootstrap 管理员账户登录。�
 - Identity 密码登录代理、JWT 管理员角色验证、Cookie 会话、刷新和登出
 - `/admin/*` 管理端点的管理员授权策略
 - 前端登录页、启动会话检查、自动刷新、401/403 处理和退出入口
-- Identity Authority 的 Consul 共享配置与 Cookie 安全属性
+- Identity Authority 的 Consul 共享配置、DocLibrary App 部署凭据与 Cookie 安全属性
 - 后端认证/授权测试与前端构建验证
 
 ### 范围外
@@ -42,7 +42,7 @@ DocLibrary 管理后台使用 SignaCore 的 bootstrap 管理员账户登录。�
 - 修改 SignaCore 初始管理员创建或 `role=admin` 注入逻辑
 - 在 DocLibrary 创建或管理 Identity 用户
 - 在前端保存或展示任何 Token
-- 预留没有真实调用方的内部服务接口或服务凭据
+- 预留没有真实调用方的内部服务接口或额外服务凭据
 
 ## 关联文档
 

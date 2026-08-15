@@ -28,7 +28,7 @@ SignaCore
 
 ### `IdentityAuthenticationService`
 
-封装 Identity 的 password grant、refresh token grant 和 revoke 调用。请求 DTO 使用显式 camelCase JSON 名称。服务不记录请求密码或响应 Token。
+封装 Identity 的 password grant、refresh token grant 和 revoke 调用。请求 DTO 使用显式 camelCase JSON 名称；token 请求附带 DocLibrary 独立 AppId/AppSecret。服务不记录请求密码、应用密钥或响应 Token。
 
 ### `IdentityTokenValidator`
 
@@ -57,7 +57,7 @@ Anonymous SPA fallback
 
 ```text
 Browser -> DocLibrary: username/password
-DocLibrary -> Identity: POST /api/auth/token
+DocLibrary -> Identity: POST /api/auth/token + DocLibrary App credentials
 Identity -> DocLibrary: accessToken + refreshToken
 DocLibrary -> Identity discovery/JWKS: validate accessToken
 DocLibrary: require role=admin
@@ -87,4 +87,5 @@ QuestionBank 专用 HTTP 接口、服务认证策略或服务密钥配置。后�
 - Host 仍监听单一 HTTP 端口 5012。
 - Identity Authority、Audience 和 metadata HTTPS 要求复用共享 Consul
   `IdentityService` 配置，`start.sh` 不重复注入。
+- DocLibrary AppId/AppSecret 是部署 secret，由 `start.sh` 注入，不进入共享 Consul。
 - Cookie 安全配置保留为 DocLibrary 本地配置，不新增独立前端容器或反向代理。

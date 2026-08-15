@@ -18,7 +18,8 @@
 | AUTH-UT-12 | Identity revoke 不可用时登出 | 仍清除 Cookie并返回 200 |
 | AUTH-UT-13 | `/health`、静态入口和 SPA fallback | 匿名可访问 |
 | AUTH-UT-14 | `/internal/question-bank/*` 和旧导入状态路径 | 不映射 |
-| AUTH-UT-15 | Identity 请求 JSON | 字段为 `grantType`、`username`、`password` / `refreshToken`，不发送 AppId/AppSecret |
+| AUTH-UT-15 | Identity token 请求 | 字段为 `grantType`、`username`、`password` / `refreshToken`，并发送 DocLibrary AppId/AppSecret headers |
+| AUTH-UT-16 | SignaCore 返回 401 拒绝 App 凭据 | 映射为 Identity 不可用，不伪装成用户密码错误 |
 
 测试使用固定 RSA 测试密钥和受控 Identity HTTP handler，不依赖真实密码或生产密钥。
 
@@ -27,7 +28,7 @@
 - 不映射任何 `/internal/question-bank/*`。
 - 不存在任何导入状态写接口。
 - DocLibrary 不创建或更新 `document_parse_imports`。
-- `start.sh` 不注入 Identity 或 QuestionBank 配置，只保留 DocLibrary 自身的 Cookie Secure 开关。
+- `start.sh` 不注入共享 Identity 信任或 QuestionBank 配置；只注入 DocLibrary App 凭据与自身的 Cookie Secure 开关。
 
 ## 前端验证
 

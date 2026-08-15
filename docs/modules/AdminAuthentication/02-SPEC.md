@@ -32,6 +32,7 @@
 |------|------|----------|
 | 用户名或密码为空 | 400 | `Username and password are required.` |
 | Identity 拒绝账号密码 | 401 | `Invalid username or password.` |
+| SignaCore 拒绝 DocLibrary App 凭据 | 502 | `Identity service is unavailable.` |
 | Identity 登录成功但 Token 无 `role=admin` | 403 | `Administrator access is required.` |
 | Identity 不可用或响应无效 | 502 | `Identity service is unavailable.` |
 | Identity Token 未通过密码学验证 | 502 | `Identity service returned an invalid token.` |
@@ -46,6 +47,9 @@ DocLibrary 调用 Identity 的请求体固定为：
 }
 ```
 
+上述 DocLibrary → SignaCore 请求同时携带 DocLibrary 自己的 `X-Admin-AppId` /
+`X-Admin-AppSecret`；凭据来自部署 secret，不复用任一 Portal App，也不写入共享 Consul KV。
+
 ### POST `/admin/auth/refresh`
 
 匿名端点，但要求请求携带有效 Refresh Cookie。DocLibrary 调用 Identity：
@@ -57,7 +61,7 @@ DocLibrary 调用 Identity 的请求体固定为：
 }
 ```
 
-刷新成功后必须重新验证新 Access Token 的签名和 `role=admin`，然后轮换两个 Cookie。无效、过期、已撤销或非管理员 Token 返回 401；Identity 不可用返回 502；两类失败都清除两个 Cookie。
+刷新成功后必须重新验证新 Access Token 的签名和 `role=admin`，然后轮换两个 Cookie。无效、过期、已撤销或非管理员 Token 返回 401；Identity 不可用返回 502；两类失败都清除两个 Cookie。refresh grant 与 password grant 使用同一组 DocLibrary App 凭据。
 
 ### POST `/admin/auth/logout`
 

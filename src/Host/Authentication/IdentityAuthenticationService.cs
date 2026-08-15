@@ -1,19 +1,23 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Microsoft.Extensions.Options;
 
 namespace Ruoyu.Study.DocLibrary.Host.Authentication;
 
 public sealed class IdentityAuthenticationService : IIdentityAuthenticationService
 {
     private readonly HttpClient _httpClient;
+    private readonly IdentityClientCredentialsOptions _credentials;
     private readonly ILogger<IdentityAuthenticationService> _logger;
 
     public IdentityAuthenticationService(
         HttpClient httpClient,
+        IOptions<IdentityClientCredentialsOptions> credentials,
         ILogger<IdentityAuthenticationService> logger)
     {
         _httpClient = httpClient;
+        _credentials = credentials.Value;
         _logger = logger;
     }
 
@@ -56,9 +60,17 @@ public sealed class IdentityAuthenticationService : IIdentityAuthenticationServi
                 HttpMethod.Post,
                 "/api/auth/token",
                 JsonContent.Create(tokenRequest));
+            request.Headers.Add("X-Admin-AppId", _credentials.AppId);
+            request.Headers.Add("X-Admin-AppSecret", _credentials.AppSecret);
             using var response = await _httpClient.SendAsync(request, cancellationToken);
 
-            if (response.StatusCode is HttpStatusCode.BadRequest or HttpStatusCode.Unauthorized)
+            if (response.StatusCode == HttpStatusCode.Unauthorized)
+            {
+                _logger.LogWarning("Identity rejected the DocLibrary application credentials");
+                return new IdentityTokenExchangeResult(IdentityExchangeStatus.Unavailable);
+            }
+
+            if (response.StatusCode == HttpStatusCode.BadRequest)
             {
                 return new IdentityTokenExchangeResult(IdentityExchangeStatus.Rejected);
             }
