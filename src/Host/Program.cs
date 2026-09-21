@@ -15,6 +15,7 @@ using Ruoyu.Study.DocLibrary.Domain.Repositories;
 using Ruoyu.Study.DocLibrary.Domain.Services;
 using Ruoyu.Study.DocLibrary.Service;
 using Ruoyu.Study.DocLibrary.Service.Parsing;
+using Ruoyu.Study.DocLibrary.Service.StructaDoc;
 using Ruoyu.Study.DocLibrary.Host;
 using Ruoyu.Study.DocLibrary.Host.Authentication;
 using Ruoyu.Study.Consul.Shared;
@@ -150,7 +151,6 @@ builder.Services.AddScoped<IDocumentFileRepository, DocumentFileRepository>();
 builder.Services.AddScoped<IDocumentParseRepository, DocumentParseRepository>();
 builder.Services.AddScoped<IDocumentParseImageRepository, DocumentParseImageRepository>();
 builder.Services.AddScoped<IDocumentParseBlockRepository, DocumentParseBlockRepository>();
-builder.Services.AddScoped<IDocumentParseBlockService, DocumentParseBlockService>();
 builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
 
 // Domain Services
@@ -158,36 +158,31 @@ builder.Services.AddScoped<ISearchDomainService, SearchDomainService>();
 builder.Services.AddScoped<IDocumentFileService, DocumentFileService>();
 builder.Services.AddScoped<IDocumentParseService, DocumentParseService>();
 
-// MinerU Precision API Client
-builder.Services.Configure<MinerUOptions>(builder.Configuration.GetSection(MinerUOptions.SectionName));
-builder.Services.Configure<FileConversionOptions>(builder.Configuration.GetSection(FileConversionOptions.SectionName));
-
-// FileConversion: 命名 HttpClient + Singleton 包装。
-// AddHttpClient<TInterface, TImplementation>() 默认注册为 Transient，MinerUFileParseWorker 每 5 秒
-// CreateScope().GetRequiredService<IFileConversionService>() 会重复 new 实例（构造函数日志被重复打印）。
-// 改用 AddHttpClient("FileConversion") 注册命名 HttpClient（HttpClientFactory 池化 Handler），
-// 再用 AddSingleton<IFileConversionService> 工厂方式包装，确保真正的 Singleton 生命周期。
-builder.Services.AddHttpClient("FileConversion", client =>
+// StructaDoc parsing service client (ADR-0009): named HttpClient + Singleton wrapper so the
+// polling worker does not recreate the client (HttpClientFactory pools the handler).
+builder.Services.Configure<StructaDocOptions>(builder.Configuration.GetSection(StructaDocOptions.SectionName));
+builder.Services.AddHttpClient("StructaDoc", client =>
 {
-    var url = builder.Configuration["FileConversionService:Url"] ?? "http://doc-converter:5050";
-    client.BaseAddress = new Uri(url.TrimEnd('/') + "/");
-    client.Timeout = TimeSpan.FromSeconds(180);
+    var options = builder.Configuration.GetSection(StructaDocOptions.SectionName).Get<StructaDocOptions>()
+        ?? new StructaDocOptions();
+    if (!string.IsNullOrWhiteSpace(options.BaseUrl))
+    {
+        client.BaseAddress = new Uri(options.BaseUrl.TrimEnd('/') + "/");
+    }
+    client.Timeout = TimeSpan.FromSeconds(options.TimeoutSeconds);
 });
-builder.Services.AddSingleton<IFileConversionService>(sp =>
+builder.Services.AddSingleton<IStructaDocClient>(sp =>
 {
     var factory = sp.GetRequiredService<IHttpClientFactory>();
-    var options = sp.GetRequiredService<IOptions<FileConversionOptions>>();
-    var logger = sp.GetRequiredService<ILogger<RemoteFileConversionService>>();
-    return new RemoteFileConversionService(factory.CreateClient("FileConversion"), options, logger);
+    var options = sp.GetRequiredService<IOptions<StructaDocOptions>>();
+    var logger = sp.GetRequiredService<ILogger<StructaDocClient>>();
+    return new StructaDocClient(factory.CreateClient("StructaDoc"), options, logger);
 });
 
-builder.Services.AddSingleton<MinerUPrecisionClient>();
-builder.Services.AddSingleton<IPdfSplitService, PdfSplitService>();
-
 // Background Workers
-builder.Services.AddScoped<MinerUParseOrchestrator>();
-builder.Services.AddScoped<MinerUResultPersistence>();
-builder.Services.AddHostedService<MinerUFileParseWorker>();
+builder.Services.AddScoped<IStructaDocParseResultSync, StructaDocParseResultSync>();
+builder.Services.AddScoped<ParseImageContentSource>();
+builder.Services.AddHostedService<StructaDocParseWorker>();
 
 var app = builder.Build();
 var identityTrust = app.Services
@@ -225,6 +220,13 @@ app.Logger.LogInformation(
     StartupDiagnosticsFormatter.SummarizeValue(builder.Configuration["OpenSearch:Url"]));
 app.Logger.LogInformation("OSS: {OssType}", useLocalOss ? "local" : "S3");
 app.Logger.LogInformation("OpenSearch: {Url}", builder.Configuration["OpenSearch:Url"] ?? "(not configured)");
+
+var structaDocConfig = builder.Configuration.GetSection(StructaDocOptions.SectionName).Get<StructaDocOptions>()
+    ?? new StructaDocOptions();
+app.Logger.LogInformation(
+    "StructaDoc: BaseUrl={BaseUrl}, ApiKey={ApiKeyStatus}",
+    structaDocConfig.BaseUrl ?? "(not configured)",
+    string.IsNullOrEmpty(structaDocConfig.ApiKey) ? "(empty - parsing disabled)" : SensitiveDataMasker.MaskApiKey(structaDocConfig.ApiKey));
 
 // Log LLM configuration
 var llmApiKey = builder.Configuration["LlmDocumentAnalysis:ApiKey"];

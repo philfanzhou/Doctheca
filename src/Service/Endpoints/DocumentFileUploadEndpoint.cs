@@ -7,9 +7,10 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Logging;
-using Ruoyu.Study.Common.Oss;
+using Microsoft.Extensions.Options;
 using Ruoyu.Study.DocLibrary.Domain.Models;
 using Ruoyu.Study.DocLibrary.Domain.Services;
+using Ruoyu.Study.DocLibrary.Service.StructaDoc;
 
 namespace Ruoyu.Study.DocLibrary.Service;
 
@@ -35,10 +36,14 @@ internal static class DocumentFileUploadEndpoint
     private static async Task<IResult> UploadDocumentFile(
         HttpRequest request,
         IDocumentFileService fileService,
-        IOssService ossService,
+        IStructaDocClient structaDocClient,
+        IOptions<StructaDocOptions> structaDocOptions,
         [FromServices] ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(DocumentFileUploadEndpoint));
+
+        if (!structaDocOptions.Value.IsConfigured)
+            return Results.Json(new { success = false, message = "StructaDoc service is not configured", errorCode = "DOCLIBRARY_STRUCTADOC_NOT_CONFIGURED" }, statusCode: StatusCodes.Status503ServiceUnavailable);
 
         if (!request.HasFormContentType)
             return Results.BadRequest(new { success = false, message = "Request must be multipart/form-data" });
@@ -54,12 +59,20 @@ internal static class DocumentFileUploadEndpoint
         if (!DocumentFileMimeTypes.Contains(file.ContentType))
             return Results.BadRequest(new { success = false, message = "Unsupported file format", errorCode = "DOCLIBRARY_FILE_FORMAT_UNSUPPORTED" });
 
-        string filePath;
-        using (var stream = file.OpenReadStream())
+        // ADR-0009: StructaDoc owns document originals; DocLibrary keeps only the reference.
+        StructaDocDocumentResponse uploaded;
+        await using (var stream = file.OpenReadStream())
         {
-            var ext = Path.GetExtension(file.FileName) ?? ".bin";
-            var objectName = $"{Guid.NewGuid()}{ext}";
-            filePath = await ossService.UploadAsync(stream, objectName, file.ContentType, OssBucket.Documents, "doclibrary-files");
+            try
+            {
+                uploaded = await structaDocClient.UploadDocumentAsync(
+                    file.FileName, file.ContentType, stream, request.HttpContext.RequestAborted);
+            }
+            catch (StructaDocException ex)
+            {
+                logger.LogError(ex, "StructaDoc document upload failed for {FileName}", file.FileName);
+                return MapUploadError(ex);
+            }
         }
 
         var subject = request.HttpContext.User.FindFirst("sub")?.Value
@@ -71,14 +84,17 @@ internal static class DocumentFileUploadEndpoint
         var model = new DocumentFileModel
         {
             FileName = file.FileName,
-            FilePath = filePath,
-            ContentType = file.ContentType,
+            FilePath = null,
+            StructaDocDocumentId = uploaded.Id,
+            ContentType = uploaded.MediaType ?? file.ContentType,
             CreatedBy = createdBy,
         };
 
         var created = await fileService.CreateAsync(model);
 
-        logger.LogInformation("Document file uploaded: {Id}, FileName={FileName}", created.Id, created.FileName);
+        logger.LogInformation(
+            "Document file uploaded to StructaDoc: {Id}, FileName={FileName}, StructaDocDocumentId={StructaDocDocumentId}",
+            created.Id, created.FileName, uploaded.Id);
 
         return Results.Ok(new
         {
@@ -90,5 +106,19 @@ internal static class DocumentFileUploadEndpoint
                 contentType = created.ContentType,
             }
         });
+    }
+
+    private static IResult MapUploadError(StructaDocException ex)
+    {
+        if (ex.StatusCode == 413 || ex.ProblemCode == "file-too-large")
+            return Results.BadRequest(new { success = false, message = "File size exceeds the StructaDoc upload limit" });
+
+        if (ex.StatusCode == 415 || ex.ProblemCode == "unsupported-document-type")
+            return Results.BadRequest(new { success = false, message = "Unsupported file format", errorCode = "DOCLIBRARY_FILE_FORMAT_UNSUPPORTED" });
+
+        if (ex.StatusCode is 401 or 403)
+            return Results.Json(new { success = false, message = "StructaDoc rejected the configured API key", errorCode = "DOCLIBRARY_STRUCTADOC_UNAUTHORIZED" }, statusCode: StatusCodes.Status502BadGateway);
+
+        return Results.Json(new { success = false, message = ex.Message, errorCode = "DOCLIBRARY_STRUCTADOC_ERROR" }, statusCode: StatusCodes.Status502BadGateway);
     }
 }

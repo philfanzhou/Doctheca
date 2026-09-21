@@ -69,7 +69,7 @@ Loki 地址统一通过配置键 `Loki:Uri` 注入，`Program.cs` 启动时读�
 
 | 字段类型 | 脱敏规则 | 示例 |
 |----------|---------|------|
-| LLM ApiKey / MinerU ApiToken | 保留前 4 + 后 4，中间用 `****` 替换；长度不足 8 位时全部替换为 `****` | `sk-a****1b2c` |
+| LLM ApiKey / StructaDoc ApiKey | 保留前 4 + 后 4，中间用 `****` 替换；长度不足 8 位时全部替换为 `****` | `sk-a****1b2c` |
 | OSS AccessKey / SecretKey | 完全不记录 | — |
 | 密码 / JWT / Refresh Token / Cookie | 完全不记录 | — |
 

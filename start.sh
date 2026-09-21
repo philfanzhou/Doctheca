@@ -21,7 +21,8 @@ LLM_BASE_URL="${LLM_BASE_URL:-https://api.siliconflow.cn/v1}"
 LLM_MODEL="${LLM_MODEL:-Qwen/Qwen2.5-7B-Instruct}"
 LLM_CONTEXT_LENGTH="${LLM_CONTEXT_LENGTH:-128K}"
 
-MINERU_API_TOKEN="${MINERU_API_TOKEN:-}"
+STRUCTADOC_BASE_URL="${STRUCTADOC_BASE_URL:-http://structadoc:8080}"
+STRUCTADOC_API_KEY="${STRUCTADOC_API_KEY:-}"
 
 if [ -n "$(docker ps -q --filter "name=^/${CONTAINER_NAME}$")" ]; then
     echo "Container is already running, stopping it..."
@@ -49,6 +50,7 @@ docker run -d \
   -e LlmDocumentAnalysis__BaseUrl="${LLM_BASE_URL}" \
   -e LlmDocumentAnalysis__Model="${LLM_MODEL}" \
   -e LlmDocumentAnalysis__ContextLength="${LLM_CONTEXT_LENGTH:-128K}" \
-  -e MinerU__ApiToken="${MINERU_API_TOKEN}" \
+  -e StructaDoc__BaseUrl="${STRUCTADOC_BASE_URL}" \
+  -e StructaDoc__ApiKey="${STRUCTADOC_API_KEY}" \
   -e Logging__LogLevel__Microsoft_EntityFrameworkCore_Database_Command="Warning" \
   "$IMAGE_NAME"

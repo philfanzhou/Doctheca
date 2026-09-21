@@ -46,6 +46,7 @@ public class DocumentParseRepository : IDocumentParseRepository
         entity.Status = model.Status;
         entity.ModelVersion = model.ModelVersion;
         entity.ExternalTaskId = model.ExternalTaskId;
+        entity.StructaDocParseRunId = model.StructaDocParseRunId;
         entity.MarkdownContent = model.MarkdownContent;
         entity.ContentList = model.ContentList;
         entity.ContentListV2 = model.ContentListV2;
@@ -63,6 +64,14 @@ public class DocumentParseRepository : IDocumentParseRepository
     {
         return await _context.DocumentParses
             .Where(e => e.Status == status)
+            .Select(e => MapToModel(e))
+            .ToListAsync();
+    }
+
+    public async Task<List<DocumentParseModel>> GetByStatusesAsync(IReadOnlyCollection<string> statuses)
+    {
+        return await _context.DocumentParses
+            .Where(e => statuses.Contains(e.Status))
             .Select(e => MapToModel(e))
             .ToListAsync();
     }
@@ -126,6 +135,7 @@ public class DocumentParseRepository : IDocumentParseRepository
         ModelVersion = model.ModelVersion,
         Status = model.Status,
         ExternalTaskId = model.ExternalTaskId,
+        StructaDocParseRunId = model.StructaDocParseRunId,
         MarkdownContent = model.MarkdownContent,
         ContentList = model.ContentList,
         ContentListV2 = model.ContentListV2,
@@ -143,6 +153,7 @@ public class DocumentParseRepository : IDocumentParseRepository
         ModelVersion = entity.ModelVersion,
         Status = entity.Status,
         ExternalTaskId = entity.ExternalTaskId,
+        StructaDocParseRunId = entity.StructaDocParseRunId,
         MarkdownContent = entity.MarkdownContent,
         ContentList = entity.ContentList,
         ContentListV2 = entity.ContentListV2,

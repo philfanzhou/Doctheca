@@ -20,7 +20,7 @@
 - `ConnectionStrings:Default` 中的数据库名部分
 - `OpenSearch:IndexName`
 - `LlmDocumentAnalysis:*`
-- `MinerU:*`
+- `StructaDoc:ApiKey`
 - `Authentication:CookieSecure`
 - `IdentityService:AppId`
 - `IdentityService:AppSecret`
@@ -48,10 +48,11 @@
   - `IdentityService:RequireHttpsMetadata`
   - `IdentityService:ClockSkewSeconds`
   - `DocLibraryService:Url`（供调用方访问 DocLibrary）
+  - `StructaDoc:BaseUrl`（DocLibrary 调用外部 StructaDoc 解析服务）
 - `config/ruoyu/serilog.json`
   - `Serilog:MinimumLevel:*`
 
-> `Database:Name`、`OpenSearch:IndexName`、`LlmDocumentAnalysis:*`、`MinerU:*` 都属于 DocLibrary 私有配置，不进入共享 KV。
+> `Database:Name`、`OpenSearch:IndexName`、`LlmDocumentAnalysis:*`、`StructaDoc:ApiKey` 都属于 DocLibrary 私有配置，不进入共享 KV；`StructaDoc:BaseUrl` 在共享 KV `service-endpoints.json` 中。
 
 ## 环境变量
 

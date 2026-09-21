@@ -150,4 +150,44 @@ public class DocumentParseServiceUpdateStatusTests
         result.Should().HaveCount(1);
         result[0].Status.Should().Be(DocumentParseStatus.Pending);
     }
+
+    [Fact]
+    public async Task GetActiveJobsAsync_ReturnsPendingAndParsingJobs()
+    {
+        // Arrange
+        var items = new List<DocumentParseModel>
+        {
+            new() { Id = Guid.NewGuid(), Status = DocumentParseStatus.Pending },
+            new() { Id = Guid.NewGuid(), Status = DocumentParseStatus.Parsing },
+        };
+        _parseRepoMock.Setup(r => r.GetByStatusesAsync(
+                It.Is<IReadOnlyCollection<string>>(s =>
+                    s.Contains(DocumentParseStatus.Pending) && s.Contains(DocumentParseStatus.Parsing))))
+            .ReturnsAsync(items);
+
+        // Act
+        var result = await _service.GetActiveJobsAsync();
+
+        // Assert
+        result.Should().HaveCount(2);
+    }
+
+    [Fact]
+    public async Task UpdateStatusAsync_SetsStructaDocParseRunId()
+    {
+        // Arrange
+        var id = Guid.NewGuid();
+        var runId = Guid.NewGuid();
+        var model = new DocumentParseModel { Id = id, Status = DocumentParseStatus.Pending };
+        _parseRepoMock.Setup(r => r.GetByIdAsync(id)).ReturnsAsync(model);
+        _parseRepoMock.Setup(r => r.UpdateAsync(It.IsAny<DocumentParseModel>())).ReturnsAsync(model);
+
+        // Act
+        var result = await _service.UpdateStatusAsync(
+            id, DocumentParseStatus.Parsing, externalTaskId: runId.ToString("D"), structaDocParseRunId: runId);
+
+        // Assert
+        result.StructaDocParseRunId.Should().Be(runId);
+        result.ExternalTaskId.Should().Be(runId.ToString("D"));
+    }
 }

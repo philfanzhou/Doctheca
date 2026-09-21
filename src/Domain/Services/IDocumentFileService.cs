@@ -8,5 +8,6 @@ public interface IDocumentFileService
     Task<DocumentFileModel?> GetByIdAsync(Guid id);
     Task<(List<DocumentFileModel> Items, int TotalCount)> GetListAsync(int page, int size, string? fileName = null);
     Task<DocumentFileModel?> UpdateMetadataAsync(Guid id, string? subject, string? grade, string? year);
+    Task<DocumentFileModel?> AttachStructaDocDocumentAsync(Guid id, Guid structaDocDocumentId);
     Task<bool> DeleteAsync(Guid id);
 }

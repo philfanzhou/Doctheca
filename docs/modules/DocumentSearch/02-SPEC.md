@@ -3,7 +3,7 @@
 ## 功能概述
 
 DocumentSearch 提供两大能力：
-1. **OpenSearch 块索引写入**：将 MinerU 解析产生的 `document_parse_blocks` 索引到 OpenSearch，并在解析删除、文件删除、元数据更新时自动维护索引。
+1. **OpenSearch 块索引写入**：将解析产生的 `document_parse_blocks` 索引到 OpenSearch，并在解析删除、文件删除、元数据更新时自动维护索引。
 2. **精确关键词搜索**：通过 `GET /admin/documents/search` HTTP API 提供基于 OpenSearch BM25 的关键词搜索，支持短语/单词匹配、元数据过滤、游标分页，OpenSearch 不可用时降级为空结果。
 
 ## 1. 接口变更
@@ -26,7 +26,7 @@ public interface ISearchIndexService
 | 方法 | 职责 | 调用时机 |
 |------|------|---------|
 | `EnsureIndexAsync` | 确保索引存在（不存在则创建） | 服务启动时（`Program.cs`） |
-| `IndexParseBlocksAsync` | 将 parse 的所有 blocks 索引到 OpenSearch | MinerU 解析完成后 |
+| `IndexParseBlocksAsync` | 将 parse 的所有 blocks 索引到 OpenSearch | 解析完成后 |
 | `DeleteParseIndexAsync` | 按 `parse_id` 删除索引文档 | 删除 parse 记录后 |
 | `DeleteDocumentFileIndexAsync` | 按 `document_file_id` 删除索引文档 | 删除文档文件后 |
 | `UpdateDocumentFileMetadataAsync` | 按 `document_file_id` 刷新 subject/grade/year | 元数据更新后（手动或 LLM） |
@@ -295,7 +295,7 @@ public class OpenSearchOptions
 
 ## 9. 实现步骤
 
-### 9.1 索引写入（`MinerUFileParseWorker` 集成）
+### 9.1 索引写入（`StructaDocParseWorker` 集成）
 
 在 `PersistParseResultAsync` 和 `PersistMergedChunkResultsAsync` 中（仅 `status == DocumentParseStatus.Parsed` 时）：
 
@@ -318,7 +318,7 @@ catch (Exception ex)
 - `DeleteDocumentFile`：数据库删除后（Step 4）调用 `DeleteDocumentFileIndexAsync`（best-effort）。
 - `UpdateDocumentFileMetadata`：元数据更新后调用 `UpdateDocumentFileMetadataAsync`（best-effort）。
 
-### 9.3 元数据同步（`MinerUFileParseWorker.AnalyzeMetadataIfMissingAsync`）
+### 9.3 元数据同步（`StructaDocParseWorker.AnalyzeMetadataIfMissingAsync`）
 
 LLM 分析完成后，调用 `UpdateDocumentFileMetadataAsync(documentFileId, newSubject, newGrade, newYear)` 同步 OpenSearch 索引（best-effort）。
 
@@ -347,7 +347,7 @@ LLM 分析完成后，调用 `UpdateDocumentFileMetadataAsync(documentFileId, ne
 ### 11.2 集成测试（规划）
 
 依赖真实 OpenSearch HTTP 与数据库，未实现：
-- MinerU 解析完成后 OpenSearch 有 blocks 数据。
+- 解析完成后 OpenSearch 有 blocks 数据。
 - 删除 parse / 文档后 OpenSearch 清理。
 - 搜索命中 blocks 数据。
 
@@ -365,7 +365,7 @@ LLM 分析完成后，调用 `UpdateDocumentFileMetadataAsync(documentFileId, ne
 | `OpenSearchIndexService.cs` | `ISearchIndexService` facade；实际逻辑委托给 `OpenSearch/` 下的辅助类 |
 | `ISearchDomainService.cs` / `SearchDomainService.cs` | 薄封装 + 降级 |
 | `DocumentSearchEndpoints.cs` | `GET /admin/documents/search` |
-| `MinerUFileParseWorker.cs` | 解析完成后索引（best-effort） |
+| `StructaDocParseWorker.cs` | 解析完成后索引（best-effort） |
 | `DocumentParseEndpoints.cs` | 删除 parse 后清理索引 |
 | `DocumentFileEndpoints.cs` | 删除文件后清理索引；元数据更新后同步索引 |
 | `Program.cs` | 启动时 `EnsureIndexAsync`（best-effort） |
@@ -374,7 +374,7 @@ LLM 分析完成后，调用 `UpdateDocumentFileMetadataAsync(documentFileId, ne
 
 ## 13. 第 2 代 — minerU block 结构化检索规格（演进 V1）
 
-> 第 2 代复用 V1 同一 OpenSearch 索引（`doclibrary-segments`）与同一 `MinerUFileParseWorker` 入口，**不新建索引、不新建平行 endpoint、不新建 `BlockXxx` 独立模型类**。第 2 代在 V1 索引写入时**追加** minerU 维度字段与 `blockData` 内嵌对象，在 V1 endpoint `GET /admin/documents/search` 上**追加** minerU 过滤参数与回挂字段，V1 查询路径零变更。
+> 第 2 代复用 V1 同一 OpenSearch 索引（`doclibrary-segments`）与同一 `StructaDocParseWorker` 入口，**不新建索引、不新建平行 endpoint、不新建 `BlockXxx` 独立模型类**。第 2 代在 V1 索引写入时**追加** minerU 维度字段与 `blockData` 内嵌对象，在 V1 endpoint `GET /admin/documents/search` 上**追加** minerU 过滤参数与回挂字段，V1 查询路径零变更。
 
 ### 13.1 第 2 代接口变更（扩展 V1 组件）
 
@@ -625,7 +625,7 @@ public static async Task<IResults> Search(...)
 
 ### 13.9 第 2 代实现步骤（扩展 V1，不新建）
 
-#### 13.9.1 索引写入扩展（`MinerUFileParseWorker`，扩展 `IndexParseBlocksAsync`）
+#### 13.9.1 索引写入扩展（`StructaDocParseWorker`，扩展 `IndexParseBlocksAsync`）
 
 在 `IndexBlocksToSearchAsync` 中，V1 bulk 构建后追加 minerU 维度字段：
 
@@ -669,7 +669,7 @@ _meta         = new { block_data = block.BlockData }   // 整块回挂（V1 mine
 
 #### 13.11.2 集成测试（规划，同 V1 集成测试体系）
 
-- MinerU 解析完成后 OpenSearch 有 `x0/y0/x1/y1`/`score`/`has_image`/`_meta.block_data`。
+- 解析完成后 OpenSearch 有 `x0/y0/x1/y1`/`score`/`has_image`/`_meta.block_data`。
 - `GET /admin/documents/search?keyword=X&blockType=Y` 命中正确 block，响应回挂 `blockData`。
 - `blockData` 回挂与库内存储一致（round-trip）。
 
@@ -681,6 +681,6 @@ _meta         = new { block_data = block.BlockData }   // 整块回挂（V1 mine
 | `OpenSearchIndexService.cs` | V1 facade 追加 minerU 字段；`OpenSearchIndexManager.BuildIndexBody` 追加 minerU 维度映射；`OpenSearchQueryBuilder.BuildSearchBody` / `OpenSearchResponseParser.ParseSearchResponse` 内追加 minerU filter + 回挂分支 |
 | `ISearchDomainService.cs` / `SearchDomainService.cs` | `ExactSearchAsync` 内追加 minerU filter 透传与回挂字段解析（V1 方法内扩展） |
 | `DocumentSearchEndpoints.cs`（扩展，同一文件） | `GET /admin/documents/search` 追加可选 minerU 入参（V1 原有入参与校验保留） |
-| `MinerUFileParseWorker.cs` | `IndexBlocksToSearchAsync` 追加 minerU 维度字段（同一 bulk） |
+| `StructaDocParseWorker.cs` | `IndexBlocksToSearchAsync` 追加 minerU 维度字段（同一 bulk） |
 | `SearchPage.vue`（doclibrary 自带前端 扩展，同一页面） | 加"高级筛选"抽屉 + 结果行展开详情 |
 | `Program.cs` | 无变更（复用 V1 DI 注册） |

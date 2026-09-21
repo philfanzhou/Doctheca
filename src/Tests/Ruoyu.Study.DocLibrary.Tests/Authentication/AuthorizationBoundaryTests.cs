@@ -19,6 +19,8 @@ using Ruoyu.Study.DocLibrary.Domain.Repositories;
 using Ruoyu.Study.DocLibrary.Domain.Services;
 using Ruoyu.Study.DocLibrary.Host.Authentication;
 using Ruoyu.Study.DocLibrary.Service;
+using Ruoyu.Study.DocLibrary.Service.Parsing;
+using Ruoyu.Study.DocLibrary.Service.StructaDoc;
 using Xunit;
 
 namespace Ruoyu.Study.DocLibrary.Tests.Authentication;
@@ -125,6 +127,8 @@ public class AuthorizationBoundaryTests
         builder.Services.AddSingleton(Mock.Of<IDocumentFileService>());
         builder.Services.AddSingleton(Mock.Of<IOssService>());
         builder.Services.AddSingleton(Mock.Of<ISearchIndexService>());
+        builder.Services.AddSingleton(Mock.Of<IStructaDocClient>());
+        builder.Services.AddSingleton<ParseImageContentSource>();
 
         builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             .AddJwtBearer(options =>

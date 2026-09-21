@@ -36,7 +36,7 @@
 
 ## 第 2 代演进：基于 minerU v1 JSON 的 block 级检索
 
-> **演进方式：并入 V1 索引 / V1 endpoint / V1 前端**—— 不新建平行 endpoint、不新建 `BlockXxx` 独立模型类、不新建独立的 `BlockSearchPage.vue` 平行页。原因（来自 @user 设计审查）：管理后台的"block 级检索"与现有的"精确关键词检索"共享同一 OpenSearch 索引、同一 `document_parse_blocks` 表、同一 `MinerUFileParseWorker` 入口、同一 `SearchDomainService` 降级链路、同一 doclibrary 自带前端——另开一条平行路径等于维护两套检索。
+> **演进方式：并入 V1 索引 / V1 endpoint / V1 前端**—— 不新建平行 endpoint、不新建 `BlockXxx` 独立模型类、不新建独立的 `BlockSearchPage.vue` 平行页。原因（来自 @user 设计审查）：管理后台的"block 级检索"与现有的"精确关键词检索"共享同一 OpenSearch 索引、同一 `document_parse_blocks` 表、同一 `StructaDocParseWorker` 入口、同一 `SearchDomainService` 降级链路、同一 doclibrary 自带前端——另开一条平行路径等于维护两套检索。
 
 ### minerU v1 block 字段来源与分层
 
@@ -111,7 +111,7 @@ type 枚举 (完整): text, title, equation, image, image_caption, image_footnot
 | 层 | 变更 | 复用 |
 |----|------|------|
 | OpenSearch 索引映射 | V1 `BuildIndexBody` 追加 `bbox`/`x0 y0 x1 y1`/`score`/`has_image`/`_meta.block_data` | 同一索引、同一 `_id` |
-| 索引写入 Worker | `MinerUFileParseWorker.IndexBlocksToSearchAsync` 在同一 bulk 追加新字段 | 同一 best-effort 入口 |
+| 索引写入 Worker | `StructaDocParseWorker.IndexBlocksToSearchAsync` 在同一 bulk 追加新字段 | 同一 best-effort 入口 |
 | 领域服务 | `SearchDomainService.ExactSearchAsync` 扩展 + 新增参数；**不新增方法**，只是同一方法里增加 filter/返回字段分支 | 委托 `ISearchIndexService` 的扩展签名 |
 | 端点 | `DocumentSearchEndpoints.Search` **扩展**：新增可选入参 `blockType`/`pageNumber`/`hasImage`，返回的 `SearchResultModel` 追加 `BlockData`/`Bbox`/`Score` 字段（新增字段 optional，对老前端兼容） | 同一 `GET /admin/documents/search` |
 | 前端 | `SearchPage.vue` 加"高级筛选"抽屉（minerU 字段过滤）+ 结果行展开显示 `blockData` | 同一页面，不并列 |
@@ -135,7 +135,7 @@ type 枚举 (完整): text, title, equation, image, image_caption, image_footnot
 
 ### minerU type 枚举进入 endpoint 的约定
 
-V1 endpoint 的新参数 `blockType` 接受**字符串**（自由文本），服务端用 `term` 精确匹配 `block_type` 索引字段。不强制 enum 校验——因为 MinerU 版本升级会引入新类型，校验白名单会成为负担。前端下拉框基于**历史数据聚合**（运维可在"块类型分布"侧边栏看到当前值域）。
+V1 endpoint 的新参数 `blockType` 接受**字符串**（自由文本），服务端用 `term` 精确匹配 `block_type` 索引字段。不强制 enum 校验——因为解析侧升级会引入新类型（存量为 MinerU 类型，新记录为 StructaDoc canonical 类型），校验白名单会成为负担。前端下拉框基于**历史数据聚合**（运维可在"块类型分布"侧边栏看到当前值域）。
 
 `[说明] 如后续 minerU 类型枚举频繁变动，可在前端下拉维护一个静态候选列表；后端仍保持字符串透传。`
 
@@ -165,7 +165,7 @@ src/services/ruoyu.doclibrary/
 │   │   │   ├── OpenSearchResponseParser.cs        # 搜索响应解析（ParseSearchResponse）
 │   │   │   └── OpenSearchJsonHelper.cs            # OpenSearch JSON 字段安全读取辅助方法
 │   │   ├── OpenSearchIndexService.cs              # OpenSearch 索引服务 facade（组合上述类，实现 ISearchIndexService）
-│   │   └── MinerUFileParseWorker.cs               # 解析完成后索引（best-effort，追加 minerU 字段）
+│   │   └── StructaDocParseWorker.cs               # 解析完成后索引（best-effort，追加 minerU 字段）
 │   └── Host/
 │       ├── frontend/                              # doclibrary 自带前端
 │       │   ├── src/pages/
@@ -227,7 +227,7 @@ builder.Services.AddScoped<ISearchDomainService, SearchDomainService>();
 ### 索引写入流程
 
 ```
-MinerUFileParseWorker.PersistParseResultAsync
+StructaDocParseResultSync.SyncAsync
   → parseService.UpdateStatusAsync(Parsed)
   → IndexBlocksToSearchAsync (best-effort, try/catch LogWarning)
       → scopeProvider.GetRequiredService<ISearchIndexService>()
@@ -361,7 +361,7 @@ _logger.LogDebug("OpenSearch search request: index={Index}, body={Body}", indexN
 | `IDocumentParseBlockRepository.GetByParseIdAsync` | 通过与 V1 同一查询取 blocks，不新增仓储方法 | `Ruoyu.Study.DocLibrary.Domain.Repositories` |
 | `IOptions<OpenSearchOptions>` | OpenSearch 配置（Url / IndexName） | `Ruoyu.Study.DocLibrary.Domain.Models` |
 | OpenSearch 2.x | 索引存储与搜索 | 外部服务（HTTP） |
-| `MinerUFileParseWorker` | 索引写入复用的 best-effort 入口（第 2 代 minerU 字段在同一 bulk 追加） | `Ruoyu.Study.DocLibrary.Service` |
+| `StructaDocParseWorker` | 索引写入复用的 best-effort 入口（第 2 代 minerU 字段在同一 bulk 追加） | `Ruoyu.Study.DocLibrary.Service` |
 
 > 第 2 代演进**不引入**新外部依赖（无新 NuGet 包、无新数据库表、无新 OSS 存储、无第三方 minerU 客户端变更）。minerU v1 block schema 中 V1 索引未覆盖的字段（`chars`/`position`/`layout_width` 等）以 `block_data` jsonb 入库，管理界面通过现有 `GET /admin/document-files/{id}` 查看，不构成新依赖倒置。
 
@@ -370,7 +370,7 @@ _logger.LogDebug("OpenSearch search request: index={Index}, body={Body}", indexN
 ### 索引写入演进（与 V1 同一 bulk，追加 minerU 字段）
 
 ```
-MinerUFileParseWorker.IndexBlocksToSearchAsync (best-effort)
+StructaDocParseWorker.IndexBlocksToSearchAsync (best-effort)
   → scopeProvider.GetRequiredService<ISearchIndexService>()
   → searchIndexService.IndexParseBlocksAsync(parseId, file.Id, file.FileName, file.Subject, file.Grade, file.Year)
       → 创建 scope → 解析 IDocumentParseBlockRepository

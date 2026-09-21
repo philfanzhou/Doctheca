@@ -7,6 +7,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Ruoyu.Study.DocLibrary.Domain.Models;
 using Ruoyu.Study.DocLibrary.Domain.Services;
+using Ruoyu.Study.DocLibrary.Service.StructaDoc;
 
 namespace Ruoyu.Study.DocLibrary.Service;
 
@@ -21,7 +22,7 @@ internal static class DocumentFileParseEndpoint
         Guid id,
         IDocumentFileService fileService,
         IDocumentParseService parseService,
-        [FromServices] IOptions<MinerUOptions> minerUOptions,
+        [FromServices] IOptions<StructaDocOptions> structaDocOptions,
         [FromServices] ILoggerFactory loggerFactory,
         [FromQuery] string modelVersion = "vlm")
     {
@@ -40,8 +41,8 @@ internal static class DocumentFileParseEndpoint
         if (latestParse != null && (latestParse.Status == DocumentParseStatus.Pending || latestParse.Status == DocumentParseStatus.Parsing))
             return Results.Json(new { success = false, message = $"File already has a {modelVersion} parse in progress", errorCode = "DOCLIBRARY_PARSE_IN_PROGRESS" }, statusCode: StatusCodes.Status422UnprocessableEntity);
 
-        if (string.IsNullOrEmpty(minerUOptions.Value.ApiToken))
-            return Results.Json(new { success = false, message = "MinerU API Token not configured", errorCode = "DOCLIBRARY_MINERU_NOT_CONFIGURED" }, statusCode: StatusCodes.Status503ServiceUnavailable);
+        if (!structaDocOptions.Value.IsConfigured)
+            return Results.Json(new { success = false, message = "StructaDoc service is not configured", errorCode = "DOCLIBRARY_STRUCTADOC_NOT_CONFIGURED" }, statusCode: StatusCodes.Status503ServiceUnavailable);
 
         var parse = await parseService.CreateAsync(id, modelVersion);
         logger.LogInformation("Document file parse requested: {Id}, ParseId={ParseId}, ModelVersion={ModelVersion}", id, parse.Id, modelVersion);

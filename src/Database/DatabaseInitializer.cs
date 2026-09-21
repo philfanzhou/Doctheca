@@ -37,6 +37,10 @@ public static class DatabaseInitializer
             "ALTER TABLE document_files ADD COLUMN IF NOT EXISTS subject character varying(50) NULL",
             "ALTER TABLE document_files ADD COLUMN IF NOT EXISTS grade character varying(20) NULL",
             "ALTER TABLE document_files ADD COLUMN IF NOT EXISTS year character varying(10) NULL",
+            // StructaDoc migration (ADR-0009): originals owned by StructaDoc, file_path becomes legacy-only
+            "ALTER TABLE document_files ADD COLUMN IF NOT EXISTS structadoc_document_id uuid NULL",
+            "ALTER TABLE document_files ALTER COLUMN file_path DROP NOT NULL",
+            "ALTER TABLE document_parses ADD COLUMN IF NOT EXISTS structadoc_parse_run_id uuid NULL",
             // document_parse_blocks: [Gen-2] minerU block-level structured columns
             "ALTER TABLE document_parse_blocks ADD COLUMN IF NOT EXISTS sub_type character varying(50) NULL",
             "ALTER TABLE document_parse_blocks ADD COLUMN IF NOT EXISTS text_level integer NOT NULL DEFAULT -1",
@@ -116,7 +120,8 @@ public static class DatabaseInitializer
                 CREATE TABLE IF NOT EXISTS document_files (
                     id uuid NOT NULL,
                     file_name character varying(500) NOT NULL,
-                    file_path character varying(500) NOT NULL,
+                    file_path character varying(500) NULL,
+                    structadoc_document_id uuid NULL,
                     content_type character varying(100) NOT NULL,
                     created_by uuid NULL,
                     created_at timestamp with time zone NOT NULL DEFAULT NOW(),
@@ -135,6 +140,7 @@ public static class DatabaseInitializer
                     model_version character varying(20) NOT NULL DEFAULT 'vlm',
                     status character varying(30) NOT NULL DEFAULT 'pending',
                     external_task_id character varying(100) NULL,
+                    structadoc_parse_run_id uuid NULL,
                     markdown_content text NULL,
                     content_list jsonb NULL,
                     content_list_v2 jsonb NULL,

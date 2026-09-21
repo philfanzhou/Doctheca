@@ -8,8 +8,10 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Logging;
 using Ruoyu.Study.Common.Oss;
+using Ruoyu.Study.DocLibrary.Domain.Models;
 using Ruoyu.Study.DocLibrary.Domain.Repositories;
 using Ruoyu.Study.DocLibrary.Domain.Services;
+using Ruoyu.Study.DocLibrary.Service.StructaDoc;
 
 namespace Ruoyu.Study.DocLibrary.Service;
 
@@ -26,6 +28,7 @@ internal static class DocumentFileDeleteEndpoint
         IDocumentParseService parseService,
         IOssService ossService,
         ISearchIndexService searchIndexService,
+        IStructaDocClient structaDocClient,
         [FromServices] ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(DocumentFileDeleteEndpoint));
@@ -34,12 +37,16 @@ internal static class DocumentFileDeleteEndpoint
         if (file == null)
             return Results.NotFound(new { success = false, message = "File not found", errorCode = "DOCLIBRARY_FILE_NOT_FOUND" });
 
-        // Step 1: Collect all OSS paths to clean up (from DB, including new MinerU artifacts)
+        // Step 1: Collect legacy OSS paths to clean up. StructaDoc-backed parses store asset IDs
+        // (not OSS paths) and their remote artifacts are owned by StructaDoc (ADR-0009).
         var ossPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        ossPaths.Add(file.FilePath);
+        if (!string.IsNullOrEmpty(file.FilePath))
+        {
+            ossPaths.Add(file.FilePath);
+        }
 
         var allParses = await parseService.GetByFileIdAsync(id);
-        foreach (var parse in allParses)
+        foreach (var parse in allParses.Where(p => p.StructaDocParseRunId == null))
         {
             if (!string.IsNullOrEmpty(parse.ZipPath)) ossPaths.Add(parse.ZipPath);
 
@@ -53,7 +60,7 @@ internal static class DocumentFileDeleteEndpoint
         // Step 2: Delete database records (cascade: parses → blocks + images, then file)
         await fileService.DeleteAsync(id);
 
-        // Step 3: Best-effort OSS cleanup
+        // Step 3: Best-effort OSS cleanup (legacy artifacts only)
         var failedPaths = new List<string>();
         foreach (var path in ossPaths)
         {
@@ -74,7 +81,31 @@ internal static class DocumentFileDeleteEndpoint
                 id, failedPaths.Count, string.Join(", ", failedPaths));
         }
 
-        // Step 4: Delete OpenSearch index for this document file (best-effort, does not block deletion)
+        // Step 4: Best-effort StructaDoc cleanup: cancel active runs, then delete the document.
+        var structaDocDeleted = false;
+        if (file.StructaDocDocumentId is Guid documentId)
+        {
+            try
+            {
+                foreach (var parse in allParses)
+                {
+                    if (parse.StructaDocParseRunId is Guid runId
+                        && parse.Status is DocumentParseStatus.Pending or DocumentParseStatus.Parsing)
+                    {
+                        await structaDocClient.CancelParseRunAsync(runId);
+                    }
+                }
+
+                await structaDocClient.DeleteDocumentAsync(documentId);
+                structaDocDeleted = true;
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Failed to delete StructaDoc document {DocumentId} for file {FileId}", documentId, id);
+            }
+        }
+
+        // Step 5: Delete OpenSearch index for this document file (best-effort, does not block deletion)
         try
         {
             await searchIndexService.DeleteDocumentFileIndexAsync(id);
@@ -93,6 +124,7 @@ internal static class DocumentFileDeleteEndpoint
                 deleted = true,
                 ossDeleted = ossPaths.Count - failedPaths.Count,
                 ossFailed = failedPaths.Count,
+                structaDocDeleted,
             }
         });
     }

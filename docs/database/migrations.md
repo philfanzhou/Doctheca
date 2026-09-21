@@ -24,6 +24,9 @@
 | `ALTER TABLE document_files ADD COLUMN IF NOT EXISTS subject character varying(50) NULL` | 新增学科元数据列（DocumentMetadataAnalysis 功能） |
 | `ALTER TABLE document_files ADD COLUMN IF NOT EXISTS grade character varying(20) NULL` | 新增年级元数据列（DocumentMetadataAnalysis 功能） |
 | `ALTER TABLE document_files ADD COLUMN IF NOT EXISTS year character varying(10) NULL` | 新增年份元数据列（DocumentMetadataAnalysis 功能） |
+| `ALTER TABLE document_files ADD COLUMN IF NOT EXISTS structadoc_document_id uuid NULL` | StructaDoc 迁移（ADR-0009）：新文档的远端引用 |
+| `ALTER TABLE document_files ALTER COLUMN file_path DROP NOT NULL` | StructaDoc 迁移：原件不再落本地 OSS，`file_path` 仅存量使用 |
+| `ALTER TABLE document_parses ADD COLUMN IF NOT EXISTS structadoc_parse_run_id uuid NULL` | StructaDoc 迁移：Parse Run 引用，非空即新管线记录 |
 
 ## 变更日志
 
@@ -34,3 +37,4 @@
 | 2026-07-04 | 新增 document_parse_blocks 表和 document_parse_images 表 | OpenSearch 块级索引和图片管理 |
 | 2026-07-04 | 删除 document_parses.layout_pdf_path 列 | 被 layout_json 替代（JSONB 存储完整版面数据） |
 | 2026-07-04 | 新增 document_parses.model_version 列（默认 'vlm'） | 支持 vlm / pipeline 双模型版本 |
+| 2026-09-21 | 新增 document_files.structadoc_document_id、document_parses.structadoc_parse_run_id；file_path 改为可空 | StructaDoc 解析管线迁移（ADR-0009）：原件与解析产物主责移交 StructaDoc，存量数据只读保留 |

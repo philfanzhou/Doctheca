@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Logging;
 using Ruoyu.Study.Common.Oss;
+using Ruoyu.Study.DocLibrary.Domain.Models;
 using Ruoyu.Study.DocLibrary.Domain.Services;
 
 namespace Ruoyu.Study.DocLibrary.Service;
@@ -37,27 +38,20 @@ internal static class DocumentFileDetailEndpoint
         foreach (var parse in allParses)
         {
             var images = await parseService.GetImagesByParseIdAsync(parse.Id);
+            var urlResolver = BuildImageUrlResolver(parse, ossService, logger);
 
             var markdownContent = parse.MarkdownContent;
             if (!string.IsNullOrEmpty(markdownContent))
             {
-                markdownContent = await MarkdownExportHelper.ReplaceImagePathsPresignedAsync(
-                    markdownContent, images, ossService, logger);
+                markdownContent = await MarkdownExportHelper.ReplaceImagePathsAsync(
+                    markdownContent, images, urlResolver, logger);
             }
 
             var imageList = new List<object>();
             foreach (var img in images)
             {
-                try
-                {
-                    var presignedUrl = await ossService.GetPresignedUrlAsync(img.ImagePath, 3600);
-                    imageList.Add(new { id = img.Id.ToString(), imageName = img.ImageName, imageUrl = presignedUrl });
-                }
-                catch (Exception ex)
-                {
-                    logger.LogWarning(ex, "Failed to generate presigned URL for image: {ImagePath}", img.ImagePath);
-                    imageList.Add(new { id = img.Id.ToString(), imageName = img.ImageName, imageUrl = img.ImagePath });
-                }
+                var imageUrl = await urlResolver(img) ?? img.ImagePath;
+                imageList.Add(new { id = img.Id.ToString(), imageName = img.ImageName, imageUrl });
             }
 
             parseResults.Add(new
@@ -88,5 +82,34 @@ internal static class DocumentFileDetailEndpoint
                 parses = parseResults,
             }
         });
+    }
+
+    /// <summary>
+    /// Legacy parses resolve images to presigned OSS URLs; StructaDoc-backed parses
+    /// resolve to the DocLibrary image proxy endpoint (ADR-0009).
+    /// </summary>
+    private static Func<DocumentParseImageModel, Task<string?>> BuildImageUrlResolver(
+        DocumentParseModel parse,
+        IOssService ossService,
+        ILogger logger)
+    {
+        if (parse.StructaDocParseRunId != null)
+        {
+            return img => Task.FromResult<string?>(
+                $"/admin/document-parses/{parse.Id:D}/images/{img.Id:D}/content");
+        }
+
+        return async img =>
+        {
+            try
+            {
+                return await ossService.GetPresignedUrlAsync(img.ImagePath, 3600);
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Failed to generate presigned URL for image: {ImagePath}", img.ImagePath);
+                return null;
+            }
+        };
     }
 }

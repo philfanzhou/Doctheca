@@ -7,9 +7,10 @@
 | Admin UI | HTTP 同源 | 入 | 文档管理和搜索 | Identity `role=admin` HttpOnly Cookie/JWT |
 | SignaCore | HTTP/OIDC | 出 | 登录、刷新、撤销、JWKS | Authority 来自 Consul |
 | PostgreSQL | TCP | 出 | 文档/解析数据 CRUD | 服务私有数据库 |
-| MinIO/SeaweedFS | S3 | 出 | 文件和图片 | 共享 Consul 配置 |
+| StructaDoc | HTTP | 出 | 文档上传、Parse Run、Blocks/Markdown/Assets 同步、图片代理、删除（ADR-0009） | `Authorization: ApiKey` scoped key，BaseUrl 来自 Consul/环境变量 |
+| MinIO/SeaweedFS | S3 | 出 | 存量文件与解析图片（只读兼容与删除清理） | 共享 Consul 配置 |
 | OpenSearch | HTTP | 出 | block 索引和查询 | 共享 Consul 配置 |
-| MinerU/doc-converter/LLM | HTTP | 出 | 解析与元数据分析 | 各自私有凭据 |
+| LLM（OpenAI 兼容，可选） | HTTP | 出 | 元数据分析 | 私有 ApiKey |
 
 当前不存在 QuestionBank → DocLibrary 集成。后续出现真实调用需求时，必须独立
 定义数据契约、认证方式和部署配置，不复用管理员 Cookie，也不预留未使用接口。
@@ -31,6 +32,7 @@
 | POST | `/admin/document-files/{id}/parse` | 触发解析 |
 | DELETE | `/admin/document-files/{id}` | 删除文档 |
 | GET/DELETE | `/admin/document-parses...` | 解析列表和删除 |
+| GET | `/admin/document-parses/{parseId}/images/{imageId}/content` | StructaDoc 解析图片代理（浏览器经 admin Cookie 认证） |
 | GET | `/admin/documents/search` | 搜索 |
 | GET | `/admin/document-files|document-parses/.../export/*` | 导出 |
 

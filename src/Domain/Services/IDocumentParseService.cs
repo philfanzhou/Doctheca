@@ -18,8 +18,10 @@ public interface IDocumentParseService
         string? contentListV2 = null,
         string? modelJson = null,
         string? layoutJson = null,
-        string? zipPath = null);
+        string? zipPath = null,
+        Guid? structaDocParseRunId = null);
     Task<List<DocumentParseModel>> GetPendingJobsAsync();
+    Task<List<DocumentParseModel>> GetActiveJobsAsync();
     Task AddImageAsync(DocumentParseImageModel image);
     Task<List<DocumentParseImageModel>> GetImagesByParseIdAsync(Guid parseId);
     Task<List<DocumentParseImageModel>> GetImagesByFileIdAsync(Guid documentFileId);

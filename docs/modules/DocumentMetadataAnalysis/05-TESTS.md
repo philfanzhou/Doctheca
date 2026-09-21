@@ -31,12 +31,12 @@
 
 | # | 覆盖方向 | 涉及组件 | 覆盖 AC |
 |---|---------|---------|---------|
-| IT-01 | 解析完成后元数据全有值 → Worker 调用 `GetService<IDocumentAnalysisService>` 后跳过 LLM | `MinerUFileParseWorker` + `IDocumentFileService` | AC-03 |
-| IT-02 | 解析完成后元数据缺失 → 调用 LLM 填充,DB 更新,OpenSearch 同步 | `MinerUFileParseWorker` + `DocumentAnalysisService`(mock) | AC-04 |
-| IT-03 | LLM 调用失败 → 解析状态仍为 `parsed`,OpenSearch 索引已写入 | `MinerUFileParseWorker` | AC-05 |
-| IT-04 | `IDocumentAnalysisService` 未注册(ApiKey 为空)→ Worker 跳过,记 Info 日志 | `MinerUFileParseWorker`(无 DI 注册) | AC-06 |
+| IT-01 | 解析完成后元数据全有值 → Worker 调用 `GetService<IDocumentAnalysisService>` 后跳过 LLM | `StructaDocParseWorker` + `IDocumentFileService` | AC-03 |
+| IT-02 | 解析完成后元数据缺失 → 调用 LLM 填充,DB 更新,OpenSearch 同步 | `StructaDocParseWorker` + `DocumentAnalysisService`(mock) | AC-04 |
+| IT-03 | LLM 调用失败 → 解析状态仍为 `parsed`,OpenSearch 索引已写入 | `StructaDocParseWorker` | AC-05 |
+| IT-04 | `IDocumentAnalysisService` 未注册(ApiKey 为空)→ Worker 跳过,记 Info 日志 | `StructaDocParseWorker`(无 DI 注册) | AC-06 |
 | IT-05 | 手动 PUT 元数据 → DB 更新 + OpenSearch `UpdateByQueryAsync` 同步 | `DocumentFileEndpoints` + `OpenSearchIndexService` | AC-07 |
-| IT-06 | LLM 分析时不覆盖已有字段(保留 DB 原值) | `MinerUFileParseWorker.AnalyzeMetadataIfMissingAsync` | AC-08 |
+| IT-06 | LLM 分析时不覆盖已有字段(保留 DB 原值) | `StructaDocParseWorker.AnalyzeMetadataIfMissingAsync` | AC-08 |
 
 ## 运行方式
 

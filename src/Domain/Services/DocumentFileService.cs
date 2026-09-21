@@ -56,6 +56,18 @@ public class DocumentFileService : IDocumentFileService
         return model;
     }
 
+    public async Task<DocumentFileModel?> AttachStructaDocDocumentAsync(Guid id, Guid structaDocDocumentId)
+    {
+        var updated = await _fileRepository.AttachStructaDocDocumentAsync(id, structaDocDocumentId);
+        if (!updated)
+        {
+            _logger.LogWarning("Document file not found for StructaDoc attach: {Id}", id);
+            return null;
+        }
+
+        return await _fileRepository.GetByIdAsync(id);
+    }
+
     public async Task<bool> DeleteAsync(Guid id)
     {
         return await _fileRepository.DeleteAsync(id);

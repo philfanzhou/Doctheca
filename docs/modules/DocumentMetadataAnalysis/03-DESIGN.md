@@ -25,7 +25,7 @@ src/services/ruoyu.doclibrary/
 │   │   ├── Analysis/
 │   │   │   ├── DocumentAnalysisPromptBuilder.cs     # prompt 构建 (纯静态逻辑)
 │   │   │   └── DocumentAnalysisResponseParser.cs    # 响应解析 (含 response records、ExtractJson)
-│   │   ├── MinerUFileParseWorker.cs                 # 后台解析 Worker (含 AnalyzeMetadataIfMissingAsync)
+│   │   ├── StructaDocParseWorker.cs                 # 后台解析 Worker (含 AnalyzeMetadataIfMissingAsync)
 │   │   ├── OpenSearchIndexService.cs                # OpenSearch 索引服务 (含 UpdateDocumentFileMetadataAsync)
 │   │   └── Endpoints/
 │   │       └── DocumentFileEndpoints.cs             # PUT /{id}/metadata 端点 + UpdateMetadataRequest record
@@ -89,7 +89,7 @@ Response 404: { "success": false, "message": "File not found", "errorCode": "DOC
 
 ### 解析完成后自动 LLM 分析流程
 
-1. `MinerUFileParseWorker` 在 `PersistParseResultAsync`(单文件)与 `PersistMergedChunkResultsAsync`(大文件分块合并且 status=`Parsed`)末尾调用 `AnalyzeMetadataIfMissingAsync` — 失败/部分失败(analyze)时不调用
+1. `StructaDocParseWorker` 在 `PollAsync` 的 `succeeded` 分支完成结果同步后调用 `AnalyzeMetadataIfMissingAsync` — 解析失败/取消时不调用
 2. 检查 `document_files` 的 subject/grade/year：
    - `!IsNullOrWhitespace` 全部满足 → 跳过 LLM（Info 日志）
    - `IDocumentAnalysisService` 未注册(`GetService` → null)→ 跳过（Info 日志）
@@ -106,7 +106,7 @@ Response 404: { "success": false, "message": "File not found", "errorCode": "DOC
 ### DocumentAnalysisService.AnalyzeMetadataAsync
 
 - **初始化**：`InitializeAsync`(启动时调用 + 首次 `AnalyzeMetadataAsync` 时懒加载)。解析 `ContextLength` 配置(支持 `"128K"` / `"1M"` / 纯数字),若未配置则调用 `TryFetchContextLengthAsync`(GET `/v1/models/{Model}`)动态获取。根据 context 计算内部字段 `_chunkSize`(`(contextLength - 200 - _maxTokensValue) × 0.8 × 1.5`,cap `2500`)与 `_maxTokensValue`(默认 `4096`)。无 context 时禁用 LLM(`_chunkSize = _maxTokensValue = 0`)。服务不再修改注入的 `DocumentAnalysisOptions` POCO。
-- **输入截断**：取 Markdown 前 2000 字符(`textPreview[..2000]`)。注: `MinerUFileParseWorker.AnalyzeMetadataIfMissingAsync` 在调用前已截断一次,此处为冗余保护。
+- **输入截断**：取 Markdown 前 2000 字符(`textPreview[..2000]`)。注: `StructaDocParseWorker.AnalyzeMetadataIfMissingAsync` 在调用前已截断一次,此处为冗余保护。
 - **请求体**：`BuildRequestBody` 组装 — system prompt `"直接返回JSON，不要解释。"` + user prompt(`DocumentAnalysisPromptBuilder.BuildMetadataAnalysisPrompt`)、`max_tokens = _maxTokensValue`、`temperature = 0.1`(只读属性)、`stream = true`。
 - **流式 SSE 调用**：通过共享的 `OpenAiCompatibleClient.CallStreamingAsync` (`Ruoyu.Study.Common.Ai` 命名空间,底层 `OpenAiSseReader`),per-attempt timeout + SSE idle timeout(`StreamIdleTimeoutSeconds` 默认 60s)由客户端保障。
 - **响应解析**：`DocumentAnalysisResponseParser.ParseMetadataAnalysis` — `DocumentAnalysisResponseParser.ExtractJson` 去 ```json``` / ```` ``` 包装;`JsonSerializer.Deserialize` 使用 `SnakeCaseLower` + `WhenWritingNull`;空字符串/空白/`"null"` 字面量一律视为 null。

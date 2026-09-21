@@ -32,8 +32,8 @@ RUN dotnet publish "src/services/ruoyu.doclibrary/src/Host/Ruoyu.Study.DocLibrar
 # ========== Stage 3: Runtime ==========
 FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS final
 
-# LibreOffice dependency removed: document-to-PDF conversion is now handled
-# by the standalone doc-converter service (src/foundation/doc-converter).
+# No LibreOffice dependency: document parsing and Office-to-PDF conversion are
+# delegated to the external StructaDoc service (ADR-0009).
 # See docs/modules/DocumentParse/03-DESIGN.md for details.
 
 WORKDIR /app

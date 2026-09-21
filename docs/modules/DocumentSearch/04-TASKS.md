@@ -15,7 +15,7 @@
 | DS-06 | 搜索响应解析（`ParseSearchResponse`）：字段映射、nextToken、highlight 优先 | completed | `OpenSearchIndexService.cs` |
 | DS-07 | 搜索领域服务（`SearchDomainService`）：委托调用 + 异常降级 | completed | `SearchDomainService.cs` |
 | DS-08 | HTTP 端点（`DocumentSearchEndpoints`）：参数校验、filter 构造、响应格式 | completed | `DocumentSearchEndpoints.cs` |
-| DS-09 | Worker 集成：解析完成后索引（best-effort）、LLM 元数据同步 | completed | `MinerUFileParseWorker.cs` |
+| DS-09 | Worker 集成：解析完成后索引（best-effort）、LLM 元数据同步 | completed | `StructaDocParseWorker.cs` |
 | DS-10 | 端点集成：删除 parse/文件后清理索引、元数据更新后同步 | completed | `DocumentParseEndpoints.cs` / `DocumentFileEndpoints.cs` |
 | DS-11 | 启动初始化：`EnsureIndexAsync`（best-effort） | completed | `Program.cs` |
 | DS-12 | 单元测试：`OpenSearchIndexServiceTests` + `SearchDomainServiceTests` | completed | 测试文件 |
@@ -25,7 +25,7 @@
 | ID | 任务 | 状态 | 验证文件 |
 |----|------|------|---------|
 | DS-13 | 扩展 `OpenSearchIndexService.IndexParseBlocksAsync`：在同一 bulk 追加 minerU 维度字段（`x0`/`y0`/`x1`/`y1`/`score`/`has_image`/`sub_type`/`text_level`/`text_format`/`caption`/`_meta.block_data`）；扩展 `BuildIndexBody` 追加 minerU 维度映射 | completed | `OpenSearchIndexService.cs` |
-| DS-14 | 扩展 `MinerUFileParseWorker.IndexBlocksToSearchAsync`：调用扩展后的 `IndexParseBlocksAsync`（同一 best-effort 入口）。**实现说明**：Worker 本身无需改动——minerU 字段由 `DocumentParseBlockService.ParseBlock` 抽取并写入 `DocumentParseBlockEntity`，经 `DocumentParseBlockRepository` 持久化，`IndexParseBlocksAsync` 通过 `GetByParseIdAsync` 读取后直接索引，字段流自动传递。 | completed | `MinerUFileParseWorker.cs`（无改动） |
+| DS-14 | 扩展 `StructaDocParseWorker.IndexBlocksToSearchAsync`：调用扩展后的 `IndexParseBlocksAsync`（同一 best-effort 入口）。**实现说明**：Worker 本身无需改动——minerU 字段由 `DocumentParseBlockService.ParseBlock` 抽取并写入 `DocumentParseBlockEntity`，经 `DocumentParseBlockRepository` 持久化，`IndexParseBlocksAsync` 通过 `GetByParseIdAsync` 读取后直接索引，字段流自动传递。 | completed | `StructaDocParseWorker.cs`（无改动） |
 | DS-15 | 扩展 `SearchResultModel`（追加 optional `BlockData`/`Bbox`/`MineruScore`/`SubType`/`TextLevel`/`TextFormat`/`Caption`）+ `SearchFilterModel`（追加 `BlockType`/`BlockSubType`/`PageNumber`/`TextLevel`/`TextFormat`/`ParseId`/`DocumentFileId`/`HasImage`）。**偏差说明**：SPEC §13.1.1 原拟 `float? Score`，但 V1 已有 `public double Score`（OpenSearch `_score`），C# 不允许同名字段，故第 2 代新字段命名为 `MineruScore`（与 §13.9.1 `block.MineruScore` 一致）；HTTP 响应 JSON key 为 `mineruScore`。详见 02-SPEC.md §13.1.1 偏差说明。 | completed | `SearchResultModel.cs` / `SearchFilterModel.cs` |
 | DS-16 | 扩展 `OpenSearchIndexService.ExactSearchAsync`（`BuildSearchBody` 追加 minerU filter 分支 + `ParseSearchResponse` 追加 minerU 回挂分支） | completed | `OpenSearchIndexService.cs` |
 | DS-17 | 扩展 `SearchDomainService.ExactSearchAsync`：透传 minerU filter + 解析回挂字段（同一方法内扩展，复用 V1 降级模式）。**实现说明**：`SearchDomainService` 为薄封装，filter 透传通过 `SearchFilterModel` 自动完成，无需改动方法体；异常降级路径已在 UT `ExactSearchAsync_WithMinerUFilterAndIndexServiceThrow_ReturnsEmpty` 覆盖。 | completed | `SearchDomainService.cs`（无改动） |
@@ -70,7 +70,7 @@ DocumentSearchEndpoints.Search
               ├── OpenSearchLowLevelClient.SearchAsync
               └── ParseSearchResponse (internal static)
 
-MinerUFileParseWorker.PersistParseResultAsync
+StructaDocParseResultSync.SyncAsync
   └── IndexBlocksToSearchAsync (best-effort)
         └── OpenSearchIndexService.IndexParseBlocksAsync
               ├── IDocumentParseBlockRepository.GetByParseIdAsync
@@ -92,7 +92,7 @@ DocumentSearchEndpoints.Search（第 2 代扩展）
               ├── OpenSearchLowLevelClient.SearchAsync
               └── ParseSearchResponse（第 2 代追加 minerU 回挂字段映射）
 
-MinerUFileParseWorker.IndexBlocksToSearchAsync
+StructaDocParseWorker.IndexBlocksToSearchAsync
   └── OpenSearchIndexService.IndexParseBlocksAsync（第 2 代同一 bulk 追加 minerU 维度字段）
         ├── IDocumentParseBlockRepository.GetByParseIdAsync
         └── OpenSearchLowLevelClient.BulkAsync   （V1 6 个方法签名不变）

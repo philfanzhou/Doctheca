@@ -29,6 +29,9 @@ public class DocumentParseEntity
     [MaxLength(100)]
     public string? ExternalTaskId { get; set; }
 
+    [Column("structadoc_parse_run_id")]
+    public Guid? StructaDocParseRunId { get; set; }
+
     [Column("markdown_content")]
     public string? MarkdownContent { get; set; }
 

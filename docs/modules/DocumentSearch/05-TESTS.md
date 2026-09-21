@@ -168,7 +168,7 @@ Mock `ISearchIndexService`，验证领域服务委托与降级。
 
 | 场景 | 覆盖 AC |
 |------|---------|
-| MinerU 解析完成后 OpenSearch 有 blocks 数据 | AC-01 |
+| 解析完成后 OpenSearch 有 blocks 数据 | AC-01 |
 | 同一文档多次解析，OpenSearch 有多份 blocks | AC-02 |
 | 删除 parse 后 OpenSearch 无该 parse 数据 | AC-03 |
 | 删除文档后 OpenSearch 无该文档数据 | AC-04 |

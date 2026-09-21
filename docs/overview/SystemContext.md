@@ -17,9 +17,10 @@ Admin Browser
 DocLibrary :5012 ─────► SignaCore :5002
   │                    password/refresh/revoke + OIDC/JWKS
   ├────► PostgreSQL
-  ├────► SeaweedFS/MinIO
+  ├────► SeaweedFS/MinIO（仅存量对象）
   ├────► OpenSearch
-  └────► MinerU / doc-converter / optional LLM
+  ├────► StructaDoc :8080（文档上传与解析，ADR-0009）
+  └────► optional LLM（元数据分析）
 ```
 
 ## 上游调用方
@@ -37,15 +38,15 @@ DocLibrary :5012 ─────► SignaCore :5002
 | 依赖 | 用途 |
 |------|------|
 | SignaCore | 密码登录、Token 刷新/撤销、OIDC discovery/JWKS |
-| PostgreSQL | 文件和解析数据 |
-| MinIO / SeaweedFS / LocalFile | 源文件与解析图片 |
+| PostgreSQL | 文件、解析记录和本地同步的 blocks/images |
+| StructaDoc（外部仓库，:8080） | 文档原件与解析产物主责存储；Parse Run 执行（MinerU Provider + LibreOffice 转换回退）；Blocks/Markdown/Assets API |
+| MinIO / SeaweedFS / LocalFile | 仅存量（迁移前上传）文件与解析图片的只读兼容与删除清理 |
 | OpenSearch | 解析 block 全文索引 |
-| MinerU Precision API | 文档解析 |
-| doc-converter | Office 文档转 PDF |
 | OpenAI 兼容 LLM（可选） | 元数据分析 |
 
 ## 服务边界
 
-- DocLibrary 独占写入自己的文档与解析数据。
+- DocLibrary 独占写入自己的文档与解析记录表；新文档的原件与解析产物由 StructaDoc 主责存储，DocLibrary 只保存 documentId/parseRunId 引用和本地 blocks/images 同步副本（ADR-0009）。
+- DocLibrary 不直连 StructaDoc 的数据库或对象存储，一律经其版本化 API。
 - DocLibrary 不保存 QuestionBank 导入状态或题目 ID。
 - Identity 负责用户凭据验证和 JWT 签发；DocLibrary 只验证并消费管理员身份。

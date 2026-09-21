@@ -6,7 +6,7 @@
 
 ## 背景
 
-文档经 MinerU 解析后，`document_parses.markdown_content` 中引用的图片路径为 OSS 绝对路径（如 `documents/mineru/task-123/abc.jpg`）。直接分发的 Markdown 在离线环境下图片无法加载。本功能：
+解析产物的图片存在两种来源（ADR-0009）：**存量解析**的 `markdown_content` 引用 OSS 绝对路径（如 `documents/mineru/task-123/abc.jpg`），字节从 OSS 读取；**新解析**的 Markdown 引用相对路径（`images/<name>`），字节经 `ParseImageContentSource` 从 StructaDoc Asset 流式读取。直接分发的 Markdown 在离线环境下图片无法加载。本功能：
 
 1. 提供文件级导出（按 `document_file_id` 取最新解析记录）
 2. 提供解析级导出（直接按 `parse_id` 指定某次解析）
@@ -18,13 +18,13 @@
 - **作为老师**:我上传讲义并解析完成后，可以一键下载 Markdown 源码包（含图片），方便二次编辑
 - **作为老师**:我可以直接下载 HTML 版本，浏览器打开即可查看，图片内联无需联网
 - **作为运维**:我可以直接指定某次解析记录导出，不依赖"最新一次解析"
-- **作为运维**:导出时如果 OSS 下载某张图片失败，该张图片跳过，不阻塞整份导出
+- **作为运维**:导出时如果图片来源（OSS 或 StructaDoc）下载某张图片失败，该张图片跳过，不阻塞整份导出
 
 ## 功能需求
 
 ### FR-01:文件级 Markdown 导出（ZIP）
 - `GET /admin/document-files/{id}/export/markdown`
-- 取该文件最新解析记录，将 `MarkdownContent` 中 OSS 图片路径改写为相对路径 `images/<ImageName>`，打包为 `{fileName}_markdown.zip`
+- 取该文件最新解析记录，将 `MarkdownContent` 中图片引用统一改写为相对路径 `images/<ImageName>`，打包为 `{fileName}_markdown.zip`
 - ZIP 内包含一个 `.md` 文件（Optimal 压缩）和一个 `images/` 目录（Fastest 压缩）
 
 ### FR-02:文件级 HTML 导出
@@ -42,16 +42,16 @@
 ### FR-05:图片路径三种处理模式
 - **相对路径**（`ReplaceImagePathsRelative`）：用于 Markdown/ZIP 导出，路径改写为 `images/<ImageName>`
 - **Base64 内联**（`ReplaceImagePathsBase64Async`）：用于 HTML 导出，下载图片转为 `data:{ContentType};base64,...`
-- **预签名 URL**（`ReplaceImagePathsPresignedAsync`）：生成 1 小时有效期的预签名 URL，供浏览器直接查看（当前未接入端点，作为 helper 能力保留）
+- **浏览器 URL**（`ReplaceImagePathsAsync` + URL resolver）：详情页使用——存量解析生成 1 小时有效期 OSS 预签名 URL；新解析生成代理端点 URL `/admin/document-parses/{parseId}/images/{imageId}/content`
 
 ### FR-06:导出前置校验
 - 文件不存在 → 404 `DOCLIBRARY_FILE_NOT_FOUND`
 - 解析记录不存在 → 404 `DOCLIBRARY_PARSE_NOT_FOUND`
 - 解析状态非 `parsed` → 422 `DOCLIBRARY_FILE_NOT_PARSED` / `DOCLIBRARY_PARSE_NOT_PARSED`
 
-### FR-07:OSS 下载失败容错
-- 单张图片下载失败 → 记 Warning 日志，跳过该张，不阻塞整份导出
-- 预签名 URL 生成失败 → 记 Warning 日志，跳过该张
+### FR-07:图片下载失败容错
+- 单张图片下载失败（OSS 或 StructaDoc）→ 记 Warning 日志，跳过该张，不阻塞整份导出
+- 浏览器 URL 生成失败 → 记 Warning 日志，跳过该张
 
 ## 验收条件
 
@@ -63,7 +63,7 @@
 | AC-04 | 文件不存在返回 404 + `DOCLIBRARY_FILE_NOT_FOUND` |
 | AC-05 | 解析记录不存在返回 404 + `DOCLIBRARY_PARSE_NOT_FOUND` |
 | AC-06 | 解析未完成返回 422 + 对应错误码 |
-| AC-07 | 单张图片 OSS 下载失败不阻塞导出，记 Warning 日志 |
+| AC-07 | 单张图片下载失败（OSS 或 StructaDoc）不阻塞导出，记 Warning 日志 |
 | AC-08 | Markdown 导出中图片路径为相对路径 `images/<ImageName>` |
 | AC-09 | HTML 导出中图片为 `data:{ContentType};base64,...` 格式 |
 

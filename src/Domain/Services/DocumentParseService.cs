@@ -58,7 +58,8 @@ public class DocumentParseService : IDocumentParseService
         string? contentListV2 = null,
         string? modelJson = null,
         string? layoutJson = null,
-        string? zipPath = null)
+        string? zipPath = null,
+        Guid? structaDocParseRunId = null)
     {
         var model = await _parseRepository.GetByIdAsync(id)
             ?? throw new KeyNotFoundException($"Document parse not found: {id}");
@@ -68,6 +69,7 @@ public class DocumentParseService : IDocumentParseService
         if (errorMessage != null) model.ErrorMessage = errorMessage;
         if (markdownContent != null) model.MarkdownContent = markdownContent;
         if (externalTaskId != null) model.ExternalTaskId = externalTaskId;
+        if (structaDocParseRunId != null) model.StructaDocParseRunId = structaDocParseRunId;
         if (contentList != null) model.ContentList = contentList;
         if (contentListV2 != null) model.ContentListV2 = contentListV2;
         if (modelJson != null) model.ModelJson = modelJson;
@@ -83,6 +85,11 @@ public class DocumentParseService : IDocumentParseService
     public async Task<List<DocumentParseModel>> GetPendingJobsAsync()
     {
         return await _parseRepository.GetByStatusAsync(DocumentParseStatus.Pending);
+    }
+
+    public async Task<List<DocumentParseModel>> GetActiveJobsAsync()
+    {
+        return await _parseRepository.GetByStatusesAsync([DocumentParseStatus.Pending, DocumentParseStatus.Parsing]);
     }
 
     public async Task AddImageAsync(DocumentParseImageModel image)

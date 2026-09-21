@@ -16,9 +16,11 @@ public class DocumentFileEntity
     public string FileName { get; set; } = string.Empty;
 
     [Column("file_path")]
-    [Required]
     [MaxLength(500)]
-    public string FilePath { get; set; } = string.Empty;
+    public string? FilePath { get; set; }
+
+    [Column("structadoc_document_id")]
+    public Guid? StructaDocDocumentId { get; set; }
 
     [Column("content_type")]
     [Required]

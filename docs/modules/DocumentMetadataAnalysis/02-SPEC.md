@@ -231,7 +231,7 @@ public record DocumentMetadataAnalysis
    - return null
 ```
 
-### 5.2 MinerUFileParseWorker 集成
+### 5.2 StructaDocParseWorker 集成
 
 在 `PersistParseResultAsync` 和 `PersistMergedChunkResultsAsync` 末尾（状态变为 Parsed 之后、OpenSearch 索引之后）调用新方法:
 
@@ -296,13 +296,13 @@ AnalyzeMetadataIfMissingAsync(documentFileId, markdownContent, scopeProvider, ct
 
 | 场景 | 处理 | 代码位置 |
 |------|------|---------|
-| LLM 服务未注册(ApiKey 为空) | `IDocumentAnalysisService` 未注册,Worker 取到 null 后 skip,记 Info 日志 | `Program.cs` DI 条件注册;`MinerUFileParseWorker.AnalyzeMetadataIfMissingAsync:330-335` |
+| LLM 服务未注册(ApiKey 为空) | `IDocumentAnalysisService` 未注册,Worker 取到 null 后 skip,记 Info 日志 | `Program.cs` DI 条件注册;`StructaDocParseWorker.AnalyzeMetadataIfMissingAsync` |
 | LLM 未初始化/已禁用(ChunkSize<=0) | `AnalyzeMetadataAsync` 内部 return null,记 Info 日志 | `DocumentAnalysisService.AnalyzeMetadataAsync:171-175` |
-| LLM 调用超时/网络错误 | catch → return null,Worker 记 Warning 日志 | `MinerUFileParseWorker:387-390` |
+| LLM 调用超时/网络错误 | catch → return null,Worker 记 Warning 日志 | `StructaDocParseWorker` |
 | LLM 返回非 JSON | `ParseMetadataAnalysis` catch JsonException → return null | `DocumentAnalysisService:294-298` |
 | LLM 返回的空字符串/空白/"null"字面量 | 视为 null,仅填充实际有值的字段 | `DocumentAnalysisService.ParseMetadataAnalysis:277-285` |
-| OpenSearch 更新失败 | inner try/catch,记 Warning 日志(syncEx),不阻塞 | `MinerUFileParseWorker:373-381` |
-| 文档不存在 | `GetByIdAsync` → null,记 Warning 日志,不阻塞 | `MinerUFileParseWorker:312-316` |
+| OpenSearch 更新失败 | inner try/catch,记 Warning 日志(syncEx),不阻塞 | `StructaDocParseWorker` |
+| 文档不存在 | `GetByIdAsync` → null,记 Warning 日志,不阻塞 | `StructaDocParseWorker` |
 | HTTP 请求体解析失败 | 端点层 catch → 400 `"Invalid request body"` | `DocumentFileEndpoints:285-289` |
 
 ## 7. 测试策略
@@ -350,7 +350,7 @@ AnalyzeMetadataIfMissingAsync(documentFileId, markdownContent, scopeProvider, ct
 |------|------|
 | `document_files` 表 | 新增 3 列（nullable） |
 | `DocumentFileEndpoints` | 新增 PUT 端点 |
-| `MinerUFileParseWorker` | 解析完成后增加元数据分析步骤 |
+| `StructaDocParseWorker` | 解析完成后增加元数据分析步骤 |
 | `DocumentAnalysisService` | 新增 AnalyzeMetadataAsync 方法（不修改现有方法） |
 | `OpenSearchIndexService` | 新增 UpdateDocumentFileMetadataAsync 方法 |
 | 前端管理页 | 后续可添加元数据显示/编辑（本期不实现） |

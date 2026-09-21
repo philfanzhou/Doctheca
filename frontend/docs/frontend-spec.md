@@ -2,7 +2,7 @@
 
 ## 1. 概述
 
-DocLibrary Admin 是文档库的管理后台前端,供本地管理员上传文档、触发 MinerU 解析、查看解析结果、测试检索功能。
+DocLibrary Admin 是文档库的管理后台前端,供本地管理员上传文档、触发解析（StructaDoc 管线，ADR-0009）、查看解析结果、测试检索功能。
 
 - 技术栈:Vue 3.5 + TypeScript + Vite + Element Plus(表单/分页控件)+ 手写 SCSS design-token 系统(展示层组件)
 - 部署:由 DocLibrary 后端 Host 静态托管(`wwwroot/`),与后端同源,无需独立部署

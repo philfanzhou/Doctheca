@@ -9,5 +9,6 @@ public interface IDocumentFileRepository
     Task<(List<DocumentFileModel> Items, int TotalCount)> GetListAsync(int page, int size, string? fileName = null);
     Task<bool> UpdateAsync(DocumentFileModel model);
     Task<bool> UpdateMetadataAsync(Guid id, string? subject, string? grade, string? year);
+    Task<bool> AttachStructaDocDocumentAsync(Guid id, Guid structaDocDocumentId);
     Task<bool> DeleteAsync(Guid id);
 }

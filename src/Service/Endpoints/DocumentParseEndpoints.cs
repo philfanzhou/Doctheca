@@ -8,6 +8,8 @@ using Microsoft.Extensions.Logging;
 using Ruoyu.Study.Common.Oss;
 using Ruoyu.Study.DocLibrary.Domain.Repositories;
 using Ruoyu.Study.DocLibrary.Domain.Services;
+using Ruoyu.Study.DocLibrary.Service.Parsing;
+using Ruoyu.Study.DocLibrary.Service.StructaDoc;
 
 namespace Ruoyu.Study.DocLibrary.Service;
 
@@ -20,6 +22,7 @@ public static class DocumentParseEndpoints
 
         group.MapGet("/", ListDocumentParses);
         group.MapDelete("/{parseId:guid}", DeleteDocumentParse);
+        group.MapGet("/{parseId:guid}/images/{imageId:guid}/content", GetParseImageContent);
 
         return app;
     }
@@ -63,9 +66,9 @@ public static class DocumentParseEndpoints
     private static async Task<IResult> DeleteDocumentParse(
         Guid parseId,
         IDocumentParseService parseService,
-        IDocumentFileService fileService,
         IOssService ossService,
         ISearchIndexService searchIndexService,
+        IStructaDocClient structaDocClient,
         [FromServices] ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(DocumentParseEndpoints));
@@ -74,21 +77,39 @@ public static class DocumentParseEndpoints
         if (parse == null)
             return Results.NotFound(new { success = false, message = "Parse record not found", errorCode = "DOCLIBRARY_PARSE_NOT_FOUND" });
 
-        // Delete associated images from S3
-        var images = await parseService.GetImagesByParseIdAsync(parseId);
-        foreach (var img in images)
+        if (parse.StructaDocParseRunId is Guid runId)
         {
+            // StructaDoc-backed parse: remote results are owned by StructaDoc (ADR-0009).
+            // Best-effort cancel (in case the run is still active) then delete; local rows
+            // and the search index are removed regardless of the remote outcome.
             try
             {
-                await ossService.DeleteAsync(img.ImagePath);
+                await structaDocClient.CancelParseRunAsync(runId);
+                await structaDocClient.DeleteParseRunAsync(runId);
             }
             catch (Exception ex)
             {
-                logger.LogWarning(ex, "Failed to delete image from OSS: {ImagePath}", img.ImagePath);
+                logger.LogWarning(ex, "Failed to delete StructaDoc parse run {ParseRunId}", runId);
+            }
+        }
+        else
+        {
+            // Legacy parse: delete associated images from OSS (best-effort)
+            var images = await parseService.GetImagesByParseIdAsync(parseId);
+            foreach (var img in images)
+            {
+                try
+                {
+                    await ossService.DeleteAsync(img.ImagePath);
+                }
+                catch (Exception ex)
+                {
+                    logger.LogWarning(ex, "Failed to delete image from OSS: {ImagePath}", img.ImagePath);
+                }
             }
         }
 
-        // Delete parse record (cascade deletes images from DB)
+        // Delete parse record (cascade deletes images and blocks from DB)
         await parseService.DeleteParseAsync(parseId);
 
         // Delete OpenSearch index for this parse (best-effort, does not block deletion)
@@ -106,5 +127,43 @@ public static class DocumentParseEndpoints
             success = true,
             data = new { id = parseId.ToString(), deleted = true }
         });
+    }
+
+    /// <summary>
+    /// Proxy image bytes of a StructaDoc-backed parse. Browsers authenticate with the
+    /// admin cookie fallback, so the URL can be used directly in img tags.
+    /// </summary>
+    private static async Task<IResult> GetParseImageContent(
+        Guid parseId,
+        Guid imageId,
+        IDocumentParseService parseService,
+        ParseImageContentSource imageSource,
+        CancellationToken cancellationToken)
+    {
+        var parse = await parseService.GetByIdAsync(parseId);
+        if (parse == null)
+            return Results.NotFound(new { success = false, message = "Parse record not found", errorCode = "DOCLIBRARY_PARSE_NOT_FOUND" });
+
+        var images = await parseService.GetImagesByParseIdAsync(parseId);
+        var image = images.Find(img => img.Id == imageId);
+        if (image == null)
+            return Results.NotFound(new { success = false, message = "Image not found", errorCode = "DOCLIBRARY_IMAGE_NOT_FOUND" });
+
+        try
+        {
+            var stream = await imageSource.OpenAsync(parse, image, cancellationToken);
+            if (stream == null)
+                return Results.NotFound(new { success = false, message = "Image content not found", errorCode = "DOCLIBRARY_IMAGE_NOT_FOUND" });
+
+            return Results.File(stream, image.ContentType, enableRangeProcessing: true);
+        }
+        catch (StructaDocException ex) when (ex.StatusCode == 404)
+        {
+            return Results.NotFound(new { success = false, message = "Image content not found in StructaDoc", errorCode = "DOCLIBRARY_IMAGE_NOT_FOUND" });
+        }
+        catch (StructaDocException ex)
+        {
+            return Results.Json(new { success = false, message = ex.Message, errorCode = "DOCLIBRARY_STRUCTADOC_ERROR" }, statusCode: StatusCodes.Status502BadGateway);
+        }
     }
 }

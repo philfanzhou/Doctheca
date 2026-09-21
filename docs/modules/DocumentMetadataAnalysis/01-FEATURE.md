@@ -2,7 +2,7 @@
 
 ## 功能概述
 
-在 MinerU 解析完成后，自动调用 LLM 分析文档前 2000 字符的 Markdown 内容，识别学科（subject）和年级（grade），并将结果回填到 `document_files` 表。如果文档的 subject/grade/year 已全部有值（人工填写或之前 LLM 分析过），则跳过 LLM 调用。LLM 失败不影响解析流程。
+在解析完成后，自动调用 LLM 分析文档前 2000 字符的 Markdown 内容，识别学科（subject）和年级（grade），并将结果回填到 `document_files` 表。如果文档的 subject/grade/year 已全部有值（人工填写或之前 LLM 分析过），则跳过 LLM 调用。LLM 失败不影响解析流程。
 
 ## 背景
 
@@ -34,7 +34,7 @@
 - 手动设置后，后续解析完成时跳过 LLM 分析（只要三个字段都有值）
 
 ### FR-03:解析完成后自动 LLM 分析
-- MinerU 解析状态变为 `parsed` 后，检查 `document_files` 的 subject/grade/year
+- 解析状态变为 `parsed` 后，检查 `document_files` 的 subject/grade/year
 - 若三个字段全部有值 → 跳过 LLM
 - 若任一字段为空 → 调用 LLM 分析 Markdown 前 2000 字符
 - LLM 返回后，仅更新为空的字段（不覆盖已有值）
@@ -95,5 +95,5 @@
 | `IDocumentFileService` | 新增 `UpdateMetadataAsync` |
 | `IDocumentAnalysisService` | 新增 `AnalyzeMetadataAsync` 方法 |
 | `ISearchIndexService` | 新增 `UpdateDocumentFileMetadataAsync` 方法 |
-| `MinerUFileParseWorker` | 解析完成后调用 LLM 分析元数据 |
+| `StructaDocParseWorker` | 解析完成后调用 LLM 分析元数据 |
 | `DocumentFileEndpoints` | 新增 `PUT /{id}/metadata` 端点 |

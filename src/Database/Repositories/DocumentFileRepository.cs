@@ -75,6 +75,18 @@ public class DocumentFileRepository : IDocumentFileRepository
         return true;
     }
 
+    public async Task<bool> AttachStructaDocDocumentAsync(Guid id, Guid structaDocDocumentId)
+    {
+        var entity = await _context.DocumentFiles.FindAsync(id);
+        if (entity == null) return false;
+
+        entity.StructaDocDocumentId = structaDocDocumentId;
+        entity.UpdatedAt = DateTimeOffset.UtcNow;
+
+        await _context.SaveChangesAsync();
+        return true;
+    }
+
     public async Task<bool> DeleteAsync(Guid id)
     {
         var entity = await _context.DocumentFiles.FindAsync(id);
@@ -89,6 +101,7 @@ public class DocumentFileRepository : IDocumentFileRepository
         Id = model.Id,
         FileName = model.FileName,
         FilePath = model.FilePath,
+        StructaDocDocumentId = model.StructaDocDocumentId,
         ContentType = model.ContentType,
         CreatedBy = model.CreatedBy,
         Subject = model.Subject,
@@ -103,6 +116,7 @@ public class DocumentFileRepository : IDocumentFileRepository
         Id = entity.Id,
         FileName = entity.FileName,
         FilePath = entity.FilePath,
+        StructaDocDocumentId = entity.StructaDocDocumentId,
         ContentType = entity.ContentType,
         CreatedBy = entity.CreatedBy,
         Subject = entity.Subject,

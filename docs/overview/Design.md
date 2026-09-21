@@ -10,7 +10,7 @@ Host
 Service
   AdminAuthEndpoints / IdentityAuthenticationService / IdentityTokenValidator
   Document*Endpoints
-  MinerU worker / OpenSearch / conversion / analysis
+  StructaDoc client+worker / OpenSearch / analysis
         │
 Domain
   document and parse services, repositories, models

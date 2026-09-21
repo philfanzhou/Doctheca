@@ -2,8 +2,8 @@
 
 | 业务域 | 功能点入口 |
 |--------|------------|
-| DocumentManagement | [DocumentManagement](./DocumentManagement/01-FEATURE.md) |
-| DocumentParse | [DocumentParse](./DocumentParse/01-FEATURE.md) |
+| DocumentManagement | [DocumentManagement](./DocumentManagement.md) |
+| DocumentParse | [DocumentParse](./DocumentParse.md) |
 | DocumentExport | [DocumentExport](./DocumentExport/01-FEATURE.md) |
 | DocumentMetadataAnalysis | [DocumentMetadataAnalysis](./DocumentMetadataAnalysis/01-FEATURE.md) |
 | DocumentSearch | [DocumentSearch](./DocumentSearch/01-FEATURE.md) |

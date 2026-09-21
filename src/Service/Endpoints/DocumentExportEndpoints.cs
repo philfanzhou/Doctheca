@@ -5,9 +5,9 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
-using Ruoyu.Study.Common.Oss;
 using Ruoyu.Study.DocLibrary.Domain.Models;
 using Ruoyu.Study.DocLibrary.Domain.Services;
+using Ruoyu.Study.DocLibrary.Service.Parsing;
 
 namespace Ruoyu.Study.DocLibrary.Service;
 
@@ -34,7 +34,7 @@ public static class DocumentExportEndpoints
         Guid id,
         IDocumentFileService fileService,
         IDocumentParseService parseService,
-        IOssService ossService,
+        ParseImageContentSource imageSource,
         [FromServices] ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(DocumentExportEndpoints));
@@ -47,14 +47,14 @@ public static class DocumentExportEndpoints
         if (parse == null || parse.Status != DocumentParseStatus.Parsed)
             return Results.Json(new { success = false, message = "File is not parsed yet", errorCode = "DOCLIBRARY_FILE_NOT_PARSED" }, statusCode: StatusCodes.Status422UnprocessableEntity);
 
-        return await ExportMarkdownCore(file.FileName, parse, parseService, ossService, logger);
+        return await ExportMarkdownCore(file.FileName, parse, parseService, imageSource, logger);
     }
 
     private static async Task<IResult> ExportHtml(
         Guid id,
         IDocumentFileService fileService,
         IDocumentParseService parseService,
-        IOssService ossService,
+        ParseImageContentSource imageSource,
         [FromServices] ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(DocumentExportEndpoints));
@@ -67,14 +67,14 @@ public static class DocumentExportEndpoints
         if (parse == null || parse.Status != DocumentParseStatus.Parsed)
             return Results.Json(new { success = false, message = "File is not parsed yet", errorCode = "DOCLIBRARY_FILE_NOT_PARSED" }, statusCode: StatusCodes.Status422UnprocessableEntity);
 
-        return await ExportHtmlCore(file.FileName, parse, parseService, ossService, logger);
+        return await ExportHtmlCore(file.FileName, parse, parseService, imageSource, logger);
     }
 
     private static async Task<IResult> ExportParseMarkdown(
         Guid parseId,
         IDocumentParseService parseService,
         IDocumentFileService fileService,
-        IOssService ossService,
+        ParseImageContentSource imageSource,
         [FromServices] ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(DocumentExportEndpoints));
@@ -89,14 +89,14 @@ public static class DocumentExportEndpoints
         var file = await fileService.GetByIdAsync(parse.DocumentFileId);
         var fileName = file?.FileName ?? "document";
 
-        return await ExportMarkdownCore(fileName, parse, parseService, ossService, logger);
+        return await ExportMarkdownCore(fileName, parse, parseService, imageSource, logger);
     }
 
     private static async Task<IResult> ExportParseHtml(
         Guid parseId,
         IDocumentParseService parseService,
         IDocumentFileService fileService,
-        IOssService ossService,
+        ParseImageContentSource imageSource,
         [FromServices] ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(DocumentExportEndpoints));
@@ -111,7 +111,7 @@ public static class DocumentExportEndpoints
         var file = await fileService.GetByIdAsync(parse.DocumentFileId);
         var fileName = file?.FileName ?? "document";
 
-        return await ExportHtmlCore(fileName, parse, parseService, ossService, logger);
+        return await ExportHtmlCore(fileName, parse, parseService, imageSource, logger);
     }
 
     // ── Shared core logic ──
@@ -120,7 +120,7 @@ public static class DocumentExportEndpoints
         string fileName,
         DocumentParseModel parse,
         IDocumentParseService parseService,
-        IOssService ossService,
+        ParseImageContentSource imageSource,
         ILogger logger)
     {
         var images = await parseService.GetImagesByParseIdAsync(parse.Id);
@@ -128,7 +128,7 @@ public static class DocumentExportEndpoints
             parse.MarkdownContent ?? string.Empty, images);
 
         var zipStream = await MarkdownExportHelper.BuildMarkdownZipAsync(
-            fileName, markdownContent, images, ossService, logger);
+            fileName, markdownContent, images, img => imageSource.OpenAsync(parse, img), logger);
 
         var zipFileName = $"{Path.GetFileNameWithoutExtension(fileName)}_markdown.zip";
         return Results.Stream(zipStream, "application/zip", zipFileName);
@@ -138,12 +138,12 @@ public static class DocumentExportEndpoints
         string fileName,
         DocumentParseModel parse,
         IDocumentParseService parseService,
-        IOssService ossService,
+        ParseImageContentSource imageSource,
         ILogger logger)
     {
         var images = await parseService.GetImagesByParseIdAsync(parse.Id);
         var markdownContent = await MarkdownExportHelper.ReplaceImagePathsBase64Async(
-            parse.MarkdownContent ?? string.Empty, images, ossService, logger);
+            parse.MarkdownContent ?? string.Empty, images, img => imageSource.OpenAsync(parse, img), logger);
 
         var htmlStream = MarkdownExportHelper.BuildHtmlStream(fileName, markdownContent);
         var htmlFileName = $"{Path.GetFileNameWithoutExtension(fileName)}.html";

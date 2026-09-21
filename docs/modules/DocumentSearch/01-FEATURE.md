@@ -2,7 +2,7 @@
 
 ## 功能概述
 
-将 MinerU 解析产生的版面块（`document_parse_blocks`）索引到 OpenSearch，并在解析完成/删除/元数据变更时自动维护索引；同时通过 HTTP API 提供基于 OpenSearch BM25 的精确关键词搜索能力，支持短语匹配、单词匹配、元数据过滤和游标分页。
+将解析产生的版面块（`document_parse_blocks`）索引到 OpenSearch，并在解析完成/删除/元数据变更时自动维护索引；同时通过 HTTP API 提供基于 OpenSearch BM25 的精确关键词搜索能力，支持短语匹配、单词匹配、元数据过滤和游标分页。
 
 本模块合并了原 ExactSearch 与 OpenSearchBlockIndexing 两个模块的全部能力。
 
@@ -12,13 +12,13 @@
 
 ## 背景
 
-DocLibrary 文档解析采用 MinerU 链路，数据表为 `document_files` / `document_parses` / `document_parse_blocks` / `document_parse_images`。搜索功能基于 MinerU 解析的版面块（blocks），每个 block 作为一个 OpenSearch 文档，索引字段来自 `document_parse_blocks` 表与 `document_files` 表的元数据。
+DocLibrary 文档解析采用 StructaDoc 管线（ADR-0009，存量数据为历史 MinerU 产物），数据表为 `document_files` / `document_parses` / `document_parse_blocks` / `document_parse_images`。搜索功能基于解析产物的版面块（blocks），每个 block 作为一个 OpenSearch 文档，索引字段来自 `document_parse_blocks` 表与 `document_files` 表的元数据。
 
 索引与搜索共享同一套 OpenSearch mapping（`BuildIndexBody`），保证写入字段与查询字段一致。索引操作均为 best-effort：失败仅记 Warning 日志，不阻塞解析/删除主流程。搜索在 OpenSearch 不可用时降级为空结果。
 
 ## 用户故事
 
-- **作为老师**：我上传讲义并完成 MinerU 解析后，搜索功能能立即检索到讲义内容。
+- **作为老师**：我上传讲义并完成解析后，搜索功能能立即检索到讲义内容。
 - **作为老师**：我按学科/年级/年份筛选搜索范围，快速定位目标文档。
 - **作为运维**：我删除某次解析结果时，对应的 OpenSearch 索引自动清理，不残留脏数据。
 - **作为运维**：我删除整个文档时，该文档所有解析版本的 OpenSearch 索引自动清理。
@@ -33,7 +33,7 @@ DocLibrary 文档解析采用 MinerU 链路，数据表为 `document_files` / `d
 ## 功能需求
 
 ### FR-01：解析完成后索引 blocks
-- MinerU 解析状态变为 `parsed` 后，自动将该 parse 的所有 `document_parse_blocks` 索引到 OpenSearch。
+- 解析状态变为 `parsed` 后，自动将该 parse 的所有 `document_parse_blocks` 索引到 OpenSearch。
 - 索引以 `block_{blockId}` 为 `_id`，支持幂等覆盖（重复索引不会产生重复文档）。
 - 仅索引 `text_content` 非空且非纯空白的 block（`null` / 空字符串 / 纯空白无可检索内容，使用 `string.IsNullOrWhiteSpace` 判断）。
 
@@ -117,12 +117,12 @@ DocLibrary 文档解析采用 MinerU 链路，数据表为 `document_files` / `d
 
 | AC | 描述 |
 |----|------|
-| AC-01 | MinerU 解析完成后，该 parse 的 blocks 出现在 OpenSearch 索引中 |
+| AC-01 | 解析完成后，该 parse 的 blocks 出现在 OpenSearch 索引中 |
 | AC-02 | 同一文档多次解析，每次 parse 的 blocks 独立索引，`_id` 不冲突 |
 | AC-03 | `DELETE /admin/document-parses/{parseId}` 后，该 parse 的 OpenSearch 索引文档被删除 |
 | AC-04 | `DELETE /admin/document-files/{id}` 后，该文档所有 parse 的 OpenSearch 索引文档被删除 |
 | AC-05 | `PUT /admin/document-files/{id}/metadata` 后，OpenSearch 索引中的 subject/grade/year 同步刷新 |
-| AC-06 | `GET /admin/documents/search` 能搜到 MinerU 解析的 blocks |
+| AC-06 | `GET /admin/documents/search` 能搜到解析产生的 blocks |
 | AC-07 | 短语匹配使用 `text.exact` 字段，单词匹配使用 `text` 字段 |
 | AC-08 | 搜索在 OpenSearch 不可用时返回空结果并记录 LogWarning |
 | AC-09 | 索引失败不阻塞解析流程（仅记 Warning 日志） |
@@ -169,7 +169,7 @@ DocLibrary 文档解析采用 MinerU 链路，数据表为 `document_files` / `d
 
 ## 数据来源
 
-- **索引源**：`document_parse_blocks` 表（MinerU 解析的结构化输出），通过 `IDocumentParseBlockRepository.GetByParseIdAsync` 读取。
+- **索引源**：`document_parse_blocks` 表（解析结果的结构化输出），通过 `IDocumentParseBlockRepository.GetByParseIdAsync` 读取。
 - **元数据来源**：`document_files` 表的 `subject` / `grade` / `year` 字段。索引时从文件记录读取写入；后续通过 `UpdateDocumentFileMetadataAsync` 同步更新。
 - **第 2 代新增数据源**：`document_parse_blocks.block_data`（minerU 原始 JSONB）→ 抽取 `bbox`（→ x0/y0/x1/y1）、`score`、`has_image`、`_meta.block_data`（整块回挂）。minerU `type`/`page_id`/`text|content|body`/`img_path` 已在第 1 代库落地为 `block_type`/`page_number`/`text_content`/`ImageId`，本次不二次解析。
 - **代码使用视图**（DocumentParseBlockService.ParseBlock 实际读取 minerU v1 block key）：type / page_id / text|content|body / img_path，见 [03-DESIGN.md §第 2 代演进](./03-DESIGN.md)。
@@ -185,7 +185,7 @@ DocLibrary 文档解析采用 MinerU 链路，数据表为 `document_files` / `d
 | `ISearchDomainService` | 定义 `ExactSearchAsync`（薄封装 + 降级） |
 | `SearchDomainService` | 实现 `ISearchDomainService`，异常时返回空结果 |
 | `DocumentSearchEndpoints` | `GET /admin/documents/search` 端点 |
-| `MinerUFileParseWorker` | 解析完成后调用 `IndexParseBlocksAsync`（best-effort） |
+| `StructaDocParseWorker` | 解析完成后调用 `IndexParseBlocksAsync`（best-effort） |
 | `DocumentParseEndpoints` | `DeleteDocumentParse` 调用 `DeleteParseIndexAsync`（best-effort） |
 | `DocumentFileEndpoints` | `DeleteDocumentFile` 调用 `DeleteDocumentFileIndexAsync`（best-effort）；`UpdateDocumentFileMetadata` 调用 `UpdateDocumentFileMetadataAsync`（best-effort） |
 

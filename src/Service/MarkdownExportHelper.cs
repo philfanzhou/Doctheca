@@ -1,22 +1,22 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using Ruoyu.Study.Common.Oss;
 using Ruoyu.Study.DocLibrary.Domain.Models;
 
 namespace Ruoyu.Study.DocLibrary.Service;
 
 /// <summary>
 /// Shared helper for Markdown/HTML export logic: image path replacement, ZIP building, HTML document wrapping.
+/// Image bytes and URLs are supplied by caller-provided delegates so the same logic serves both
+/// legacy OSS-backed parses and StructaDoc-backed parses (ADR-0009).
 /// </summary>
 internal static class MarkdownExportHelper
 {
     /// <summary>
-    /// Replace S3 image paths in markdown with relative paths (images/name).
+    /// Replace stored image references in markdown with relative paths (images/name) for ZIP packaging.
     /// </summary>
     public static string ReplaceImagePathsRelative(string markdown, IReadOnlyList<DocumentParseImageModel> images)
     {
@@ -30,19 +30,25 @@ internal static class MarkdownExportHelper
     }
 
     /// <summary>
-    /// Replace S3 image paths in markdown with base64 data URIs for self-contained HTML.
+    /// Replace image references in markdown with base64 data URIs for self-contained HTML.
     /// </summary>
     public static async Task<string> ReplaceImagePathsBase64Async(
         string markdown,
         IReadOnlyList<DocumentParseImageModel> images,
-        IOssService ossService,
+        Func<DocumentParseImageModel, Task<Stream?>> imageOpener,
         ILogger logger)
     {
         foreach (var img in images)
         {
             try
             {
-                using var imgStream = await ossService.DownloadAsync(img.ImagePath);
+                await using var imgStream = await imageOpener(img);
+                if (imgStream == null)
+                {
+                    logger.LogWarning("Image source unavailable for HTML export: {ImageName}", img.ImageName);
+                    continue;
+                }
+
                 using var imgMs = new MemoryStream();
                 await imgStream.CopyToAsync(imgMs);
                 var base64 = Convert.ToBase64String(imgMs.ToArray());
@@ -57,34 +63,40 @@ internal static class MarkdownExportHelper
             }
             catch (Exception ex)
             {
-                logger.LogWarning(ex, "Failed to download image for HTML export: {ImagePath}", img.ImagePath);
+                logger.LogWarning(ex, "Failed to download image for HTML export: {ImageName}", img.ImageName);
             }
         }
         return markdown;
     }
 
     /// <summary>
-    /// Replace S3 image paths in markdown with presigned URLs for in-browser viewing.
+    /// Replace image references in markdown with viewer URLs resolved per image
+    /// (presigned OSS URLs for legacy parses, DocLibrary proxy URLs for StructaDoc parses).
     /// </summary>
-    public static async Task<string> ReplaceImagePathsPresignedAsync(
+    public static async Task<string> ReplaceImagePathsAsync(
         string markdown,
         IReadOnlyList<DocumentParseImageModel> images,
-        IOssService ossService,
+        Func<DocumentParseImageModel, Task<string?>> urlResolver,
         ILogger logger)
     {
         foreach (var img in images)
         {
             try
             {
-                var presignedUrl = await ossService.GetPresignedUrlAsync(img.ImagePath, 3600);
-                markdown = markdown.Replace($"({img.ImagePath})", $"({presignedUrl})");
-                markdown = markdown.Replace($"(images/{img.ImageName})", $"({presignedUrl})");
-                markdown = markdown.Replace($"src=\"{img.ImagePath}\"", $"src=\"{presignedUrl}\"");
-                markdown = markdown.Replace($"src=\"images/{img.ImageName}\"", $"src=\"{presignedUrl}\"");
+                var url = await urlResolver(img);
+                if (string.IsNullOrEmpty(url))
+                {
+                    continue;
+                }
+
+                markdown = markdown.Replace($"({img.ImagePath})", $"({url})");
+                markdown = markdown.Replace($"(images/{img.ImageName})", $"({url})");
+                markdown = markdown.Replace($"src=\"{img.ImagePath}\"", $"src=\"{url}\"");
+                markdown = markdown.Replace($"src=\"images/{img.ImageName}\"", $"src=\"{url}\"");
             }
             catch (Exception ex)
             {
-                logger.LogWarning(ex, "Failed to generate presigned URL for image: {ImagePath}", img.ImagePath);
+                logger.LogWarning(ex, "Failed to resolve image URL: {ImageName}", img.ImageName);
             }
         }
         return markdown;
@@ -97,7 +109,7 @@ internal static class MarkdownExportHelper
         string fileName,
         string markdownContent,
         IReadOnlyList<DocumentParseImageModel> images,
-        IOssService ossService,
+        Func<DocumentParseImageModel, Task<Stream?>> imageOpener,
         ILogger logger)
     {
         var ms = new MemoryStream();
@@ -116,14 +128,20 @@ internal static class MarkdownExportHelper
             {
                 try
                 {
-                    using var imgStream = await ossService.DownloadAsync(img.ImagePath);
+                    await using var imgStream = await imageOpener(img);
+                    if (imgStream == null)
+                    {
+                        logger.LogWarning("Image source unavailable for export: {ImageName}", img.ImageName);
+                        continue;
+                    }
+
                     var imgEntry = archive.CreateEntry($"images/{img.ImageName}", System.IO.Compression.CompressionLevel.Fastest);
-                    using var entryStream = imgEntry.Open();
+                    await using var entryStream = imgEntry.Open();
                     await imgStream.CopyToAsync(entryStream);
                 }
                 catch (Exception ex)
                 {
-                    logger.LogWarning(ex, "Failed to download image for export: {ImagePath}", img.ImagePath);
+                    logger.LogWarning(ex, "Failed to download image for export: {ImageName}", img.ImageName);
                 }
             }
         }
