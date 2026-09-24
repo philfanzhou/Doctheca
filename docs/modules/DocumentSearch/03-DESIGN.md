@@ -120,8 +120,8 @@ type 枚举 (完整): text, title, equation, image, image_caption, image_footnot
 
 理由：
 - 索引/写入/降级/分页完全复用；维护工作量接近最小。
-- 结果契约向后兼容：新增字段 `BlockData`/`Bbox`/`Score` 在 `SearchResultModel` 是 optional；不传/不展示的前端（老 admin_portal 如有引用）不受影响。
-- 管理界面入口仍在 doclibrary 自带前端；不扩大 admin_portal 边界。
+- 结果契约向后兼容：新增字段 `BlockData`/`Bbox`/`Score` 在 `SearchResultModel` 是 optional；不传/不展示的前端（老 Ruoyu.Admin 如有引用）不受影响。
+- 管理界面入口仍在 doclibrary 自带前端；不扩大 Ruoyu.Admin 边界。
 - minerU `type` 与 `block_type` 同源、`page_id` 与 `page_number` 同源、`text|content|body` 与 `text_content` 同源 → 维度 1 零新增映射成本。
 
 ### `block_data` 回挂策略（同平行 V2 的 B 方案，精简后保留）

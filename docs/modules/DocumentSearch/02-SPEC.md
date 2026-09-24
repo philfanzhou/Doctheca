@@ -651,7 +651,7 @@ _meta         = new { block_data = block.BlockData }   // 整块回挂（V1 mine
 #### 13.9.3 前端扩展
 
 - doclibrary 自带前端**改造**现有 `SearchPage.vue`（V1 页保留），新增"高级筛选"抽屉 + 结果行展开 `blockData`/`bbox`/`score` 详情。**不新增**平行 `BlockSearchPage.vue`。
-- 不动 admin_portal。
+- 不动 Ruoyu.Admin。
 
 ### 13.10 第 2 代配置
 

@@ -95,7 +95,7 @@ DocLibrary 文档解析采用 StructaDoc 管线（ADR-0009，存量数据为历�
 ### FR-11：第 2 代 — 命中结果回挂 minerU block 原始 JSON
 - 搜索结果每条追加 `blockData`（`document_parse_blocks.block_data` 原始 JSON 字符串），让前端能在不二次请求 `GET /admin/documents/files/{id}` 的情况下直接展示命中 block 的完整 minerU 字段。
 - 同时追加 `bbox`（float[4]）与 `score`（float）字段，便于管理界面做视觉区域与置信度核对。
-- V1 的 `SearchResultModel` **向后兼容扩展**：新增 `BlockData` / `Bbox` / `Score` 为 optional 字段；不传/不展示的前端（含 admin_portal 现有引用）不受影响。**不新建** `BlockResultModel` 独立类。
+- V1 的 `SearchResultModel` **向后兼容扩展**：新增 `BlockData` / `Bbox` / `Score` 为 optional 字段；不传/不展示的前端（含 Ruoyu.Admin 现有引用）不受影响。**不新建** `BlockResultModel` 独立类。
 
 ### FR-12：第 2 代 — minerU 字段进入 OpenSearch mapping
 - 在 V1 `BuildIndexBody` 追加 minerU 维度字段（详见 [02-SPEC.md §13.4](./02-SPEC.md)）：
@@ -111,7 +111,7 @@ DocLibrary 文档解析采用 StructaDoc 管线（ADR-0009，存量数据为历�
 - 查询面板（V1 关键词输入框保留，追加）：blockType 下拉（基于历史数据聚合候选值）、pageNumber 数字输入、parseId / documentFileId 文本输入、hasImage 复选框。
 - 结果表格列（V1 列保留，追加）：块类型 / 页码 / 抽取文本（前 80 字） / 详情按钮（弹窗展示 `blockData` 格式化 JSON + bbox + score）。
 - 选中行可跳转 `ParseResultsPage.vue`（已存在）定位到对应 parse。
-- **不动 admin_portal**（admin_portal 当前无 doclibrary 相关视图，且无 BFF 转发；迁移至 admin_portal 属于独立大工程，本模块文档不包圆）。
+- **不动 Ruoyu.Admin**（Ruoyu.Admin 当前无 doclibrary 相关视图，且无 BFF 转发；迁移至 Ruoyu.Admin 属于独立大工程，本模块文档不包圆）。
 
 ## 验收条件
 
@@ -165,7 +165,7 @@ DocLibrary 文档解析采用 StructaDoc 管线（ADR-0009，存量数据为历�
 | NFR-09 | 带 minerU filter 的查询默认单页上限 50（每 block 携带完整 `blockData` JSONB，避免响应体过大）；超出截断；V1 纯 keyword 路径保持 100 |
 | NFR-10 | 第 2 代检索链路 P95 < 500ms（携带 `blockData`，放宽 V1 的 200ms 目标；后续通过列投影与 gzip 压缩收敛） |
 | NFR-11 | `blockData` 全文以 `_meta.block_data`（`enabled:false`）存 `_source`，不进入全文索引，避免写入放大 |
-| NFR-12 | 第 2 代演进置于 doclibrary 自带前端（改造 `SearchPage.vue`），不扩大 admin_portal 的 BFF 边界（本次范围控制） |
+| NFR-12 | 第 2 代演进置于 doclibrary 自带前端（改造 `SearchPage.vue`），不扩大 Ruoyu.Admin 的 BFF 边界（本次范围控制） |
 
 ## 数据来源
 

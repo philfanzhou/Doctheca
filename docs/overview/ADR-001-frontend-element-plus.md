@@ -1,5 +1,8 @@
 # ADR-001：DocLibrary 管理前端引入 Element Plus 并替换纯手写 CSS
 
+> **迁出说明（2026-09-24）**：本文中的 `src/admin_portal` / `admin_portal` 路径已随 Admin Portal 迁出为外部仓库 [Ruoyu.Admin](https://github.com/philfanzhou/Ruoyu.Admin)（[ADR-0010](../../../../../docs/adr/0010-extract-ruoyu-admin.md)），在本仓库已不存在。本文保留原始描述作为历史记录，不作为当前运行手册使用。
+
+
 ## 状态
 
 已接受（Accepted） — 2026-07-10
