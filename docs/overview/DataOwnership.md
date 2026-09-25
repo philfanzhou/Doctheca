@@ -31,6 +31,6 @@
 
 - 本服务不写入任何其他 Ruoyu 微服务的数据库，也不直连 StructaDoc 的数据库或对象存储
 - 其他服务不应直接写入本服务的 4 张业务表
-- QuestionBank 的导入状态和题目 ID 由 QuestionBank 自己持久化，DocLibrary 不保存副本
+- Quaestura 的导入状态和题目 ID 由 Quaestura 自己持久化，DocLibrary 不保存副本
 - 存量 OSS 文件路径格式由本服务内部控制，其他服务不应直接操作
 - StructaDoc 内部的 storageRef 与资源生命周期由其 API 屏蔽，DocLibrary 不持久化其存储细节

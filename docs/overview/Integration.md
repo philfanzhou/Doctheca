@@ -12,7 +12,7 @@
 | OpenSearch | HTTP | 出 | block 索引和查询 | 共享 Consul 配置 |
 | LLM（OpenAI 兼容，可选） | HTTP | 出 | 元数据分析 | 私有 ApiKey |
 
-当前不存在 QuestionBank → DocLibrary 集成。后续出现真实调用需求时，必须独立
+当前不存在 Quaestura → DocLibrary 集成。后续出现真实调用需求时，必须独立
 定义数据契约、认证方式和部署配置，不复用管理员 Cookie，也不预留未使用接口。
 
 ## 管理 API

@@ -1,5 +1,7 @@
 # ruoyu.doclibrary 后端代码规范审计报告
 
+> 历史快照（2026-07-22）：文中 `QuestionBankImport*` 是 DocLibrary 自己的内部集成代码，其后已随 AdminAuthentication 重构移除；其命名所指的原 QuestionBank 服务亦已迁出为外部仓库 Quaestura（ADR-0011）。为保审计记录准确，保留原文件名不改。
+
 - 审计日期：2026-07-22
 - 扫描范围：`src/services/ruoyu.doclibrary/src/**/*.cs`（排除 obj/、bin/）
 - 扫描文件数：72

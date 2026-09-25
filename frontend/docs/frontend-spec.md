@@ -239,7 +239,7 @@ DocLibrary 管理后台使用 SignaCore bootstrap 管理员账户登录：
 - 认证材料改为 Access/Refresh HttpOnly Cookie，前端不持有 Token。
 - 新增登录页、启动会话检查、单次刷新、退出和 401/403 处理。
 - 静态文件和 SPA fallback 保持匿名；所有管理业务 API 要求管理员策略。
-- QuestionBank 接口移出 `/admin`，改为独立的只读 internal API，不复用浏览器管理员会话。
+- QuestionBank（现外部仓库 Quaestura，ADR-0011）接口移出 `/admin`，改为独立的只读 internal API，不复用浏览器管理员会话（该 internal API 其后已整体移除）。
 
 ### 2026-07-22: 前端大文件重构与问题修复
 

@@ -73,10 +73,12 @@ DocLibrary -> Browser: HttpOnly access/refresh cookies + non-sensitive session s
 - 刷新返回的新 Access Token 仍必须经过完整密码学验证和管理员角色检查。
 - 登出时 Identity revoke 为 best-effort，本地 Cookie 清理是强制行为。
 
-## QuestionBank 边界
+## Quaestura 边界
 
-当前仓库没有 QuestionBank → DocLibrary 调用方，因此 DocLibrary 不提供
-QuestionBank 专用 HTTP 接口、服务认证策略或服务密钥配置。后续出现真实调用
+> Quaestura 是原 QuestionBank 服务，已于 2026-09-25 迁出为独立仓库 [philfanzhou/Quaestura](https://github.com/philfanzhou/Quaestura)（ADR-0011）。下述边界在迁出前后一致：DocLibrary 从未提供其专用接口。
+
+当前仓库没有 Quaestura → DocLibrary 调用方，因此 DocLibrary 不提供
+Quaestura 专用 HTTP 接口、服务认证策略或服务密钥配置。后续出现真实调用
 需求时重新设计数据契约与认证方式，不预留未使用接口。
 
 原 `POST /admin/document-parses/{parseId}/import-status`、`document_parse_imports` 运行时模型和列表过滤全部移除。已有数据库中的遗留表不在启动时自动删除。

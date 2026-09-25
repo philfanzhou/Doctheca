@@ -115,7 +115,7 @@ Main（.view，200ms 模糊过渡）
 | 样稿元素 | 原因 |
 |---------|------|
 | 学科/年级/年份元数据卡片（pgDocDetail 右上） | API `DocumentFile` 无 `subject/grade/year` 字段；为避免静态皮，**省略该卡片**。后端若后续扩展 `DocumentMetadata` 模块，再补回。 |
-| 下游流向卡片（pgDocDetail 右下） | OpenSearch 同步状态 / QuestionBank 导入按钮均无对应 API；**省略**。 |
+| 下游流向卡片（pgDocDetail 右下） | OpenSearch 同步状态 / 题库导入按钮（原 QuestionBank，现外部仓库 Quaestura，ADR-0011）均无对应 API；**省略**。 |
 | 题库导入 toast 演示 | 样稿为 `App.toastDemo(...)` mock；无对应 API，**不实现**。 |
 | 系统切换器 sys-switch | DocLibrary 只消费 Identity 认证，不承载 Identity 管理 UI；**不展示**。 |
 | Identity 管理页面 | 不在范围；仅实现 DocLibrary 登录页和 Cookie 会话。 |

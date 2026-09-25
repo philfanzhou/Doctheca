@@ -30,7 +30,7 @@ DocLibrary :5012 ─────► SignaCore :5002
 | Admin UI | `/`、`/admin/*` | Identity `role=admin` Cookie/JWT | 文件、解析、元数据、导出和搜索管理 |
 
 普通 Identity 用户没有管理员角色，不能登录或调用管理 API。当前 DocLibrary
-不提供 QuestionBank 专用 HTTP 接口；如果后续出现真实调用方，必须重新设计
+不提供 Quaestura 专用 HTTP 接口；如果后续出现真实调用方，必须重新设计
 数据契约和服务认证。
 
 ## 下游依赖
@@ -48,5 +48,5 @@ DocLibrary :5012 ─────► SignaCore :5002
 
 - DocLibrary 独占写入自己的文档与解析记录表；新文档的原件与解析产物由 StructaDoc 主责存储，DocLibrary 只保存 documentId/parseRunId 引用和本地 blocks/images 同步副本（ADR-0009）。
 - DocLibrary 不直连 StructaDoc 的数据库或对象存储，一律经其版本化 API。
-- DocLibrary 不保存 QuestionBank 导入状态或题目 ID。
+- DocLibrary 不保存 Quaestura 导入状态或题目 ID。
 - Identity 负责用户凭据验证和 JWT 签发；DocLibrary 只验证并消费管理员身份。

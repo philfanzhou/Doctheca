@@ -28,7 +28,7 @@
 - 不映射任何 `/internal/question-bank/*`。
 - 不存在任何导入状态写接口。
 - DocLibrary 不创建或更新 `document_parse_imports`。
-- `start.sh` 不注入共享 Identity 信任或 QuestionBank 配置；只注入 DocLibrary App 凭据与自身的 Cookie Secure 开关。
+- `start.sh` 不注入共享 Identity 信任或 Quaestura（原 QuestionBank） 配置；只注入 DocLibrary App 凭据与自身的 Cookie Secure 开关。
 
 ## 前端验证
 

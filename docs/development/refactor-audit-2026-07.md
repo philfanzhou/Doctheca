@@ -1,5 +1,7 @@
 # DocLibrary 重构审查清单（2026-07）
 
+> 历史快照（2026-07）：文中 `QuestionBankImportServiceTests.cs` 是 DocLibrary 自己的内部集成测试，其后已移除；原 QuestionBank 服务已迁出为外部仓库 Quaestura（ADR-0011）。为保审计记录准确，保留原文件名不改。
+
 ## 审计范围
 
 - **后端**：`src/services/ruoyu.doclibrary/src/**/*.cs`（排除 obj/、bin/），共 72 个文件
