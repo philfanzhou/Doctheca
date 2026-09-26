@@ -6,7 +6,7 @@
 
 | 依赖 | 是否必需 | 说明 |
 |------|----------|------|
-| .NET 8 SDK | 是 | 项目目标框架为 `net8.0` |
+| .NET 10 SDK | 是 | 项目目标框架为 `net10.0` |
 | PostgreSQL | 是 | 默认连接字符串指向 `localhost:5432`（`doctheca`）|
 | OpenSearch | 可选 | 全文搜索索引；默认地址为 `http://localhost:9200`；推荐 Docker 镜像版本 `2.19.5`（与 `OpenSearch.Net 1.8.0` 客户端兼容） |
 | MinIO / SeaweedFS | 可选 | S3 兼容的对象存储；本地 fallback 的 `Oss:InternalEndpoint` 为 `localhost:8333`；可通过 `USE_LOCAL_OSS=1` 切换为本地文件系统存储 |

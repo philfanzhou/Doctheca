@@ -228,7 +228,7 @@ public class DocumentExportLogicTests
         var readImgEntry = readArchive.GetEntry($"images/{imageName}")!;
         using var readImgStream = readImgEntry.Open();
         var readBytes = new byte[imageBytes.Length];
-        await readImgStream.ReadAsync(readBytes);
+        await readImgStream.ReadExactlyAsync(readBytes);
         readBytes.Should().Equal(imageBytes);
     }
 

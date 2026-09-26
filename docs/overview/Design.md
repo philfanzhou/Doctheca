@@ -19,7 +19,7 @@ Database
   EF Core repositories + SQL DatabaseInitializer
 ```
 
-技术栈：.NET 8、ASP.NET Core Minimal APIs、EF Core 8/Npgsql、Mapster、OpenSearch.Net、Vue 3.5/TypeScript/Vite/Element Plus。
+技术栈：.NET 10、ASP.NET Core Minimal APIs、EF Core 10/Npgsql、Mapster、OpenSearch.Net、Vue 3.5/TypeScript/Vite/Element Plus。
 
 ## 访问控制架构
 
