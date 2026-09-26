@@ -1,7 +1,7 @@
-# 开发执行索引
+# Development Docs Index
 
-| 文档 | 用途 |
+| Document | Purpose |
 |------|------|
-| [Deployment.md](./Deployment.md) | 部署、Consul 接入与运行时依赖说明 |
-| [local-setup.md](./local-setup.md) | 本地环境搭建 |
-| [verification.md](./verification.md) | 验证与测试 |
+| [Deployment.md](./Deployment.md) | Deployment, Consul integration and runtime dependencies |
+| [local-setup.md](./local-setup.md) | Local environment setup |
+| [verification.md](./verification.md) | Verification and testing |

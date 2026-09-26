@@ -1,23 +1,23 @@
-﻿# Deployment — 部署与运维
+﻿# Deployment — Deployment & Operations
 
-## 服务端口
+## Service Ports
 
-| 端口 | 协议 | 用途 |
+| Port | Protocol | Purpose |
 |------|------|------|
-| 5012 | HTTP | Web 管理界面 + 搜索 API + 静态文件 + Health Check |
+| 5012 | HTTP | Web admin UI + search API + static files + health check |
 
-端口可在 `appsettings.json` 的 `Endpoints:Http` 中覆盖。
+The port can be overridden via `Endpoints:Http` in `appsettings.json`.
 
-## Consul 接入
+## Consul Integration
 
-`doctheca` 通过 `src/Consul`（vendored 自 ruoyu.common）的共享 Consul 代码在进程启动时读取共享配置；当前不向 Consul Catalog 注册服务。
+`doctheca` reads shared configuration at process startup through the shared Consul code in `src/Consul` (vendored from ruoyu.common); it currently does not register the service in the Consul Catalog.
 
-启动脚本 `start.sh` 只保留以下几类参数：
+The startup script `start.sh` only keeps the following kinds of parameters:
 
 - `CONSUL_HTTP_ADDR`
 - `CONSUL_TOKEN`
 - `Endpoints:Http`
-- `ConnectionStrings:Default` 中的数据库名部分
+- The database-name part of `ConnectionStrings:Default`
 - `OpenSearch:IndexName`
 - `LlmDocumentAnalysis:*`
 - `StructaDoc:ApiKey`
@@ -25,7 +25,7 @@
 - `IdentityService:AppId`
 - `IdentityService:AppSecret`
 
-以下配置迁入共享 Consul KV：
+The following configuration has moved into the shared Consul KV:
 
 - `config/ruoyu/shared.json`
   - `PostgreSql:Host`
@@ -47,64 +47,64 @@
   - `IdentityService:Audience`
   - `IdentityService:RequireHttpsMetadata`
   - `IdentityService:ClockSkewSeconds`
-  - `DocthecaService:Url`（供调用方访问 Doctheca）
-  - `StructaDoc:BaseUrl`（Doctheca 调用外部 StructaDoc 解析服务）
+  - `DocthecaService:Url` (for callers accessing Doctheca)
+  - `StructaDoc:BaseUrl` (Doctheca calling the external StructaDoc parse service)
 - `config/ruoyu/serilog.json`
   - `Serilog:MinimumLevel:*`
 
-> `Database:Name`、`OpenSearch:IndexName`、`LlmDocumentAnalysis:*`、`StructaDoc:ApiKey` 都属于 Doctheca 私有配置，不进入共享 KV；`StructaDoc:BaseUrl` 在共享 KV `service-endpoints.json` 中。
+> `Database:Name`, `OpenSearch:IndexName`, `LlmDocumentAnalysis:*` and `StructaDoc:ApiKey` are all Doctheca-private configuration and do not go into the shared KV; `StructaDoc:BaseUrl` lives in the shared KV `service-endpoints.json`.
 
-## 环境变量
+## Environment Variables
 
-| 变量 | 默认值 | 说明 |
+| Variable | Default | Description |
 |------|--------|------|
-| `CONSUL_HTTP_ADDR` | `192.168.100.10:8500` | Consul HTTP API 地址；仓库值是示例内网地址，部署时替换为实际地址 |
-| `CONSUL_TOKEN` | （空） | Consul ACL token（启用 ACL 时必需） |
-| `CONSUL_KV_PREFIX` | `config/ruoyu` | Consul 共享 KV 前缀 |
-| `CONSUL_CACHE_DIR` | `./data/consul` | Consul 本地缓存目录 |
-| `USE_LOCAL_OSS` | （未设置） | 设为 `1` 使用本地文件系统存储代替 S3 |
-| `OSS_LOCAL_PATH` | `data/oss` | 本地文件存储目录（仅在 `USE_LOCAL_OSS=1` 时使用） |
-| `DOCTHECA_COOKIE_SECURE` | `false` | 映射到 `Authentication__CookieSecure`；HTTPS 生产部署必须设为 `true` |
-| `IDENTITY_APP_ID` | 无 | Doctheca 在 SignaCore 中的独立 AppId；启动时映射到 `IdentityService__AppId` |
-| `IDENTITY_APP_SECRET` | 无 | Doctheca AppSecret；只从部署 secret 注入，启动时映射到 `IdentityService__AppSecret` |
+| `CONSUL_HTTP_ADDR` | `192.168.100.10:8500` | Consul HTTP API address; the repository value is an example internal LAN address — replace it with the actual address at deployment time |
+| `CONSUL_TOKEN` | (empty) | Consul ACL token (required when ACLs are enabled) |
+| `CONSUL_KV_PREFIX` | `config/ruoyu` | Consul shared KV prefix |
+| `CONSUL_CACHE_DIR` | `./data/consul` | Consul local cache directory |
+| `USE_LOCAL_OSS` | (unset) | Set to `1` to use local file-system storage instead of S3 |
+| `OSS_LOCAL_PATH` | `data/oss` | Local file-storage directory (used only when `USE_LOCAL_OSS=1`) |
+| `DOCTHECA_COOKIE_SECURE` | `false` | Maps to `Authentication__CookieSecure`; must be set to `true` for HTTPS production deployments |
+| `IDENTITY_APP_ID` | none | Doctheca's dedicated AppId in SignaCore; mapped to `IdentityService__AppId` at startup |
+| `IDENTITY_APP_SECRET` | none | Doctheca AppSecret; injected only from deployment secrets and mapped to `IdentityService__AppSecret` at startup |
 
-LLM 文档分析配置通过 `start.sh` 的环境变量注入，不把密钥提交到仓库：
+LLM document-analysis configuration is injected via environment variables in `start.sh`; secrets are never committed to the repository:
 
-| 环境变量 | 默认值 | 说明 |
+| Environment variable | Default | Description |
 |------|------|------|
-| `LLM_API_KEY` | 空 | 映射到 `LlmDocumentAnalysis__ApiKey`；启用文档分析时必须设置 |
-| `LLM_BASE_URL` | `https://api.siliconflow.cn/v1` | OpenAI 兼容 API 地址 |
-| `LLM_MODEL` | `Qwen/Qwen2.5-7B-Instruct` | 文档分析模型 |
-| `LLM_CONTEXT_LENGTH` | `128K` | 文档分析上下文长度 |
+| `LLM_API_KEY` | empty | Maps to `LlmDocumentAnalysis__ApiKey`; must be set to enable document analysis |
+| `LLM_BASE_URL` | `https://api.siliconflow.cn/v1` | OpenAI-compatible API address |
+| `LLM_MODEL` | `Qwen/Qwen2.5-7B-Instruct` | Document-analysis model |
+| `LLM_CONTEXT_LENGTH` | `128K` | Document-analysis context length |
 
-## OSS 地址配置
+## OSS Address Configuration
 
-- `Oss:InternalEndpoint` / `Oss:InternalSecure` 用于服务端上传、下载和桶操作；独立部署
-  SeaweedFS 时填写其服务器 `IP:发布端口` 及实际协议。
-- `Oss:PublicBaseUrl` 用于生成浏览器可访问的预签名地址，生产环境为
-  `https://ry.zhoufan.asia/oss`。
-- OSS 地址来自 Consul `config/ruoyu/shared.json`，修改后重启 Doctheca 生效。
-- 公网 `/oss/` 的反向代理由 User Web Nginx 管理；它的上游地址不从 Consul 动态生成，
-  SeaweedFS 迁移时需同时修改 User Web 部署目录的 `conf/nginx.conf` 并重启 User Web。
+- `Oss:InternalEndpoint` / `Oss:InternalSecure` are used for server-side uploads, downloads and bucket operations; when deploying
+  SeaweedFS standalone, fill in its server `IP:published-port` and the actual protocol.
+- `Oss:PublicBaseUrl` is used to generate browser-accessible presigned addresses; in production it is
+  `https://ry.zhoufan.asia/oss`.
+- OSS addresses come from Consul `config/ruoyu/shared.json`; restart Doctheca for changes to take effect.
+- The public-network reverse proxy for `/oss/` is managed by User Web Nginx; its upstream address is not generated dynamically from Consul,
+  so when migrating SeaweedFS you must also modify `conf/nginx.conf` in the User Web deployment directory and restart User Web.
 
-直接运行 Host 时也可使用 .NET 分层配置名
-`Authentication__CookieSecure`。`IdentityService:Authority/Audience/RequireHttpsMetadata`
-由 Consul 提供；`appsettings.json` 只保留本地开发 fallback。
+When running the Host directly you can also use the .NET hierarchical configuration name
+`Authentication__CookieSecure`. `IdentityService:Authority/Audience/RequireHttpsMetadata`
+are provided by Consul; `appsettings.json` only keeps the local-development fallback.
 
-## 下游依赖
+## Downstream Dependencies
 
-| 依赖 | 端口 | 用途 |
+| Dependency | Port | Purpose |
 |------|------|------|
-| PostgreSQL | 5432 | 主数据库（`doctheca`） |
-| OpenSearch | 9200 | 全文检索索引 |
-| MinIO / SeaweedFS | 部署决定（默认 8333） | 对象存储（S3 兼容，地址来自 Consul `Oss:InternalEndpoint`） |
-| Consul | 8500 | 共享配置读取与服务注册 |
-| Loki | 3100 | 日志聚合（通过 Consul `Loki:Uri` 配置） |
-| SignaCore | 5002 | 管理员登录、Token刷新/撤销、OIDC discovery/JWKS |
+| PostgreSQL | 5432 | Primary database (`doctheca`) |
+| OpenSearch | 9200 | Full-text search index |
+| MinIO / SeaweedFS | Deployment-dependent (default 8333) | Object storage (S3-compatible; address comes from Consul `Oss:InternalEndpoint`) |
+| Consul | 8500 | Shared configuration reads and service registration |
+| Loki | 3100 | Log aggregation (configured via Consul `Loki:Uri`) |
+| SignaCore | 5002 | Admin login, token refresh/revocation, OIDC discovery/JWKS |
 
-## 管理员认证配置
+## Admin Authentication Configuration
 
-最小配置：
+Minimal configuration:
 
 ```json
 {
@@ -122,90 +122,90 @@ LLM 文档分析配置通过 `start.sh` 的环境变量注入，不把密钥提�
 }
 ```
 
-SignaCore `POST /api/auth/token` 对 password 与 refresh grant 都要求应用凭据。因此
-Doctheca 使用无 callback、短信禁用、Shared audience 的独立 SignaCore App，并在每次
-token 请求中发送 `X-Admin-AppId` / `X-Admin-AppSecret`。bootstrap 管理员角色注入不依赖
-callback。Authority、Issuer、Audience 和 metadata HTTPS 要求以 Consul
-`config/ruoyu/service-endpoints.json` 为部署事实源；AppId/AppSecret 只来自部署 secret。上面的
-`192.168.100.10` 仅为仓库假内网示例，部署时替换为实际地址。
+SignaCore's `POST /api/auth/token` requires application credentials for both the password and refresh grants. Therefore
+Doctheca uses a dedicated SignaCore App with no callback, SMS disabled and a shared audience, and sends
+`X-Admin-AppId` / `X-Admin-AppSecret` with every token request. Bootstrap admin-role injection does not depend on the
+callback. Authority, Issuer, Audience and the metadata HTTPS requirement take Consul
+`config/ruoyu/service-endpoints.json` as the deployment source of truth; AppId/AppSecret come only from deployment secrets. The
+`192.168.100.10` above is merely the repository's fake internal-LAN example — replace it with the actual address at deployment time.
 
-浏览器与 Doctheca 之间默认使用 HTTPS，并设置 `Authentication:CookieSecure=true`。`RequireHttpsMetadata=false` 仅表示运维显式接受 HTTP Identity metadata；SignaCore 端也必须启用 HTTP issuer，代码不会因为地址是私网、容器名或处于 Development 就自动放宽。
+HTTPS is used by default between the browser and Doctheca, with `Authentication:CookieSecure=true`. `RequireHttpsMetadata=false` only means operations explicitly accepts HTTP Identity metadata; the HTTP issuer must also be enabled on the SignaCore side, and the code does not automatically relax just because the address is a private network, a container name, or the environment is Development.
 
-Cookie 名称和路径：
+Cookie names and paths:
 
-| Cookie | Path | 用途 |
+| Cookie | Path | Purpose |
 |--------|------|------|
-| `docthecaAccessToken` | `/admin` | 管理 API JWT |
-| `docthecaRefreshToken` | `/admin/auth` | 刷新与登出 |
+| `docthecaAccessToken` | `/admin` | Admin API JWT |
+| `docthecaRefreshToken` | `/admin/auth` | Refresh and logout |
 
-两个 Cookie 均为 HttpOnly、SameSite=Strict，不向前端 JavaScript 暴露。
+Both cookies are HttpOnly and SameSite=Strict, and are not exposed to front-end JavaScript.
 
-## 日志配置
+## Logging Configuration
 
-Doctheca 使用 Serilog 替代原生 Microsoft.Extensions.Logging，双写到 Console + Grafana Loki。接入方式与 Identity 服务完全一致。
+Doctheca uses Serilog instead of the native Microsoft.Extensions.Logging, dual-writing to Console + Grafana Loki. The integration is exactly the same as in the Identity service.
 
-### Serilog 配置
+### Serilog Configuration
 
-服务通过 `builder.Host.UseAgentSerilog("Doctheca")` 配置 Serilog。`appsettings.json` 中的 `Logging` 节仅保留给未走 Serilog 的少量运行时组件，**业务日志级别以 Serilog 配置为准**。
+The service configures Serilog via `builder.Host.UseAgentSerilog("Doctheca")`. The `Logging` section in `appsettings.json` is kept only for the few runtime components that do not go through Serilog; **business log levels are governed by the Serilog configuration**.
 
-| 配置键 | 默认值 | 说明 |
+| Config key | Default | Description |
 |--------|--------|------|
-| `Serilog:MinimumLevel:Default` | Information | 默认日志级别 |
-| `Serilog:MinimumLevel:Override:Microsoft.AspNetCore` | Warning | ASP.NET Core 日志级别 |
-| `Serilog:MinimumLevel:Override:Microsoft.EntityFrameworkCore.Database.Command` | Warning | EF Core 日志级别 |
-| `Serilog:WriteTo:0:Name` | Console | 控制台 Sink（数组下标 0） |
-| `Serilog:WriteTo:1:Name` | GrafanaLoki | Loki Sink（数组下标 1） |
-| `Serilog:WriteTo:1:Args:uri` | http://ruoyu-loki:3100 | Loki 地址（最终由 `Loki:Uri` 覆盖） |
-| `Serilog:WriteTo:1:Args:labels:0:key` | service | Loki 标签键 |
-| `Serilog:WriteTo:1:Args:labels:0:value` | Doctheca | Loki 标签值（service 标签） |
+| `Serilog:MinimumLevel:Default` | Information | Default log level |
+| `Serilog:MinimumLevel:Override:Microsoft.AspNetCore` | Warning | ASP.NET Core log level |
+| `Serilog:MinimumLevel:Override:Microsoft.EntityFrameworkCore.Database.Command` | Warning | EF Core log level |
+| `Serilog:WriteTo:0:Name` | Console | Console sink (array index 0) |
+| `Serilog:WriteTo:1:Name` | GrafanaLoki | Loki sink (array index 1) |
+| `Serilog:WriteTo:1:Args:uri` | http://ruoyu-loki:3100 | Loki address (ultimately overridden by `Loki:Uri`) |
+| `Serilog:WriteTo:1:Args:labels:0:key` | service | Loki label key |
+| `Serilog:WriteTo:1:Args:labels:0:value` | Doctheca | Loki label value (service label) |
 
-### 日志 Enricher
+### Log Enrichers
 
-每条日志自动携带以下字段：
+Every log entry automatically carries the following fields:
 
-| 字段 | 来源 | 说明 |
+| Field | Source | Description |
 |------|------|------|
-| ServiceName | UseAgentSerilog 参数 | 固定为 `Doctheca` |
-| ServiceVersion | UseAgentSerilog 参数 | 默认 `1.0.0` |
-| InstanceId | Environment.MachineName | 实例标识 |
-| MachineName | Enrichers.Environment | 主机名 |
-| ThreadId | Enrichers.Thread | 线程 ID |
+| ServiceName | UseAgentSerilog parameter | Fixed as `Doctheca` |
+| ServiceVersion | UseAgentSerilog parameter | Defaults to `1.0.0` |
+| InstanceId | Environment.MachineName | Instance identifier |
+| MachineName | Enrichers.Environment | Host name |
+| ThreadId | Enrichers.Thread | Thread ID |
 
-### Loki 地址注入
+### Loki Address Injection
 
-Loki 地址统一通过 `Loki:Uri` 配置键进入 `Serilog:WriteTo:1:Args:uri`：
+The Loki address is injected uniformly into `Serilog:WriteTo:1:Args:uri` through the `Loki:Uri` configuration key:
 
-| 来源 | 示例值 | 说明 |
+| Source | Example value | Description |
 |------|--------|------|
-| `Loki:Uri` 配置键 | http://ruoyu-loki:3100 | 推荐由 Consul `config/ruoyu/shared.json` 提供 |
-| `Loki:Uri`（fallback） | http://localhost:3100 | appsettings.json 中的兜底地址 |
+| `Loki:Uri` config key | http://ruoyu-loki:3100 | Recommended to be provided by Consul `config/ruoyu/shared.json` |
+| `Loki:Uri` (fallback) | http://localhost:3100 | Fallback address in appsettings.json |
 
-> **容错机制**：如果 `Loki:Uri` 未设置，Loki Sink 使用 appsettings.json 中 `Serilog:WriteTo:1:Args:uri` 的 fallback 地址。Loki 不可达时 Sink 异步重试，不影响服务启动。`start.sh` 不传 `LOKI_URI` 环境变量，Loki 地址完全由 Consul 提供。
+> **Fault tolerance**: If `Loki:Uri` is not set, the Loki Sink uses the fallback address in `Serilog:WriteTo:1:Args:uri` from appsettings.json. When Loki is unreachable the sink retries asynchronously and does not affect service startup. `start.sh` does not pass a `LOKI_URI` environment variable; the Loki address is provided entirely by Consul.
 
-### 启动诊断
+### Startup Diagnostics
 
-服务启动时会输出 Consul 拉取过程和最终生效配置摘要，包括 `LokiUri` 字段，便于排查 Loki 地址是否正确从 Consul 加载。
+At startup the service outputs the Consul pull process and a summary of the final effective configuration, including the `LokiUri` field, making it easy to check whether the Loki address was loaded from Consul correctly.
 
-## 数据库配置
+## Database Configuration
 
-代码使用 `UseNpgsql`。本地开发请运行 PostgreSQL。
+The code uses `UseNpgsql`. Run PostgreSQL for local development.
 
-数据库连接字符串在运行时由以下两部分拼合得到：
+The database connection string is assembled at runtime from the following two parts:
 
-- 共享 Consul 配置：`PostgreSql:Host/Port/Username/Password`
-- 服务私有配置：`Database:Name=doctheca`
+- Shared Consul configuration: `PostgreSql:Host/Port/Username/Password`
+- Service-private configuration: `Database:Name=doctheca`
 
-启动后若配置正常，诊断日志应能看到最终生效的 PostgreSQL 主机与数据库名。
+After startup, if the configuration is correct, the diagnostic logs should show the final effective PostgreSQL host and database name.
 
-## 启动命令
+## Startup Command
 
 ```bash
 dotnet run --project src/Host
 ```
 
-Doctheca 容器使用 Docker 默认 bridge 网络，不再加入 `ruoyu-net`，也不再依赖 Docker 容器名访问 Consul。部署时必须保证容器能够访问 `CONSUL_HTTP_ADDR` 指向的局域网地址。
+The Doctheca container uses the Docker default bridge network; it no longer joins `ruoyu-net` and no longer relies on Docker container names to reach Consul. At deployment time you must ensure the container can access the LAN address pointed to by `CONSUL_HTTP_ADDR`.
 
-调用方通过 Consul `config/ruoyu/service-endpoints.json` 中的 `DocthecaService:Url` 访问 Doctheca。跨主机部署时该值必须是调用方可达的局域网 IP 和 host 映射端口，例如：
+Callers access Doctheca via `DocthecaService:Url` in Consul `config/ruoyu/service-endpoints.json`. For cross-host deployments this value must be a LAN IP and host-mapped port reachable by the callers, for example:
 
 ```json
 {
@@ -215,33 +215,33 @@ Doctheca 容器使用 Docker 默认 bridge 网络，不再加入 `ruoyu-net`，�
 }
 ```
 
-Consul 初始化脚本使用 `cas=0`，只创建尚不存在的 KV。修改初始化 JSON 不会覆盖已有值；迁移时还需更新实时 KV。调用方如果只在启动时读取该配置，实时 KV 更新后还需重启调用方。
+The Consul initialization script uses `cas=0` and only creates KVs that do not yet exist. Modifying the initialization JSON does not overwrite existing values; during migration you must also update the live KV. If callers read this configuration only at startup, they must also be restarted after the live KV is updated.
 
-部署后的冒烟检查应在 Doctheca 目标宿主机上访问 `http://127.0.0.1:5012/health`；完整部署联调见 [`docs/deploy-test/`](../../../../../docs/deploy-test/README.md)。
+The post-deployment smoke check should hit `http://127.0.0.1:5012/health` on the Doctheca target host.
 
-服务启动时自动执行：
-1. `DatabaseInitializer.InitializeAsync` — 建表 + 列迁移（SQL-based，无 EF Core Migration）
-2. `OpenSearchIndexService.EnsureIndexAsync` — 创建搜索索引（best-effort）
-3. `IDocumentAnalysisService.InitializeAsync` — LLM 初始化（如配置了 ApiKey）
+The service automatically performs the following at startup:
+1. `DatabaseInitializer.InitializeAsync` — table creation + column migration (SQL-based, no EF Core Migration)
+2. `OpenSearchIndexService.EnsureIndexAsync` — create the search index (best-effort)
+3. `IDocumentAnalysisService.InitializeAsync` — LLM initialization (if an ApiKey is configured)
 
-## 预构建镜像与版本发布
+## Prebuilt Images & Version Releases
 
-`start.sh` 默认运行本地构建的 `doctheca:latest`；使用已发布镜像时指定 `IMAGE_REPO` 与 `IMAGE_TAG`：
+`start.sh` runs the locally built `doctheca:latest` by default; when using a published image, specify `IMAGE_REPO` and `IMAGE_TAG`:
 
 ```bash
 docker pull ghcr.io/philfanzhou/doctheca:0.1.0
 IMAGE_REPO=ghcr.io/philfanzhou/doctheca IMAGE_TAG=0.1.0 ./start.sh
 ```
 
-GitHub Actions（`.github/workflows/ci.yml`）在 PR、`main` 推送和 release tag 上运行构建、测试与镜像构建；只有 `main` 推送和 tag 会发布镜像到 `ghcr.io/philfanzhou/doctheca`。
+GitHub Actions (`.github/workflows/ci.yml`) runs builds, tests and image builds on PRs, `main` pushes and release tags; only `main` pushes and tags publish images to `ghcr.io/philfanzhou/doctheca`.
 
-| 触发 | 发布的镜像 tag | GitHub Release |
+| Trigger | Published image tag | GitHub Release |
 |------|---------------|----------------|
-| 合并到 `main` | `edge`（随最新提交移动，不代表正式版本） | 无 |
-| `MAJOR.MINOR.PATCH` tag | `MAJOR.MINOR.PATCH`、`MAJOR.MINOR`、`latest` | 正式版，标记为 latest |
-| `MAJOR.MINOR.PATCH-rc.NUMBER` tag | 仅 `MAJOR.MINOR.PATCH-rc.NUMBER` | 预发布版，不移动 `MAJOR.MINOR` 与 `latest` |
+| Merge to `main` | `edge` (moves with the latest commit; not a formal release) | none |
+| `MAJOR.MINOR.PATCH` tag | `MAJOR.MINOR.PATCH`, `MAJOR.MINOR`, `latest` | Formal release, marked as latest |
+| `MAJOR.MINOR.PATCH-rc.NUMBER` tag | `MAJOR.MINOR.PATCH-rc.NUMBER` only | Pre-release; does not move `MAJOR.MINOR` or `latest` |
 
-发布完全由推送 tag 驱动，不手工创建 Release 或推送镜像。tag 不带 `v` 前缀，打在已合并到 `main` 的提交上：
+Releases are driven entirely by pushing tags; do not create Releases or push images manually. Tags carry no `v` prefix and are placed on commits already merged into `main`:
 
 ```bash
 git switch main && git pull
@@ -249,23 +249,23 @@ git tag -a 0.1.0 -m "Doctheca 0.1.0"
 git push origin 0.1.0
 ```
 
-候选版本使用 `-rc.NUMBER` 后缀，例如 `git tag -a 0.1.0-rc.1 -m "Doctheca 0.1.0-rc.1"`。其他格式的 tag 会被 CI 拒绝。
+Release candidates use the `-rc.NUMBER` suffix, e.g. `git tag -a 0.1.0-rc.1 -m "Doctheca 0.1.0-rc.1"`. Tags in any other format are rejected by CI.
 
-tag 推送后先运行完整的 `Build & Test`，通过后依次执行：
+After a tag is pushed, the full `Build & Test` runs first; once it passes, the following execute in order:
 
-1. **Publish GHCR Image**：构建并推送镜像，附带 provenance 与 SBOM。
-2. **Publish GitHub Release**：为该 tag 创建 Release，写入实际发布的镜像 digest，并附加 GitHub 自动生成的变更日志。
+1. **Publish GHCR Image**: build and push the image, with provenance and SBOM attached.
+2. **Publish GitHub Release**: create a Release for the tag, record the digest of the actually published image, and attach the GitHub auto-generated changelog.
 
-Release 只会为测试通过且镜像已可拉取的 tag 创建。某个 tag 的流水线失败时，既不发布镜像也不创建 Release；修复原因后打新版本号，不要移动已失败的 tag。对已有 Release 的 tag 重新运行流水线，不会覆盖手工编辑过的 Release 说明。
+A Release is created only for tags whose tests pass and whose image is pullable. When the pipeline for a tag fails, neither the image nor a Release is published; fix the cause and cut a new version number — do not move a failed tag. Re-running the pipeline for a tag that already has a Release will not overwrite manually edited Release notes.
 
-每次 `edge` 推送会把旧的 manifest 留作 GHCR 中未打 tag 的包版本，GHCR 不会自动清理，需要时在包设置中手工删除。
+Each `edge` push leaves the old manifest as an untagged package version in GHCR; GHCR does not clean these up automatically — delete them manually in the package settings when needed.
 
-## 数据库备份与恢复
+## Database Backup & Restore
 
 ```bash
-# 备份
+# Backup
 docker exec ruoyu-postgres pg_dump -U postgres doctheca | gzip > backup_doctheca_$(date +%Y%m%d_%H%M%S).sql.gz
 
-# 恢复
+# Restore
 gunzip -c backup_doctheca_20240101_020000.sql.gz | docker exec -i ruoyu-postgres psql -U postgres -d doctheca
 ```

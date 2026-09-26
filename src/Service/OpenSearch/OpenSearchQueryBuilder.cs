@@ -41,7 +41,7 @@ internal static class OpenSearchQueryBuilder
                 filterClauses.Add(new { term = new { grade = new { value = filter.Grade } } });
             if (!string.IsNullOrEmpty(filter.Year))
                 filterClauses.Add(new { term = new { year = new { value = filter.Year } } });
-            // file_name 是 keyword 类型，使用 term 精确匹配
+            // file_name is a keyword field; use term for exact matching
             if (!string.IsNullOrEmpty(filter.DocumentTitle))
                 filterClauses.Add(new { term = new { file_name = new { value = filter.DocumentTitle } } });
 

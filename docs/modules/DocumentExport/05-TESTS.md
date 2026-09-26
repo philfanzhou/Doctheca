@@ -1,58 +1,58 @@
-# DocumentExport — 测试文档
+# DocumentExport — Test Documentation
 
-## 单元测试（DocumentExportLogicTests.cs）
+## Unit Tests (DocumentExportLogicTests.cs)
 
-共 12 个纯逻辑单元测试，位于 `DocumentExportLogicTests.cs`。测试覆盖图片路径替换、Markdig 转换、HTML 模板、ZIP 结构、Base64 往返，不依赖 HTTP / OSS / 数据库。
+12 pure-logic unit tests in total, located in `DocumentExportLogicTests.cs`. The tests cover image path replacement, Markdig conversion, the HTML template, ZIP structure, and Base64 round trips, with no dependency on HTTP / OSS / database.
 
-| # | 测试方法 | 覆盖 | 状态 |
+| # | Test method | Coverage | Status |
 |---|---------|------|------|
-| UT-DE-01 | `MarkdownPathReplacement_ReplacesS3PathWithRelativePath` | FR-05（相对路径基础替换） | completed |
-| UT-DE-02 | `MarkdownPathReplacement_ReplacesSrcAttribute` | FR-05（双引号 src 属性替换） | completed |
-| UT-DE-03 | `MarkdownPathReplacement_ReplacesSrcAttribute_SingleQuotes` | FR-05（单引号 src 属性替换） | completed |
-| UT-DE-04 | `MarkdownPathReplacement_ReplacesMixedQuoteFormats` | FR-05（混合格式 + 无残留绝对路径） | completed |
-| UT-DE-05 | `MarkdownPathReplacement_HandlesMultipleImages` | FR-05（多图批量替换） | completed |
-| UT-DE-06 | `MarkdownPathReplacement_DoesNotReplaceIfPathNotFound` | FR-05（路径不匹配时保持不变） | completed |
-| UT-DE-07 | `HtmlExport_ReplacesS3PathWithDataUri` | FR-05（Base64 data URI 替换） | completed |
-| UT-DE-08 | `Markdig_ConvertsMarkdownToHtml` | FR-02（Markdown→HTML 基础：标题/加粗/列表） | completed |
-| UT-DE-09 | `Markdig_ConvertsMarkdownWithImageToHtml` | FR-02（Markdown→HTML 图片：img/alt/src） | completed |
-| UT-DE-10 | `HtmlTemplate_GeneratesValidHtmlDocument` | FR-02（自包含 HTML 文档结构） | completed |
-| UT-DE-11 | `ZipExport_ContainsMarkdownAndImages` | FR-01（ZIP 内含 .md 与 images/） | completed |
-| UT-DE-12 | `Base64Conversion_RoundTripsCorrectly` | FR-05（Base64 编解码往返 + data URI 前缀） | completed |
+| UT-DE-01 | `MarkdownPathReplacement_ReplacesS3PathWithRelativePath` | FR-05 (basic relative path replacement) | completed |
+| UT-DE-02 | `MarkdownPathReplacement_ReplacesSrcAttribute` | FR-05 (double-quoted src attribute replacement) | completed |
+| UT-DE-03 | `MarkdownPathReplacement_ReplacesSrcAttribute_SingleQuotes` | FR-05 (single-quoted src attribute replacement) | completed |
+| UT-DE-04 | `MarkdownPathReplacement_ReplacesMixedQuoteFormats` | FR-05 (mixed formats + no leftover absolute paths) | completed |
+| UT-DE-05 | `MarkdownPathReplacement_HandlesMultipleImages` | FR-05 (batch replacement of multiple images) | completed |
+| UT-DE-06 | `MarkdownPathReplacement_DoesNotReplaceIfPathNotFound` | FR-05 (unchanged when the path does not match) | completed |
+| UT-DE-07 | `HtmlExport_ReplacesS3PathWithDataUri` | FR-05 (Base64 data URI replacement) | completed |
+| UT-DE-08 | `Markdig_ConvertsMarkdownToHtml` | FR-02 (Markdown→HTML basics: headings/bold/lists) | completed |
+| UT-DE-09 | `Markdig_ConvertsMarkdownWithImageToHtml` | FR-02 (Markdown→HTML images: img/alt/src) | completed |
+| UT-DE-10 | `HtmlTemplate_GeneratesValidHtmlDocument` | FR-02 (self-contained HTML document structure) | completed |
+| UT-DE-11 | `ZipExport_ContainsMarkdownAndImages` | FR-01 (ZIP contains .md and images/) | completed |
+| UT-DE-12 | `Base64Conversion_RoundTripsCorrectly` | FR-05 (Base64 encode/decode round trip + data URI prefix) | completed |
 
-### FR/AC 映射
+### FR/AC Mapping
 
-- FR-01（Markdown/ZIP 导出）→ UT-DE-11
-- FR-02（HTML 导出）→ UT-DE-08、UT-DE-09、UT-DE-10
-- FR-03（解析级 Markdown 导出）→ 与 FR-01 共享 `ExportMarkdownCore`，同 UT-DE-11
-- FR-04（解析级 HTML 导出）→ 与 FR-02 共享 `ExportHtmlCore`，同 UT-DE-08/09/10
-- FR-05（三种图片路径模式）→ UT-DE-01 至 UT-DE-07、UT-DE-12
-- FR-06 / FR-07（校验与容错）→ 未覆盖（需集成测试）
+- FR-01 (Markdown/ZIP export) → UT-DE-11
+- FR-02 (HTML export) → UT-DE-08, UT-DE-09, UT-DE-10
+- FR-03 (parse-level Markdown export) → shares `ExportMarkdownCore` with FR-01, same as UT-DE-11
+- FR-04 (parse-level HTML export) → shares `ExportHtmlCore` with FR-02, same as UT-DE-08/09/10
+- FR-05 (three image path modes) → UT-DE-01 through UT-DE-07, UT-DE-12
+- FR-06 / FR-07 (validation and fault tolerance) → not covered (requires integration tests)
 
-## 集成测试（未实现）
+## Integration Tests (not implemented)
 
-端点层（`DocumentExportEndpoints`）与共享核心（`ExportMarkdownCore` / `ExportHtmlCore`）当前无集成测试，需补充以覆盖 FR-06 / FR-07 及 AC-04 至 AC-09。
+The endpoint layer (`DocumentExportEndpoints`) and the shared cores (`ExportMarkdownCore` / `ExportHtmlCore`) currently have no integration tests; they need to be added to cover FR-06 / FR-07 and AC-04 through AC-09.
 
-| # | 测试用例 | 覆盖 |
+| # | Test case | Coverage |
 |---|---------|------|
-| IT-DE-01 | 文件级 Markdown 导出返回有效 ZIP，Entry 含 .md 与 images/ | AC-01, AC-08 |
-| IT-DE-02 | 文件级 HTML 导出返回含 Base64 img 的 HTML | AC-02, AC-09 |
-| IT-DE-03 | 解析级导出与文件级导出结果一致（同一 parseId） | AC-03 |
-| IT-DE-04 | 文件不存在返回 404 + DOCTHECA_FILE_NOT_FOUND | AC-04 |
-| IT-DE-05 | 解析记录不存在返回 404 + DOCTHECA_PARSE_NOT_FOUND | AC-05 |
-| IT-DE-06 | 未解析返回 422 + DOCTHECA_FILE_NOT_PARSED / DOCTHECA_PARSE_NOT_PARSED | AC-06 |
-| IT-DE-07 | 单张图片 OSS 下载失败不阻塞导出，记 Warning 日志 | AC-07 |
+| IT-DE-01 | File-level Markdown export returns a valid ZIP whose entries include .md and images/ | AC-01, AC-08 |
+| IT-DE-02 | File-level HTML export returns HTML containing Base64 img | AC-02, AC-09 |
+| IT-DE-03 | Parse-level export matches file-level export (same parseId) | AC-03 |
+| IT-DE-04 | Missing file returns 404 + DOCTHECA_FILE_NOT_FOUND | AC-04 |
+| IT-DE-05 | Missing parse record returns 404 + DOCTHECA_PARSE_NOT_FOUND | AC-05 |
+| IT-DE-06 | Not parsed returns 422 + DOCTHECA_FILE_NOT_PARSED / DOCTHECA_PARSE_NOT_PARSED | AC-06 |
+| IT-DE-07 | A single image OSS download failure does not block the export; a Warning is logged | AC-07 |
 
-## 运行方式
+## How to Run
 
 ```bash
-# 运行本模块单元测试
+# Run this module's unit tests
 dotnet test src/Tests/Doctheca.Tests --filter "FullyQualifiedName~DocumentExport"
 
-# 运行所有测试
+# Run all tests
 dotnet test src/Tests/Doctheca.Tests
 ```
 
-## 覆盖率目标
+## Coverage Targets
 
-- `MarkdownExportHelper` 代码行覆盖率 ≥ 80%
-- `DocumentExportEndpoints` 端点层建议集成测试覆盖前置校验分支
+- `MarkdownExportHelper` line coverage ≥ 80%
+- For the `DocumentExportEndpoints` endpoint layer, integration tests covering the precondition validation branches are recommended

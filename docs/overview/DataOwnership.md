@@ -1,36 +1,36 @@
-﻿# DataOwnership — 数据主责与引用边界
+﻿# DataOwnership — Data Ownership and Reference Boundaries
 
-## 本服务拥有的数据实体（主责）
+## Data Entities Owned by This Service (Primary Ownership)
 
-以下数据由 Doctheca 服务独立管理，其他服务不可直接写入：
+The following data is managed independently by the Doctheca service; other services must not write to it directly:
 
-| 实体表 | 说明 | 操作权限 |
+| Entity table | Description | Operation permissions |
 |--------|------|---------|
-| `document_files` | 文档文件表 | 本服务独写 |
-| `document_parses` | 解析记录表 | 本服务独写 |
-| `document_parse_blocks` | 解析 block 表 | 本服务独写 |
-| `document_parse_images` | 解析图片表 | 本服务独写 |
+| `document_files` | Document file table | Written exclusively by this service |
+| `document_parses` | Parse record table | Written exclusively by this service |
+| `document_parse_blocks` | Parse block table | Written exclusively by this service |
+| `document_parse_images` | Parse image table | Written exclusively by this service |
 
-## 本服务引用的外部数据（只读引用）
+## External Data Referenced by This Service (Read-Only References)
 
-| 外部数据 | 来源 | 读取方式 | 说明 |
+| External data | Source | Read method | Description |
 |---------|------|---------|------|
-| Identity JWT | SignaCore | OIDC/JWKS + HTTP token API | 只消费管理员身份，不持久化 Identity 账户 |
-| 文档原件与解析产物 | StructaDoc | 版本化 API（ApiKey 认证） | 原件、Markdown、图片、ZIP 由 StructaDoc 主责存储；Doctheca 只保存 documentId/parseRunId 引用与本地 blocks/images 同步副本（ADR-0009） |
+| Identity JWT | SignaCore | OIDC/JWKS + HTTP token API | Only consumes administrator identity; does not persist Identity accounts |
+| Document originals and parse artifacts | StructaDoc | Versioned API (ApiKey authentication) | Originals, Markdown, images, and ZIPs are stored under StructaDoc's primary ownership; Doctheca only keeps documentId/parseRunId references and local blocks/images synchronized copies (ADR-0009) |
 
-## 外部系统依赖
+## External System Dependencies
 
-| 系统 | 写入 | 读取 | 说明 |
+| System | Write | Read | Description |
 |------|------|------|------|
-| PostgreSQL | CRUD 所有表 | 全文搜索、文档查询 | 自建数据库 |
-| StructaDoc | 上传文档、创建/取消/删除 Parse Run | Blocks/Markdown/Assets/图片内容 | 外部解析服务，自带存储 |
-| MinIO / SeaweedFS | 仅删除清理 | 存量对象读取 | 迁移前的文件与解析图片（只读兼容） |
-| OpenSearch | 创建/删除索引 | 搜索查询 | 外部检索引擎 |
+| PostgreSQL | CRUD on all tables | Full-text search, document queries | Self-hosted database |
+| StructaDoc | Upload documents, create/cancel/delete Parse Runs | Blocks/Markdown/Assets/image content | External parsing service with its own storage |
+| MinIO / SeaweedFS | Delete cleanup only | Reading legacy objects | Files and parse images from before the migration (read-only compatibility) |
+| OpenSearch | Create/delete indexes | Search queries | External retrieval engine |
 
-## 双写禁区
+## Dual-Write Forbidden Zones
 
-- 本服务不写入任何其他 Ruoyu 微服务的数据库，也不直连 StructaDoc 的数据库或对象存储
-- 其他服务不应直接写入本服务的 4 张业务表
-- Quaestura 的导入状态和题目 ID 由 Quaestura 自己持久化，Doctheca 不保存副本
-- 存量 OSS 文件路径格式由本服务内部控制，其他服务不应直接操作
-- StructaDoc 内部的 storageRef 与资源生命周期由其 API 屏蔽，Doctheca 不持久化其存储细节
+- This service does not write to the databases of any other Ruoyu microservice, nor does it connect directly to StructaDoc's database or object storage
+- Other services should not write directly to this service's 4 business tables
+- Quaestura's import status and question IDs are persisted by Quaestura itself; Doctheca keeps no copies
+- The legacy OSS file path format is controlled internally by this service; other services should not manipulate it directly
+- StructaDoc's internal storageRef and resource lifecycle are shielded behind its API; Doctheca does not persist its storage details

@@ -1,9 +1,9 @@
-# 实体关系图
+# Entity Relationship Diagram
 
-## 级联行为
+## Cascade Behavior
 
-| 操作 | 影响范围 |
+| Operation | Affected scope |
 |------|---------|
-| 删除 document_file | CASCADE 到 parses、parse_blocks、parse_images |
-| 删除 document_parse | CASCADE 到 parse_blocks、parse_images |
-| 删除 document_parse_image | SET NULL parse_blocks 的 image_id |
+| Delete document_file | CASCADE to parses, parse_blocks, parse_images |
+| Delete document_parse | CASCADE to parse_blocks, parse_images |
+| Delete document_parse_image | SET NULL on parse_blocks' image_id |

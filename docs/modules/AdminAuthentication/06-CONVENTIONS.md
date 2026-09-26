@@ -1,39 +1,39 @@
-# 06-CONVENTIONS — Doctheca 管理员认证约定
+# 06-CONVENTIONS — Doctheca Admin Authentication Conventions
 
-## 路径
+## Paths
 
-| 类型 | 前缀 |
+| Kind | Prefix |
 |------|------|
-| 浏览器认证 | `/admin/auth` |
-| 浏览器管理 API | `/admin` |
-| 匿名健康检查 | `/health` |
+| Browser authentication | `/admin/auth` |
+| Browser admin API | `/admin` |
+| Anonymous health check | `/health` |
 
-## 策略与配置命名
+## Policy and configuration naming
 
-| 名称 | 值 |
+| Name | Value |
 |------|----|
-| 管理员授权策略 | `DocthecaAdmin` |
+| Admin authorization policy | `DocthecaAdmin` |
 | Access Cookie | `docthecaAccessToken` |
 | Refresh Cookie | `docthecaRefreshToken` |
-| Authority 配置 | `IdentityService:Authority` |
-| Issuer 配置 | `IdentityService:Issuer` |
-| Audience 配置 | `IdentityService:Audience` |
-| AppId 部署密钥 | `IdentityService:AppId` |
-| AppSecret 部署密钥 | `IdentityService:AppSecret` |
-| Cookie Secure 配置 | `Authentication:CookieSecure` |
+| Authority configuration | `IdentityService:Authority` |
+| Issuer configuration | `IdentityService:Issuer` |
+| Audience configuration | `IdentityService:Audience` |
+| AppId deployment secret | `IdentityService:AppId` |
+| AppSecret deployment secret | `IdentityService:AppSecret` |
+| Cookie Secure configuration | `Authentication:CookieSecure` |
 
-## 错误与日志
+## Errors and logging
 
-- 对外认证错误使用英文、简洁、稳定的消息。
-- 401 表示无有效身份；403 表示身份有效但没有管理员角色。
-- 错误码使用 `DOCTHECA_` 前缀。
-- 不记录密码、Access Token、Refresh Token 或 Cookie。
-- Identity 失败只记录 HTTP 状态、关联 ID 和通用失败类别。
+- Externally facing authentication errors use concise, stable English messages.
+- 401 means no valid identity; 403 means a valid identity without the admin role.
+- Error codes use the `DOCTHECA_` prefix.
+- Never log passwords, Access Tokens, Refresh Tokens, or Cookies.
+- Identity failures log only the HTTP status, correlation ID, and a generic failure category.
 
-## 前端
+## Frontend
 
-- 不使用 localStorage/sessionStorage 保存认证材料。
-- API 模块必须复用单一共享 Axios 实例。
-- 认证端点的 401 不触发递归 refresh。
-- 403 不自动重试。
-- 登录表单必须使用 `autocomplete="username"` 和 `autocomplete="current-password"`。
+- Never use localStorage/sessionStorage to store authentication material.
+- API modules must reuse the single shared Axios instance.
+- A 401 on auth endpoints does not trigger recursive refresh.
+- 403 is not retried automatically.
+- The login form must use `autocomplete="username"` and `autocomplete="current-password"`.

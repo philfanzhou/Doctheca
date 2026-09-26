@@ -1,66 +1,66 @@
-# DocumentSearch — 任务清单 (TASKS)
+# DocumentSearch — Task List (TASKS)
 
-> **本模块代码已实现完成（第 1 代 + 第 2 代后端）。** 第 2 代前端（DS-19）属独立工程，状态保持 planned。
-> 以下为代码评审与自动化验证记录。
+> **This module's code is fully implemented (Generation 1 + Generation 2 backend).** The Generation 2 frontend (DS-19) is a separate project; its status remains planned.
+> The following are code review and automated verification records.
 
-## 任务拆解
+## Task Breakdown
 
-| ID | 任务 | 状态 | 验证文件 |
+| ID | Task | Status | Verification file |
 |----|------|------|---------|
-| DS-01 | 索引 mapping 定义（`BuildIndexBody`）：确认 blocks 字段、分析器、无 legacy 字段 | completed | `OpenSearchIndexService.cs` |
-| DS-02 | 索引写入（`IndexParseBlocksAsync`）：bulk 构建、空 text 跳过、幂等 `_id` | completed | `OpenSearchIndexService.cs` |
-| DS-03 | 索引删除（`DeleteParseIndexAsync` / `DeleteDocumentFileIndexAsync`）：`delete_by_query` | completed | `OpenSearchIndexService.cs` |
-| DS-04 | 元数据同步（`UpdateDocumentFileMetadataAsync`）：`update_by_query` + script | completed | `OpenSearchIndexService.cs` |
-| DS-05 | 搜索查询构建（`BuildSearchBody`）：phrase/match、filter、search_after、sort、highlight | completed | `OpenSearchIndexService.cs` |
-| DS-06 | 搜索响应解析（`ParseSearchResponse`）：字段映射、nextToken、highlight 优先 | completed | `OpenSearchIndexService.cs` |
-| DS-07 | 搜索领域服务（`SearchDomainService`）：委托调用 + 异常降级 | completed | `SearchDomainService.cs` |
-| DS-08 | HTTP 端点（`DocumentSearchEndpoints`）：参数校验、filter 构造、响应格式 | completed | `DocumentSearchEndpoints.cs` |
-| DS-09 | Worker 集成：解析完成后索引（best-effort）、LLM 元数据同步 | completed | `StructaDocParseWorker.cs` |
-| DS-10 | 端点集成：删除 parse/文件后清理索引、元数据更新后同步 | completed | `DocumentParseEndpoints.cs` / `DocumentFileEndpoints.cs` |
-| DS-11 | 启动初始化：`EnsureIndexAsync`（best-effort） | completed | `Program.cs` |
-| DS-12 | 单元测试：`OpenSearchIndexServiceTests` + `SearchDomainServiceTests` | completed | 测试文件 |
+| DS-01 | Index mapping definition (`BuildIndexBody`): confirm block fields, analyzers, absence of legacy fields | completed | `OpenSearchIndexService.cs` |
+| DS-02 | Index writes (`IndexParseBlocksAsync`): bulk construction, empty-text skipping, idempotent `_id` | completed | `OpenSearchIndexService.cs` |
+| DS-03 | Index deletion (`DeleteParseIndexAsync` / `DeleteDocumentFileIndexAsync`): `delete_by_query` | completed | `OpenSearchIndexService.cs` |
+| DS-04 | Metadata sync (`UpdateDocumentFileMetadataAsync`): `update_by_query` + script | completed | `OpenSearchIndexService.cs` |
+| DS-05 | Search query building (`BuildSearchBody`): phrase/match, filter, search_after, sort, highlight | completed | `OpenSearchIndexService.cs` |
+| DS-06 | Search response parsing (`ParseSearchResponse`): field mapping, nextToken, highlight priority | completed | `OpenSearchIndexService.cs` |
+| DS-07 | Search domain service (`SearchDomainService`): delegation + exception degradation | completed | `SearchDomainService.cs` |
+| DS-08 | HTTP endpoint (`DocumentSearchEndpoints`): parameter validation, filter construction, response format | completed | `DocumentSearchEndpoints.cs` |
+| DS-09 | Worker integration: indexing after parse completion (best-effort), LLM metadata sync | completed | `StructaDocParseWorker.cs` |
+| DS-10 | Endpoint integration: index cleanup after deleting parses/files, sync after metadata updates | completed | `DocumentParseEndpoints.cs` / `DocumentFileEndpoints.cs` |
+| DS-11 | Startup initialization: `EnsureIndexAsync` (best-effort) | completed | `Program.cs` |
+| DS-12 | Unit tests: `OpenSearchIndexServiceTests` + `SearchDomainServiceTests` | completed | Test files |
 
-### 第 2 代任务（演进 V1，block 结构化检索）
+### Generation 2 Tasks (evolving V1, block structured retrieval)
 
-| ID | 任务 | 状态 | 验证文件 |
+| ID | Task | Status | Verification file |
 |----|------|------|---------|
-| DS-13 | 扩展 `OpenSearchIndexService.IndexParseBlocksAsync`：在同一 bulk 追加 minerU 维度字段（`x0`/`y0`/`x1`/`y1`/`score`/`has_image`/`sub_type`/`text_level`/`text_format`/`caption`/`_meta.block_data`）；扩展 `BuildIndexBody` 追加 minerU 维度映射 | completed | `OpenSearchIndexService.cs` |
-| DS-14 | 扩展 `StructaDocParseWorker.IndexBlocksToSearchAsync`：调用扩展后的 `IndexParseBlocksAsync`（同一 best-effort 入口）。**实现说明**：Worker 本身无需改动——minerU 字段由 `DocumentParseBlockService.ParseBlock` 抽取并写入 `DocumentParseBlockEntity`，经 `DocumentParseBlockRepository` 持久化，`IndexParseBlocksAsync` 通过 `GetByParseIdAsync` 读取后直接索引，字段流自动传递。 | completed | `StructaDocParseWorker.cs`（无改动） |
-| DS-15 | 扩展 `SearchResultModel`（追加 optional `BlockData`/`Bbox`/`MineruScore`/`SubType`/`TextLevel`/`TextFormat`/`Caption`）+ `SearchFilterModel`（追加 `BlockType`/`BlockSubType`/`PageNumber`/`TextLevel`/`TextFormat`/`ParseId`/`DocumentFileId`/`HasImage`）。**偏差说明**：SPEC §13.1.1 原拟 `float? Score`，但 V1 已有 `public double Score`（OpenSearch `_score`），C# 不允许同名字段，故第 2 代新字段命名为 `MineruScore`（与 §13.9.1 `block.MineruScore` 一致）；HTTP 响应 JSON key 为 `mineruScore`。详见 02-SPEC.md §13.1.1 偏差说明。 | completed | `SearchResultModel.cs` / `SearchFilterModel.cs` |
-| DS-16 | 扩展 `OpenSearchIndexService.ExactSearchAsync`（`BuildSearchBody` 追加 minerU filter 分支 + `ParseSearchResponse` 追加 minerU 回挂分支） | completed | `OpenSearchIndexService.cs` |
-| DS-17 | 扩展 `SearchDomainService.ExactSearchAsync`：透传 minerU filter + 解析回挂字段（同一方法内扩展，复用 V1 降级模式）。**实现说明**：`SearchDomainService` 为薄封装，filter 透传通过 `SearchFilterModel` 自动完成，无需改动方法体；异常降级路径已在 UT `ExactSearchAsync_WithMinerUFilterAndIndexServiceThrow_ReturnsEmpty` 覆盖。 | completed | `SearchDomainService.cs`（无改动） |
-| DS-18 | 扩展 `DocumentSearchEndpoints.cs`：同一 `GET /admin/documents/search` 追加可选 minerU 入参（`blockType`/`blockSubType`/`pageNumber`/`textLevel`/`textFormat`/`parseId`/`documentFileId`/`hasImage`）；V1 校验保留；参数 null 时零回归。响应追加 `blockData`/`bbox`/`mineruScore`/`subType`/`textLevel`/`textFormat`/`caption` optional 字段。 | completed | `DocumentSearchEndpoints.cs` |
-| DS-19 | doctheca 自带前端扩展 `SearchPage.vue`：加"高级筛选"抽屉（blockType/blockSubType/pageNumber/textLevel/textFormat/parseId/documentFileId/hasImage）+ 结果表格追加 minerU 列（块类型/subType/矿工 U 置信度/textFormat/Caption）+ 行展开 blockData/bbox/mineruScore 详情卡片；`docApi.ts` `SearchResult` 追加 7 optional 字段 + `searchTest` 签名扩展 8 个可选参数（空值不透传，零回归）；`frontend-spec.md` §4.4 同步。验证：`npm run build`（vue-tsc + vite build）通过。 | completed | `SearchPage.vue` / `docApi.ts` / `frontend-spec.md` |
-| DS-20 | 单元测试追加：在现有 `OpenSearchIndexServiceTests` / `SearchDomainServiceTests` / `DocumentParseBlockServiceTests` 追加 minerU filter 构造 / `blockData` 回挂 / 缺省 fallback / bbox 归一化 / 零回归断言（不新增测试方法类）。新增 15 个测试方法，全部通过（169/169）。 | completed | 测试文件 |
+| DS-13 | Extend `OpenSearchIndexService.IndexParseBlocksAsync`: append minerU dimension fields in the same bulk (`x0`/`y0`/`x1`/`y1`/`score`/`has_image`/`sub_type`/`text_level`/`text_format`/`caption`/`_meta.block_data`); extend `BuildIndexBody` with minerU dimension mappings | completed | `OpenSearchIndexService.cs` |
+| DS-14 | Extend `StructaDocParseWorker.IndexBlocksToSearchAsync`: call the extended `IndexParseBlocksAsync` (same best-effort entry point). **Implementation note**: the Worker itself needs no changes — minerU fields are extracted by `DocumentParseBlockService.ParseBlock` and written to `DocumentParseBlockEntity`, persisted via `DocumentParseBlockRepository`, then read by `IndexParseBlocksAsync` via `GetByParseIdAsync` and indexed directly; the field flow propagates automatically. | completed | `StructaDocParseWorker.cs` (no changes) |
+| DS-15 | Extend `SearchResultModel` (add optional `BlockData`/`Bbox`/`MineruScore`/`SubType`/`TextLevel`/`TextFormat`/`Caption`) + `SearchFilterModel` (add `BlockType`/`BlockSubType`/`PageNumber`/`TextLevel`/`TextFormat`/`ParseId`/`DocumentFileId`/`HasImage`). **Deviation note**: SPEC §13.1.1 originally proposed `float? Score`, but V1 already has `public double Score` (OpenSearch `_score`); C# does not allow same-named fields, so the Generation 2 field is named `MineruScore` (consistent with `block.MineruScore` in §13.9.1); the HTTP response JSON key is `mineruScore`. See the deviation note in 02-SPEC.md §13.1.1. | completed | `SearchResultModel.cs` / `SearchFilterModel.cs` |
+| DS-16 | Extend `OpenSearchIndexService.ExactSearchAsync` (`BuildSearchBody` gains the minerU filter branch + `ParseSearchResponse` gains the minerU attachment branch) | completed | `OpenSearchIndexService.cs` |
+| DS-17 | Extend `SearchDomainService.ExactSearchAsync`: pass through minerU filters + parse attachment fields (extended within the same method, reusing the V1 degradation pattern). **Implementation note**: `SearchDomainService` is a thin wrapper; filter pass-through happens automatically via `SearchFilterModel`, so the method body needs no changes; the exception degradation path is already covered by the UT `ExactSearchAsync_WithMinerUFilterAndIndexServiceThrow_ReturnsEmpty`. | completed | `SearchDomainService.cs` (no changes) |
+| DS-18 | Extend `DocumentSearchEndpoints.cs`: the same `GET /admin/documents/search` gains optional minerU inputs (`blockType`/`blockSubType`/`pageNumber`/`textLevel`/`textFormat`/`parseId`/`documentFileId`/`hasImage`); V1 validation retained; zero regression when parameters are null. The response gains the optional `blockData`/`bbox`/`mineruScore`/`subType`/`textLevel`/`textFormat`/`caption` fields. | completed | `DocumentSearchEndpoints.cs` |
+| DS-19 | doctheca built-in frontend extension of `SearchPage.vue`: add an "Advanced filters" drawer (blockType/blockSubType/pageNumber/textLevel/textFormat/parseId/documentFileId/hasImage) + result table minerU columns (block type/subType/minerU confidence/textFormat/Caption) + row expansion with blockData/bbox/mineruScore detail cards; `docApi.ts` `SearchResult` gains 7 optional fields + the `searchTest` signature is extended with 8 optional parameters (null values not passed through, zero regression); `frontend-spec.md` §4.4 updated in sync. Verification: `npm run build` (vue-tsc + vite build) passes. | completed | `SearchPage.vue` / `docApi.ts` / `frontend-spec.md` |
+| DS-20 | Unit test additions: add minerU filter construction / `blockData` attachment / default fallback / bbox normalization / zero-regression assertions to the existing `OpenSearchIndexServiceTests` / `SearchDomainServiceTests` / `DocumentParseBlockServiceTests` (no new test classes). 15 new test methods, all passing (169/169). | completed | Test files |
 
-## 第 2 代实现附注
+## Generation 2 Implementation Notes
 
-### 数据库 schema 变更（DatabaseInitializer 原生 SQL）
-新增 9 列到 `document_parse_blocks` 表（通过 `ALTER TABLE ADD COLUMN IF NOT EXISTS`）：
+### Database schema changes (DatabaseInitializer raw SQL)
+9 new columns added to the `document_parse_blocks` table (via `ALTER TABLE ADD COLUMN IF NOT EXISTS`):
 `sub_type` / `text_level` / `text_format` / `bbox_x0` / `bbox_y0` / `bbox_x1` / `bbox_y1` / `score` / `caption`
 
-> 列名 `score` 遵循 06-CONVENTIONS §103 行"真正新字段不加 mineru_ 前缀"规定；C# 属性名 `MineruScore` 避免与 V1 概念混淆。
+> The column name `score` follows the rule at 06-CONVENTIONS line 103 that "genuinely new fields do not take the mineru_ prefix"; the C# property name `MineruScore` avoids confusion with the V1 concept.
 
-### 验证结果
-- `dotnet build src/Doctheca.sln --configuration Release`：**成功**（0 错误，3 个无关 nullable 警告）
-- `dotnet test ... --configuration Release`：**169/169 通过**（含 AC-17 零回归 `BuildSearchBody_WithNoMinerUFilter_OutputEqualsV1`）
+### Verification results
+- `dotnet build src/Doctheca.sln --configuration Release`: **success** (0 errors, 3 unrelated nullable warnings)
+- `dotnet test ... --configuration Release`: **169/169 passing** (including the AC-17 zero-regression `BuildSearchBody_WithNoMinerUFilter_OutputEqualsV1`)
 
-## 命令速查
+## Command Quick Reference
 
 ```bash
-# 构建
+# Build
 dotnet build Doctheca.sln --configuration Release
 
-# 运行本模块相关测试
+# Run tests related to this module
 dotnet test src/Tests/Doctheca.Tests \
   --configuration Release \
   --filter "FullyQualifiedName~OpenSearchIndexServiceTests|FullyQualifiedName~SearchDomainServiceTests"
 
-# 全部测试
+# All tests
 dotnet test src/Tests/Doctheca.Tests --configuration Release
 ```
 
-## 依赖图
+## Dependency Graph
 
 ```
 DocumentSearchEndpoints.Search
@@ -85,19 +85,19 @@ DocumentFileEndpoints.DeleteDocumentFile
 DocumentFileEndpoints.UpdateDocumentFileMetadata
   └── OpenSearchIndexService.UpdateDocumentFileMetadataAsync (best-effort)
 
-DocumentSearchEndpoints.Search（第 2 代扩展）
-  └── SearchDomainService.ExactSearchAsync（同一方法内 minerU filter 分支 + 回挂解析）
-        └── OpenSearchIndexService.ExactSearchAsync（同一方法内 minerU filter + 回挂）
-              ├── BuildSearchBody（第 2 代追加 minerU filter 子句；无 minerU filter 时输出等同 V1）
+DocumentSearchEndpoints.Search (Generation 2 extension)
+  └── SearchDomainService.ExactSearchAsync (minerU filter branch + attachment parsing within the same method)
+        └── OpenSearchIndexService.ExactSearchAsync (minerU filter + attachment within the same method)
+              ├── BuildSearchBody (Generation 2 adds minerU filter clauses; output equals V1 when no minerU filters)
               ├── OpenSearchLowLevelClient.SearchAsync
-              └── ParseSearchResponse（第 2 代追加 minerU 回挂字段映射）
+              └── ParseSearchResponse (Generation 2 adds minerU attachment field mapping)
 
 StructaDocParseWorker.IndexBlocksToSearchAsync
-  └── OpenSearchIndexService.IndexParseBlocksAsync（第 2 代同一 bulk 追加 minerU 维度字段）
+  └── OpenSearchIndexService.IndexParseBlocksAsync (Generation 2 appends minerU dimension fields in the same bulk)
         ├── IDocumentParseBlockRepository.GetByParseIdAsync
-        └── OpenSearchLowLevelClient.BulkAsync   （V1 6 个方法签名不变）
+        └── OpenSearchLowLevelClient.BulkAsync   (V1's 6 method signatures unchanged)
 
-Program.cs (启动)
+Program.cs (startup)
   └── OpenSearchIndexService.EnsureIndexAsync (best-effort)
-        └── BuildIndexBody (第 2 代追加 minerU 维度映射后仍由同一方法生成)
+        └── BuildIndexBody (still generated by the same method after Generation 2 adds minerU dimension mappings)
 ```

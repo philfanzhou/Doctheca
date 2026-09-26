@@ -1,44 +1,44 @@
-# DocumentMetadataAnalysis — 任务列表
+# DocumentMetadataAnalysis — Task list
 
-> **本模块实现任务已完成,但单元测试尚未编写。** 详见 05-TESTS。
+> **Implementation tasks for this module are complete, but unit tests have not been written yet.** See 05-TESTS for details.
 
-## 已完成任务
+## Completed tasks
 
-| ID | 任务 | 状态 |
+| ID | Task | Status |
 |----|------|------|
-| DM-01 | 创建 DocumentMetadataAnalysis record (Domain/Models) | completed |
-| DM-02 | 创建 DocumentAnalysisOptions (继承 AiClientOptions) | completed |
-| DM-03 | 实现 DocumentAnalysisService.AnalyzeMetadataAsync | completed |
-| DM-04 | 创建 IDocumentAnalysisService 接口 | completed |
-| DM-05 | 创建 DocthecaConstants（ValidSubjects / ValidGrades） | completed |
-| DM-06 | DocumentFileEntity 新增 Subject/Grade/Year 列 | completed |
-| DM-07 | DocumentFileModel 新增 Subject/Grade/Year 字段 | completed |
-| DM-08 | IDocumentFileRepository 新增 UpdateMetadataAsync | completed |
-| DM-09 | IDocumentFileService 新增 UpdateMetadataAsync | completed |
-| DM-10 | IDocumentFileRepository.UpdateMetadataAsync 实现 | completed |
-| DM-11 | DocumentFileService.UpdateMetadataAsync 实现 | completed |
-| DM-12 | ISearchIndexService 新增 UpdateDocumentFileMetadataAsync | completed |
-| DM-13 | OpenSearchIndexService.UpdateDocumentFileMetadataAsync 实现 | completed |
-| DM-14 | DocumentFileEndpoints 新增 PUT /{id}/metadata | completed |
-| DM-15 | MinerUFileParseWorker.AnalyzeMetadataIfMissingAsync 实现 | completed |
-| DM-16 | DI 注册 IDocumentAnalysisService（条件注册） | completed |
-| DM-17 | Program.cs LLM 初始化调用 InitializeAsync | completed |
+| DM-01 | Create DocumentMetadataAnalysis record (Domain/Models) | completed |
+| DM-02 | Create DocumentAnalysisOptions (inherits AiClientOptions) | completed |
+| DM-03 | Implement DocumentAnalysisService.AnalyzeMetadataAsync | completed |
+| DM-04 | Create IDocumentAnalysisService interface | completed |
+| DM-05 | Create DocthecaConstants (ValidSubjects / ValidGrades) | completed |
+| DM-06 | Add Subject/Grade/Year columns to DocumentFileEntity | completed |
+| DM-07 | Add Subject/Grade/Year fields to DocumentFileModel | completed |
+| DM-08 | Add UpdateMetadataAsync to IDocumentFileRepository | completed |
+| DM-09 | Add UpdateMetadataAsync to IDocumentFileService | completed |
+| DM-10 | Implement IDocumentFileRepository.UpdateMetadataAsync | completed |
+| DM-11 | Implement DocumentFileService.UpdateMetadataAsync | completed |
+| DM-12 | Add UpdateDocumentFileMetadataAsync to ISearchIndexService | completed |
+| DM-13 | Implement OpenSearchIndexService.UpdateDocumentFileMetadataAsync | completed |
+| DM-14 | Add PUT /{id}/metadata to DocumentFileEndpoints | completed |
+| DM-15 | Implement MinerUFileParseWorker.AnalyzeMetadataIfMissingAsync | completed |
+| DM-16 | DI registration of IDocumentAnalysisService (conditional registration) | completed |
+| DM-17 | Program.cs LLM initialization calls InitializeAsync | completed |
 
-## 待完成任务
+## Pending tasks
 
-| ID | 任务 | 状态 | 说明 |
+| ID | Task | Status | Notes |
 |----|------|------|------|
-| DM-18 | 单元测试 DocumentAnalysisService(覆盖内部方法) | pending | 02-SPEC §7.2 建议方向,当前零测试覆盖 |
+| DM-18 | Unit tests for DocumentAnalysisService (covering internal methods) | pending | Suggested directions in 02-SPEC §7.2; currently zero test coverage |
 
-## 命令速查
+## Command quick reference
 
 ```bash
-# 构建
+# Build
 dotnet build Doctheca.sln --configuration Release
 
-# 测试(目前无 DocumentAnalysis 测试可筛选)
+# Test (no DocumentAnalysis tests available to filter at present)
 dotnet test src/Tests/Doctheca.Tests --configuration Release
 
-# 前端构建
+# Frontend build
 cd frontend && npm run build
 ```

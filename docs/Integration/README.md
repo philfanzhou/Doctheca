@@ -1,3 +1,3 @@
-# 集成索引
+# Integration Index
 
-当前目录仅保留入口；服务级集成总览见 [overview/Integration.md](../overview/Integration.md)。
+This directory only keeps an entry point; for the service-level integration overview see [overview/Integration.md](../overview/Integration.md).

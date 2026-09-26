@@ -1,83 +1,83 @@
-# ADR-001：Doctheca 管理前端引入 Element Plus 并替换纯手写 CSS
+# ADR-001: Adopt Element Plus in the Doctheca Admin Frontend and Replace Hand-Written CSS
 
-> **迁出说明（2026-09-24）**：本文中的 `src/admin_portal` / `admin_portal` 路径已随 Admin Portal 迁出为外部仓库 [Ruoyu.Admin](https://github.com/philfanzhou/Ruoyu.Admin)（[ADR-0010](../../../../../docs/adr/0010-extract-ruoyu-admin.md)），在本仓库已不存在。本文保留原始描述作为历史记录，不作为当前运行手册使用。
+> **Migration note (2026-09-24)**: The `src/admin_portal` / `admin_portal` paths in this document were migrated out with the Admin Portal into the external repository [Ruoyu.Admin](https://github.com/philfanzhou/Ruoyu.Admin) (ADR-0010, extract ruoyu-admin), and no longer exist in this repository. This document is kept in its original form as a historical record and is not to be used as a current runbook.
 
 
-## 状态
+## Status
 
-已接受（Accepted） — 2026-07-10
+Accepted — 2026-07-10
 
-## 背景
+## Context
 
-Doctheca 管理前端最初使用 914 行纯手写 `style.css` + 三页面手写组件类（`.btn` / `.card` / `.data-table` 等），仅依赖 `vue + axios`。该决策（记录在 `frontend/docs/frontend-spec.md` §2）在当时合理——组件最少、能跑。
+The Doctheca admin frontend initially used a 914-line hand-written `style.css` plus hand-written component classes across three pages (`.btn` / `.card` / `.data-table`, etc.), depending only on `vue + axios`. That decision (recorded in `frontend/docs/frontend-spec.md` §2) was reasonable at the time — minimal components, it worked.
 
-经过 minerU 第 2 代检索能力上线（SearchPage.vue 高级筛选 + 展开 + 响应式多列），我们确认纯手写方案在以下维度**达不到"真正产品级"**：
+After the minerU second-generation retrieval capability went live (SearchPage.vue advanced filtering + expansion + responsive multi-column), we confirmed that the pure hand-written approach **does not reach "truly production-grade"** in the following dimensions:
 
-1. **交互精致度**：loading skeleton / 行 hover 过渡 / 表单校验联动 / Drawer / 空态插图等微动效需要大量手写 JS + CSS transition，且每次页面复制都会**产生微妙不一致**（"半成品 demo 感"的主要来源）。
-2. **跨端一致性**：手机 + PC + 平板三档响应式，手写栅格在每个页面都要重新排，无法保证间距、字号、断点一致。
-3. **缺陷成本**：每次加新组件都要补齐 hover / focus / active / disabled / loading / 空态六种稳定态，手写组件类的稳定态遗漏是 bug 温床。
-4. **项目趋势**：admin_portal、teacher_portel 已在使用 Element Plus；doctheca 是门户管理员高频入口，视觉/交互**若能与既有门户统一**将降低用户认知成本。
+1. **Interaction polish**: micro-animations such as loading skeletons, row hover transitions, form validation linkage, Drawers, and empty-state illustrations require large amounts of hand-written JS + CSS transitions, and every page copy **introduces subtle inconsistencies** (the main source of the "half-finished demo feel").
+2. **Cross-device consistency**: three-tier responsive layouts for phone + PC + tablet require re-laying out the hand-written grid on every page, with no guarantee of consistent spacing, font sizes, or breakpoints.
+3. **Defect cost**: every new component requires covering the six stable states hover / focus / active / disabled / loading / empty; missing stable states in hand-written component classes is a breeding ground for bugs.
+4. **Project trend**: admin_portal and teacher_portel already use Element Plus; doctheca is a high-frequency entry point for portal administrators, and **if its visuals/interactions can be unified with the existing portals**, user cognitive cost will drop.
 
-## 决策
+## Decision
 
-**引入 Element Plus 作为 doctheca 管理前端唯一 UI 组件库，迁移三页面（DocManagePage / ParseResultsPage / SearchPage）+ App.vue 布局壳，同时把现有 CSS 变量主题体系转为 Element Plus SCSS design token 源。**
+**Adopt Element Plus as the only UI component library of the doctheca admin frontend, migrate the three pages (DocManagePage / ParseResultsPage / SearchPage) plus the App.vue layout shell, and convert the existing CSS variable theme system into Element Plus SCSS design token sources.**
 
-### 动机优先级
+### Motivation Priorities
 
-| 优先级 | 目标 |
+| Priority | Goal |
 |--------|------|
-| P0 | 交互精致（精致过渡、表单联动、稳定态完备）|
-| P1 | PC + 移动 + 平板三档响应式 |
-| P2 | 跨项目门户视觉统一 |
+| P0 | Interaction polish (refined transitions, form linkage, complete stable states) |
+| P1 | PC + mobile + tablet three-tier responsiveness |
+| P2 | Cross-project portal visual unification |
 
-### 范围（一次迁完，不留半套）
+### Scope (migrate all at once, leave no half-set)
 
-- ✅ 全部三页面 + App.vue 布局壳（侧栏 / 顶栏 / 面包屑 / 响应式抽屉）
-- ✅ 基础组件全面替换为 EP：Button / Input / Select / Checkbox / Switch / Table / Drawer / Pagination / Tag / Skeleton / Empty / Message / MessageBox / Popconfirm
-- ✅ 现有 `style.css` 914 行提炼为 EP SCSS design token 映射（见 §5），旧 `style.css` 拆成小幅覆写文件
-- ❌ 不动 admin_portal / teacher_portal（统一后续单独评估，本 ADR 不包）
-- ❌ 不动后端（API 契约 / minerU 检索 / 数据库 0 改动）
+- ✅ All three pages + App.vue layout shell (sidebar / topbar / breadcrumb / responsive drawer)
+- ✅ Base components fully replaced with EP: Button / Input / Select / Checkbox / Switch / Table / Drawer / Pagination / Tag / Skeleton / Empty / Message / MessageBox / Popconfirm
+- ✅ The existing 914-line `style.css` distilled into an EP SCSS design token mapping (see §5); the old `style.css` split into small override files
+- ❌ No changes to admin_portal / teacher_portal (unification to be assessed separately later; not covered by this ADR)
+- ❌ No changes to the backend (API contracts / minerU retrieval / database: zero changes)
 
-### 技术栈变更
+### Tech Stack Change
 
-迁移前：
+Before migration:
 ```
-Vue 3.5 + TypeScript + Vite + 纯手写 CSS (style.css 914 行) + axios
-```
-
-迁移后：
-```
-Vue 3.5 + TypeScript + Vite + Element Plus (按需导入, unplugin-auto-import 或手动)
-  + EP SCSS design token 覆写 (来自现有 style.css 变量)
-  + axios (保留)
+Vue 3.5 + TypeScript + Vite + pure hand-written CSS (style.css, 914 lines) + axios
 ```
 
-## 选型理由
+After migration:
+```
+Vue 3.5 + TypeScript + Vite + Element Plus (on-demand import, unplugin-auto-import or manual)
+  + EP SCSS design token overrides (from existing style.css variables)
+  + axios (retained)
+```
 
-### 为何不是 Naive UI / Arco Design / Ant Design Vue
+## Selection Rationale
 
-| 方案 | 评估 |
+### Why Not Naive UI / Arco Design / Ant Design Vue
+
+| Option | Assessment |
 |------|------|
-| **Element Plus** ✅ 选用 | 成熟稳定，admin 场景验证最多；Vue 3.5 原生；按需导入支持好；admin_portal/teacher_portal 已用 = 立即统一 |
-| Naive UI | TS 原生、bundle 小、设计更现代；但生产环境踩坑少、issue 响应慢于 EP、手动迁移已有门户成本更高 |
-| Arco Design | admin 专精、组件精致；bytes 风格与项目现有不同；社区小于 EP |
-| Ant Design Vue | 最成熟 admin 库；bundle 重、默认风格饱和；迁移已有门户成本更高 |
-| 纯手写（保持现状） | 当前路径 — 交互精致 + 三端一致 + 稳定态 = 工数持续高于补齐 EP 一次性成本；不可接受 |
+| **Element Plus** ✅ selected | Mature and stable, most validated in admin scenarios; native to Vue 3.5; good on-demand import support; already used by admin_portal/teacher_portal = immediate unification |
+| Naive UI | TS-native, small bundle, more modern design; but fewer production pitfalls encountered, slower issue response than EP, and higher cost to manually migrate existing portals |
+| Arco Design | Admin-specialized, refined components; bytes style differs from the project's existing one; smaller community than EP |
+| Ant Design Vue | Most mature admin library; heavy bundle, saturated default style; higher cost to migrate existing portals |
+| Pure hand-written (status quo) | Current path — interaction polish + three-device consistency + stable states = ongoing effort continuously exceeds the one-time cost of completing EP; unacceptable |
 
-### 稳定优先 > 审美新颖
+### Stability First > Aesthetic Novelty
 
-"精致"在这个项目的真正含义是：**过渡平滑、状态完整、跨端一致、bug 少**——Element Plus 在四项上均优于更年轻的 Naive/Arco。审美可通过 token 覆写单独调整。
+The real meaning of "polished" in this project is: **smooth transitions, complete states, cross-device consistency, few bugs** — Element Plus beats the younger Naive/Arco on all four. Aesthetics can be adjusted separately via token overrides.
 
-## 主题策略（CSS 变量 → EP SCSS 映射）
+## Theme Strategy (CSS Variables → EP SCSS Mapping)
 
-现有 `style.css :root` 的 CSS 变量继续作为**品牌色 / 间距 / 圆角 / 过渡** 的唯一来源，不再维护两套 token。
+The CSS variables in the existing `style.css :root` continue to be the single source of truth for **brand colors / spacing / border radius / transitions**; two sets of tokens are no longer maintained.
 
-### 变量映射表（CSS 变量 → EP SCSS 变量）
+### Variable Mapping Table (CSS Variables → EP SCSS Variables)
 
-| 现有 CSS 变量 | EP SCSS 变量 | 说明 |
+| Existing CSS variable | EP SCSS variable | Notes |
 |-------------|-------------|------|
-| `--primary-color: #2563eb` | `$--color-primary` / `$--color-primary-light-3~9` 系列 | 主色阶梯由 `#2563eb` 自动生成 |
-| `--primary-dark: #1d4ed8` | `$--color-primary-dark-2` | 悬停色 |
+| `--primary-color: #2563eb` | `$--color-primary` / `$--color-primary-light-3~9` series | Primary color ladder auto-generated from `#2563eb` |
+| `--primary-dark: #1d4ed8` | `$--color-primary-dark-2` | Hover color |
 | `--success-color: #10b981` | `$--color-success` | |
 | `--danger-color: #ef4444` | `$--color-danger` | |
 | `--warning-color: #f59e0b` | `$--color-warning` | |
@@ -90,14 +90,14 @@ Vue 3.5 + TypeScript + Vite + Element Plus (按需导入, unplugin-auto-import �
 | `--card-bg: #fff` | `$--bg-color` | |
 | `--bg-color: #f5f7fa` | `$--bg-color-page` | |
 | `--shadow-sm/md` | `$--box-shadow-light` / `$--box-shadow` | |
-| `--radius-sm/md/lg` | `$--border-radius-small/medium/large`（需自定义）| EP 默认更小，保留 4/6/8 |
-| `--transition-fast: 150ms ease` | 自定义：覆写 transition-duration（EP 默认 0.3s，需收紧）| |
+| `--radius-sm/md/lg` | `$--border-radius-small/medium/large` (needs customization) | EP defaults are smaller; keep 4/6/8 |
+| `--transition-fast: 150ms ease` | Custom: override transition-duration (EP defaults to 0.3s, needs tightening) | |
 | `--transition-base: 200ms ease` | | |
 
-### SCSS token 覆写文件（`src/styles/element-variables.scss`）
+### SCSS Token Override File (`src/styles/element-variables.scss`)
 
 ```scss
-// 在 EP 默认变量之前注入品牌值
+// Inject brand values before the EP default variables
 @forward 'element-plus/theme-chalk/src/common/var.scss' with (
   $colors: (
     'primary': ('base': #2563eb),
@@ -138,13 +138,13 @@ Vue 3.5 + TypeScript + Vite + Element Plus (按需导入, unplugin-auto-import �
   ),
 );
 
-// 显式引入 EP 基础样式
+// Explicitly import EP base styles
 @use 'element-plus/theme-chalk/src/index.scss' as *;
 ```
 
-### 过渡收紧（EP 默认 0.3s → 现有 0.15/0.2s）
+### Tightening Transitions (EP Default 0.3s → Existing 0.15/0.2s)
 
-EP 默认动效较长（0.3s）。按要求"精致不拖沓"，覆写全局过渡变量：
+EP default animations are relatively long (0.3s). As required — "polished but not sluggish" — override the global transition variables:
 
 ```scss
 :root {
@@ -153,88 +153,88 @@ EP 默认动效较长（0.3s）。按要求"精致不拖沓"，覆写全局过�
 }
 ```
 
-### 保留 `@use` 而非 `@import`
+### Keep `@use` Instead of `@import`
 
-EP v2.7+ 推荐 `@use`，避免 `@import` 在 Vite 中的 future-deprecation 警告。
+EP v2.7+ recommends `@use`, avoiding the future-deprecation warning of `@import` in Vite.
 
-## 迁移实施要点
+## Migration Implementation Points
 
-### 按层迁移（页面 → 布局 → 微调）
+### Migrate by Layer (Pages → Layout → Fine Tuning)
 
-1. **元素级替换**：`btn` / `card` / `input-wrap` / `data-table` / `tag` / `empty-state` → EP 组件
-2. **表格替换**：`.data-table` → `el-table` + `el-pagination`；zebra / hover / sticky header / 列选择器沿用
-3. **表单替换**：所有筛选区输入 → `el-input` / `el-select` / `el-checkbox` / `el-date-picker`；校验联动用 EP `el-form`
-4. **布局替换**：App.vue 的 sidebar 手工 CSS → `el-menu`（折叠 + 响应式抽屉）；顶栏面包屑 → `el-breadcrumb`；空态 → `el-empty`；文字 toast → `el-message` / `el-message-box`
-5. **响应式接管**：PC/平板/手机三档由 `el-row` + `el-col` 的断点（`sm / md / lg / xl`）+ 侧栏 `v-if="!isMobile"` 联动，不再手写媒体查询
+1. **Element-level replacement**: `btn` / `card` / `input-wrap` / `data-table` / `tag` / `empty-state` → EP components
+2. **Table replacement**: `.data-table` → `el-table` + `el-pagination`; zebra / hover / sticky header / column selector carried over
+3. **Form replacement**: all filter-area inputs → `el-input` / `el-select` / `el-checkbox` / `el-date-picker`; validation linkage via EP `el-form`
+4. **Layout replacement**: App.vue's hand-written sidebar CSS → `el-menu` (collapse + responsive drawer); topbar breadcrumb → `el-breadcrumb`; empty states → `el-empty`; text toasts → `el-message` / `el-message-box`
+5. **Responsive takeover**: the PC/tablet/phone three tiers handled by `el-row` + `el-col` breakpoints (`sm / md / lg / xl`) plus sidebar `v-if="!isMobile"` linkage; no more hand-written media queries
 
-### 不得遗漏的"精致"细节
+### "Polish" Details Not to Be Missed
 
-- **Skeleton 骨架屏**：表格加载用 `el-skeleton`，替代"搜索中..."文字
-- **Empty 统一**：空态全部用 `el-empty`（描述文案统一）
-- **Message / MessageBox 统一**：成功/失败反馈用 `el-message`；破坏性操作用 `el-message-box`（`confirmDelete` 当前是 `window.confirm`）
-- **Drawer 抽屉**：高级筛选抽屉用 `el-drawer`（当前 SearchPage 已是 inline 折叠 → 改 Drawer）
-- **表格行 hover / stripe**：`el-table` `stripe` + `row-class-name` 控制
-- **分页**：`el-pagination`（layout 含 `sizes` / `prev` / `pager` / `next` / `jumper` / `total`）
+- **Skeleton screens**: use `el-skeleton` for table loading, replacing the "Searching..." text
+- **Empty unification**: all empty states use `el-empty` (unified description copy)
+- **Message / MessageBox unification**: success/failure feedback uses `el-message`; destructive operations use `el-message-box` (`confirmDelete` is currently `window.confirm`)
+- **Drawer**: advanced filter drawer uses `el-drawer` (SearchPage currently uses inline collapse → change to Drawer)
+- **Table row hover / stripe**: controlled via `el-table` `stripe` + `row-class-name`
+- **Pagination**: `el-pagination` (layout includes `sizes` / `prev` / `pager` / `next` / `jumper` / `total`)
 
-### 保留现有品牌的 Checklist
+### Checklist for Preserving the Existing Brand
 
-- [ ] 主色 #2563eb（EP `$--color-primary` 正确注入）
-- [ ] 阴影 `--shadow-sm` / `--shadow-md`（EP `$--box-shadow` 映射）
-- [ ] 圆角 4/6/8px（EP `$--border-radius` 自定义）
-- [ ] 字号阶梯（EP `$--font-size-*` 沿用默认，不再另起）
-- [ ] 过渡时长收紧到 0.15/0.2s（EP `$--transition-duration` 覆写）
-- [ ] 字体栈：保持 `-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC'...`（只在 `:root` 续写，不动）
+- [ ] Primary color #2563eb (EP `$--color-primary` injected correctly)
+- [ ] Shadows `--shadow-sm` / `--shadow-md` (EP `$--box-shadow` mapping)
+- [ ] Border radius 4/6/8px (EP `$--border-radius` customized)
+- [ ] Font size ladder (EP `$--font-size-*` keeps defaults, no separate scale)
+- [ ] Transition durations tightened to 0.15/0.2s (EP `$--transition-duration` override)
+- [ ] Font stack: keep `-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC'...` (only appended in `:root`, untouched)
 
-## 后果
+## Consequences
 
-### 正向
-- 三端稳定（EP 内置响应式断点 + 折叠菜单）
-- 稳定态齐全（hover / focus / active / disabled / loading / 空态 / 错误态由 EP 内部实现，不再手写）
-- 跨门户统一（与 admin_portal/teacher_portal 共享类名、尺寸、间距体系）
-- 手工样式表从 914 行降到纯 token 覆写 + 少量 scoped 覆盖（估计 < 150 行）
+### Positive
+- Stable across three device tiers (EP built-in responsive breakpoints + collapsible menu)
+- Complete stable states (hover / focus / active / disabled / loading / empty / error states implemented internally by EP, no longer hand-written)
+- Unified across portals (shares class names, sizing, and spacing system with admin_portal/teacher_portal)
+- Hand-written stylesheet reduced from 914 lines to pure token overrides + a few scoped overrides (estimated < 150 lines)
 
-### 风险与缓解
+### Risks and Mitigations
 
-| 风险 | 缓解 |
+| Risk | Mitigation |
 |------|------|
-| EP bundle 增大 → 首屏加载变慢 | 按需导入 `unplugin-element-plus` / 手动局部 import；首屏 < 200KB gzip |
-| 旧 style.css 914 行一次性迁移易遗漏状态 | 逐表替换：先映射表头 → 再替换表格体 → 再补空态/加载态；每替换一页跑 `npm run build` |
-| 主题色注入失败导致返回 EP 默认蓝 | build 后在浏览器核对主色 === #2563eb；`npm run dev` 本地预检 |
-| 表单校验联动（docApi 错误码格式）与 EP `el-form` 校验格式不兼容 | 显式把 axios 错误码映射到 EP 校验 message，不在 EP 规则层硬接 |
-| 迁移期间 minerU 检索新增字段（blockData/minerUscore/subType 等）需要重测表格列 | SearchPage.vue 已加 minerU 列，EP 迁移后必须保留且展示正常 |
+| EP bundle grows → slower first paint | On-demand import via `unplugin-element-plus` / manual partial imports; first paint < 200KB gzip |
+| Migrating the 914-line old style.css all at once easily misses states | Replace table by table: map the header first → then replace the table body → then add empty/loading states; run `npm run build` after each page is replaced |
+| Theme color injection fails, falling back to EP default blue | After build, verify in the browser that the primary color === #2563eb; pre-check locally with `npm run dev` |
+| Form validation linkage (docApi error code format) incompatible with EP `el-form` validation format | Explicitly map axios error codes to EP validation messages; do not hard-wire in the EP rules layer |
+| During migration, new minerU retrieval fields (blockData/minerUscore/subType, etc.) require re-testing table columns | SearchPage.vue already has minerU columns; after EP migration they must be preserved and display correctly |
 
-### 工作量估计
+### Effort Estimate
 
-- 基础替换（元素+表格+表单）：1 周
-- 响应式 + 精致态（skeleton / drawer / message / transition）：3 天
-- 主题 token 覆写 + 视觉微调：2 天
-- 三页面回归测试：2 天
+- Base replacement (elements + tables + forms): 1 week
+- Responsive + polished states (skeleton / drawer / message / transition): 3 days
+- Theme token overrides + visual fine tuning: 2 days
+- Regression testing of the three pages: 2 days
 
-总计约 2 周。
+Total: about 2 weeks.
 
-## 参考
+## References
 
-- EP 官方主题文档：https://element-plus.org/zh-CN/guide/theming.html
-- EP SCSS 变量全量：https://github.com/element-plus/element-plus/blob/dev/packages/theme-chalk/src/common/var.scss
-- 既有门户 EP 实践：`src/admin_portal/frontend`（Element Plus 已接入）
-- 本前端既有样式源：`frontend/src/style.css`（CSS 变量见 §5 映射表）
-- minerU 第 2 代检索设计：`docs/modules/DocumentSearch/03-DESIGN.md §演进（DS-13~DS-18 已合并 master）`
+- EP official theming docs: https://element-plus.org/zh-CN/guide/theming.html
+- Full EP SCSS variables: https://github.com/element-plus/element-plus/blob/dev/packages/theme-chalk/src/common/var.scss
+- Existing portal EP practice: `src/admin_portal/frontend` (Element Plus already integrated)
+- This frontend's existing style source: `frontend/src/style.css` (CSS variables in the §5 mapping table)
+- minerU second-generation retrieval design: `docs/modules/DocumentSearch/03-DESIGN.md §Evolution (DS-13~DS-18 merged to master)`
 
-## 实施偏差
+## Implementation Deviations
 
-### 实施偏差 1：SCSS 注入方式调整（additionalData → importStyle: false）
+### Implementation Deviation 1: SCSS Injection Method Adjusted (additionalData → importStyle: false)
 
-**现象**：按 §5.2 在 `vite.config.ts` 配置 `css.preprocessorOptions.scss.additionalData: '@use "@/styles/element-variables.scss" as *;'` 后，`npm run build` 报 `Error: [sass] Module loop: this module is already being loaded.`。原因是 `additionalData` 会把 `@use` 注入到**每个** SCSS 文件中，包括 `element-variables.scss` 自身，形成循环加载。
+**Symptom**: after configuring `css.preprocessorOptions.scss.additionalData: '@use "@/styles/element-variables.scss" as *;'` in `vite.config.ts` per §5.2, `npm run build` reported `Error: [sass] Module loop: this module is already being loaded.`. The cause is that `additionalData` injects the `@use` into **every** SCSS file, including `element-variables.scss` itself, forming a circular load.
 
-**调整**：
-1. 移除 `vite.config.ts` 的 `css.preprocessorOptions.scss.additionalData` 块。
-2. `AutoImport` 和 `Components` 的 `ElementPlusResolver` 均加 `importStyle: false`，禁用 per-component 预构建 CSS 自动导入。
-3. themed 样式表由 `element-variables.scss`（`@forward` + `@use index.scss`）一次性编译，`main.ts` 引入一次即生效全量 themed CSS。
+**Adjustment**:
+1. Remove the `css.preprocessorOptions.scss.additionalData` block from `vite.config.ts`.
+2. Add `importStyle: false` to both the `AutoImport` and `Components` `ElementPlusResolver` configurations, disabling per-component pre-built CSS auto-import.
+3. The themed stylesheet is compiled once by `element-variables.scss` (`@forward` + `@use index.scss`); importing it once in `main.ts` applies the full themed CSS.
 
-**影响**：无功能损失。themed CSS 仍由 SCSS 编译产出品牌值，只是注入路径从"每个 SCSS 文件 @use"改为"main.ts 一次性 import 全量编译产物"。
+**Impact**: no functional loss. The themed CSS is still produced by SCSS compilation with brand values; only the injection path changed from "@use in every SCSS file" to "one-time import of the full compiled artifact in main.ts".
 
-### 实施偏差 2：$box-shadow 多阴影值需括号包裹
+### Implementation Deviation 2: $box-shadow Multi-Shadow Values Need Parentheses
 
-**现象**：§5.2 模板中 `$box-shadow` 的 `''` key 包含两个逗号分隔的阴影值 `0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06),`，SCSS parser 把逗号误解为 map entry 分隔符，报 `expected ":"`。
+**Symptom**: in the §5.2 template, the `''` key of `$box-shadow` contained two comma-separated shadow values `0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06),`; the SCSS parser misread the comma as a map entry separator and reported `expected ":"`.
 
-**调整**：用括号包裹多阴影值 `(0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06))`。本 ADR §5.2 模板已同步修正。
+**Adjustment**: wrap the multi-shadow value in parentheses `(0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06))`. The §5.2 template in this ADR has been corrected accordingly.

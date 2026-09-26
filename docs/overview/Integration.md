@@ -1,55 +1,56 @@
-﻿# Integration — 集成矩阵
+﻿# Integration — Integration Matrix
 
-## 集成总表
+## Integration Overview Table
 
-| 目标 | 协议 | 方向 | 用途 | 安全边界 |
+| Target | Protocol | Direction | Purpose | Security boundary |
 |------|------|------|------|----------|
-| Admin UI | HTTP 同源 | 入 | 文档管理和搜索 | Identity `role=admin` HttpOnly Cookie/JWT |
-| SignaCore | HTTP/OIDC | 出 | 登录、刷新、撤销、JWKS | Authority 来自 Consul |
-| PostgreSQL | TCP | 出 | 文档/解析数据 CRUD | 服务私有数据库 |
-| StructaDoc | HTTP | 出 | 文档上传、Parse Run、Blocks/Markdown/Assets 同步、图片代理、删除（ADR-0009） | `Authorization: ApiKey` scoped key，BaseUrl 来自 Consul/环境变量 |
-| MinIO/SeaweedFS | S3 | 出 | 存量文件与解析图片（只读兼容与删除清理） | 共享 Consul 配置 |
-| OpenSearch | HTTP | 出 | block 索引和查询 | 共享 Consul 配置 |
-| LLM（OpenAI 兼容，可选） | HTTP | 出 | 元数据分析 | 私有 ApiKey |
+| Admin UI | HTTP same-origin | Inbound | Document management and search | Identity `role=admin` HttpOnly Cookie/JWT |
+| SignaCore | HTTP/OIDC | Outbound | Login, refresh, revocation, JWKS | Authority from Consul |
+| PostgreSQL | TCP | Outbound | Document/parse data CRUD | Service-private database |
+| StructaDoc | HTTP | Outbound | Document upload, Parse Runs, Blocks/Markdown/Assets sync, image proxy, deletion (ADR-0009) | `Authorization: ApiKey` scoped key, BaseUrl from Consul/environment variables |
+| MinIO/SeaweedFS | S3 | Outbound | Legacy files and parse images (read-only compatibility and delete cleanup) | Shared Consul configuration |
+| OpenSearch | HTTP | Outbound | Block indexing and queries | Shared Consul configuration |
+| LLM (OpenAI-compatible, optional) | HTTP | Outbound | Metadata analysis | Private ApiKey |
 
-当前不存在 Quaestura → Doctheca 集成。后续出现真实调用需求时，必须独立
-定义数据契约、认证方式和部署配置，不复用管理员 Cookie，也不预留未使用接口。
+There is currently no Quaestura → Doctheca integration. When a real calling need
+appears later, the data contract, authentication method, and deployment configuration must be
+defined independently, without reusing the administrator cookie and without reserving unused interfaces.
 
-## 管理 API
+## Admin API
 
-除 `/admin/auth/login`、`/admin/auth/refresh`、`/admin/auth/logout` 外，所有
-`/admin/*` 端点要求 `DocthecaAdmin` 策略。完整认证契约见
-[AdminAuthentication](../modules/AdminAuthentication/01-FEATURE.md)。
+Except for `/admin/auth/login`, `/admin/auth/refresh`, and `/admin/auth/logout`, all
+`/admin/*` endpoints require the `DocthecaAdmin` policy. For the full authentication contract see
+[AdminAuthentication](../modules/AdminAuthentication/01-FEATURE.md).
 
-主要管理端点：
+Main admin endpoints:
 
-| 方法 | 路径 | 说明 |
+| Method | Path | Description |
 |------|------|------|
-| POST | `/admin/document-files/upload` | 上传文档 |
-| GET | `/admin/document-files` | 文档列表 |
-| GET | `/admin/document-files/{id}` | 文档详情 |
-| PUT | `/admin/document-files/{id}/metadata` | 更新元数据 |
-| POST | `/admin/document-files/{id}/parse` | 触发解析 |
-| DELETE | `/admin/document-files/{id}` | 删除文档 |
-| GET/DELETE | `/admin/document-parses...` | 解析列表和删除 |
-| GET | `/admin/document-parses/{parseId}/images/{imageId}/content` | StructaDoc 解析图片代理（浏览器经 admin Cookie 认证） |
-| GET | `/admin/documents/search` | 搜索 |
-| GET | `/admin/document-files|document-parses/.../export/*` | 导出 |
+| POST | `/admin/document-files/upload` | Upload a document |
+| GET | `/admin/document-files` | Document list |
+| GET | `/admin/document-files/{id}` | Document details |
+| PUT | `/admin/document-files/{id}/metadata` | Update metadata |
+| POST | `/admin/document-files/{id}/parse` | Trigger parsing |
+| DELETE | `/admin/document-files/{id}` | Delete a document |
+| GET/DELETE | `/admin/document-parses...` | Parse list and deletion |
+| GET | `/admin/document-parses/{parseId}/images/{imageId}/content` | StructaDoc parse image proxy (browser authenticated via admin cookie) |
+| GET | `/admin/documents/search` | Search |
+| GET | `/admin/document-files|document-parses/.../export/*` | Export |
 
-## 匿名入口
+## Anonymous Entry Points
 
-- `/`、静态资源和 SPA fallback
+- `/`, static resources, and SPA fallback
 - `/health`
 - `/admin/auth/login`
 - `/admin/auth/refresh`
 - `/admin/auth/logout`
 
-## 失败语义
+## Failure Semantics
 
-| 类别 | 行为 |
+| Category | Behavior |
 |------|------|
-| 未认证管理请求 | 401 |
-| 已认证但非管理员 | 403 |
-| Identity 不可用 | 登录/刷新返回受控 502/401，不泄露内部异常 |
-| OpenSearch 写失败 | 不阻塞解析主流程，记录 Warning |
-| OpenSearch 查询失败 | 返回空结果并记录 Warning |
+| Unauthenticated admin request | 401 |
+| Authenticated but not an administrator | 403 |
+| Identity unavailable | Login/refresh returns a controlled 502/401 without leaking internal exceptions |
+| OpenSearch write failure | Does not block the main parsing flow; logs a Warning |
+| OpenSearch query failure | Returns empty results and logs a Warning |

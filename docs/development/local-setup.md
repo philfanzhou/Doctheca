@@ -1,68 +1,68 @@
-# 本地搭建
+# Local Setup
 
-如何在本地搭建并运行 `doctheca`。
+How to set up and run `doctheca` locally.
 
-## 前置条件
+## Prerequisites
 
-| 依赖 | 是否必需 | 说明 |
+| Dependency | Required | Description |
 |------|----------|------|
-| .NET 10 SDK | 是 | 项目目标框架为 `net10.0` |
-| PostgreSQL | 是 | 默认连接字符串指向 `localhost:5432`（`doctheca`）|
-| OpenSearch | 可选 | 全文搜索索引；默认地址为 `http://localhost:9200`；推荐 Docker 镜像版本 `2.19.5`（与 `OpenSearch.Net 1.8.0` 客户端兼容） |
-| MinIO / SeaweedFS | 可选 | S3 兼容的对象存储；本地 fallback 的 `Oss:InternalEndpoint` 为 `localhost:8333`；可通过 `USE_LOCAL_OSS=1` 切换为本地文件系统存储 |
+| .NET 10 SDK | Yes | The project targets `net10.0` |
+| PostgreSQL | Yes | The default connection string points to `localhost:5432` (`doctheca`)|
+| OpenSearch | Optional | Full-text search index; default address `http://localhost:9200`; recommended Docker image version `2.19.5` (compatible with the `OpenSearch.Net 1.8.0` client) |
+| MinIO / SeaweedFS | Optional | S3-compatible object storage; the local fallback `Oss:InternalEndpoint` is `localhost:8333`; can be switched to local file-system storage via `USE_LOCAL_OSS=1` |
 
-## 环境变量
+## Environment Variables
 
-| 变量 | 默认值 | 说明 |
+| Variable | Default | Description |
 |------|--------|------|
-| `USE_LOCAL_OSS` | （未设置） | 设为 `1` 可使用本地文件系统存储代替 S3，文件保存至 `OSS_LOCAL_PATH` |
-| `OSS_LOCAL_PATH` | `data/oss` | 本地文件存储目录（仅在 `USE_LOCAL_OSS=1` 时使用） |
+| `USE_LOCAL_OSS` | (unset) | Set to `1` to use local file-system storage instead of S3; files are saved to `OSS_LOCAL_PATH` |
+| `OSS_LOCAL_PATH` | `data/oss` | Local file-storage directory (used only when `USE_LOCAL_OSS=1`) |
 
-无需其他环境变量。直接本地运行时，其余配置来自 `appsettings.json`；接入 Consul 后，
-`Oss:InternalEndpoint`、`Oss:InternalSecure` 和 `Oss:PublicBaseUrl` 等共享配置由
-`config/ruoyu/shared.json` 覆盖。
+No other environment variables are required. When running locally directly, the rest of the configuration comes from `appsettings.json`; once Consul is connected,
+shared configuration such as `Oss:InternalEndpoint`, `Oss:InternalSecure` and `Oss:PublicBaseUrl` is overridden by
+`config/ruoyu/shared.json`.
 
-## 数据库配置
+## Database Configuration
 
-服务使用 **PostgreSQL**（`UseNpgsql`，连接字符串来自 `ConnectionStrings:Default`）。默认的 `appsettings.json` 包含：
+The service uses **PostgreSQL** (`UseNpgsql`; the connection string comes from `ConnectionStrings:Default`). The default `appsettings.json` contains:
 
 ```
 Host=localhost;Port=5432;Database=doctheca;Username=phil
 ```
 
-数据库和表会在启动时通过 `DatabaseInitializer.InitializeAsync` 自动创建（`CREATE TABLE IF NOT EXISTS`）。
+The database and tables are created automatically at startup via `DatabaseInitializer.InitializeAsync` (`CREATE TABLE IF NOT EXISTS`).
 
-## 运行服务
+## Running the Service
 
-在 `` 目录下执行：
+Run in the `` directory:
 
 ```bash
 dotnet run --project src/Host
 ```
 
-### 端口配置
+### Port Configuration
 
-| 协议 | 默认端口 | 配置键 | 说明 |
+| Protocol | Default port | Config key | Description |
 |------|----------|--------|------|
-| HTTP | 5012 | `Endpoints:Http` | 管理 API + 搜索 API + 健康检查 |
+| HTTP | 5012 | `Endpoints:Http` | Admin API + search API + health check |
 
-端口可在 `appsettings.json` 的 `Endpoints` 节中覆盖。
+The port can be overridden in the `Endpoints` section of `appsettings.json`.
 
-## 最小本地搭建（仅 OSS 用本地存储）
+## Minimal Local Setup (local storage for OSS only)
 
-在不依赖外部对象存储的情况下运行（PostgreSQL 仍必需）：
+Run without depending on external object storage (PostgreSQL is still required):
 
-1. 设置环境变量 `USE_LOCAL_OSS=1`（可选指定 `OSS_LOCAL_PATH`，默认 `data/oss`）。
-2. 运行 `dotnet run --project src/Host`。
+1. Set the environment variable `USE_LOCAL_OSS=1` (optionally specify `OSS_LOCAL_PATH`; default `data/oss`).
+2. Run `dotnet run --project src/Host`.
 
-你将获得：
-- PostgreSQL 数据库（自动创建表）
-- 本地文件系统对象存储（文件保存至 `data/oss/`）
-- 通过 HTTP 管理 API 进行文档上传、列表、删除和元数据更新
-- 后台解析工作器（解析功能完整；OpenSearch 不可用时搜索返回空结果）
+You will get:
+- A PostgreSQL database (tables created automatically)
+- Local file-system object storage (files saved to `data/oss/`)
+- Document upload, listing, deletion and metadata updates via the HTTP admin API
+- A background parse worker (parsing is fully functional; search returns empty results when OpenSearch is unavailable)
 
-## 需要外部服务的功能
+## Features Requiring External Services
 
-| 功能 | 服务 | 配置节 | 缺少时的行为 |
+| Feature | Service | Config section | Behavior when missing |
 |------|------|--------|-------------|
-| 全文搜索 | OpenSearch | `OpenSearch` | 搜索返回空结果（`SearchDomainService` 返回空 + LogWarning）；索引初始化时记录警告 |
+| Full-text search | OpenSearch | `OpenSearch` | Search returns empty results (`SearchDomainService` returns empty + LogWarning); a warning is logged during index initialization |
