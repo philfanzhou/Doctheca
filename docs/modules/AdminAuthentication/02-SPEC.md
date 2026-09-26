@@ -1,4 +1,4 @@
-﻿# 02-SPEC — DocLibrary 管理员认证规格
+﻿# 02-SPEC — Doctheca 管理员认证规格
 
 ## HTTP 契约
 
@@ -32,12 +32,12 @@
 |------|------|----------|
 | 用户名或密码为空 | 400 | `Username and password are required.` |
 | Identity 拒绝账号密码 | 401 | `Invalid username or password.` |
-| SignaCore 拒绝 DocLibrary App 凭据 | 502 | `Identity service is unavailable.` |
+| SignaCore 拒绝 Doctheca App 凭据 | 502 | `Identity service is unavailable.` |
 | Identity 登录成功但 Token 无 `role=admin` | 403 | `Administrator access is required.` |
 | Identity 不可用或响应无效 | 502 | `Identity service is unavailable.` |
 | Identity Token 未通过密码学验证 | 502 | `Identity service returned an invalid token.` |
 
-DocLibrary 调用 Identity 的请求体固定为：
+Doctheca 调用 Identity 的请求体固定为：
 
 ```json
 {
@@ -47,12 +47,12 @@ DocLibrary 调用 Identity 的请求体固定为：
 }
 ```
 
-上述 DocLibrary → SignaCore 请求同时携带 DocLibrary 自己的 `X-Admin-AppId` /
+上述 Doctheca → SignaCore 请求同时携带 Doctheca 自己的 `X-Admin-AppId` /
 `X-Admin-AppSecret`；凭据来自部署 secret，不复用任一 Portal App，也不写入共享 Consul KV。
 
 ### POST `/admin/auth/refresh`
 
-匿名端点，但要求请求携带有效 Refresh Cookie。DocLibrary 调用 Identity：
+匿名端点，但要求请求携带有效 Refresh Cookie。Doctheca 调用 Identity：
 
 ```json
 {
@@ -61,11 +61,11 @@ DocLibrary 调用 Identity 的请求体固定为：
 }
 ```
 
-刷新成功后必须重新验证新 Access Token 的签名和 `role=admin`，然后轮换两个 Cookie。无效、过期、已撤销或非管理员 Token 返回 401；Identity 不可用返回 502；两类失败都清除两个 Cookie。refresh grant 与 password grant 使用同一组 DocLibrary App 凭据。
+刷新成功后必须重新验证新 Access Token 的签名和 `role=admin`，然后轮换两个 Cookie。无效、过期、已撤销或非管理员 Token 返回 401；Identity 不可用返回 502；两类失败都清除两个 Cookie。refresh grant 与 password grant 使用同一组 Doctheca App 凭据。
 
 ### POST `/admin/auth/logout`
 
-允许无有效 Access Token 时调用，以保证过期会话仍能退出。若存在 Refresh Cookie，DocLibrary best-effort 调用 Identity `POST /api/auth/revoke`；无论 Identity 是否可用，最终均清除两个 Cookie并返回 200。
+允许无有效 Access Token 时调用，以保证过期会话仍能退出。若存在 Refresh Cookie，Doctheca best-effort 调用 Identity `POST /api/auth/revoke`；无论 Identity 是否可用，最终均清除两个 Cookie并返回 200。
 
 ### GET `/admin/auth/session`
 
@@ -108,8 +108,8 @@ DocLibrary 调用 Identity 的请求体固定为：
 
 | Cookie | Path | 属性 | 用途 |
 |--------|------|------|------|
-| `doclibraryAccessToken` | `/admin` | HttpOnly, SameSite=Strict, Secure 由配置控制 | 管理 API 身份 |
-| `doclibraryRefreshToken` | `/admin/auth` | HttpOnly, SameSite=Strict, Secure 由配置控制 | 刷新与登出 |
+| `docthecaAccessToken` | `/admin` | HttpOnly, SameSite=Strict, Secure 由配置控制 | 管理 API 身份 |
+| `docthecaRefreshToken` | `/admin/auth` | HttpOnly, SameSite=Strict, Secure 由配置控制 | 刷新与登出 |
 
 生产 HTTPS 部署必须设置 `Authentication:CookieSecure=true`。当前纯 HTTP 内网部署可显式设置为 `false`，但不得把该配置解释为公网安全部署。
 

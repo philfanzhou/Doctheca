@@ -1,13 +1,13 @@
 # 本地搭建
 
-如何在本地搭建并运行 `ruoyu.doclibrary`。
+如何在本地搭建并运行 `doctheca`。
 
 ## 前置条件
 
 | 依赖 | 是否必需 | 说明 |
 |------|----------|------|
 | .NET 8 SDK | 是 | 项目目标框架为 `net8.0` |
-| PostgreSQL | 是 | 默认连接字符串指向 `localhost:5432`（`ruoyu_study_doclibrary`）|
+| PostgreSQL | 是 | 默认连接字符串指向 `localhost:5432`（`doctheca`）|
 | OpenSearch | 可选 | 全文搜索索引；默认地址为 `http://localhost:9200`；推荐 Docker 镜像版本 `2.19.5`（与 `OpenSearch.Net 1.8.0` 客户端兼容） |
 | MinIO / SeaweedFS | 可选 | S3 兼容的对象存储；本地 fallback 的 `Oss:InternalEndpoint` 为 `localhost:8333`；可通过 `USE_LOCAL_OSS=1` 切换为本地文件系统存储 |
 
@@ -27,14 +27,14 @@
 服务使用 **PostgreSQL**（`UseNpgsql`，连接字符串来自 `ConnectionStrings:Default`）。默认的 `appsettings.json` 包含：
 
 ```
-Host=localhost;Port=5432;Database=ruoyu_study_doclibrary;Username=phil
+Host=localhost;Port=5432;Database=doctheca;Username=phil
 ```
 
 数据库和表会在启动时通过 `DatabaseInitializer.InitializeAsync` 自动创建（`CREATE TABLE IF NOT EXISTS`）。
 
 ## 运行服务
 
-在 `src/services/ruoyu.doclibrary/` 目录下执行：
+在 `` 目录下执行：
 
 ```bash
 dotnet run --project src/Host

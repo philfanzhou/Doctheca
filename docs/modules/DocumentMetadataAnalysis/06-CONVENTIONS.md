@@ -52,4 +52,4 @@
 
 ## 空值校验边界
 
-> 本功能**不强制校验** subject/grade/year 的取值范围。`DocLibraryConstants.ValidSubjects` / `ValidGrades` 仅作为 LLM 提示词示例与 future 校验储备;`UpdateMetadataAsync` 与 Entity 列约束仅做 `MaxLength` + nullable 兜底。
+> 本功能**不强制校验** subject/grade/year 的取值范围。`DocthecaConstants.ValidSubjects` / `ValidGrades` 仅作为 LLM 提示词示例与 future 校验储备;`UpdateMetadataAsync` 与 Entity 列约束仅做 `MaxLength` + nullable 兜底。

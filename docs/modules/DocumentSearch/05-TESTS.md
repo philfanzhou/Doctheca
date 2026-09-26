@@ -3,17 +3,17 @@
 测试工具：`xUnit` + `Moq` + `FluentAssertions`。
 
 现有测试文件（代码中实际存在）：
-- `src/Tests/Ruoyu.Study.DocLibrary.Tests/OpenSearch/OpenSearchQueryBuilderTests.cs`
-- `src/Tests/Ruoyu.Study.DocLibrary.Tests/OpenSearch/OpenSearchResponseParserTests.cs`
-- `src/Tests/Ruoyu.Study.DocLibrary.Tests/OpenSearchIndexServiceTests.cs`
-- `src/Tests/Ruoyu.Study.DocLibrary.Tests/SearchDomainServiceTests.cs`
+- `src/Tests/Doctheca.Tests/OpenSearch/OpenSearchQueryBuilderTests.cs`
+- `src/Tests/Doctheca.Tests/OpenSearch/OpenSearchResponseParserTests.cs`
+- `src/Tests/Doctheca.Tests/OpenSearchIndexServiceTests.cs`
+- `src/Tests/Doctheca.Tests/SearchDomainServiceTests.cs`
 
 > 注：不存在 `DocumentSearchEndpointsTests.cs`（旧文档误列）。HTTP 端点无独立单元测试。
 
 ## 运行方式
 
 ```bash
-dotnet test src/services/ruoyu.doclibrary/src/Tests/Ruoyu.Study.DocLibrary.Tests \
+dotnet test src/Tests/Doctheca.Tests \
   --configuration Release \
   --filter "FullyQualifiedName~OpenSearchQueryBuilderTests|FullyQualifiedName~OpenSearchResponseParserTests|FullyQualifiedName~OpenSearchIndexServiceTests|FullyQualifiedName~SearchDomainServiceTests"
 ```

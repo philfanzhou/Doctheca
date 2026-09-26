@@ -1,7 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
-namespace Ruoyu.Study.DocLibrary.Database.Entities;
+namespace Doctheca.Database.Entities;
 
 [Table("document_parse_images")]
 public class DocumentParseImageEntity

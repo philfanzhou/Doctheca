@@ -37,19 +37,19 @@
 | IT-DE-01 | 文件级 Markdown 导出返回有效 ZIP，Entry 含 .md 与 images/ | AC-01, AC-08 |
 | IT-DE-02 | 文件级 HTML 导出返回含 Base64 img 的 HTML | AC-02, AC-09 |
 | IT-DE-03 | 解析级导出与文件级导出结果一致（同一 parseId） | AC-03 |
-| IT-DE-04 | 文件不存在返回 404 + DOCLIBRARY_FILE_NOT_FOUND | AC-04 |
-| IT-DE-05 | 解析记录不存在返回 404 + DOCLIBRARY_PARSE_NOT_FOUND | AC-05 |
-| IT-DE-06 | 未解析返回 422 + DOCLIBRARY_FILE_NOT_PARSED / DOCLIBRARY_PARSE_NOT_PARSED | AC-06 |
+| IT-DE-04 | 文件不存在返回 404 + DOCTHECA_FILE_NOT_FOUND | AC-04 |
+| IT-DE-05 | 解析记录不存在返回 404 + DOCTHECA_PARSE_NOT_FOUND | AC-05 |
+| IT-DE-06 | 未解析返回 422 + DOCTHECA_FILE_NOT_PARSED / DOCTHECA_PARSE_NOT_PARSED | AC-06 |
 | IT-DE-07 | 单张图片 OSS 下载失败不阻塞导出，记 Warning 日志 | AC-07 |
 
 ## 运行方式
 
 ```bash
 # 运行本模块单元测试
-dotnet test src/Tests/Ruoyu.Study.DocLibrary.Tests --filter "FullyQualifiedName~DocumentExport"
+dotnet test src/Tests/Doctheca.Tests --filter "FullyQualifiedName~DocumentExport"
 
 # 运行所有测试
-dotnet test src/Tests/Ruoyu.Study.DocLibrary.Tests
+dotnet test src/Tests/Doctheca.Tests
 ```
 
 ## 覆盖率目标

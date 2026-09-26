@@ -1,9 +1,9 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.Extensions.Logging;
-using Ruoyu.Study.DocLibrary.Domain.Models;
+using Doctheca.Domain.Models;
 
-namespace Ruoyu.Study.DocLibrary.Service;
+namespace Doctheca.Service;
 
 /// <summary>
 /// Parses LLM responses for document metadata analysis.

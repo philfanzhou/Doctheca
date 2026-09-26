@@ -2,10 +2,10 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using Ruoyu.Study.DocLibrary.Domain.Models;
-using Ruoyu.Study.DocLibrary.Domain.Repositories;
+using Doctheca.Domain.Models;
+using Doctheca.Domain.Repositories;
 
-namespace Ruoyu.Study.DocLibrary.Domain.Services;
+namespace Doctheca.Domain.Services;
 
 public class SearchDomainService : ISearchDomainService
 {

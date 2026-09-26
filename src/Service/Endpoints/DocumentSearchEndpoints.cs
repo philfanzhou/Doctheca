@@ -5,17 +5,17 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
-using Ruoyu.Study.DocLibrary.Domain.Models;
-using Ruoyu.Study.DocLibrary.Domain.Services;
+using Doctheca.Domain.Models;
+using Doctheca.Domain.Services;
 
-namespace Ruoyu.Study.DocLibrary.Service;
+namespace Doctheca.Service;
 
 public static class DocumentSearchEndpoints
 {
     public static WebApplication MapDocumentSearchEndpoints(this WebApplication app)
     {
         var group = app.MapGroup("/admin/documents")
-            .RequireAuthorization(DocLibraryAuthorizationPolicies.Admin);
+            .RequireAuthorization(DocthecaAuthorizationPolicies.Admin);
 
         group.MapGet("/search", Search);
 
@@ -46,10 +46,10 @@ public static class DocumentSearchEndpoints
         var logger = loggerFactory.CreateLogger(nameof(DocumentSearchEndpoints));
 
         if (string.IsNullOrWhiteSpace(query))
-            return Results.BadRequest(new { success = false, message = "Query cannot be empty", errorCode = "DOCLIBRARY_QUERY_REQUIRED" });
+            return Results.BadRequest(new { success = false, message = "Query cannot be empty", errorCode = "DOCTHECA_QUERY_REQUIRED" });
 
         if (query.Length > 200)
-            return Results.BadRequest(new { success = false, message = "Query exceeds 200 characters", errorCode = "DOCLIBRARY_QUERY_TOO_LONG" });
+            return Results.BadRequest(new { success = false, message = "Query exceeds 200 characters", errorCode = "DOCTHECA_QUERY_TOO_LONG" });
 
         pageSize = Math.Min(Math.Max(pageSize, 1), 100);
 

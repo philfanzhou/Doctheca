@@ -1,6 +1,6 @@
 # database — 数据库文档
 
-> **本目录是 DocLibrary 服务数据库结构的唯一事实源。** 其他文档如需引用表结构，请链接至 `tables/` 下的对应文件。
+> **本目录是 Doctheca 服务数据库结构的唯一事实源。** 其他文档如需引用表结构，请链接至 `tables/` 下的对应文件。
 
 ## 表清单
 
@@ -23,6 +23,6 @@
 
 ## 数据库配置
 
-- **数据库名**：`ruoyu_study_doclibrary`
+- **数据库名**：`doctheca`
 - **引擎**：PostgreSQL
 - **连接字符串**：`ConnectionStrings:Default`

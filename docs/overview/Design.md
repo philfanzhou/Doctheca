@@ -27,9 +27,9 @@ Database
 
 - Identity password grant 验证用户名和密码。
 - Identity bootstrap 管理员在密码登录时自动获得 `role=admin`。
-- DocLibrary 在登录和刷新时使用 Identity OIDC/JWKS 完整验证 Access Token。
+- Doctheca 在登录和刷新时使用 Identity OIDC/JWKS 完整验证 Access Token。
 - Access/Refresh Token 仅存放在 HttpOnly、SameSite=Strict Cookie。
-- `DocLibraryAdmin` 策略保护管理 route group，要求有效 JWT 和 `role=admin`。
+- `DocthecaAdmin` 策略保护管理 route group，要求有效 JWT 和 `role=admin`。
 - 静态文件和 SPA fallback 保持匿名，避免登录死锁。
 
 ## 关键决策

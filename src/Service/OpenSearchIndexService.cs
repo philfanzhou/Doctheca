@@ -8,11 +8,11 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using OpenSearch.Net;
-using Ruoyu.Study.DocLibrary.Domain.Models;
-using Ruoyu.Study.DocLibrary.Domain.Repositories;
-using Ruoyu.Study.DocLibrary.Service.OpenSearch;
+using Doctheca.Domain.Models;
+using Doctheca.Domain.Repositories;
+using Doctheca.Service.OpenSearch;
 
-namespace Ruoyu.Study.DocLibrary.Service;
+namespace Doctheca.Service;
 
 public sealed class OpenSearchIndexService : ISearchIndexService
 {

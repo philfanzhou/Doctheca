@@ -35,13 +35,13 @@ async function submit(): Promise<void> {
 </script>
 
 <template>
-  <main class="login-page doclibrary-admin">
+  <main class="login-page doctheca-admin">
     <section class="login-card" aria-labelledby="login-title">
       <div class="login-brand">
         <div class="brand-mark">若</div>
         <div>
           <div class="login-product">若愚学习平台</div>
-          <div class="login-service">DocLibrary 管理后台</div>
+          <div class="login-service">Doctheca 管理后台</div>
         </div>
       </div>
 

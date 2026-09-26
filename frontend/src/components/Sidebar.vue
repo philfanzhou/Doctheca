@@ -56,7 +56,7 @@ defineExpose({ moveIndicator })
     </div>
     <nav class="nav" ref="navRef">
       <div class="nav-indicator" ref="indicator"></div>
-      <div class="nav-label">ruoyu.doclibrary</div>
+      <div class="nav-label">doctheca</div>
       <button
         v-for="item in props.navItems"
         :key="item.key"

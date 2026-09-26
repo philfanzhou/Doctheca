@@ -1,6 +1,6 @@
 using System.Text.Json;
 
-namespace Ruoyu.Study.DocLibrary.Service.OpenSearch;
+namespace Doctheca.Service.OpenSearch;
 
 internal static class OpenSearchJsonHelper
 {

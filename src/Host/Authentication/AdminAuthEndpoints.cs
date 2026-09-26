@@ -2,9 +2,9 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
-using Ruoyu.Study.DocLibrary.Service;
+using Doctheca.Service;
 
-namespace Ruoyu.Study.DocLibrary.Host.Authentication;
+namespace Doctheca.Host.Authentication;
 
 public static class AdminAuthEndpoints
 {
@@ -16,7 +16,7 @@ public static class AdminAuthEndpoints
         group.MapPost("/refresh", RefreshAsync).AllowAnonymous();
         group.MapPost("/logout", LogoutAsync).AllowAnonymous();
         group.MapGet("/session", GetSession)
-            .RequireAuthorization(DocLibraryAuthorizationPolicies.Admin);
+            .RequireAuthorization(DocthecaAuthorizationPolicies.Admin);
 
         return app;
     }
@@ -26,7 +26,7 @@ public static class AdminAuthEndpoints
         HttpContext context,
         IIdentityAuthenticationService identityService,
         IIdentityTokenValidator tokenValidator,
-        IOptions<DocLibraryCookieOptions> cookieOptions,
+        IOptions<DocthecaCookieOptions> cookieOptions,
         ILoggerFactory loggerFactory)
     {
         if (string.IsNullOrWhiteSpace(request.Username) || string.IsNullOrWhiteSpace(request.Password))
@@ -55,12 +55,12 @@ public static class AdminAuthEndpoints
         HttpContext context,
         IIdentityAuthenticationService identityService,
         IIdentityTokenValidator tokenValidator,
-        IOptions<DocLibraryCookieOptions> cookieOptions,
+        IOptions<DocthecaCookieOptions> cookieOptions,
         ILoggerFactory loggerFactory)
     {
         var options = cookieOptions.Value;
         if (!context.Request.Cookies.TryGetValue(
-                DocLibraryAuthenticationConstants.RefreshCookieName,
+                DocthecaAuthenticationConstants.RefreshCookieName,
                 out var refreshToken)
             || string.IsNullOrWhiteSpace(refreshToken))
         {
@@ -114,11 +114,11 @@ public static class AdminAuthEndpoints
     private static async Task<IResult> LogoutAsync(
         HttpContext context,
         IIdentityAuthenticationService identityService,
-        IOptions<DocLibraryCookieOptions> cookieOptions,
+        IOptions<DocthecaCookieOptions> cookieOptions,
         ILoggerFactory loggerFactory)
     {
         if (context.Request.Cookies.TryGetValue(
-                DocLibraryAuthenticationConstants.RefreshCookieName,
+                DocthecaAuthenticationConstants.RefreshCookieName,
                 out var refreshToken)
             && !string.IsNullOrWhiteSpace(refreshToken))
         {
@@ -165,7 +165,7 @@ public static class AdminAuthEndpoints
         IdentityTokenExchangeResult exchange,
         HttpContext context,
         IIdentityTokenValidator tokenValidator,
-        DocLibraryCookieOptions cookieOptions,
+        DocthecaCookieOptions cookieOptions,
         ILogger logger)
     {
         if (exchange.Status == IdentityExchangeStatus.Rejected)
@@ -224,25 +224,25 @@ public static class AdminAuthEndpoints
     private static void AppendCookies(
         HttpResponse response,
         IdentityTokenExchangeResult exchange,
-        DocLibraryCookieOptions options)
+        DocthecaCookieOptions options)
     {
         response.Cookies.Append(
-            DocLibraryAuthenticationConstants.AccessCookieName,
+            DocthecaAuthenticationConstants.AccessCookieName,
             exchange.AccessToken,
             CreateCookieOptions("/admin", options.CookieSecure, exchange.ExpiresAt));
         response.Cookies.Append(
-            DocLibraryAuthenticationConstants.RefreshCookieName,
+            DocthecaAuthenticationConstants.RefreshCookieName,
             exchange.RefreshToken,
             CreateCookieOptions("/admin/auth", options.CookieSecure));
     }
 
-    private static void ClearCookies(HttpResponse response, DocLibraryCookieOptions options)
+    private static void ClearCookies(HttpResponse response, DocthecaCookieOptions options)
     {
         response.Cookies.Delete(
-            DocLibraryAuthenticationConstants.AccessCookieName,
+            DocthecaAuthenticationConstants.AccessCookieName,
             CreateCookieOptions("/admin", options.CookieSecure));
         response.Cookies.Delete(
-            DocLibraryAuthenticationConstants.RefreshCookieName,
+            DocthecaAuthenticationConstants.RefreshCookieName,
             CreateCookieOptions("/admin/auth", options.CookieSecure));
     }
 

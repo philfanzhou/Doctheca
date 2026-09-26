@@ -45,9 +45,9 @@
 - **浏览器 URL**（`ReplaceImagePathsAsync` + URL resolver）：详情页使用——存量解析生成 1 小时有效期 OSS 预签名 URL；新解析生成代理端点 URL `/admin/document-parses/{parseId}/images/{imageId}/content`
 
 ### FR-06:导出前置校验
-- 文件不存在 → 404 `DOCLIBRARY_FILE_NOT_FOUND`
-- 解析记录不存在 → 404 `DOCLIBRARY_PARSE_NOT_FOUND`
-- 解析状态非 `parsed` → 422 `DOCLIBRARY_FILE_NOT_PARSED` / `DOCLIBRARY_PARSE_NOT_PARSED`
+- 文件不存在 → 404 `DOCTHECA_FILE_NOT_FOUND`
+- 解析记录不存在 → 404 `DOCTHECA_PARSE_NOT_FOUND`
+- 解析状态非 `parsed` → 422 `DOCTHECA_FILE_NOT_PARSED` / `DOCTHECA_PARSE_NOT_PARSED`
 
 ### FR-07:图片下载失败容错
 - 单张图片下载失败（OSS 或 StructaDoc）→ 记 Warning 日志，跳过该张，不阻塞整份导出
@@ -60,8 +60,8 @@
 | AC-01 | 文件级 Markdown 导出返回 ZIP，内含 `.md` 与 `images/` |
 | AC-02 | 文件级 HTML 导出返回自包含 HTML，图片以 Base64 内联 |
 | AC-03 | 解析级导出与文件级导出结果一致（同一 parseId） |
-| AC-04 | 文件不存在返回 404 + `DOCLIBRARY_FILE_NOT_FOUND` |
-| AC-05 | 解析记录不存在返回 404 + `DOCLIBRARY_PARSE_NOT_FOUND` |
+| AC-04 | 文件不存在返回 404 + `DOCTHECA_FILE_NOT_FOUND` |
+| AC-05 | 解析记录不存在返回 404 + `DOCTHECA_PARSE_NOT_FOUND` |
 | AC-06 | 解析未完成返回 422 + 对应错误码 |
 | AC-07 | 单张图片下载失败（OSS 或 StructaDoc）不阻塞导出，记 Warning 日志 |
 | AC-08 | Markdown 导出中图片路径为相对路径 `images/<ImageName>` |

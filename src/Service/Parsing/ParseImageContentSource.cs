@@ -1,9 +1,9 @@
 using Microsoft.Extensions.Logging;
-using Ruoyu.Study.Common.Oss;
-using Ruoyu.Study.DocLibrary.Domain.Models;
-using Ruoyu.Study.DocLibrary.Service.StructaDoc;
+using Doctheca.Common.Oss;
+using Doctheca.Domain.Models;
+using Doctheca.Service.StructaDoc;
 
-namespace Ruoyu.Study.DocLibrary.Service.Parsing;
+namespace Doctheca.Service.Parsing;
 
 /// <summary>
 /// Resolves parse image bytes from the owning storage: legacy parses read from OSS,

@@ -1,4 +1,4 @@
-namespace Ruoyu.Study.DocLibrary.Domain.Models;
+namespace Doctheca.Domain.Models;
 
 public class DocumentParseModel
 {

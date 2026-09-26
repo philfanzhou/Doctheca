@@ -1,10 +1,10 @@
-# DocLibrary 重构审查清单（2026-07）
+# Doctheca 重构审查清单（2026-07）
 
-> 历史快照（2026-07）：文中 `QuestionBankImportServiceTests.cs` 是 DocLibrary 自己的内部集成测试，其后已移除；原 QuestionBank 服务已迁出为外部仓库 Quaestura（ADR-0011）。为保审计记录准确，保留原文件名不改。
+> 历史快照（2026-07）：文中 `QuestionBankImportServiceTests.cs` 是 Doctheca 自己的内部集成测试，其后已移除；原 QuestionBank 服务已迁出为外部仓库 Quaestura（ADR-0011）。为保审计记录准确，保留原文件名不改。
 
 ## 审计范围
 
-- **后端**：`src/services/ruoyu.doclibrary/src/**/*.cs`（排除 obj/、bin/），共 72 个文件
+- **后端**：`src/**/*.cs`（排除 obj/、bin/），共 72 个文件
 - **前端**：`frontend/src/**/*.vue` / `.ts` / `.scss`（排除 node_modules/），共 25 个文件
 - **重点提交**：`7b0dcd10`（前端重设计）、`6fd0e90c`（生命周期修复）、`f4404815`（超时硬编码）
 
@@ -136,11 +136,11 @@
 
 ```bash
 # 后端
-dotnet build src/services/ruoyu.doclibrary/src/Ruoyu.Study.DocLibrary.sln
-dotnet test src/services/ruoyu.doclibrary/src/Ruoyu.Study.DocLibrary.sln
+dotnet build src/Doctheca.sln
+dotnet test src/Doctheca.sln
 
 # 前端
-cd src/services/ruoyu.doclibrary/frontend
+cd frontend
 npm run build
 ```
 

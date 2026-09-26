@@ -1,6 +1,6 @@
-using Ruoyu.Study.DocLibrary.Domain.Models;
+using Doctheca.Domain.Models;
 
-namespace Ruoyu.Study.DocLibrary.Domain.Services;
+namespace Doctheca.Domain.Services;
 
 public interface IDocumentFileService
 {

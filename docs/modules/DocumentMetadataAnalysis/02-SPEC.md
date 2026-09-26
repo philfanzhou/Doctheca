@@ -128,7 +128,7 @@ Response 200:
   }
 }
 
-Response 404: { "success": false, "message": "File not found", "errorCode": "DOCLIBRARY_FILE_NOT_FOUND" }
+Response 404: { "success": false, "message": "File not found", "errorCode": "DOCTHECA_FILE_NOT_FOUND" }
 ```
 
 **DTO 定义** (`DocumentFileEndpoints.cs`):
@@ -151,7 +151,7 @@ public record UpdateMetadataRequest
 ## 3. DocumentMetadataAnalysis 模型
 
 ```csharp
-namespace Ruoyu.Study.DocLibrary.Domain.Models;
+namespace Doctheca.Domain.Models;
 
 /// <summary>
 /// LLM metadata analysis result. Fields are null if LLM could not determine them.
@@ -309,7 +309,7 @@ AnalyzeMetadataIfMissingAsync(documentFileId, markdownContent, scopeProvider, ct
 
 ### 7.1 当前测试现状
 
-**当前无单元测试**。`src/Tests/Ruoyu.Study.DocLibrary.Tests/` 目录下不存在 `DocumentAnalysisServiceTests.cs`,元分析相关功能目前零测试覆盖。
+**当前无单元测试**。`src/Tests/Doctheca.Tests/` 目录下不存在 `DocumentAnalysisServiceTests.cs`,元分析相关功能目前零测试覆盖。
 
 ### 7.2 建议单元测试方向 (UT)
 

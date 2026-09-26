@@ -1,7 +1,7 @@
 import axios, { AxiosError, type InternalAxiosRequestConfig } from 'axios'
 
 interface RetriableRequestConfig extends InternalAxiosRequestConfig {
-  docLibraryRetry?: boolean
+  docthecaRetry?: boolean
 }
 
 interface AuthFailureHandlers {
@@ -54,13 +54,13 @@ httpClient.interceptors.response.use(
     if (
       status !== 401 ||
       !config ||
-      config.docLibraryRetry ||
+      config.docthecaRetry ||
       isAuthRequest(config)
     ) {
       return Promise.reject(error)
     }
 
-    config.docLibraryRetry = true
+    config.docthecaRetry = true
     try {
       await refreshAuthentication()
       return await httpClient.request(config)

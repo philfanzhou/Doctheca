@@ -19,11 +19,11 @@
 
 ```bash
 # 构建
-dotnet build Ruoyu.Study.DocLibrary.sln --configuration Release
+dotnet build Doctheca.sln --configuration Release
 
 # 测试（本模块）
-dotnet test src/Tests/Ruoyu.Study.DocLibrary.Tests --filter "FullyQualifiedName~DocumentExport"
+dotnet test src/Tests/Doctheca.Tests --filter "FullyQualifiedName~DocumentExport"
 
 # 测试（全部）
-dotnet test src/Tests/Ruoyu.Study.DocLibrary.Tests
+dotnet test src/Tests/Doctheca.Tests
 ```

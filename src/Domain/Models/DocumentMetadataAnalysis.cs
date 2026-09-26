@@ -1,4 +1,4 @@
-namespace Ruoyu.Study.DocLibrary.Domain.Models;
+namespace Doctheca.Domain.Models;
 
 /// <summary>
 /// LLM metadata analysis result. Fields are null if LLM could not determine them.

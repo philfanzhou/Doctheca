@@ -3,14 +3,14 @@
 ## 本功能在项目中的目录与文件结构
 
 ```
-src/services/ruoyu.doclibrary/
+
 ├── src/
 │   ├── Domain/
 │   │   ├── Models/
 │   │   │   ├── DocumentMetadataAnalysis.cs        # LLM 分析结果 record (Subject/Grade/Year)
 │   │   │   ├── DocumentAnalysisOptions.cs          # LLM 配置选项 (继承 AiClientOptions)
 │   │   │   ├── DocumentFileModel.cs                # 文件模型 (含 Subject/Grade/Year)
-│   │   │   └── DocLibraryConstants.cs              # 学科/年级常量 (ValidSubjects/ValidGrades,本功能未强制校验)
+│   │   │   └── DocthecaConstants.cs              # 学科/年级常量 (ValidSubjects/ValidGrades,本功能未强制校验)
 │   │   ├── Services/
 │   │   │   ├── IDocumentAnalysisService.cs         # LLM 分析接口
 │   │   │   ├── IDocumentFileService.cs             # 文件服务接口(含 UpdateMetadataAsync)
@@ -31,7 +31,7 @@ src/services/ruoyu.doclibrary/
 │   │       └── DocumentFileEndpoints.cs             # PUT /{id}/metadata 端点 + UpdateMetadataRequest record
 │   ├── Database/
 │   │   ├── DatabaseInitializer.cs                   # SQL-based 初始化 (CREATE TABLE IF NOT EXISTS / ADD COLUMN IF NOT EXISTS)
-│   │   ├── DocLibraryDbContext.cs                   # EF Core DbContext (Fluent API)
+│   │   ├── DocthecaDbContext.cs                   # EF Core DbContext (Fluent API)
 │   │   └── Entities/
 │   │       └── DocumentFileEntity.cs                 # 含 Subject/Grade/Year 列
 │   └── Host/
@@ -74,7 +74,7 @@ Content-Type: application/json
 
 Request: { "subject": "English", "grade": "G10", "year": "2024" }  // 全部可选
 Response 200: { "id": "...", "fileName": "...", "subject": "English", "grade": "G10", "year": "2024", ... }
-Response 404: { "success": false, "message": "File not found", "errorCode": "DOCLIBRARY_FILE_NOT_FOUND" }
+Response 404: { "success": false, "message": "File not found", "errorCode": "DOCTHECA_FILE_NOT_FOUND" }
 ```
 
 ## 数据流
@@ -108,7 +108,7 @@ Response 404: { "success": false, "message": "File not found", "errorCode": "DOC
 - **初始化**：`InitializeAsync`(启动时调用 + 首次 `AnalyzeMetadataAsync` 时懒加载)。解析 `ContextLength` 配置(支持 `"128K"` / `"1M"` / 纯数字),若未配置则调用 `TryFetchContextLengthAsync`(GET `/v1/models/{Model}`)动态获取。根据 context 计算内部字段 `_chunkSize`(`(contextLength - 200 - _maxTokensValue) × 0.8 × 1.5`,cap `2500`)与 `_maxTokensValue`(默认 `4096`)。无 context 时禁用 LLM(`_chunkSize = _maxTokensValue = 0`)。服务不再修改注入的 `DocumentAnalysisOptions` POCO。
 - **输入截断**：取 Markdown 前 2000 字符(`textPreview[..2000]`)。注: `StructaDocParseWorker.AnalyzeMetadataIfMissingAsync` 在调用前已截断一次,此处为冗余保护。
 - **请求体**：`BuildRequestBody` 组装 — system prompt `"直接返回JSON，不要解释。"` + user prompt(`DocumentAnalysisPromptBuilder.BuildMetadataAnalysisPrompt`)、`max_tokens = _maxTokensValue`、`temperature = 0.1`(只读属性)、`stream = true`。
-- **流式 SSE 调用**：通过共享的 `OpenAiCompatibleClient.CallStreamingAsync` (`Ruoyu.Study.Common.Ai` 命名空间,底层 `OpenAiSseReader`),per-attempt timeout + SSE idle timeout(`StreamIdleTimeoutSeconds` 默认 60s)由客户端保障。
+- **流式 SSE 调用**：通过共享的 `OpenAiCompatibleClient.CallStreamingAsync` (`Doctheca.Ai` 命名空间,底层 `OpenAiSseReader`),per-attempt timeout + SSE idle timeout(`StreamIdleTimeoutSeconds` 默认 60s)由客户端保障。
 - **响应解析**：`DocumentAnalysisResponseParser.ParseMetadataAnalysis` — `DocumentAnalysisResponseParser.ExtractJson` 去 ```json``` / ```` ``` 包装;`JsonSerializer.Deserialize` 使用 `SnakeCaseLower` + `WhenWritingNull`;空字符串/空白/`"null"` 字面量一律视为 null。
 - **失败处理**：任何异常 catch 后 `LogWarning` 并返回 null,Worker 层按 best-effort 处理。
 
@@ -135,9 +135,9 @@ Response 404: { "success": false, "message": "File not found", "errorCode": "DOC
 
 | 接口 | 提供能力 | 所在模块 |
 |------|---------|---------|
-| `IDocumentAnalysisService` | LLM 元数据分析 | `Ruoyu.Study.DocLibrary.Service` |
-| `ISearchIndexService` | OpenSearch 元数据同步 | `Ruoyu.Study.DocLibrary.Service` |
-| `IDocumentFileService` | 文件元数据 CRUD | `Ruoyu.Study.DocLibrary.Domain.Services` |
+| `IDocumentAnalysisService` | LLM 元数据分析 | `Doctheca.Service` |
+| `ISearchIndexService` | OpenSearch 元数据同步 | `Doctheca.Service` |
+| `IDocumentFileService` | 文件元数据 CRUD | `Doctheca.Domain.Services` |
 
 ## DI 注册
 

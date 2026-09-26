@@ -1,10 +1,10 @@
-# 04-TASKS — DocLibrary 管理员认证任务
+# 04-TASKS — Doctheca 管理员认证任务
 
 | 编号 | 任务 | 验收结果 |
 |------|------|----------|
 | AUTH-01 | 增加 Identity 认证客户端、显式 Token 验证器和配置模型 | 登录/刷新 Token 在设置 Cookie 前完成完整验证 |
 | AUTH-02 | 增加 login、refresh、logout、session 端点 | HTTP 契约符合 02-SPEC |
-| AUTH-03 | 配置 JwtBearer Cookie 回退和 `DocLibraryAdmin` 策略 | `/admin/*` 满足 401/403 矩阵 |
+| AUTH-03 | 配置 JwtBearer Cookie 回退和 `DocthecaAdmin` 策略 | `/admin/*` 满足 401/403 矩阵 |
 | AUTH-04 | 为现有浏览器管理 route group 应用管理员策略 | 所有管理读写端点均受保护 |
 | AUTH-05 | 移除无调用方的 Quaestura（原 QuestionBank） internal API | 无 `/internal/question-bank/*`，无导入状态写回 |
 | AUTH-06 | 移除 Quaestura（原 QuestionBank） 服务密钥策略与配置 | `start.sh` 和 `appsettings.json` 无 `QuestionBankKey` |

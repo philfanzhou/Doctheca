@@ -1,4 +1,4 @@
-namespace Ruoyu.Study.DocLibrary.Host.Authentication;
+namespace Doctheca.Host.Authentication;
 
 public interface IIdentityTokenValidator
 {

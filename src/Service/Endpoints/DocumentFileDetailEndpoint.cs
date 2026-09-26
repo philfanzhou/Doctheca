@@ -6,11 +6,11 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Logging;
-using Ruoyu.Study.Common.Oss;
-using Ruoyu.Study.DocLibrary.Domain.Models;
-using Ruoyu.Study.DocLibrary.Domain.Services;
+using Doctheca.Common.Oss;
+using Doctheca.Domain.Models;
+using Doctheca.Domain.Services;
 
-namespace Ruoyu.Study.DocLibrary.Service;
+namespace Doctheca.Service;
 
 internal static class DocumentFileDetailEndpoint
 {
@@ -30,7 +30,7 @@ internal static class DocumentFileDetailEndpoint
 
         var file = await fileService.GetByIdAsync(id);
         if (file == null)
-            return Results.NotFound(new { success = false, message = "File not found", errorCode = "DOCLIBRARY_FILE_NOT_FOUND" });
+            return Results.NotFound(new { success = false, message = "File not found", errorCode = "DOCTHECA_FILE_NOT_FOUND" });
 
         var allParses = await parseService.GetByFileIdAsync(id);
         var parseResults = new List<object>();
@@ -86,7 +86,7 @@ internal static class DocumentFileDetailEndpoint
 
     /// <summary>
     /// Legacy parses resolve images to presigned OSS URLs; StructaDoc-backed parses
-    /// resolve to the DocLibrary image proxy endpoint (ADR-0009).
+    /// resolve to the Doctheca image proxy endpoint (ADR-0009).
     /// </summary>
     private static Func<DocumentParseImageModel, Task<string?>> BuildImageUrlResolver(
         DocumentParseModel parse,

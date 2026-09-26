@@ -7,13 +7,13 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Logging;
-using Ruoyu.Study.Common.Oss;
-using Ruoyu.Study.DocLibrary.Domain.Models;
-using Ruoyu.Study.DocLibrary.Domain.Repositories;
-using Ruoyu.Study.DocLibrary.Domain.Services;
-using Ruoyu.Study.DocLibrary.Service.StructaDoc;
+using Doctheca.Common.Oss;
+using Doctheca.Domain.Models;
+using Doctheca.Domain.Repositories;
+using Doctheca.Domain.Services;
+using Doctheca.Service.StructaDoc;
 
-namespace Ruoyu.Study.DocLibrary.Service;
+namespace Doctheca.Service;
 
 internal static class DocumentFileDeleteEndpoint
 {
@@ -35,7 +35,7 @@ internal static class DocumentFileDeleteEndpoint
 
         var file = await fileService.GetByIdAsync(id);
         if (file == null)
-            return Results.NotFound(new { success = false, message = "File not found", errorCode = "DOCLIBRARY_FILE_NOT_FOUND" });
+            return Results.NotFound(new { success = false, message = "File not found", errorCode = "DOCTHECA_FILE_NOT_FOUND" });
 
         // Step 1: Collect legacy OSS paths to clean up. StructaDoc-backed parses store asset IDs
         // (not OSS paths) and their remote artifacts are owned by StructaDoc (ADR-0009).

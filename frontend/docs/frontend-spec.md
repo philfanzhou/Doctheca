@@ -1,11 +1,11 @@
-# DocLibrary Admin 前端规格
+# Doctheca Admin 前端规格
 
 ## 1. 概述
 
-DocLibrary Admin 是文档库的管理后台前端,供本地管理员上传文档、触发解析（StructaDoc 管线，ADR-0009）、查看解析结果、测试检索功能。
+Doctheca Admin 是文档库的管理后台前端,供本地管理员上传文档、触发解析（StructaDoc 管线，ADR-0009）、查看解析结果、测试检索功能。
 
 - 技术栈:Vue 3.5 + TypeScript + Vite + Element Plus(表单/分页控件)+ 手写 SCSS design-token 系统(展示层组件)
-- 部署:由 DocLibrary 后端 Host 静态托管(`wwwroot/`),与后端同源,无需独立部署
+- 部署:由 Doctheca 后端 Host 静态托管(`wwwroot/`),与后端同源,无需独立部署
 - 访问:HTTP `:5012`
 
 ## 2. 依赖策略
@@ -33,7 +33,7 @@ DocLibrary Admin 是文档库的管理后台前端,供本地管理员上传文�
 
 ## 3. 访问控制
 
-DocLibrary 管理后台使用 SignaCore bootstrap 管理员账户登录：
+Doctheca 管理后台使用 SignaCore bootstrap 管理员账户登录：
 
 - 应用启动先调用 `GET /admin/auth/session`；有效管理员会话加载管理界面，否则显示登录页。
 - 登录页调用 `POST /admin/auth/login`，不预填或硬编码管理员用户名/密码。
@@ -141,7 +141,7 @@ DocLibrary 管理后台使用 SignaCore bootstrap 管理员账户登录：
 4. `./style.css` — 排版辅助类(`.page-header` / `.page-title` / `.page-subtitle`)
 
 `app.scss` 不再包含全局元素 reset 或 ID 选择器:
-- reset 限定在 `.doclibrary-admin *` 作用域内
+- reset 限定在 `.doctheca-admin *` 作用域内
 - `#app` / `#view` / `#toast-root` 改为 `.app` / `.view` / `.toast-root`
 - 元素选择器迁移到对应 class,避免污染 Element Plus 默认样式
 
@@ -256,14 +256,14 @@ DocLibrary 管理后台使用 SignaCore bootstrap 管理员账户登录：
   - `DocManagePage.vue`(365 行)拆分为 `DocManagePage/` 目录(DocManagePage.vue / FileUploadZone.vue / FileListTable.vue / useDocManage.ts)
   - `services/docApi.ts`(252 行)按领域拆分为 `types.ts` / `documentApi.ts` / `parseApi.ts` / `searchApi.ts` / `exportApi.ts` / `error.ts`,`docApi.ts` 保留为兼容 facade
 - **样式污染整改**:
-  - `* { ... }` reset 限定在 `.doclibrary-admin *`
+  - `* { ... }` reset 限定在 `.doctheca-admin *`
   - `#app` / `#view` / `#toast-root` 改为 `.app` / `.view` / `.toast-root`
   - 同步更新 `App.vue` / `index.html` / `AppToast.vue`
 - **业务逻辑零改动**:API 端点/参数/校验/轮询/确认框完全等价
 
 ### 2026-07-20: 高保真还原样稿重设计
 
-- **输入**:`prototype/admin-console-redesign.html`(样稿,DocLibrary 部分)
+- **输入**:`prototype/admin-console-redesign.html`(样稿,Doctheca 部分)
 - **输出**:5 个视图(OverviewPage 新增 / DocManagePage 重写 / DocDetailPage 新增 / ParseResultsPage 重写 / SearchPage 重写)+ 8 个组件(Sidebar / Topbar / AppDrawer / AppModal / AppToast / ChartLine / ChartDonut / StatCard / StatusStrip)+ 3 个 composables(useToast / useCountUp)+ 1 个 icons 工具
 - **样式**:`tokens.scss`(CSS 变量)+ `app.scss`(组件类库)+ `element-variables.scss`(EP 主色 `#4F46E5`)+ `style.css`(排版 helper)
 - **路由**:Hash 路由(4 主页 + detail 子页),provide/inject 跨层级通信

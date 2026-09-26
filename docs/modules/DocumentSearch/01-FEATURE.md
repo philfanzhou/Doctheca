@@ -12,7 +12,7 @@
 
 ## 背景
 
-DocLibrary 文档解析采用 StructaDoc 管线（ADR-0009，存量数据为历史 MinerU 产物），数据表为 `document_files` / `document_parses` / `document_parse_blocks` / `document_parse_images`。搜索功能基于解析产物的版面块（blocks），每个 block 作为一个 OpenSearch 文档，索引字段来自 `document_parse_blocks` 表与 `document_files` 表的元数据。
+Doctheca 文档解析采用 StructaDoc 管线（ADR-0009，存量数据为历史 MinerU 产物），数据表为 `document_files` / `document_parses` / `document_parse_blocks` / `document_parse_images`。搜索功能基于解析产物的版面块（blocks），每个 block 作为一个 OpenSearch 文档，索引字段来自 `document_parse_blocks` 表与 `document_files` 表的元数据。
 
 索引与搜索共享同一套 OpenSearch mapping（`BuildIndexBody`），保证写入字段与查询字段一致。索引操作均为 best-effort：失败仅记 Warning 日志，不阻塞解析/删除主流程。搜索在 OpenSearch 不可用时降级为空结果。
 
@@ -77,8 +77,8 @@ DocLibrary 文档解析采用 StructaDoc 管线（ADR-0009，存量数据为历�
 - OpenSearch 不可用或查询异常时，`SearchDomainService` 返回空结果并记录 LogWarning，不中断请求。
 
 ### FR-09：搜索参数校验
-- 查询词为空返回 HTTP 400（`DOCLIBRARY_QUERY_REQUIRED`）。
-- 查询词超过 200 字符返回 HTTP 400（`DOCLIBRARY_QUERY_TOO_LONG`）。
+- 查询词为空返回 HTTP 400（`DOCTHECA_QUERY_REQUIRED`）。
+- 查询词超过 200 字符返回 HTTP 400（`DOCTHECA_QUERY_TOO_LONG`）。
 - `page_size` 默认 20，最小 1，最大 100（超过 100 静默截断）。
 
 ### FR-10：第 2 代 — 扩展 V1 endpoint 支持 minerU 字段过滤
@@ -107,11 +107,11 @@ DocLibrary 文档解析采用 StructaDoc 管线（ADR-0009，存量数据为历�
 - `[说明] minerU v1 block 真实 schema 在本环境无法在线校验（github.com / pypi.org / opendatalab.github.io 均被网关拦截）。首版以项目代码实际读取路径（`DocumentParseBlockService.ParseBlock`）+ MinerU 公开枚举共识为准；其他 minerU 字段（`chars`/`position`/`layout_width`/`images`/`table_html` 等）以 `block_data` jsonb 入库，管理界面通过现有 `GET /admin/document-files/{id}` 查看，延至 facet 需求明确后再追加。`
 
 ### FR-13：第 2 代 — 管理界面 block 检索入口（演进 SearchPage.vue）
-- 在 doclibrary **自带前端**（`src/services/ruoyu.doclibrary/frontend/`）**改造**现有 `SearchPage.vue`，新增"高级筛选"抽屉（minerU 字段过滤）+ 结果行展开显示 `blockData`/`bbox`/`score`。**不新增**平行 `BlockSearchPage.vue` 页。
+- 在 doctheca **自带前端**（`frontend/`）**改造**现有 `SearchPage.vue`，新增"高级筛选"抽屉（minerU 字段过滤）+ 结果行展开显示 `blockData`/`bbox`/`score`。**不新增**平行 `BlockSearchPage.vue` 页。
 - 查询面板（V1 关键词输入框保留，追加）：blockType 下拉（基于历史数据聚合候选值）、pageNumber 数字输入、parseId / documentFileId 文本输入、hasImage 复选框。
 - 结果表格列（V1 列保留，追加）：块类型 / 页码 / 抽取文本（前 80 字） / 详情按钮（弹窗展示 `blockData` 格式化 JSON + bbox + score）。
 - 选中行可跳转 `ParseResultsPage.vue`（已存在）定位到对应 parse。
-- **不动 Ruoyu.Admin**（Ruoyu.Admin 当前无 doclibrary 相关视图，且无 BFF 转发；迁移至 Ruoyu.Admin 属于独立大工程，本模块文档不包圆）。
+- **不动 Ruoyu.Admin**（Ruoyu.Admin 当前无 doctheca 相关视图，且无 BFF 转发；迁移至 Ruoyu.Admin 属于独立大工程，本模块文档不包圆）。
 
 ## 验收条件
 
@@ -165,7 +165,7 @@ DocLibrary 文档解析采用 StructaDoc 管线（ADR-0009，存量数据为历�
 | NFR-09 | 带 minerU filter 的查询默认单页上限 50（每 block 携带完整 `blockData` JSONB，避免响应体过大）；超出截断；V1 纯 keyword 路径保持 100 |
 | NFR-10 | 第 2 代检索链路 P95 < 500ms（携带 `blockData`，放宽 V1 的 200ms 目标；后续通过列投影与 gzip 压缩收敛） |
 | NFR-11 | `blockData` 全文以 `_meta.block_data`（`enabled:false`）存 `_source`，不进入全文索引，避免写入放大 |
-| NFR-12 | 第 2 代演进置于 doclibrary 自带前端（改造 `SearchPage.vue`），不扩大 Ruoyu.Admin 的 BFF 边界（本次范围控制） |
+| NFR-12 | 第 2 代演进置于 doctheca 自带前端（改造 `SearchPage.vue`），不扩大 Ruoyu.Admin 的 BFF 边界（本次范围控制） |
 
 ## 数据来源
 
@@ -198,7 +198,7 @@ DocLibrary 文档解析采用 StructaDoc 管线（ADR-0009，存量数据为历�
 | `SearchFilterModel`（`src/Domain/Models/` 扩展） | 追加 `BlockType` / `PageNumber` / `ParseId` / `DocumentFileId` / `HasImage` 过滤条件 | HTTP 查询入参契约 |
 | `DocumentSearchEndpoints`（`src/Service/Endpoints/` 扩展） | `GET /admin/documents/search` 端点追加可选 filter 入参（FR-10）；参数为 null 时行为等同 V1 | 管理界面 block 检索入口（同一页面） |
 | `SearchDomainService`（扩展） | `ExactSearchAsync` 内追加 minerU filter 分支并解析 minerU 回挂字段；**不新增** `BlockXxx` 方法 | HTTP 处理委托 |
-| `SearchPage.vue`（doclibrary 自带前端 扩展） | 现有搜索页加"高级筛选"抽屉 + 结果行展开矿工 U 详情；**不新增**平行 `BlockSearchPage.vue` | 前端管理界面 |
+| `SearchPage.vue`（doctheca 自带前端 扩展） | 现有搜索页加"高级筛选"抽屉 + 结果行展开矿工 U 详情；**不新增**平行 `BlockSearchPage.vue` | 前端管理界面 |
 
 ## 文档索引
 

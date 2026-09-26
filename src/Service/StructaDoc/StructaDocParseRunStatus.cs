@@ -1,4 +1,4 @@
-namespace Ruoyu.Study.DocLibrary.Service.StructaDoc;
+namespace Doctheca.Service.StructaDoc;
 
 /// <summary>
 /// StructaDoc Parse Run status values. Only <see cref="IsTerminal"/> statuses end polling.

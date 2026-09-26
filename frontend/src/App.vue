@@ -163,13 +163,13 @@ provide('backToDocs', backToDocs)
 <template>
   <div
     v-if="sessionStatus === 'checking'"
-    class="session-loading doclibrary-admin"
+    class="session-loading doctheca-admin"
     role="status"
   >
     正在检查登录状态…
   </div>
   <LoginPage v-else-if="sessionStatus === 'anonymous'" />
-  <div v-else class="admin-shell doclibrary-admin">
+  <div v-else class="admin-shell doctheca-admin">
     <Sidebar
       ref="sidebarComp"
       :active="currentNavKey"

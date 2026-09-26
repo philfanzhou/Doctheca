@@ -1,4 +1,4 @@
-# 06-CONVENTIONS — DocLibrary 管理员认证约定
+# 06-CONVENTIONS — Doctheca 管理员认证约定
 
 ## 路径
 
@@ -12,9 +12,9 @@
 
 | 名称 | 值 |
 |------|----|
-| 管理员授权策略 | `DocLibraryAdmin` |
-| Access Cookie | `doclibraryAccessToken` |
-| Refresh Cookie | `doclibraryRefreshToken` |
+| 管理员授权策略 | `DocthecaAdmin` |
+| Access Cookie | `docthecaAccessToken` |
+| Refresh Cookie | `docthecaRefreshToken` |
 | Authority 配置 | `IdentityService:Authority` |
 | Issuer 配置 | `IdentityService:Issuer` |
 | Audience 配置 | `IdentityService:Audience` |
@@ -26,7 +26,7 @@
 
 - 对外认证错误使用英文、简洁、稳定的消息。
 - 401 表示无有效身份；403 表示身份有效但没有管理员角色。
-- 错误码使用 `DOCLIBRARY_` 前缀。
+- 错误码使用 `DOCTHECA_` 前缀。
 - 不记录密码、Access Token、Refresh Token 或 Cookie。
 - Identity 失败只记录 HTTP 状态、关联 ID 和通用失败类别。
 

@@ -3,11 +3,11 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using Ruoyu.Study.Common.Ai;
-using Ruoyu.Study.DocLibrary.Domain.Models;
-using Ruoyu.Study.DocLibrary.Domain.Repositories;
+using Doctheca.Ai;
+using Doctheca.Domain.Models;
+using Doctheca.Domain.Repositories;
 
-namespace Ruoyu.Study.DocLibrary.Service;
+namespace Doctheca.Service;
 
 /// <summary>
 /// LLM-based document metadata analysis service implementation.

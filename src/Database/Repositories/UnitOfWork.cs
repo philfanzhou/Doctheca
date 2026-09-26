@@ -1,13 +1,13 @@
 using System.Threading.Tasks;
-using Ruoyu.Study.DocLibrary.Domain.Repositories;
+using Doctheca.Domain.Repositories;
 
-namespace Ruoyu.Study.DocLibrary.Database.Repositories;
+namespace Doctheca.Database.Repositories;
 
 public class UnitOfWork : IUnitOfWork
 {
-    private readonly DocLibraryDbContext _dbContext;
+    private readonly DocthecaDbContext _dbContext;
 
-    public UnitOfWork(DocLibraryDbContext dbContext)
+    public UnitOfWork(DocthecaDbContext dbContext)
     {
         _dbContext = dbContext;
     }

@@ -2,14 +2,14 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using Ruoyu.Study.Common.Oss;
-using Ruoyu.Study.DocLibrary.Domain.Models;
-using Ruoyu.Study.DocLibrary.Domain.Repositories;
-using Ruoyu.Study.DocLibrary.Domain.Services;
-using Ruoyu.Study.DocLibrary.Service.Parsing;
-using Ruoyu.Study.DocLibrary.Service.StructaDoc;
+using Doctheca.Common.Oss;
+using Doctheca.Domain.Models;
+using Doctheca.Domain.Repositories;
+using Doctheca.Domain.Services;
+using Doctheca.Service.Parsing;
+using Doctheca.Service.StructaDoc;
 
-namespace Ruoyu.Study.DocLibrary.Service;
+namespace Doctheca.Service;
 
 /// <summary>
 /// Background worker driving the StructaDoc parse pipeline (ADR-0009).

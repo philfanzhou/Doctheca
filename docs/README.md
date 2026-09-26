@@ -1,6 +1,6 @@
-# DocLibrary 文档
+# Doctheca 文档
 
-ruoyu.doclibrary 是文档检索服务（纯 HTTP，端口 5012），负责文档上传、解析、管理与精确搜索能力。gRPC 已移除。
+doctheca 是文档检索服务（纯 HTTP，端口 5012），负责文档上传、解析、管理与精确搜索能力。gRPC 已移除。
 
 ## 入口
 

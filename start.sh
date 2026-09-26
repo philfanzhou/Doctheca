@@ -1,20 +1,21 @@
 #!/bin/bash
 set -e
 
-IMAGE_NAME="ruoyu.doclibrary:20260619"
-CONTAINER_NAME="ruoyu-doclibrary"
+IMAGE_TAG="${IMAGE_TAG:-latest}"
+IMAGE_NAME="doctheca:${IMAGE_TAG}"
+CONTAINER_NAME="doctheca"
 HTTP_PORT="5012"
 
 CONSUL_HTTP_ADDR="${CONSUL_HTTP_ADDR:-192.168.100.10:8500}"
 CONSUL_TOKEN="${CONSUL_TOKEN:-}"
 
-DOCLIBRARY_COOKIE_SECURE="${DOCLIBRARY_COOKIE_SECURE:-false}"
-: "${IDENTITY_APP_ID:?IDENTITY_APP_ID must be the DocLibrary SignaCore AppId}"
-: "${IDENTITY_APP_SECRET:?IDENTITY_APP_SECRET must be the DocLibrary SignaCore AppSecret}"
+DOCTHECA_COOKIE_SECURE="${DOCTHECA_COOKIE_SECURE:-false}"
+: "${IDENTITY_APP_ID:?IDENTITY_APP_ID must be the Doctheca SignaCore AppId}"
+: "${IDENTITY_APP_SECRET:?IDENTITY_APP_SECRET must be the Doctheca SignaCore AppSecret}"
 
-OPENSEARCH_INDEX="doclibrary-segments"
+OPENSEARCH_INDEX="doctheca-segments"
 
-DB_NAME="ruoyu_study_doclibrary"
+DB_NAME="doctheca"
 
 LLM_API_KEY="${LLM_API_KEY:-}"
 LLM_BASE_URL="${LLM_BASE_URL:-https://api.siliconflow.cn/v1}"
@@ -42,7 +43,7 @@ docker run -d \
   -e CONSUL_TOKEN="${CONSUL_TOKEN}" \
   -e Endpoints__Http="${HTTP_PORT}" \
   -e Database__Name="${DB_NAME}" \
-  -e Authentication__CookieSecure="${DOCLIBRARY_COOKIE_SECURE}" \
+  -e Authentication__CookieSecure="${DOCTHECA_COOKIE_SECURE}" \
   -e IdentityService__AppId="${IDENTITY_APP_ID}" \
   -e IdentityService__AppSecret="${IDENTITY_APP_SECRET}" \
   -e OpenSearch__IndexName="${OPENSEARCH_INDEX}" \

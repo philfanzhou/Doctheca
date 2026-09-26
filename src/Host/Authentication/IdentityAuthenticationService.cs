@@ -3,7 +3,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.Extensions.Options;
 
-namespace Ruoyu.Study.DocLibrary.Host.Authentication;
+namespace Doctheca.Host.Authentication;
 
 public sealed class IdentityAuthenticationService : IIdentityAuthenticationService
 {
@@ -66,7 +66,7 @@ public sealed class IdentityAuthenticationService : IIdentityAuthenticationServi
 
             if (response.StatusCode == HttpStatusCode.Unauthorized)
             {
-                _logger.LogWarning("Identity rejected the DocLibrary application credentials");
+                _logger.LogWarning("Identity rejected the Doctheca application credentials");
                 return new IdentityTokenExchangeResult(IdentityExchangeStatus.Unavailable);
             }
 

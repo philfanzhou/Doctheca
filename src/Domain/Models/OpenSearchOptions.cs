@@ -1,7 +1,7 @@
-namespace Ruoyu.Study.DocLibrary.Domain.Models;
+namespace Doctheca.Domain.Models;
 
 public class OpenSearchOptions
 {
     public string Url { get; set; } = "http://localhost:9200";
-    public string IndexName { get; set; } = "doclibrary-segments";
+    public string IndexName { get; set; } = "doctheca-segments";
 }

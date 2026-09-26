@@ -1,4 +1,4 @@
-# ADR-001：DocLibrary 管理前端引入 Element Plus 并替换纯手写 CSS
+# ADR-001：Doctheca 管理前端引入 Element Plus 并替换纯手写 CSS
 
 > **迁出说明（2026-09-24）**：本文中的 `src/admin_portal` / `admin_portal` 路径已随 Admin Portal 迁出为外部仓库 [Ruoyu.Admin](https://github.com/philfanzhou/Ruoyu.Admin)（[ADR-0010](../../../../../docs/adr/0010-extract-ruoyu-admin.md)），在本仓库已不存在。本文保留原始描述作为历史记录，不作为当前运行手册使用。
 
@@ -9,18 +9,18 @@
 
 ## 背景
 
-DocLibrary 管理前端最初使用 914 行纯手写 `style.css` + 三页面手写组件类（`.btn` / `.card` / `.data-table` 等），仅依赖 `vue + axios`。该决策（记录在 `frontend/docs/frontend-spec.md` §2）在当时合理——组件最少、能跑。
+Doctheca 管理前端最初使用 914 行纯手写 `style.css` + 三页面手写组件类（`.btn` / `.card` / `.data-table` 等），仅依赖 `vue + axios`。该决策（记录在 `frontend/docs/frontend-spec.md` §2）在当时合理——组件最少、能跑。
 
 经过 minerU 第 2 代检索能力上线（SearchPage.vue 高级筛选 + 展开 + 响应式多列），我们确认纯手写方案在以下维度**达不到"真正产品级"**：
 
 1. **交互精致度**：loading skeleton / 行 hover 过渡 / 表单校验联动 / Drawer / 空态插图等微动效需要大量手写 JS + CSS transition，且每次页面复制都会**产生微妙不一致**（"半成品 demo 感"的主要来源）。
 2. **跨端一致性**：手机 + PC + 平板三档响应式，手写栅格在每个页面都要重新排，无法保证间距、字号、断点一致。
 3. **缺陷成本**：每次加新组件都要补齐 hover / focus / active / disabled / loading / 空态六种稳定态，手写组件类的稳定态遗漏是 bug 温床。
-4. **项目趋势**：admin_portal、teacher_portel 已在使用 Element Plus；doclibrary 是门户管理员高频入口，视觉/交互**若能与既有门户统一**将降低用户认知成本。
+4. **项目趋势**：admin_portal、teacher_portel 已在使用 Element Plus；doctheca 是门户管理员高频入口，视觉/交互**若能与既有门户统一**将降低用户认知成本。
 
 ## 决策
 
-**引入 Element Plus 作为 doclibrary 管理前端唯一 UI 组件库，迁移三页面（DocManagePage / ParseResultsPage / SearchPage）+ App.vue 布局壳，同时把现有 CSS 变量主题体系转为 Element Plus SCSS design token 源。**
+**引入 Element Plus 作为 doctheca 管理前端唯一 UI 组件库，迁移三页面（DocManagePage / ParseResultsPage / SearchPage）+ App.vue 布局壳，同时把现有 CSS 变量主题体系转为 Element Plus SCSS design token 源。**
 
 ### 动机优先级
 

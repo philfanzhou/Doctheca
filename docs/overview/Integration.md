@@ -12,13 +12,13 @@
 | OpenSearch | HTTP | 出 | block 索引和查询 | 共享 Consul 配置 |
 | LLM（OpenAI 兼容，可选） | HTTP | 出 | 元数据分析 | 私有 ApiKey |
 
-当前不存在 Quaestura → DocLibrary 集成。后续出现真实调用需求时，必须独立
+当前不存在 Quaestura → Doctheca 集成。后续出现真实调用需求时，必须独立
 定义数据契约、认证方式和部署配置，不复用管理员 Cookie，也不预留未使用接口。
 
 ## 管理 API
 
 除 `/admin/auth/login`、`/admin/auth/refresh`、`/admin/auth/logout` 外，所有
-`/admin/*` 端点要求 `DocLibraryAdmin` 策略。完整认证契约见
+`/admin/*` 端点要求 `DocthecaAdmin` 策略。完整认证契约见
 [AdminAuthentication](../modules/AdminAuthentication/01-FEATURE.md)。
 
 主要管理端点：

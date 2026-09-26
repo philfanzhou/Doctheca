@@ -1,6 +1,6 @@
-# DocLibrary Admin Frontend
+# Doctheca Admin Frontend
 
-这是 DocLibrary 文档检索服务的管理后台前端。
+这是 Doctheca 文档检索服务的管理后台前端。
 
 ## 开发
 

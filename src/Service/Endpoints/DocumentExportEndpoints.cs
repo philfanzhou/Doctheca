@@ -5,24 +5,24 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
-using Ruoyu.Study.DocLibrary.Domain.Models;
-using Ruoyu.Study.DocLibrary.Domain.Services;
-using Ruoyu.Study.DocLibrary.Service.Parsing;
+using Doctheca.Domain.Models;
+using Doctheca.Domain.Services;
+using Doctheca.Service.Parsing;
 
-namespace Ruoyu.Study.DocLibrary.Service;
+namespace Doctheca.Service;
 
 public static class DocumentExportEndpoints
 {
     public static WebApplication MapDocumentExportEndpoints(this WebApplication app)
     {
         var fileGroup = app.MapGroup("/admin/document-files")
-            .RequireAuthorization(DocLibraryAuthorizationPolicies.Admin);
+            .RequireAuthorization(DocthecaAuthorizationPolicies.Admin);
 
         fileGroup.MapGet("/{id:guid}/export/markdown", ExportMarkdown);
         fileGroup.MapGet("/{id:guid}/export/html", ExportHtml);
 
         var parseGroup = app.MapGroup("/admin/document-parses")
-            .RequireAuthorization(DocLibraryAuthorizationPolicies.Admin);
+            .RequireAuthorization(DocthecaAuthorizationPolicies.Admin);
 
         parseGroup.MapGet("/{parseId:guid}/export/markdown", ExportParseMarkdown);
         parseGroup.MapGet("/{parseId:guid}/export/html", ExportParseHtml);
@@ -41,11 +41,11 @@ public static class DocumentExportEndpoints
 
         var file = await fileService.GetByIdAsync(id);
         if (file == null)
-            return Results.NotFound(new { success = false, message = "File not found", errorCode = "DOCLIBRARY_FILE_NOT_FOUND" });
+            return Results.NotFound(new { success = false, message = "File not found", errorCode = "DOCTHECA_FILE_NOT_FOUND" });
 
         var parse = await parseService.GetLatestByFileIdAsync(id);
         if (parse == null || parse.Status != DocumentParseStatus.Parsed)
-            return Results.Json(new { success = false, message = "File is not parsed yet", errorCode = "DOCLIBRARY_FILE_NOT_PARSED" }, statusCode: StatusCodes.Status422UnprocessableEntity);
+            return Results.Json(new { success = false, message = "File is not parsed yet", errorCode = "DOCTHECA_FILE_NOT_PARSED" }, statusCode: StatusCodes.Status422UnprocessableEntity);
 
         return await ExportMarkdownCore(file.FileName, parse, parseService, imageSource, logger);
     }
@@ -61,11 +61,11 @@ public static class DocumentExportEndpoints
 
         var file = await fileService.GetByIdAsync(id);
         if (file == null)
-            return Results.NotFound(new { success = false, message = "File not found", errorCode = "DOCLIBRARY_FILE_NOT_FOUND" });
+            return Results.NotFound(new { success = false, message = "File not found", errorCode = "DOCTHECA_FILE_NOT_FOUND" });
 
         var parse = await parseService.GetLatestByFileIdAsync(id);
         if (parse == null || parse.Status != DocumentParseStatus.Parsed)
-            return Results.Json(new { success = false, message = "File is not parsed yet", errorCode = "DOCLIBRARY_FILE_NOT_PARSED" }, statusCode: StatusCodes.Status422UnprocessableEntity);
+            return Results.Json(new { success = false, message = "File is not parsed yet", errorCode = "DOCTHECA_FILE_NOT_PARSED" }, statusCode: StatusCodes.Status422UnprocessableEntity);
 
         return await ExportHtmlCore(file.FileName, parse, parseService, imageSource, logger);
     }
@@ -81,10 +81,10 @@ public static class DocumentExportEndpoints
 
         var parse = await parseService.GetByIdAsync(parseId);
         if (parse == null)
-            return Results.NotFound(new { success = false, message = "Parse record not found", errorCode = "DOCLIBRARY_PARSE_NOT_FOUND" });
+            return Results.NotFound(new { success = false, message = "Parse record not found", errorCode = "DOCTHECA_PARSE_NOT_FOUND" });
 
         if (parse.Status != DocumentParseStatus.Parsed)
-            return Results.Json(new { success = false, message = "Parse record is not parsed yet", errorCode = "DOCLIBRARY_PARSE_NOT_PARSED" }, statusCode: StatusCodes.Status422UnprocessableEntity);
+            return Results.Json(new { success = false, message = "Parse record is not parsed yet", errorCode = "DOCTHECA_PARSE_NOT_PARSED" }, statusCode: StatusCodes.Status422UnprocessableEntity);
 
         var file = await fileService.GetByIdAsync(parse.DocumentFileId);
         var fileName = file?.FileName ?? "document";
@@ -103,10 +103,10 @@ public static class DocumentExportEndpoints
 
         var parse = await parseService.GetByIdAsync(parseId);
         if (parse == null)
-            return Results.NotFound(new { success = false, message = "Parse record not found", errorCode = "DOCLIBRARY_PARSE_NOT_FOUND" });
+            return Results.NotFound(new { success = false, message = "Parse record not found", errorCode = "DOCTHECA_PARSE_NOT_FOUND" });
 
         if (parse.Status != DocumentParseStatus.Parsed)
-            return Results.Json(new { success = false, message = "Parse record is not parsed yet", errorCode = "DOCLIBRARY_PARSE_NOT_PARSED" }, statusCode: StatusCodes.Status422UnprocessableEntity);
+            return Results.Json(new { success = false, message = "Parse record is not parsed yet", errorCode = "DOCTHECA_PARSE_NOT_PARSED" }, statusCode: StatusCodes.Status422UnprocessableEntity);
 
         var file = await fileService.GetByIdAsync(parse.DocumentFileId);
         var fileName = file?.FileName ?? "document";

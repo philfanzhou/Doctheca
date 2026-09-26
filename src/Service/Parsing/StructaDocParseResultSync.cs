@@ -1,11 +1,11 @@
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
-using Ruoyu.Study.DocLibrary.Domain.Models;
-using Ruoyu.Study.DocLibrary.Domain.Repositories;
-using Ruoyu.Study.DocLibrary.Domain.Services;
-using Ruoyu.Study.DocLibrary.Service.StructaDoc;
+using Doctheca.Domain.Models;
+using Doctheca.Domain.Repositories;
+using Doctheca.Domain.Services;
+using Doctheca.Service.StructaDoc;
 
-namespace Ruoyu.Study.DocLibrary.Service.Parsing;
+namespace Doctheca.Service.Parsing;
 
 public interface IStructaDocParseResultSync
 {
@@ -17,7 +17,7 @@ public interface IStructaDocParseResultSync
 }
 
 /// <summary>
-/// Syncs a succeeded StructaDoc Parse Run into DocLibrary local tables (ADR-0009):
+/// Syncs a succeeded StructaDoc Parse Run into Doctheca local tables (ADR-0009):
 /// assets become document_parse_images rows (image_path stores the StructaDoc asset ID),
 /// blocks become document_parse_blocks rows, and the canonical Markdown is stored on the
 /// parse record. Re-running the sync is idempotent (images and blocks are replaced).

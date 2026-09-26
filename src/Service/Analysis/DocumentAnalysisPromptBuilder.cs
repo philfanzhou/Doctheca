@@ -1,4 +1,4 @@
-namespace Ruoyu.Study.DocLibrary.Service;
+namespace Doctheca.Service;
 
 /// <summary>
 /// Builds prompts for LLM-based document metadata analysis.

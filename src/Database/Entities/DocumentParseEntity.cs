@@ -1,8 +1,8 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
-using Ruoyu.Study.DocLibrary.Domain.Models;
+using Doctheca.Domain.Models;
 
-namespace Ruoyu.Study.DocLibrary.Database.Entities;
+namespace Doctheca.Database.Entities;
 
 [Table("document_parses")]
 public class DocumentParseEntity

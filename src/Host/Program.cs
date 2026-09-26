@@ -5,20 +5,20 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Protocols;
 using Microsoft.IdentityModel.Protocols.OpenIdConnect;
-using Ruoyu.Study.Common.Authentication;
-using Ruoyu.Study.Common.Ai;
-using Ruoyu.Study.Common.Oss;
-using Ruoyu.Study.DocLibrary.Database;
-using Ruoyu.Study.DocLibrary.Database.Repositories;
-using Ruoyu.Study.DocLibrary.Domain.Models;
-using Ruoyu.Study.DocLibrary.Domain.Repositories;
-using Ruoyu.Study.DocLibrary.Domain.Services;
-using Ruoyu.Study.DocLibrary.Service;
-using Ruoyu.Study.DocLibrary.Service.Parsing;
-using Ruoyu.Study.DocLibrary.Service.StructaDoc;
-using Ruoyu.Study.DocLibrary.Host;
-using Ruoyu.Study.DocLibrary.Host.Authentication;
-using Ruoyu.Study.Consul.Shared;
+using Doctheca.Common.Authentication;
+using Doctheca.Ai;
+using Doctheca.Common.Oss;
+using Doctheca.Database;
+using Doctheca.Database.Repositories;
+using Doctheca.Domain.Models;
+using Doctheca.Domain.Repositories;
+using Doctheca.Domain.Services;
+using Doctheca.Service;
+using Doctheca.Service.Parsing;
+using Doctheca.Service.StructaDoc;
+using Doctheca.Host;
+using Doctheca.Host.Authentication;
+using Doctheca.Consul;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -26,7 +26,7 @@ builder.Configuration.AddRuoyuConsulConfiguration(builder.Configuration);
 
 // ========== Serilog (Console + Grafana Loki) ==========
 builder.Configuration.AddRuoyuLokiSink();
-builder.Host.UseRuoyuSerilog("Ruoyu.Study.DocLibrary");
+builder.Host.UseRuoyuSerilog("Doctheca");
 
 var consulOptions = RuoyuConsulOptions.Bind(builder.Configuration);
 var consulRuntimeState = RuoyuConsulRuntimeState.Instance;
@@ -43,14 +43,14 @@ builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(optio
     options.MultipartBodyLengthLimit = 200 * 1024 * 1024;
 });
 
-builder.Services.Configure<DocLibraryCookieOptions>(
-    builder.Configuration.GetSection(DocLibraryCookieOptions.SectionName));
+builder.Services.Configure<DocthecaCookieOptions>(
+    builder.Configuration.GetSection(DocthecaCookieOptions.SectionName));
 builder.Services.AddOptions<IdentityClientCredentialsOptions>()
     .Bind(builder.Configuration.GetSection(IdentityClientCredentialsOptions.SectionName))
     .Validate(
         options => !string.IsNullOrWhiteSpace(options.AppId)
             && !string.IsNullOrWhiteSpace(options.AppSecret),
-        "IdentityService:AppId and IdentityService:AppSecret must be configured for DocLibrary.")
+        "IdentityService:AppId and IdentityService:AppSecret must be configured for Doctheca.")
     .ValidateOnStart();
 builder.Services.AddHttpClient<IIdentityAuthenticationService, IdentityAuthenticationService>(
     (serviceProvider, client) =>
@@ -79,13 +79,13 @@ builder.Services.AddRuoyuJwtBearer(
     consumer =>
     {
         consumer.MapInboundClaims = false;
-        consumer.AccessTokenCookieName = DocLibraryAuthenticationConstants.AccessCookieName;
+        consumer.AccessTokenCookieName = DocthecaAuthenticationConstants.AccessCookieName;
         consumer.NameClaimType = "unique_name";
         consumer.RoleClaimType = "role";
     },
     options =>
 {
-    options.AddPolicy(DocLibraryAuthorizationPolicies.Admin, policy =>
+    options.AddPolicy(DocthecaAuthorizationPolicies.Admin, policy =>
     {
         policy.AddAuthenticationSchemes(JwtBearerDefaults.AuthenticationScheme);
         policy.RequireAuthenticatedUser();
@@ -100,7 +100,7 @@ builder.Services.AddRuoyuJwtBearer(
 var fallbackConnectionString = builder.Configuration.GetConnectionString("Default");
 var connectionString = SharedPostgreSqlConnectionStringFactory.BuildOrFallback(builder.Configuration, fallbackConnectionString)
     ?? throw new InvalidOperationException("ConnectionStrings:Default is not configured");
-builder.Services.AddDbContext<DocLibraryDbContext>(options =>
+builder.Services.AddDbContext<DocthecaDbContext>(options =>
 {
     options.UseNpgsql(connectionString);
 });
@@ -189,7 +189,7 @@ var identityTrust = app.Services
     .GetRequiredService<IOptions<IdentityAuthenticationOptions>>()
     .Value;
 
-app.Logger.LogInformation("DocLibrary Service starting");
+app.Logger.LogInformation("Doctheca Service starting");
 app.Logger.LogInformation(
     "Identity trust: Authority={Authority}, Issuers={Issuers}, Audience={Audience}, RequireHttpsMetadata={RequireHttpsMetadata}",
     identityTrust.Authority,
@@ -262,7 +262,7 @@ if (llmEnabled)
 
 using (var scope = app.Services.CreateScope())
 {
-    var dbContext = scope.ServiceProvider.GetRequiredService<DocLibraryDbContext>();
+    var dbContext = scope.ServiceProvider.GetRequiredService<DocthecaDbContext>();
     var loggerFactory = scope.ServiceProvider.GetRequiredService<ILoggerFactory>();
     await DatabaseInitializer.InitializeAsync(dbContext, loggerFactory);
 }

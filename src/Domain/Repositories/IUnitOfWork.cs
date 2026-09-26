@@ -1,6 +1,6 @@
 using System.Threading.Tasks;
 
-namespace Ruoyu.Study.DocLibrary.Domain.Repositories;
+namespace Doctheca.Domain.Repositories;
 
 public interface IUnitOfWork
 {

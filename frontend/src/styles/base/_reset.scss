@@ -1,4 +1,4 @@
-.doclibrary-admin * {
+.doctheca-admin * {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
@@ -38,7 +38,7 @@ body {
   background: transparent;
 }
 
-.doclibrary-admin button {
+.doctheca-admin button {
   font-family: inherit;
   cursor: pointer;
   border: none;
@@ -46,15 +46,15 @@ body {
   color: inherit;
 }
 
-.doclibrary-admin input,
-.doclibrary-admin select,
-.doclibrary-admin textarea {
+.doctheca-admin input,
+.doctheca-admin select,
+.doctheca-admin textarea {
   font-family: inherit;
   font-size: 13.5px;
   color: var(--text);
 }
 
-.doclibrary-admin svg {
+.doctheca-admin svg {
   display: block;
 }
 

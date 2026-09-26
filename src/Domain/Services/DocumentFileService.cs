@@ -1,9 +1,9 @@
 using Microsoft.Extensions.Logging;
-using Ruoyu.Study.DocLibrary.Domain.Models;
-using Ruoyu.Study.DocLibrary.Domain.Repositories;
-using Ruoyu.Study.DocLibrary.Domain.Services;
+using Doctheca.Domain.Models;
+using Doctheca.Domain.Repositories;
+using Doctheca.Domain.Services;
 
-namespace Ruoyu.Study.DocLibrary.Domain.Services;
+namespace Doctheca.Domain.Services;
 
 public class DocumentFileService : IDocumentFileService
 {

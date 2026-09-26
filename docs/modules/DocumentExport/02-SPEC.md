@@ -20,8 +20,8 @@ GET /admin/document-files/{id:guid}/export/markdown
 
 **响应**:
 - 200:`application/zip` 流，文件名 `{fileName}_markdown.zip`
-- 404:`{ "success": false, "message": "File not found", "errorCode": "DOCLIBRARY_FILE_NOT_FOUND" }`
-- 422:`{ "success": false, "message": "File is not parsed yet", "errorCode": "DOCLIBRARY_FILE_NOT_PARSED" }`
+- 404:`{ "success": false, "message": "File not found", "errorCode": "DOCTHECA_FILE_NOT_FOUND" }`
+- 422:`{ "success": false, "message": "File is not parsed yet", "errorCode": "DOCTHECA_FILE_NOT_PARSED" }`
 
 ### 1.2 ExportHtml — 文件级 HTML 导出
 
@@ -56,8 +56,8 @@ GET /admin/document-parses/{parseId:guid}/export/markdown
 
 **响应**:
 - 200:`application/zip` 流
-- 404:`{ "success": false, "message": "Parse record not found", "errorCode": "DOCLIBRARY_PARSE_NOT_FOUND" }`
-- 422:`{ "success": false, "message": "Parse record is not parsed yet", "errorCode": "DOCLIBRARY_PARSE_NOT_PARSED" }`
+- 404:`{ "success": false, "message": "Parse record not found", "errorCode": "DOCTHECA_PARSE_NOT_FOUND" }`
+- 422:`{ "success": false, "message": "Parse record is not parsed yet", "errorCode": "DOCTHECA_PARSE_NOT_PARSED" }`
 
 ### 1.4 ExportParseHtml — 解析级 HTML 导出
 
@@ -213,10 +213,10 @@ public static WebApplication MapDocumentExportEndpoints(this WebApplication app)
 
 | 场景 | HTTP | 错误码 | 处理 |
 |------|------|--------|------|
-| 文件不存在 | 404 | `DOCLIBRARY_FILE_NOT_FOUND` | 文件级端点 |
-| 解析记录不存在 | 404 | `DOCLIBRARY_PARSE_NOT_FOUND` | 解析级端点 |
-| 文件未解析 | 422 | `DOCLIBRARY_FILE_NOT_PARSED` | 文件级端点 |
-| 解析记录未解析 | 422 | `DOCLIBRARY_PARSE_NOT_PARSED` | 解析级端点 |
+| 文件不存在 | 404 | `DOCTHECA_FILE_NOT_FOUND` | 文件级端点 |
+| 解析记录不存在 | 404 | `DOCTHECA_PARSE_NOT_FOUND` | 解析级端点 |
+| 文件未解析 | 422 | `DOCTHECA_FILE_NOT_PARSED` | 文件级端点 |
+| 解析记录未解析 | 422 | `DOCTHECA_PARSE_NOT_PARSED` | 解析级端点 |
 | 单张图片 OSS 下载失败 | — | — | 记 Warning 日志，跳过该张 |
 | 单张图片预签名失败 | — | — | 记 Warning 日志，跳过该张 |
 

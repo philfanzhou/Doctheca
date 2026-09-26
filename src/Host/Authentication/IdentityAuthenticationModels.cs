@@ -1,7 +1,7 @@
 using System.Security.Claims;
 using System.Text.Json.Serialization;
 
-namespace Ruoyu.Study.DocLibrary.Host.Authentication;
+namespace Doctheca.Host.Authentication;
 
 public enum IdentityExchangeStatus
 {

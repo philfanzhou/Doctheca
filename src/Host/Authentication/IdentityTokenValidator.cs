@@ -4,9 +4,9 @@ using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Protocols;
 using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 using Microsoft.IdentityModel.Tokens;
-using Ruoyu.Study.Common.Authentication;
+using Doctheca.Common.Authentication;
 
-namespace Ruoyu.Study.DocLibrary.Host.Authentication;
+namespace Doctheca.Host.Authentication;
 
 public sealed class IdentityTokenValidator : IIdentityTokenValidator
 {

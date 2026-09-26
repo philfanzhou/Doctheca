@@ -1,4 +1,4 @@
-namespace Ruoyu.Study.DocLibrary.Service.StructaDoc;
+namespace Doctheca.Service.StructaDoc;
 
 /// <summary>
 /// HTTP client for the StructaDoc public API v1 (API-key machine client).

@@ -5,11 +5,11 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Logging;
-using Ruoyu.Study.DocLibrary.Domain.Repositories;
-using Ruoyu.Study.DocLibrary.Domain.Services;
-using Ruoyu.Study.DocLibrary.Service.Endpoints.Models;
+using Doctheca.Domain.Repositories;
+using Doctheca.Domain.Services;
+using Doctheca.Service.Endpoints.Models;
 
-namespace Ruoyu.Study.DocLibrary.Service;
+namespace Doctheca.Service;
 
 internal static class DocumentFileMetadataEndpoint
 {
@@ -46,7 +46,7 @@ internal static class DocumentFileMetadataEndpoint
         var updated = await fileService.UpdateMetadataAsync(id, body.Subject, body.Grade, body.Year);
         if (updated == null)
         {
-            return Results.NotFound(new { success = false, message = "File not found", errorCode = "DOCLIBRARY_FILE_NOT_FOUND" });
+            return Results.NotFound(new { success = false, message = "File not found", errorCode = "DOCTHECA_FILE_NOT_FOUND" });
         }
 
         // Best-effort: sync OpenSearch index with new metadata

@@ -30,7 +30,7 @@
 | DS-16 | 扩展 `OpenSearchIndexService.ExactSearchAsync`（`BuildSearchBody` 追加 minerU filter 分支 + `ParseSearchResponse` 追加 minerU 回挂分支） | completed | `OpenSearchIndexService.cs` |
 | DS-17 | 扩展 `SearchDomainService.ExactSearchAsync`：透传 minerU filter + 解析回挂字段（同一方法内扩展，复用 V1 降级模式）。**实现说明**：`SearchDomainService` 为薄封装，filter 透传通过 `SearchFilterModel` 自动完成，无需改动方法体；异常降级路径已在 UT `ExactSearchAsync_WithMinerUFilterAndIndexServiceThrow_ReturnsEmpty` 覆盖。 | completed | `SearchDomainService.cs`（无改动） |
 | DS-18 | 扩展 `DocumentSearchEndpoints.cs`：同一 `GET /admin/documents/search` 追加可选 minerU 入参（`blockType`/`blockSubType`/`pageNumber`/`textLevel`/`textFormat`/`parseId`/`documentFileId`/`hasImage`）；V1 校验保留；参数 null 时零回归。响应追加 `blockData`/`bbox`/`mineruScore`/`subType`/`textLevel`/`textFormat`/`caption` optional 字段。 | completed | `DocumentSearchEndpoints.cs` |
-| DS-19 | doclibrary 自带前端扩展 `SearchPage.vue`：加"高级筛选"抽屉（blockType/blockSubType/pageNumber/textLevel/textFormat/parseId/documentFileId/hasImage）+ 结果表格追加 minerU 列（块类型/subType/矿工 U 置信度/textFormat/Caption）+ 行展开 blockData/bbox/mineruScore 详情卡片；`docApi.ts` `SearchResult` 追加 7 optional 字段 + `searchTest` 签名扩展 8 个可选参数（空值不透传，零回归）；`frontend-spec.md` §4.4 同步。验证：`npm run build`（vue-tsc + vite build）通过。 | completed | `SearchPage.vue` / `docApi.ts` / `frontend-spec.md` |
+| DS-19 | doctheca 自带前端扩展 `SearchPage.vue`：加"高级筛选"抽屉（blockType/blockSubType/pageNumber/textLevel/textFormat/parseId/documentFileId/hasImage）+ 结果表格追加 minerU 列（块类型/subType/矿工 U 置信度/textFormat/Caption）+ 行展开 blockData/bbox/mineruScore 详情卡片；`docApi.ts` `SearchResult` 追加 7 optional 字段 + `searchTest` 签名扩展 8 个可选参数（空值不透传，零回归）；`frontend-spec.md` §4.4 同步。验证：`npm run build`（vue-tsc + vite build）通过。 | completed | `SearchPage.vue` / `docApi.ts` / `frontend-spec.md` |
 | DS-20 | 单元测试追加：在现有 `OpenSearchIndexServiceTests` / `SearchDomainServiceTests` / `DocumentParseBlockServiceTests` 追加 minerU filter 构造 / `blockData` 回挂 / 缺省 fallback / bbox 归一化 / 零回归断言（不新增测试方法类）。新增 15 个测试方法，全部通过（169/169）。 | completed | 测试文件 |
 
 ## 第 2 代实现附注
@@ -42,22 +42,22 @@
 > 列名 `score` 遵循 06-CONVENTIONS §103 行"真正新字段不加 mineru_ 前缀"规定；C# 属性名 `MineruScore` 避免与 V1 概念混淆。
 
 ### 验证结果
-- `dotnet build src/services/ruoyu.doclibrary/src/Ruoyu.Study.DocLibrary.sln --configuration Release`：**成功**（0 错误，3 个无关 nullable 警告）
+- `dotnet build src/Doctheca.sln --configuration Release`：**成功**（0 错误，3 个无关 nullable 警告）
 - `dotnet test ... --configuration Release`：**169/169 通过**（含 AC-17 零回归 `BuildSearchBody_WithNoMinerUFilter_OutputEqualsV1`）
 
 ## 命令速查
 
 ```bash
 # 构建
-dotnet build src/services/ruoyu.doclibrary/Ruoyu.Study.DocLibrary.sln --configuration Release
+dotnet build Doctheca.sln --configuration Release
 
 # 运行本模块相关测试
-dotnet test src/services/ruoyu.doclibrary/src/Tests/Ruoyu.Study.DocLibrary.Tests \
+dotnet test src/Tests/Doctheca.Tests \
   --configuration Release \
   --filter "FullyQualifiedName~OpenSearchIndexServiceTests|FullyQualifiedName~SearchDomainServiceTests"
 
 # 全部测试
-dotnet test src/services/ruoyu.doclibrary/src/Tests/Ruoyu.Study.DocLibrary.Tests --configuration Release
+dotnet test src/Tests/Doctheca.Tests --configuration Release
 ```
 
 ## 依赖图

@@ -2,9 +2,9 @@
 
 ## 当前测试现状
 
-**当前无单元测试覆盖。** `src/Tests/Ruoyu.Study.DocLibrary.Tests/` 目录下不存在 `DocumentAnalysisServiceTests.cs`,元分析相关功能目前零测试。项目测试集中在 `ConstantsTests` / `DocumentFileServiceTests` / `DocumentFileDeleteCleanupTests` / `DocumentParseBlockServiceTests` / `OpenSearchIndexServiceTests` 等文件,详见仓库测试目录。
+**当前无单元测试覆盖。** `src/Tests/Doctheca.Tests/` 目录下不存在 `DocumentAnalysisServiceTests.cs`,元分析相关功能目前零测试。项目测试集中在 `ConstantsTests` / `DocumentFileServiceTests` / `DocumentFileDeleteCleanupTests` / `DocumentParseBlockServiceTests` / `OpenSearchIndexServiceTests` 等文件,详见仓库测试目录。
 
-> 本仓库采用 xUnit + Moq + FluentAssertions。新增测试需遵循 `.agent/rules/coding-policy.md` 对 `ruoyu.doclibrary` 项目的测试约定。
+> 本仓库采用 xUnit + Moq + FluentAssertions。新增测试需遵循 `.agent/rules/coding-policy.md` 对 `doctheca` 项目的测试约定。
 
 ## 建议覆盖方向
 
@@ -42,10 +42,10 @@
 
 ```bash
 # 运行所有测试(目前无 DocumentAnalysis 专项测试)
-dotnet test src/Tests/Ruoyu.Study.DocLibrary.Tests --configuration Release
+dotnet test src/Tests/Doctheca.Tests --configuration Release
 
 # 按现有测试文件筛选(示例)
-dotnet test src/Tests/Ruoyu.Study.DocLibrary.Tests --filter "FullyQualifiedName~OpenSearchIndexServiceTests"
+dotnet test src/Tests/Doctheca.Tests --filter "FullyQualifiedName~OpenSearchIndexServiceTests"
 ```
 
 ## 覆盖率目标(待 DM-18 实施)

@@ -35,10 +35,10 @@ HTTP 响应消息为中文（面向终端用户），错误码为英文常量：
 
 | 错误码 | 消息 | 场景 |
 |--------|------|------|
-| `DOCLIBRARY_FILE_NOT_FOUND` | `File not found` | 文件级端点 |
-| `DOCLIBRARY_FILE_NOT_PARSED` | `File is not parsed yet` | 文件级端点 |
-| `DOCLIBRARY_PARSE_NOT_FOUND` | `Parse record not found` | 解析级端点 |
-| `DOCLIBRARY_PARSE_NOT_PARSED` | `Parse record is not parsed yet` | 解析级端点 |
+| `DOCTHECA_FILE_NOT_FOUND` | `File not found` | 文件级端点 |
+| `DOCTHECA_FILE_NOT_PARSED` | `File is not parsed yet` | 文件级端点 |
+| `DOCTHECA_PARSE_NOT_FOUND` | `Parse record not found` | 解析级端点 |
+| `DOCTHECA_PARSE_NOT_PARSED` | `Parse record is not parsed yet` | 解析级端点 |
 
 响应统一格式：`{ "success": false, "message": "...", "errorCode": "..." }`。
 
@@ -83,4 +83,4 @@ HTTP 响应消息为中文（面向终端用户），错误码为英文常量：
 
 - 使用 `MapGroup` 分组：`/admin/document-files`、`/admin/document-parses`
 - 路径参数约束：`{id:guid}`、`{parseId:guid}`
-- 导出端点要求 `DocLibraryAdmin` 策略和 Identity `role=admin`
+- 导出端点要求 `DocthecaAdmin` 策略和 Identity `role=admin`

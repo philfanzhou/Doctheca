@@ -1,7 +1,7 @@
-namespace Ruoyu.Study.DocLibrary.Host.Authentication;
+namespace Doctheca.Host.Authentication;
 
 /// <summary>
-/// Credentials for the DocLibrary application registration in SignaCore.
+/// Credentials for the Doctheca application registration in SignaCore.
 /// They are deployment secrets and are intentionally separate from the shared JWT trust settings.
 /// </summary>
 public sealed class IdentityClientCredentialsOptions

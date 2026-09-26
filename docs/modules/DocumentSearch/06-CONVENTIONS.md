@@ -2,14 +2,14 @@
 
 ## 命名约定
 
-- **命名空间**：领域代码使用 `Ruoyu.Study.DocLibrary.Domain.*`；服务层使用 `Ruoyu.Study.DocLibrary.Service.*`；数据库层使用 `Ruoyu.Study.DocLibrary.Database.*`。
+- **命名空间**：领域代码使用 `Doctheca.Domain.*`；服务层使用 `Doctheca.Service.*`；数据库层使用 `Doctheca.Database.*`。
 - **类名**：领域服务采用 `XxxDomainService`；模型采用 `XxxModel`；匹配类型常量采用 `static class`（`SearchMatchType`）；接口采用 `IXxxService` / `IXxxRepository`。
 - **方法名**：动词开头，遵循 `[动词][名词][Async]`，如 `ExactSearchAsync`、`IndexParseBlocksAsync`、`BuildSearchBody`。
 - **返回值**：HTTP 端点层返回 JSON 响应；领域层返回元组 `(List<SearchResultModel>, int, string?)`。
 - **私有字段**：采用 `_camelCase` 下划线前缀（如 `_searchIndexService`、`_client`）。
 - **数据库/索引字段**：小写蛇形（如 `document_file_id`、`block_id`、`text_content`、`page_number`）。
 - **OpenSearch `_id`**：`block_{blockId}` 格式，保证幂等。
-- **索引名**：配置驱动（`OpenSearchOptions.IndexName`，默认 `doclibrary-segments`）。
+- **索引名**：配置驱动（`OpenSearchOptions.IndexName`，默认 `doctheca-segments`）。
 - **配置节**：`OpenSearch:Url` / `OpenSearch:IndexName`。
 
 ## 第 2 代日志约定（追加到 V1 日志集）
@@ -49,14 +49,14 @@
 
 | 场景 | HTTP | 错误码 | 消息文本 |
 |------|------|--------|---------|
-| 查询词为空 | 400 | `DOCLIBRARY_QUERY_REQUIRED` | `Query cannot be empty` |
-| 查询词超过 200 字符 | 400 | `DOCLIBRARY_QUERY_TOO_LONG` | `Query exceeds 200 characters` |
+| 查询词为空 | 400 | `DOCTHECA_QUERY_REQUIRED` | `Query cannot be empty` |
+| 查询词超过 200 字符 | 400 | `DOCTHECA_QUERY_TOO_LONG` | `Query exceeds 200 characters` |
 
 ### 第 2 代错误消息约定（无新增错误码）
 
 > 第 2 代**不引入新错误码**。V1 既有校验继续承担：
-> - query 为空 → 400 `DOCLIBRARY_QUERY_REQUIRED` （守卫条件）
-> - query 超过 200 字符 → 400 `DOCLIBRARY_QUERY_TOO_LONG`
+> - query 为空 → 400 `DOCTHECA_QUERY_REQUIRED` （守卫条件）
+> - query 超过 200 字符 → 400 `DOCTHECA_QUERY_TOO_LONG`
 >
 > minerU filter 全部可选、`null`/空字符串不参与过滤；当所有 minerU filter 均为 null 时走 V1 路径（零回归，不需要专门的全空校验错误码）。`pageSize` 超限静默截断为 100（V1 值不变）；带 minerU filter 时前端引导 ≤ 50。
 
@@ -67,7 +67,7 @@
 - **已复用 V1 字段命名**（同源，不双写）：`block_type` = minerU type、`page_number` = minerU page_id、`text` = minerU text。
 - **OpenSearch 内嵌不索引字段**：`_meta.block_data` 启用 `enabled:false`（仅存不索引），符合 NFR-11。
 - **返回 DTO 命名**：后端 → 前端 camelCase（与 V1 一致）；前端 TS 接口扩展 `SearchResultItem`（V1 接口）追加 `blockData?`/`bbox?`/`score?`。**不新增**独立 `BlockResultItem` 接口。
-- **错误码**：第 2 代不引入新错误码 —— V1 的 `DOCLIBRARY_QUERY_REQUIRED`（query 空守卫）继续承担唯一必填守卫；零回归设计避免额外空 filter 校验。
+- **错误码**：第 2 代不引入新错误码 —— V1 的 `DOCTHECA_QUERY_REQUIRED`（query 空守卫）继续承担唯一必填守卫；零回归设计避免额外空 filter 校验。
 
 ## 搜索约定
 
@@ -84,7 +84,7 @@
 - **keyword 执行**：复用 V1 `match` / `match_phrase` 查询 `text` 字段（english_custom / english_phrase 分析器）。**不新增** `mineru_text` 字段（minerU `text|content|body` 已落地 `text_content`）。
 - **无 keyword 兜底排序**：按 `sort_index asc`（按块顺序）。
 - **minerU 精确条件组合**：keyword 走 `must`；`blockType`（→ `block_type`）/ `pageNumber`（→ `page_number`）/ `parseId` / `documentFileId` / `hasImage`（→ `has_image`）走 `filter`。
-- **零回归守卫**：当所有 minerU filter 均为 null 时，走 V1 路径（输出与改造前完全一致）。**不新增** `DOCLIBRARY_FILTER_REQUIRED` 错误码 —— V1 的 `query` 必填校验已承担唯一守卫。
+- **零回归守卫**：当所有 minerU filter 均为 null 时，走 V1 路径（输出与改造前完全一致）。**不新增** `DOCTHECA_FILTER_REQUIRED` 错误码 —— V1 的 `query` 必填校验已承担唯一守卫。
 - **blockData 回挂**：`_source` 含 `_meta.block_data` 原文 string，`ParseSearchResponse`（V1 方法）追加映射到 `SearchResultModel.BlockData` + 组合 `Bbox`（x0/y0/x1/y1）+ `Score`。不做二次序列化 / 反序列化。
 - **分页**：`pageSize` 最大 100（V1 值）；带 minerU filter 时前端引导 ≤ 50（携带完整 `blockData` JSONB，避免响应体过大）。
 

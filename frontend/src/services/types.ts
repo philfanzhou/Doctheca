@@ -1,4 +1,4 @@
-// Shared API types for ruoyu.doclibrary frontend.
+// Shared API types for doctheca frontend.
 
 export interface DocPagedResponse<T> {
   success: boolean

@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace Ruoyu.Study.DocLibrary.Service.StructaDoc;
+namespace Doctheca.Service.StructaDoc;
 
 /// <summary>RFC 7807 problem+json error payload returned by StructaDoc.</summary>
 public sealed class StructaDocProblemDetails

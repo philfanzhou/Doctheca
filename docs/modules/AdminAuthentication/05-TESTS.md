@@ -1,4 +1,4 @@
-# 05-TESTS — DocLibrary 管理员认证测试
+# 05-TESTS — Doctheca 管理员认证测试
 
 ## 后端自动化测试
 
@@ -18,7 +18,7 @@
 | AUTH-UT-12 | Identity revoke 不可用时登出 | 仍清除 Cookie并返回 200 |
 | AUTH-UT-13 | `/health`、静态入口和 SPA fallback | 匿名可访问 |
 | AUTH-UT-14 | `/internal/question-bank/*` 和旧导入状态路径 | 不映射 |
-| AUTH-UT-15 | Identity token 请求 | 字段为 `grantType`、`username`、`password` / `refreshToken`，并发送 DocLibrary AppId/AppSecret headers |
+| AUTH-UT-15 | Identity token 请求 | 字段为 `grantType`、`username`、`password` / `refreshToken`，并发送 Doctheca AppId/AppSecret headers |
 | AUTH-UT-16 | SignaCore 返回 401 拒绝 App 凭据 | 映射为 Identity 不可用，不伪装成用户密码错误 |
 
 测试使用固定 RSA 测试密钥和受控 Identity HTTP handler，不依赖真实密码或生产密钥。
@@ -27,15 +27,15 @@
 
 - 不映射任何 `/internal/question-bank/*`。
 - 不存在任何导入状态写接口。
-- DocLibrary 不创建或更新 `document_parse_imports`。
-- `start.sh` 不注入共享 Identity 信任或 Quaestura（原 QuestionBank） 配置；只注入 DocLibrary App 凭据与自身的 Cookie Secure 开关。
+- Doctheca 不创建或更新 `document_parse_imports`。
+- `start.sh` 不注入共享 Identity 信任或 Quaestura（原 QuestionBank） 配置；只注入 Doctheca App 凭据与自身的 Cookie Secure 开关。
 
 ## 前端验证
 
 当前前端未配置单元测试框架，不为本功能引入新 npm 依赖。必须执行：
 
 ```bash
-cd src/services/ruoyu.doclibrary/frontend
+cd frontend
 npm run build
 ```
 
@@ -43,10 +43,11 @@ npm run build
 
 ## 项目验证
 
+在仓库根目录运行：
+
 ```bash
-cd src/services/ruoyu.doclibrary
-dotnet test src/Tests/Ruoyu.Study.DocLibrary.Tests/Ruoyu.Study.DocLibrary.Tests.csproj --configuration Release
-dotnet build src/Ruoyu.Study.DocLibrary.sln --configuration Release
+dotnet test src/Tests/Doctheca.Tests/Doctheca.Tests.csproj --configuration Release
+dotnet build src/Doctheca.sln --configuration Release
 ```
 
 真实 Identity 可用时，额外按 `docs/development/verification.md` 执行 Cookie 会话 smoke test。

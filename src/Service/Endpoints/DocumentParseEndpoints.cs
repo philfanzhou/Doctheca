@@ -5,20 +5,20 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
-using Ruoyu.Study.Common.Oss;
-using Ruoyu.Study.DocLibrary.Domain.Repositories;
-using Ruoyu.Study.DocLibrary.Domain.Services;
-using Ruoyu.Study.DocLibrary.Service.Parsing;
-using Ruoyu.Study.DocLibrary.Service.StructaDoc;
+using Doctheca.Common.Oss;
+using Doctheca.Domain.Repositories;
+using Doctheca.Domain.Services;
+using Doctheca.Service.Parsing;
+using Doctheca.Service.StructaDoc;
 
-namespace Ruoyu.Study.DocLibrary.Service;
+namespace Doctheca.Service;
 
 public static class DocumentParseEndpoints
 {
     public static WebApplication MapDocumentParseEndpoints(this WebApplication app)
     {
         var group = app.MapGroup("/admin/document-parses")
-            .RequireAuthorization(DocLibraryAuthorizationPolicies.Admin);
+            .RequireAuthorization(DocthecaAuthorizationPolicies.Admin);
 
         group.MapGet("/", ListDocumentParses);
         group.MapDelete("/{parseId:guid}", DeleteDocumentParse);
@@ -75,7 +75,7 @@ public static class DocumentParseEndpoints
 
         var parse = await parseService.GetByIdAsync(parseId);
         if (parse == null)
-            return Results.NotFound(new { success = false, message = "Parse record not found", errorCode = "DOCLIBRARY_PARSE_NOT_FOUND" });
+            return Results.NotFound(new { success = false, message = "Parse record not found", errorCode = "DOCTHECA_PARSE_NOT_FOUND" });
 
         if (parse.StructaDocParseRunId is Guid runId)
         {
@@ -142,28 +142,28 @@ public static class DocumentParseEndpoints
     {
         var parse = await parseService.GetByIdAsync(parseId);
         if (parse == null)
-            return Results.NotFound(new { success = false, message = "Parse record not found", errorCode = "DOCLIBRARY_PARSE_NOT_FOUND" });
+            return Results.NotFound(new { success = false, message = "Parse record not found", errorCode = "DOCTHECA_PARSE_NOT_FOUND" });
 
         var images = await parseService.GetImagesByParseIdAsync(parseId);
         var image = images.Find(img => img.Id == imageId);
         if (image == null)
-            return Results.NotFound(new { success = false, message = "Image not found", errorCode = "DOCLIBRARY_IMAGE_NOT_FOUND" });
+            return Results.NotFound(new { success = false, message = "Image not found", errorCode = "DOCTHECA_IMAGE_NOT_FOUND" });
 
         try
         {
             var stream = await imageSource.OpenAsync(parse, image, cancellationToken);
             if (stream == null)
-                return Results.NotFound(new { success = false, message = "Image content not found", errorCode = "DOCLIBRARY_IMAGE_NOT_FOUND" });
+                return Results.NotFound(new { success = false, message = "Image content not found", errorCode = "DOCTHECA_IMAGE_NOT_FOUND" });
 
             return Results.File(stream, image.ContentType, enableRangeProcessing: true);
         }
         catch (StructaDocException ex) when (ex.StatusCode == 404)
         {
-            return Results.NotFound(new { success = false, message = "Image content not found in StructaDoc", errorCode = "DOCLIBRARY_IMAGE_NOT_FOUND" });
+            return Results.NotFound(new { success = false, message = "Image content not found in StructaDoc", errorCode = "DOCTHECA_IMAGE_NOT_FOUND" });
         }
         catch (StructaDocException ex)
         {
-            return Results.Json(new { success = false, message = ex.Message, errorCode = "DOCLIBRARY_STRUCTADOC_ERROR" }, statusCode: StatusCodes.Status502BadGateway);
+            return Results.Json(new { success = false, message = ex.Message, errorCode = "DOCTHECA_STRUCTADOC_ERROR" }, statusCode: StatusCodes.Status502BadGateway);
         }
     }
 }

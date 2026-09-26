@@ -5,7 +5,7 @@ using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
-namespace Ruoyu.Study.DocLibrary.Service.StructaDoc;
+namespace Doctheca.Service.StructaDoc;
 
 /// <summary>
 /// Default <see cref="IStructaDocClient"/> implementation over HttpClient.

@@ -1,6 +1,6 @@
 using Microsoft.Extensions.Logging;
 
-namespace Ruoyu.Study.DocLibrary.Host;
+namespace Doctheca.Host;
 
 /// <summary>
 /// HTTP CorrelationId middleware: reads or creates a CorrelationId from the x-correlation-id header,

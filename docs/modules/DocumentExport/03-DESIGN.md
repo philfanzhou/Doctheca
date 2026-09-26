@@ -3,7 +3,7 @@
 ## 本功能在项目中的目录与文件结构
 
 ```
-src/services/ruoyu.doclibrary/
+
 ├── src/
 │   ├── Domain/
 │   │   ├── Models/
@@ -47,7 +47,7 @@ Task<List<DocumentParseImageModel>> GetImagesByParseIdAsync(Guid parseId);
 Task<DocumentFileModel?> GetByIdAsync(Guid id);
 ```
 
-### IOssService（复用，ruoyu.common）
+### IOssService（复用，vendored Doctheca.Common）
 
 ```csharp
 Task<Stream> DownloadAsync(string objectPath);
@@ -147,10 +147,10 @@ HTTP Request
 
 | 场景 | 处理 |
 |------|------|
-| 文件不存在 | 404 + `DOCLIBRARY_FILE_NOT_FOUND` |
-| 解析记录不存在 | 404 + `DOCLIBRARY_PARSE_NOT_FOUND` |
-| 文件未解析 | 422 + `DOCLIBRARY_FILE_NOT_PARSED` |
-| 解析记录未解析 | 422 + `DOCLIBRARY_PARSE_NOT_PARSED` |
+| 文件不存在 | 404 + `DOCTHECA_FILE_NOT_FOUND` |
+| 解析记录不存在 | 404 + `DOCTHECA_PARSE_NOT_FOUND` |
+| 文件未解析 | 422 + `DOCTHECA_FILE_NOT_PARSED` |
+| 解析记录未解析 | 422 + `DOCTHECA_PARSE_NOT_PARSED` |
 | 单张图片 OSS 下载失败 | 记 Warning 日志，跳过该张 |
 | 单张图片预签名失败 | 记 Warning 日志，跳过该张 |
 
@@ -158,9 +158,9 @@ HTTP Request
 
 | 接口 | 提供能力 | 所在模块 |
 |------|---------|---------|
-| `IDocumentParseService` | 解析记录 / 图片列表查询 | `Ruoyu.Study.DocLibrary.Domain.Services` |
-| `IDocumentFileService` | 文件查询 | `Ruoyu.Study.DocLibrary.Domain.Services` |
-| `IOssService` | 文件上传下载 / 预签名 URL | `Ruoyu.Study.Common.Oss`（ruoyu.common） |
+| `IDocumentParseService` | 解析记录 / 图片列表查询 | `Doctheca.Domain.Services` |
+| `IDocumentFileService` | 文件查询 | `Doctheca.Domain.Services` |
+| `IOssService` | 文件上传下载 / 预签名 URL | `Doctheca.Common.Oss`（vendored 自 ruoyu.common） |
 | `Markdig` | Markdown → HTML 转换 | NuGet 包 |
 
 ## DI 注册

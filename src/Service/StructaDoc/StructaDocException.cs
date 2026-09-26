@@ -1,4 +1,4 @@
-namespace Ruoyu.Study.DocLibrary.Service.StructaDoc;
+namespace Doctheca.Service.StructaDoc;
 
 /// <summary>
 /// Raised when a StructaDoc API call fails. <see cref="IsTransient"/> distinguishes

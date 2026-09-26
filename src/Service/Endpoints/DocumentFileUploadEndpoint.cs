@@ -8,11 +8,11 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using Ruoyu.Study.DocLibrary.Domain.Models;
-using Ruoyu.Study.DocLibrary.Domain.Services;
-using Ruoyu.Study.DocLibrary.Service.StructaDoc;
+using Doctheca.Domain.Models;
+using Doctheca.Domain.Services;
+using Doctheca.Service.StructaDoc;
 
-namespace Ruoyu.Study.DocLibrary.Service;
+namespace Doctheca.Service;
 
 internal static class DocumentFileUploadEndpoint
 {
@@ -43,7 +43,7 @@ internal static class DocumentFileUploadEndpoint
         var logger = loggerFactory.CreateLogger(nameof(DocumentFileUploadEndpoint));
 
         if (!structaDocOptions.Value.IsConfigured)
-            return Results.Json(new { success = false, message = "StructaDoc service is not configured", errorCode = "DOCLIBRARY_STRUCTADOC_NOT_CONFIGURED" }, statusCode: StatusCodes.Status503ServiceUnavailable);
+            return Results.Json(new { success = false, message = "StructaDoc service is not configured", errorCode = "DOCTHECA_STRUCTADOC_NOT_CONFIGURED" }, statusCode: StatusCodes.Status503ServiceUnavailable);
 
         if (!request.HasFormContentType)
             return Results.BadRequest(new { success = false, message = "Request must be multipart/form-data" });
@@ -51,15 +51,15 @@ internal static class DocumentFileUploadEndpoint
         var form = await request.ReadFormAsync();
         var file = form.Files.GetFile("file");
         if (file == null || file.Length == 0)
-            return Results.BadRequest(new { success = false, message = "File cannot be empty", errorCode = "DOCLIBRARY_FILE_REQUIRED" });
+            return Results.BadRequest(new { success = false, message = "File cannot be empty", errorCode = "DOCTHECA_FILE_REQUIRED" });
 
         if (file.Length > MaxFileSize)
             return Results.BadRequest(new { success = false, message = "File size exceeds 200MB limit" });
 
         if (!DocumentFileMimeTypes.Contains(file.ContentType))
-            return Results.BadRequest(new { success = false, message = "Unsupported file format", errorCode = "DOCLIBRARY_FILE_FORMAT_UNSUPPORTED" });
+            return Results.BadRequest(new { success = false, message = "Unsupported file format", errorCode = "DOCTHECA_FILE_FORMAT_UNSUPPORTED" });
 
-        // ADR-0009: StructaDoc owns document originals; DocLibrary keeps only the reference.
+        // ADR-0009: StructaDoc owns document originals; Doctheca keeps only the reference.
         StructaDocDocumentResponse uploaded;
         await using (var stream = file.OpenReadStream())
         {
@@ -114,11 +114,11 @@ internal static class DocumentFileUploadEndpoint
             return Results.BadRequest(new { success = false, message = "File size exceeds the StructaDoc upload limit" });
 
         if (ex.StatusCode == 415 || ex.ProblemCode == "unsupported-document-type")
-            return Results.BadRequest(new { success = false, message = "Unsupported file format", errorCode = "DOCLIBRARY_FILE_FORMAT_UNSUPPORTED" });
+            return Results.BadRequest(new { success = false, message = "Unsupported file format", errorCode = "DOCTHECA_FILE_FORMAT_UNSUPPORTED" });
 
         if (ex.StatusCode is 401 or 403)
-            return Results.Json(new { success = false, message = "StructaDoc rejected the configured API key", errorCode = "DOCLIBRARY_STRUCTADOC_UNAUTHORIZED" }, statusCode: StatusCodes.Status502BadGateway);
+            return Results.Json(new { success = false, message = "StructaDoc rejected the configured API key", errorCode = "DOCTHECA_STRUCTADOC_UNAUTHORIZED" }, statusCode: StatusCodes.Status502BadGateway);
 
-        return Results.Json(new { success = false, message = ex.Message, errorCode = "DOCLIBRARY_STRUCTADOC_ERROR" }, statusCode: StatusCodes.Status502BadGateway);
+        return Results.Json(new { success = false, message = ex.Message, errorCode = "DOCTHECA_STRUCTADOC_ERROR" }, statusCode: StatusCodes.Status502BadGateway);
     }
 }

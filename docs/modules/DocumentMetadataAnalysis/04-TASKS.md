@@ -10,7 +10,7 @@
 | DM-02 | 创建 DocumentAnalysisOptions (继承 AiClientOptions) | completed |
 | DM-03 | 实现 DocumentAnalysisService.AnalyzeMetadataAsync | completed |
 | DM-04 | 创建 IDocumentAnalysisService 接口 | completed |
-| DM-05 | 创建 DocLibraryConstants（ValidSubjects / ValidGrades） | completed |
+| DM-05 | 创建 DocthecaConstants（ValidSubjects / ValidGrades） | completed |
 | DM-06 | DocumentFileEntity 新增 Subject/Grade/Year 列 | completed |
 | DM-07 | DocumentFileModel 新增 Subject/Grade/Year 字段 | completed |
 | DM-08 | IDocumentFileRepository 新增 UpdateMetadataAsync | completed |
@@ -34,10 +34,10 @@
 
 ```bash
 # 构建
-dotnet build Ruoyu.Study.DocLibrary.sln --configuration Release
+dotnet build Doctheca.sln --configuration Release
 
 # 测试(目前无 DocumentAnalysis 测试可筛选)
-dotnet test src/Tests/Ruoyu.Study.DocLibrary.Tests --configuration Release
+dotnet test src/Tests/Doctheca.Tests --configuration Release
 
 # 前端构建
 cd frontend && npm run build

@@ -1,15 +1,15 @@
 using Microsoft.EntityFrameworkCore;
-using Ruoyu.Study.DocLibrary.Database.Entities;
-using Ruoyu.Study.DocLibrary.Domain.Models;
-using Ruoyu.Study.DocLibrary.Domain.Repositories;
+using Doctheca.Database.Entities;
+using Doctheca.Domain.Models;
+using Doctheca.Domain.Repositories;
 
-namespace Ruoyu.Study.DocLibrary.Database.Repositories;
+namespace Doctheca.Database.Repositories;
 
 public class DocumentParseImageRepository : IDocumentParseImageRepository
 {
-    private readonly DocLibraryDbContext _context;
+    private readonly DocthecaDbContext _context;
 
-    public DocumentParseImageRepository(DocLibraryDbContext context)
+    public DocumentParseImageRepository(DocthecaDbContext context)
     {
         _context = context;
     }

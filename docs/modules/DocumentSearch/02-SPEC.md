@@ -82,7 +82,7 @@ public static class SearchMatchType
 public class OpenSearchOptions
 {
     public string Url { get; set; } = "http://localhost:9200";
-    public string IndexName { get; set; } = "doclibrary-segments";
+    public string IndexName { get; set; } = "doctheca-segments";
 }
 ```
 
@@ -268,8 +268,8 @@ public class OpenSearchOptions
 
 **校验失败响应 (400 Bad Request)**：
 ```json
-{ "success": false, "message": "Query cannot be empty", "errorCode": "DOCLIBRARY_QUERY_REQUIRED" }
-{ "success": false, "message": "Query exceeds 200 characters", "errorCode": "DOCLIBRARY_QUERY_TOO_LONG" }
+{ "success": false, "message": "Query cannot be empty", "errorCode": "DOCTHECA_QUERY_REQUIRED" }
+{ "success": false, "message": "Query exceeds 200 characters", "errorCode": "DOCTHECA_QUERY_TOO_LONG" }
 ```
 
 > 注：成功响应**不**包含 `success` 字段；错误消息为**英文**（非中文）。`nextPageToken` 无更多结果时为空字符串 `""`。
@@ -283,8 +283,8 @@ public class OpenSearchOptions
 
 | 场景 | 处理 |
 |------|------|
-| 查询词为空 | HTTP 400，`DOCLIBRARY_QUERY_REQUIRED` |
-| 查询词超过 200 字符 | HTTP 400，`DOCLIBRARY_QUERY_TOO_LONG` |
+| 查询词为空 | HTTP 400，`DOCTHECA_QUERY_REQUIRED` |
+| 查询词超过 200 字符 | HTTP 400，`DOCTHECA_QUERY_TOO_LONG` |
 | `pageSize` 超限 | 静默截断为 100 |
 | blocks 为空（索引时） | LogWarning 返回，不抛异常 |
 | OpenSearch 连接失败（索引/删除） | 抛异常，调用方捕获后 LogWarning，不阻塞主流程 |
@@ -327,7 +327,7 @@ LLM 分析完成后，调用 `UpdateDocumentFileMetadataAsync(documentFileId, ne
 | 配置节 | 键 | 默认值 |
 |--------|-----|--------|
 | `OpenSearch` | `Url` | `http://localhost:9200` |
-| `OpenSearch` | `IndexName` | `doclibrary-segments` |
+| `OpenSearch` | `IndexName` | `doctheca-segments` |
 
 - 配置绑定：`builder.Services.Configure<OpenSearchOptions>(builder.Configuration.GetSection("OpenSearch"))`。
 - DI 注册：`AddSingleton<ISearchIndexService, OpenSearchIndexService>()`。
@@ -374,7 +374,7 @@ LLM 分析完成后，调用 `UpdateDocumentFileMetadataAsync(documentFileId, ne
 
 ## 13. 第 2 代 — minerU block 结构化检索规格（演进 V1）
 
-> 第 2 代复用 V1 同一 OpenSearch 索引（`doclibrary-segments`）与同一 `StructaDocParseWorker` 入口，**不新建索引、不新建平行 endpoint、不新建 `BlockXxx` 独立模型类**。第 2 代在 V1 索引写入时**追加** minerU 维度字段与 `blockData` 内嵌对象，在 V1 endpoint `GET /admin/documents/search` 上**追加** minerU 过滤参数与回挂字段，V1 查询路径零变更。
+> 第 2 代复用 V1 同一 OpenSearch 索引（`doctheca-segments`）与同一 `StructaDocParseWorker` 入口，**不新建索引、不新建平行 endpoint、不新建 `BlockXxx` 独立模型类**。第 2 代在 V1 索引写入时**追加** minerU 维度字段与 `blockData` 内嵌对象，在 V1 endpoint `GET /admin/documents/search` 上**追加** minerU 过滤参数与回挂字段，V1 查询路径零变更。
 
 ### 13.1 第 2 代接口变更（扩展 V1 组件）
 
@@ -621,7 +621,7 @@ public static async Task<IResults> Search(...)
 | `_meta.block_data` 缺失 | `BlockData = null`，不阻塞响应 |
 | `pageToken` 解码失败 | LogDebug，从第一页开始（V1 不变） |
 
-> 注：**去掉** `DOCLIBRARY_FILTER_REQUIRED` 错误码 —— 第 2 代 endpoint 与 V1 共用 `GET /admin/documents/search`；V1 的 `query` 必填校验（空 → 400 `DOCLIBRARY_QUERY_REQUIRED`）**保留**作为唯一必填守卫，不需要另立 filter 必填守卫。
+> 注：**去掉** `DOCTHECA_FILTER_REQUIRED` 错误码 —— 第 2 代 endpoint 与 V1 共用 `GET /admin/documents/search`；V1 的 `query` 必填校验（空 → 400 `DOCTHECA_QUERY_REQUIRED`）**保留**作为唯一必填守卫，不需要另立 filter 必填守卫。
 
 ### 13.9 第 2 代实现步骤（扩展 V1，不新建）
 
@@ -650,7 +650,7 @@ _meta         = new { block_data = block.BlockData }   // 整块回挂（V1 mine
 
 #### 13.9.3 前端扩展
 
-- doclibrary 自带前端**改造**现有 `SearchPage.vue`（V1 页保留），新增"高级筛选"抽屉 + 结果行展开 `blockData`/`bbox`/`score` 详情。**不新增**平行 `BlockSearchPage.vue`。
+- doctheca 自带前端**改造**现有 `SearchPage.vue`（V1 页保留），新增"高级筛选"抽屉 + 结果行展开 `blockData`/`bbox`/`score` 详情。**不新增**平行 `BlockSearchPage.vue`。
 - 不动 Ruoyu.Admin。
 
 ### 13.10 第 2 代配置
@@ -682,5 +682,5 @@ _meta         = new { block_data = block.BlockData }   // 整块回挂（V1 mine
 | `ISearchDomainService.cs` / `SearchDomainService.cs` | `ExactSearchAsync` 内追加 minerU filter 透传与回挂字段解析（V1 方法内扩展） |
 | `DocumentSearchEndpoints.cs`（扩展，同一文件） | `GET /admin/documents/search` 追加可选 minerU 入参（V1 原有入参与校验保留） |
 | `StructaDocParseWorker.cs` | `IndexBlocksToSearchAsync` 追加 minerU 维度字段（同一 bulk） |
-| `SearchPage.vue`（doclibrary 自带前端 扩展，同一页面） | 加"高级筛选"抽屉 + 结果行展开详情 |
+| `SearchPage.vue`（doctheca 自带前端 扩展，同一页面） | 加"高级筛选"抽屉 + 结果行展开详情 |
 | `Program.cs` | 无变更（复用 V1 DI 注册） |

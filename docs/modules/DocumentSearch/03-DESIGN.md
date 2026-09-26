@@ -36,7 +36,7 @@
 
 ## 第 2 代演进：基于 minerU v1 JSON 的 block 级检索
 
-> **演进方式：并入 V1 索引 / V1 endpoint / V1 前端**—— 不新建平行 endpoint、不新建 `BlockXxx` 独立模型类、不新建独立的 `BlockSearchPage.vue` 平行页。原因（来自 @user 设计审查）：管理后台的"block 级检索"与现有的"精确关键词检索"共享同一 OpenSearch 索引、同一 `document_parse_blocks` 表、同一 `StructaDocParseWorker` 入口、同一 `SearchDomainService` 降级链路、同一 doclibrary 自带前端——另开一条平行路径等于维护两套检索。
+> **演进方式：并入 V1 索引 / V1 endpoint / V1 前端**—— 不新建平行 endpoint、不新建 `BlockXxx` 独立模型类、不新建独立的 `BlockSearchPage.vue` 平行页。原因（来自 @user 设计审查）：管理后台的"block 级检索"与现有的"精确关键词检索"共享同一 OpenSearch 索引、同一 `document_parse_blocks` 表、同一 `StructaDocParseWorker` 入口、同一 `SearchDomainService` 降级链路、同一 doctheca 自带前端——另开一条平行路径等于维护两套检索。
 
 ### minerU v1 block 字段来源与分层
 
@@ -121,7 +121,7 @@ type 枚举 (完整): text, title, equation, image, image_caption, image_footnot
 理由：
 - 索引/写入/降级/分页完全复用；维护工作量接近最小。
 - 结果契约向后兼容：新增字段 `BlockData`/`Bbox`/`Score` 在 `SearchResultModel` 是 optional；不传/不展示的前端（老 Ruoyu.Admin 如有引用）不受影响。
-- 管理界面入口仍在 doclibrary 自带前端；不扩大 Ruoyu.Admin 边界。
+- 管理界面入口仍在 doctheca 自带前端；不扩大 Ruoyu.Admin 边界。
 - minerU `type` 与 `block_type` 同源、`page_id` 与 `page_number` 同源、`text|content|body` 与 `text_content` 同源 → 维度 1 零新增映射成本。
 
 ### `block_data` 回挂策略（同平行 V2 的 B 方案，精简后保留）
@@ -142,7 +142,7 @@ V1 endpoint 的新参数 `blockType` 接受**字符串**（自由文本），服
 ## 目录与文件结构
 
 ```
-src/services/ruoyu.doclibrary/
+
 ├── src/
 │   ├── Domain/
 │   │   ├── Models/
@@ -167,12 +167,12 @@ src/services/ruoyu.doclibrary/
 │   │   ├── OpenSearchIndexService.cs              # OpenSearch 索引服务 facade（组合上述类，实现 ISearchIndexService）
 │   │   └── StructaDocParseWorker.cs               # 解析完成后索引（best-effort，追加 minerU 字段）
 │   └── Host/
-│       ├── frontend/                              # doclibrary 自带前端
+│       ├── frontend/                              # doctheca 自带前端
 │       │   ├── src/pages/
 │       │   │   └── SearchPage.vue                 # 搜索页（第 2 代演进加"高级筛选"抽屉 + blockData 展开）
 │       ├── appsettings.json                       # OpenSearch 配置（不变）
 │       └── Program.cs                             # DI 注册（不变）
-└── src/Tests/Ruoyu.Study.DocLibrary.Tests/
+└── src/Tests/Doctheca.Tests/
     ├── OpenSearchIndexServiceTests.cs             # 追加 minerU 字段映射/查询/回挂用例
     └── SearchDomainServiceTests.cs                # 追加 minerU filter 透传 + 回挂降级用例
 ```
@@ -357,11 +357,11 @@ _logger.LogDebug("OpenSearch search request: index={Index}, body={Body}", indexN
 
 | 依赖 | 提供能力 | 所在模块 |
 |------|---------|---------|
-| `IDocumentParseBlockRepository` | 读取 parse 的 blocks（索引数据源） | `Ruoyu.Study.DocLibrary.Domain.Repositories` |
-| `IDocumentParseBlockRepository.GetByParseIdAsync` | 通过与 V1 同一查询取 blocks，不新增仓储方法 | `Ruoyu.Study.DocLibrary.Domain.Repositories` |
-| `IOptions<OpenSearchOptions>` | OpenSearch 配置（Url / IndexName） | `Ruoyu.Study.DocLibrary.Domain.Models` |
+| `IDocumentParseBlockRepository` | 读取 parse 的 blocks（索引数据源） | `Doctheca.Domain.Repositories` |
+| `IDocumentParseBlockRepository.GetByParseIdAsync` | 通过与 V1 同一查询取 blocks，不新增仓储方法 | `Doctheca.Domain.Repositories` |
+| `IOptions<OpenSearchOptions>` | OpenSearch 配置（Url / IndexName） | `Doctheca.Domain.Models` |
 | OpenSearch 2.x | 索引存储与搜索 | 外部服务（HTTP） |
-| `StructaDocParseWorker` | 索引写入复用的 best-effort 入口（第 2 代 minerU 字段在同一 bulk 追加） | `Ruoyu.Study.DocLibrary.Service` |
+| `StructaDocParseWorker` | 索引写入复用的 best-effort 入口（第 2 代 minerU 字段在同一 bulk 追加） | `Doctheca.Service` |
 
 > 第 2 代演进**不引入**新外部依赖（无新 NuGet 包、无新数据库表、无新 OSS 存储、无第三方 minerU 客户端变更）。minerU v1 block schema 中 V1 索引未覆盖的字段（`chars`/`position`/`layout_width` 等）以 `block_data` jsonb 入库，管理界面通过现有 `GET /admin/document-files/{id}` 查看，不构成新依赖倒置。
 

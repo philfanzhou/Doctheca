@@ -1,6 +1,6 @@
 # DocumentParse — 文档解析（StructaDoc 管线）
 
-> 按 [ADR-0009](../../../../../docs/adr/0009-doclibrary-structadoc-parse-migration.md)，解析管线已从自维护 MinerU 实现迁移到外部 StructaDoc 服务。本文档是原 DocumentParse 六件套收敛后的单一能力文档。
+> 按 [ADR-0009](../../../../../docs/adr/0009-doctheca-structadoc-parse-migration.md)，解析管线已从自维护 MinerU 实现迁移到外部 StructaDoc 服务。本文档是原 DocumentParse 六件套收敛后的单一能力文档。
 
 ## 能力概述
 
@@ -16,7 +16,7 @@
 | GET | `/admin/document-parses/{parseId}/images/{imageId}/content` | 新解析图片代理：从 StructaDoc 流式读取 Asset 字节；浏览器经 admin Cookie 认证，可直接用于 `<img>` |
 
 解析状态枚举：`pending` / `parsing` / `parsed` / `failed`（`document_parses.status`）。
-未配置 StructaDoc 时触发解析返回 503 + `DOCLIBRARY_STRUCTADOC_NOT_CONFIGURED`。
+未配置 StructaDoc 时触发解析返回 503 + `DOCTHECA_STRUCTADOC_NOT_CONFIGURED`。
 
 ## 后台 Worker（StructaDocParseWorker）
 
@@ -63,6 +63,6 @@
 
 ## 验证
 
-- 单元测试：`src/Tests/Ruoyu.Study.DocLibrary.Tests/`（`StructaDoc/StructaDocClientTests`、`Parsing/StructaDocParseResultSyncTests`、`Parsing/ParseImageContentSourceTests`、`StructaDocParseWorkerTests`）。
-- 命令：`dotnet test src/Ruoyu.Study.DocLibrary.sln --configuration Release`（在本服务目录）。
+- 单元测试：`src/Tests/Doctheca.Tests/`（`StructaDoc/StructaDocClientTests`、`Parsing/StructaDocParseResultSyncTests`、`Parsing/ParseImageContentSourceTests`、`StructaDocParseWorkerTests`）。
+- 命令：`dotnet test src/Doctheca.sln --configuration Release`（在本服务目录）。
 - 切换流量前须在真实环境以真实文档验证 `vlm` + 批量端点组合（ADR-0009 后果条款）。

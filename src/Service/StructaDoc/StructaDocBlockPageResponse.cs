@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace Ruoyu.Study.DocLibrary.Service.StructaDoc;
+namespace Doctheca.Service.StructaDoc;
 
 /// <summary>Wire DTO for the paginated blocks response ({ items, nextSequence }).</summary>
 public sealed class StructaDocBlockPageResponse

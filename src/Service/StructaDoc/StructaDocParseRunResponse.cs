@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace Ruoyu.Study.DocLibrary.Service.StructaDoc;
+namespace Doctheca.Service.StructaDoc;
 
 /// <summary>Wire DTO for StructaDoc ParseRunResponse.</summary>
 public sealed class StructaDocParseRunResponse

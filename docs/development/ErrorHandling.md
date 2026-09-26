@@ -50,9 +50,9 @@ HTTP 端点实现中必须使用标准的 HTTP 状态码，不得自定义状态
 
 ### Serilog + Loki 日志系统
 
-DocLibrary 使用 Serilog 替代原生 Microsoft.Extensions.Logging，双写到 Console + Grafana Loki。与 Identity 服务接入方式完全一致。
+Doctheca 使用 Serilog 替代原生 Microsoft.Extensions.Logging，双写到 Console + Grafana Loki。与 Identity 服务接入方式完全一致。
 
-配置入口：`Program.cs` 中 `UseAgentSerilog("Ruoyu.Study.DocLibrary")`，读取 `appsettings.json` 中 `Serilog` 配置节。
+配置入口：`Program.cs` 中 `UseAgentSerilog("Doctheca")`，读取 `appsettings.json` 中 `Serilog` 配置节。
 
 Loki 地址统一通过配置键 `Loki:Uri` 注入，`Program.cs` 启动时读取并覆盖 `Serilog:WriteTo:1:Args:uri` 配置键：
 
@@ -73,7 +73,7 @@ Loki 地址统一通过配置键 `Loki:Uri` 注入，`Program.cs` 启动时读�
 | OSS AccessKey / SecretKey | 完全不记录 | — |
 | 密码 / JWT / Refresh Token / Cookie | 完全不记录 | — |
 
-实现位置：`Ruoyu.Study.Common.Ai.SensitiveDataMasker` 静态工具类（位于共享库 `Ruoyu.Study.Ai.Shared`）。业务代码中使用 `_logger.LogInformation("... ApiKey={ApiKey}", SensitiveDataMasker.MaskApiKey(apiKey))` 形式调用。
+实现位置：`Doctheca.Ai.SensitiveDataMasker` 静态工具类（位于 vendored 库 `src/Ai`）。业务代码中使用 `_logger.LogInformation("... ApiKey={ApiKey}", SensitiveDataMasker.MaskApiKey(apiKey))` 形式调用。
 
 > 数据库字段不受此规则约束，仍按业务需要存储原始值；该规则仅约束日志输出。
 
@@ -95,4 +95,4 @@ UseMiddleware<CorrelationIdMiddleware>()
   → MapHealth / MapFallbackToFile
 ```
 
-静态文件与 SPA fallback 保持匿名；管理 route group 要求 `DocLibraryAdmin`。
+静态文件与 SPA fallback 保持匿名；管理 route group 要求 `DocthecaAdmin`。

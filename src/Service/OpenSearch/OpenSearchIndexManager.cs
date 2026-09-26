@@ -3,7 +3,7 @@ using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using OpenSearch.Net;
 
-namespace Ruoyu.Study.DocLibrary.Service.OpenSearch;
+namespace Doctheca.Service.OpenSearch;
 
 internal sealed class OpenSearchIndexManager
 {

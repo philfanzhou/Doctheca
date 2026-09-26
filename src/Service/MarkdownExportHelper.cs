@@ -4,9 +4,9 @@ using System.IO;
 using System.Text;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using Ruoyu.Study.DocLibrary.Domain.Models;
+using Doctheca.Domain.Models;
 
-namespace Ruoyu.Study.DocLibrary.Service;
+namespace Doctheca.Service;
 
 /// <summary>
 /// Shared helper for Markdown/HTML export logic: image path replacement, ZIP building, HTML document wrapping.
@@ -71,7 +71,7 @@ internal static class MarkdownExportHelper
 
     /// <summary>
     /// Replace image references in markdown with viewer URLs resolved per image
-    /// (presigned OSS URLs for legacy parses, DocLibrary proxy URLs for StructaDoc parses).
+    /// (presigned OSS URLs for legacy parses, Doctheca proxy URLs for StructaDoc parses).
     /// </summary>
     public static async Task<string> ReplaceImagePathsAsync(
         string markdown,

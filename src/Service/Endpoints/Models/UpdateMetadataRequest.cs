@@ -1,4 +1,4 @@
-namespace Ruoyu.Study.DocLibrary.Service.Endpoints.Models;
+namespace Doctheca.Service.Endpoints.Models;
 
 /// <summary>
 /// Request body for PUT /admin/document-files/{id}/metadata.

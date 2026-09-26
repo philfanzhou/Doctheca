@@ -1,6 +1,6 @@
-using Ruoyu.Study.Common.Ai;
+using Doctheca.Ai;
 
-namespace Ruoyu.Study.DocLibrary.Domain.Models;
+namespace Doctheca.Domain.Models;
 
 /// <summary>
 /// Configuration options for LLM document analysis.
@@ -14,7 +14,7 @@ public class DocumentAnalysisOptions : AiClientOptions
 
     public DocumentAnalysisOptions()
     {
-        // Override base defaults: doclibrary LLM calls are long-running streaming calls
+        // Override base defaults: doctheca LLM calls are long-running streaming calls
         // (segmentation of large documents) and benefit from a higher retry count and
         // a much longer per-attempt timeout than the typical short VL call.
         MaxRetries = 3;

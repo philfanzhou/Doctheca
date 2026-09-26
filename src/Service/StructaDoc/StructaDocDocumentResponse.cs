@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace Ruoyu.Study.DocLibrary.Service.StructaDoc;
+namespace Doctheca.Service.StructaDoc;
 
 /// <summary>Wire DTO for StructaDoc DocumentResponse (POST/GET /api/v1/documents).</summary>
 public sealed class StructaDocDocumentResponse

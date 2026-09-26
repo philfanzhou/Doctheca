@@ -1,6 +1,6 @@
 # DocumentManagement — 文档文件管理
 
-> 原 DocumentManagement 六件套收敛后的单一能力文档。存储主责按 [ADR-0009](../../../../../docs/adr/0009-doclibrary-structadoc-parse-migration.md) 迁移：新文档原件由 StructaDoc 主责，本地只存引用与元数据。
+> 原 DocumentManagement 六件套收敛后的单一能力文档。存储主责按 [ADR-0009](../../../../../docs/adr/0009-doctheca-structadoc-parse-migration.md) 迁移：新文档原件由 StructaDoc 主责，本地只存引用与元数据。
 
 ## 能力概述
 
@@ -17,12 +17,12 @@
 
 | 场景 | 状态码 | errorCode |
 |------|--------|-----------|
-| StructaDoc 未配置 | 503 | `DOCLIBRARY_STRUCTADOC_NOT_CONFIGURED` |
-| 空文件 | 400 | `DOCLIBRARY_FILE_REQUIRED` |
-| 格式不支持（本地白名单或 StructaDoc 415） | 400 | `DOCLIBRARY_FILE_FORMAT_UNSUPPORTED` |
+| StructaDoc 未配置 | 503 | `DOCTHECA_STRUCTADOC_NOT_CONFIGURED` |
+| 空文件 | 400 | `DOCTHECA_FILE_REQUIRED` |
+| 格式不支持（本地白名单或 StructaDoc 415） | 400 | `DOCTHECA_FILE_FORMAT_UNSUPPORTED` |
 | 超过本地 200MB / StructaDoc 上限（413） | 400 | — |
-| StructaDoc 拒绝 API key（401/403） | 502 | `DOCLIBRARY_STRUCTADOC_UNAUTHORIZED` |
-| 其他 StructaDoc 失败 | 502 | `DOCLIBRARY_STRUCTADOC_ERROR` |
+| StructaDoc 拒绝 API key（401/403） | 502 | `DOCTHECA_STRUCTADOC_UNAUTHORIZED` |
+| 其他 StructaDoc 失败 | 502 | `DOCTHECA_STRUCTADOC_ERROR` |
 
 ### GET /admin/document-files
 
@@ -48,7 +48,7 @@
 
 ### POST /admin/document-files/{id}/parse
 
-校验序列：modelVersion ∈ {`vlm`, `pipeline`} → 文件存在 → 同 modelVersion 无进行中解析（422 `DOCLIBRARY_PARSE_IN_PROGRESS`）→ StructaDoc 已配置（503 `DOCLIBRARY_STRUCTADOC_NOT_CONFIGURED`）。通过后创建 `status=pending` 的 parse 记录；实际提交与轮询见 [DocumentParse](./DocumentParse.md)。
+校验序列：modelVersion ∈ {`vlm`, `pipeline`} → 文件存在 → 同 modelVersion 无进行中解析（422 `DOCTHECA_PARSE_IN_PROGRESS`）→ StructaDoc 已配置（503 `DOCTHECA_STRUCTADOC_NOT_CONFIGURED`）。通过后创建 `status=pending` 的 parse 记录；实际提交与轮询见 [DocumentParse](./DocumentParse.md)。
 
 ## 数据
 
@@ -57,4 +57,4 @@
 ## 验证
 
 - 单元测试：`DocumentFileServiceTests/`（含 Attach 引用回填）、`Authentication/DocumentFileUploadAuthorizationTests`（createdBy、未配置 503）、`Authentication/AuthorizationBoundaryTests`（401/403 边界）、`DocumentFileDeleteCleanupTests`（存量路径收集）。
-- 命令：`dotnet test src/Ruoyu.Study.DocLibrary.sln --configuration Release`（在本服务目录）。
+- 命令：`dotnet test src/Doctheca.sln --configuration Release`（在本服务目录）。

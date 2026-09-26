@@ -1,8 +1,8 @@
 using System.Text;
 using System.Text.Json;
-using Ruoyu.Study.DocLibrary.Domain.Models;
+using Doctheca.Domain.Models;
 
-namespace Ruoyu.Study.DocLibrary.Service.OpenSearch;
+namespace Doctheca.Service.OpenSearch;
 
 internal static class OpenSearchResponseParser
 {

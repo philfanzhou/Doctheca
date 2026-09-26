@@ -1,4 +1,4 @@
-namespace Ruoyu.Study.DocLibrary.Service.StructaDoc;
+namespace Doctheca.Service.StructaDoc;
 
 /// <summary>
 /// Configuration for the StructaDoc document parsing service integration (ADR-0009).
@@ -17,7 +17,7 @@ public class StructaDocOptions
     public int TimeoutSeconds { get; set; } = 300;
 
     /// <summary>
-    /// Optional mapping from DocLibrary model version ("vlm"/"pipeline") to a StructaDoc
+    /// Optional mapping from Doctheca model version ("vlm"/"pipeline") to a StructaDoc
     /// Provider Config ID. When a model is absent here, the enabled default Provider is used.
     /// </summary>
     public Dictionary<string, Guid> ProviderConfigIdByModel { get; set; } = new(StringComparer.OrdinalIgnoreCase);
