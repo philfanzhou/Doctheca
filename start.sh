@@ -1,8 +1,10 @@
 #!/bin/bash
 set -e
 
+# Set IMAGE_REPO=ghcr.io/philfanzhou/doctheca to run a published release instead of a local build.
+IMAGE_REPO="${IMAGE_REPO:-doctheca}"
 IMAGE_TAG="${IMAGE_TAG:-latest}"
-IMAGE_NAME="doctheca:${IMAGE_TAG}"
+IMAGE_NAME="${IMAGE_REPO}:${IMAGE_TAG}"
 CONTAINER_NAME="doctheca"
 HTTP_PORT="5012"
 
