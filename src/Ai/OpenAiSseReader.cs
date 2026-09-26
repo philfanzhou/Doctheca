@@ -41,7 +41,7 @@ public class OpenAiSseReader
         using var reader = new StreamReader(stream);
         var idleTimeout = TimeSpan.FromSeconds(_idleTimeoutSeconds);
 
-        while (!reader.EndOfStream)
+        while (true)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
@@ -60,7 +60,8 @@ public class OpenAiSseReader
                 }
             }
 
-            if (string.IsNullOrEmpty(line)) continue;
+            if (line is null) break;
+            if (line.Length == 0) continue;
             if (!line.StartsWith("data: ", StringComparison.Ordinal)) continue;
 
             var data = line["data: ".Length..];

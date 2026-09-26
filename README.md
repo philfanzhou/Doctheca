@@ -1,6 +1,6 @@
 # Doctheca
 
-A self-hosted **document library & full-text retrieval** service for educational content. Doctheca manages document uploads, delegates parsing to the external [StructaDoc](https://github.com/philfanzhou/StructaDoc) service, synchronizes structured Blocks/Markdown/Images locally, indexes them into OpenSearch, and exposes an admin console for management and precise search. It ships as a single container hosting a .NET 8 minimal API and a Vue 3 admin SPA on the same port (5012).
+A self-hosted **document library & full-text retrieval** service for educational content. Doctheca manages document uploads, delegates parsing to the external [StructaDoc](https://github.com/philfanzhou/StructaDoc) service, synchronizes structured Blocks/Markdown/Images locally, indexes them into OpenSearch, and exposes an admin console for management and precise search. It ships as a single container hosting a .NET 10 minimal API and a Vue 3 admin SPA on the same port (5012).
 
 > Doctheca was extracted from the Ruoyu.Study platform (`ruoyu.doclibrary`, earlier `ruoyu.docretrieval`) with its subtree history preserved. It pairs with StructaDoc: **StructaDoc** ingests and parses documents; **Doctheca** stores references, keeps searchable local copies, and serves retrieval.
 
@@ -17,9 +17,9 @@ A self-hosted **document library & full-text retrieval** service for educational
 
 ## Tech Stack
 
-- **Backend**: .NET 8 + ASP.NET Core minimal API
+- **Backend**: .NET 10 + ASP.NET Core minimal API
 - **Admin frontend**: Vue 3 + TypeScript + Vite + Element Plus
-- **Database**: PostgreSQL (EF Core 8 + Npgsql)
+- **Database**: PostgreSQL (EF Core 10 + Npgsql)
 - **Search**: OpenSearch
 - **Parsing**: external StructaDoc service (HTTP + scoped API key)
 - **Object storage**: S3-compatible (SeaweedFS/MinIO) — legacy objects read-compat & deletion only; new originals/artifacts are owned by StructaDoc
