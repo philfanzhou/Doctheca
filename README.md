@@ -93,7 +93,9 @@ cd frontend && npm ci && npm run build
 
 ## Documentation
 
-Inherited Chinese documentation lives under [`docs/`](docs/): service overview, module specs, integration matrix, database schema, and development guides. Domain language is in [`CONTEXT.md`](CONTEXT.md). AI collaboration conventions are in [`AGENTS.md`](AGENTS.md).
+Inherited Chinese documentation lives under [`docs/`](docs/): service overview, module specs, integration matrix, database schema, and development guides. Domain language is in [`CONTEXT.md`](CONTEXT.md). AI collaboration conventions are in [`AGENTS.md`](AGENTS.md). These inherited documents are still in Chinese; their translation to English is tracked in [#2](https://github.com/philfanzhou/Doctheca/issues/2).
+
+Contributions should follow [CONTRIBUTING.md](CONTRIBUTING.md), and vulnerabilities should be reported through [SECURITY.md](SECURITY.md).
 
 ## License
 
