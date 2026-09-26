@@ -205,7 +205,7 @@ public class S3OssService : IOssService
         {
             _prefixValidator?.ValidateWritePath(objectPath);
 
-            // 如果不是缩略图路径，先删除关联缩略图
+            // If not a thumbnail path, delete the associated thumbnails first
             if (!ThumbnailHelper.IsThumbnailPath(objectPath))
             {
                 var thumbnailPaths = ThumbnailHelper.GetAllThumbnailPaths(objectPath);
@@ -220,7 +220,7 @@ public class S3OssService : IOssService
                     }
                     catch
                     {
-                        // 缩略图不存在时忽略
+                        // Ignore when the thumbnail does not exist
                     }
                 }
             }
@@ -318,7 +318,7 @@ public class S3OssService : IOssService
         }
         catch
         {
-            // 忽略错误，返回空列表
+            // Ignore errors and return an empty list
         }
 
         return objects;

@@ -1,68 +1,68 @@
-# DocumentParse — 文档解析（StructaDoc 管线）
+# DocumentParse — Document Parsing (StructaDoc Pipeline)
 
-> 按 [ADR-0009](../../../../../docs/adr/0009-doctheca-structadoc-parse-migration.md)，解析管线已从自维护 MinerU 实现迁移到外部 StructaDoc 服务。本文档是原 DocumentParse 六件套收敛后的单一能力文档。
+> Per ADR-0009, Doctheca–StructaDoc parse migration, the parsing pipeline has migrated from the self-maintained MinerU implementation to the external StructaDoc service. This document is the single capability document consolidated from the original DocumentParse six-part set.
 
-## 能力概述
+## Capability Overview
 
-- 异步解析生命周期：触发 → `pending` → Worker 提交 StructaDoc Parse Run → `parsing` → 终态同步 → `parsed` / `failed`。
-- 原件与解析产物（Markdown、图片、ZIP、规范化 PDF）由 StructaDoc 主责存储；本服务只保存 documentId/parseRunId 引用，并把 Blocks/Markdown/Assets 同步到本地表，供搜索、详情、导出消费。
-- 存量兼容：迁移前的解析记录只读保留（其 `content_list*`/`model_json`/`layout_json`/`zip_path` 列不再写入新数据）；迁移前上传的文件在首次触发解析时由 Worker 惰性上传到 StructaDoc 并回填引用。
+- Asynchronous parse lifecycle: trigger → `pending` → Worker submits a StructaDoc Parse Run → `parsing` → terminal-state sync → `parsed` / `failed`.
+- Originals and parse artifacts (Markdown, images, ZIP, normalized PDF) are stored by StructaDoc as the owner; this service only keeps documentId/parseRunId references and syncs Blocks/Markdown/Assets into local tables for search, detail, and export consumption.
+- Legacy compatibility: parse records from before the migration are kept read-only (their `content_list*`/`model_json`/`layout_json`/`zip_path` columns no longer receive new data); files uploaded before the migration are lazily uploaded to StructaDoc by the Worker on the first parse trigger, with references backfilled.
 
-## 端点与契约
+## Endpoints and Contracts
 
-| 方法 | 路径 | 说明 |
+| Method | Path | Description |
 |------|------|------|
-| POST | `/admin/document-files/{id}/parse?modelVersion=vlm\|pipeline` | 触发解析（校验与错误码见 [DocumentManagement](./DocumentManagement.md)） |
-| GET | `/admin/document-parses/{parseId}/images/{imageId}/content` | 新解析图片代理：从 StructaDoc 流式读取 Asset 字节；浏览器经 admin Cookie 认证，可直接用于 `<img>` |
+| POST | `/admin/document-files/{id}/parse?modelVersion=vlm\|pipeline` | Trigger a parse (for validation and error codes see [DocumentManagement](./DocumentManagement.md)) |
+| GET | `/admin/document-parses/{parseId}/images/{imageId}/content` | New-parse image proxy: streams Asset bytes from StructaDoc; browsers authenticate via the admin Cookie, so it can be used directly in `<img>` |
 
-解析状态枚举：`pending` / `parsing` / `parsed` / `failed`（`document_parses.status`）。
-未配置 StructaDoc 时触发解析返回 503 + `DOCTHECA_STRUCTADOC_NOT_CONFIGURED`。
+Parse status enum: `pending` / `parsing` / `parsed` / `failed` (`document_parses.status`).
+Triggering a parse when StructaDoc is not configured returns 503 + `DOCTHECA_STRUCTADOC_NOT_CONFIGURED`.
 
-## 后台 Worker（StructaDocParseWorker）
+## Background Worker (StructaDocParseWorker)
 
-每 5 秒轮询 `pending` + `parsing` 记录：
+Polls `pending` + `parsing` records every 5 seconds:
 
-1. **pending**：
-   - 文件无 `structadoc_document_id` 且有 `file_path`（存量）→ 从 OSS 下载并上传 StructaDoc，回填引用（惰性迁移）；两者皆无 → failed。
-   - `POST parse-runs`（`Idempotency-Key` = parseId 的 "N" 格式；`modelVersion` 命中 `StructaDoc:ProviderConfigIdByModel` 时携带 `providerConfigId`，否则用 StructaDoc 默认 Provider）。
-   - 成功 → `parsing`，`external_task_id` 与 `structadoc_parse_run_id` 记录 run id。
-2. **parsing**：轮询 `GET /api/v1/parse-runs/{id}`：
-   - `succeeded` → 执行结果同步，随后 best-effort OpenSearch 索引与 LLM 元数据分析；
-   - `failed` / `cancelled` → 本地 `failed`，`error_message` 携带 StructaDoc `errorCode: errorMessage`；
-   - run 404 → `failed`（run 不再存在）；
-   - 记录无 `structadoc_parse_run_id`（迁移中断的遗留 `parsing`）→ `failed`，提示重新触发。
-3. **失败语义**：transient 错误（网络、超时、408/429/5xx）保持当前状态，下一轮重试；permanent 错误写入 `failed`。
+1. **pending**:
+   - File has no `structadoc_document_id` but has `file_path` (legacy) → download from OSS and upload to StructaDoc, backfilling the reference (lazy migration); neither present → failed.
+   - `POST parse-runs` (`Idempotency-Key` = parseId in "N" format; `modelVersion` carries `providerConfigId` when it hits `StructaDoc:ProviderConfigIdByModel`, otherwise the StructaDoc default Provider is used).
+   - Success → `parsing`; `external_task_id` and `structadoc_parse_run_id` record the run id.
+2. **parsing**: polls `GET /api/v1/parse-runs/{id}`:
+   - `succeeded` → run result sync, then best-effort OpenSearch indexing and LLM metadata analysis;
+   - `failed` / `cancelled` → local `failed`, with `error_message` carrying StructaDoc's `errorCode: errorMessage`;
+   - run 404 → `failed` (the run no longer exists);
+   - record has no `structadoc_parse_run_id` (leftover `parsing` from an interrupted migration) → `failed`, prompting a re-trigger.
+3. **Failure semantics**: transient errors (network, timeout, 408/429/5xx) keep the current state and retry in the next round; permanent errors are written as `failed`.
 
-## 结果同步（StructaDocParseResultSync）
+## Result Sync (StructaDocParseResultSync)
 
-- **Assets → `document_parse_images`**：`image_name` = asset.name；`image_path` = asset id（Guid 字符串，**不是 OSS 路径**）；`content_type` = asset.mediaType（缺省 `image/jpeg`）。
-- **Blocks → `document_parse_blocks`**（按 `sequence` 排序）：
-  - `page_id` = pageNumber − 1（1-based → 本地 0-based；null → 0）；`sort_index` 页内递增；
-  - `block_type` = type（截断 20）；`text_content` = content；`sub_type` = subtype；
-  - `text_level`：subtype `heading-N` → N，否则 −1；`text_format` = contentFormat；
-  - bbox：StructaDoc 0–1 归一化坐标 ×1000，对齐本地 0–1000 约定；`score` = confidence；
-  - `image_id`：block.assetId → 本地 image 记录映射；`block_data` = block 的规范化 JSON。
-- **Markdown → `document_parses.markdown_content`**；状态置 `parsed` 并记录 `parsed_at`。
-- **幂等**：同步前删除本 parse 旧 images（blocks 由仓储先删后插），崩溃后重跑安全。
+- **Assets → `document_parse_images`**: `image_name` = asset.name; `image_path` = asset id (Guid string, **not an OSS path**); `content_type` = asset.mediaType (defaults to `image/jpeg`).
+- **Blocks → `document_parse_blocks`** (ordered by `sequence`):
+  - `page_id` = pageNumber − 1 (1-based → local 0-based; null → 0); `sort_index` increments within a page;
+  - `block_type` = type (truncated to 20); `text_content` = content; `sub_type` = subtype;
+  - `text_level`: subtype `heading-N` → N, otherwise −1; `text_format` = contentFormat;
+  - bbox: StructaDoc 0–1 normalized coordinates ×1000, aligned with the local 0–1000 convention; `score` = confidence;
+  - `image_id`: block.assetId → local image record mapping; `block_data` = the block's normalized JSON.
+- **Markdown → `document_parses.markdown_content`**; status is set to `parsed` and `parsed_at` is recorded.
+- **Idempotency**: old images of this parse are deleted before syncing (blocks are deleted-then-inserted by the repository), so re-running after a crash is safe.
 
-## StructaDoc 客户端契约摘要（IStructaDocClient）
+## StructaDoc Client Contract Summary (IStructaDocClient)
 
-- 认证：`Authorization: ApiKey <credential>`，需 `documents:write`、`parses:read`、`parses:write` scope。
-- `POST /api/v1/documents`（multipart 字段 `file`，201）；`POST /api/v1/documents/{id}/parse-runs`（201 首次 / 200 + `Idempotency-Replayed` 重放）。
-- `GET /api/v1/parse-runs/{id}`：终态仅 `succeeded` / `failed` / `cancelled`。
-- `GET .../blocks?limit=1000&afterSequence=`：必须跟随 `nextSequence` 翻页到 null。
-- `GET .../assets`、`.../markdown`、`.../assets/{assetId}/content`（直接字节流，无签名 URL）。
-- `DELETE /api/v1/documents/{id}`（202 受理 / 404 幂等；存在未终态 run 时先 cancel）；`DELETE /api/v1/parse-runs/{id}`（仅终态）。
-- 错误：RFC 7807 problem+json（401/403 为空 body，不得解析）；408/429/5xx/网络错误分类为 transient。
+- Authentication: `Authorization: ApiKey <credential>`, requiring the `documents:write`, `parses:read`, `parses:write` scopes.
+- `POST /api/v1/documents` (multipart field `file`, 201); `POST /api/v1/documents/{id}/parse-runs` (201 first time / 200 + `Idempotency-Replayed` on replay).
+- `GET /api/v1/parse-runs/{id}`: terminal states are only `succeeded` / `failed` / `cancelled`.
+- `GET .../blocks?limit=1000&afterSequence=`: must follow `nextSequence` paging until null.
+- `GET .../assets`, `.../markdown`, `.../assets/{assetId}/content` (direct byte stream, no signed URL).
+- `DELETE /api/v1/documents/{id}` (202 accepted / 404 idempotent; cancel first when a non-terminal run exists); `DELETE /api/v1/parse-runs/{id}` (terminal states only).
+- Errors: RFC 7807 problem+json (empty body for 401/403, must not be parsed); 408/429/5xx/network errors are classified as transient.
 
-## 数据与配置
+## Data and Configuration
 
-- 新列：`document_parses.structadoc_parse_run_id`、`document_files.structadoc_document_id`；`document_files.file_path` 改为可空（仅存量使用）。详见 [database/](../database/README.md)。
-- 配置节 `StructaDoc`：`BaseUrl`（Consul KV `service-endpoints.json`）、`ApiKey`（start.sh 环境变量 `StructaDoc__ApiKey` 注入，不落仓库）、`TimeoutSeconds`（默认 300）、`ProviderConfigIdByModel`（可选，`vlm`/`pipeline` → StructaDoc Provider Config ID）。
-- Provider 侧要求：MinerU Cloud Provider 配置 `model_version=vlm`、`is_ocr`、`enable_formula`、`enable_table` 对齐迁移前解析质量。
+- New columns: `document_parses.structadoc_parse_run_id`, `document_files.structadoc_document_id`; `document_files.file_path` becomes nullable (legacy use only). See [database/](../database/README.md).
+- Configuration section `StructaDoc`: `BaseUrl` (Consul KV `service-endpoints.json`), `ApiKey` (injected via the start.sh environment variable `StructaDoc__ApiKey`, never committed to the repo), `TimeoutSeconds` (default 300), `ProviderConfigIdByModel` (optional, `vlm`/`pipeline` → StructaDoc Provider Config ID).
+- Provider-side requirements: the MinerU Cloud Provider must configure `model_version=vlm`, `is_ocr`, `enable_formula`, `enable_table` to match pre-migration parse quality.
 
-## 验证
+## Validation
 
-- 单元测试：`src/Tests/Doctheca.Tests/`（`StructaDoc/StructaDocClientTests`、`Parsing/StructaDocParseResultSyncTests`、`Parsing/ParseImageContentSourceTests`、`StructaDocParseWorkerTests`）。
-- 命令：`dotnet test src/Doctheca.sln --configuration Release`（在本服务目录）。
-- 切换流量前须在真实环境以真实文档验证 `vlm` + 批量端点组合（ADR-0009 后果条款）。
+- Unit tests: `src/Tests/Doctheca.Tests/` (`StructaDoc/StructaDocClientTests`, `Parsing/StructaDocParseResultSyncTests`, `Parsing/ParseImageContentSourceTests`, `StructaDocParseWorkerTests`).
+- Command: `dotnet test src/Doctheca.sln --configuration Release` (in this service's directory).
+- Before switching traffic, the `vlm` + batch endpoint combination must be validated with real documents in a real environment (ADR-0009 consequences clause).

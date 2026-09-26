@@ -1,6 +1,6 @@
-# 功能索引
+# Feature Index
 
-| 业务域 | 功能点入口 |
+| Business domain | Feature entry point |
 |--------|------------|
 | DocumentManagement | [DocumentManagement](./DocumentManagement.md) |
 | DocumentParse | [DocumentParse](./DocumentParse.md) |

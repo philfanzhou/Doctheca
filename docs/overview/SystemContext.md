@@ -1,12 +1,12 @@
-﻿# SystemContext — 服务定位
+﻿# SystemContext — Service Positioning
 
-## 服务定位
+## Service Positioning
 
-`doctheca` 是 Ruoyu.Study 平台的文档检索微服务，负责教育文档的存储、
-解析、管理与全文精确搜索。服务在 HTTP 5012 上同时托管 Vue 管理前端、
-管理 API 和健康检查。
+`doctheca` is the document retrieval microservice of the Ruoyu.Study platform, responsible for
+storing, parsing, managing, and full-text exact searching of educational documents. The service
+hosts the Vue admin frontend, the admin API, and health checks together on HTTP 5012.
 
-## 调用关系
+## Call Relationships
 
 ```text
 Admin Browser
@@ -17,36 +17,36 @@ Admin Browser
 Doctheca :5012 ─────► SignaCore :5002
   │                    password/refresh/revoke + OIDC/JWKS
   ├────► PostgreSQL
-  ├────► SeaweedFS/MinIO（仅存量对象）
+  ├────► SeaweedFS/MinIO (legacy objects only)
   ├────► OpenSearch
-  ├────► StructaDoc :8080（文档上传与解析，ADR-0009）
-  └────► optional LLM（元数据分析）
+  ├────► StructaDoc :8080 (document upload and parsing, ADR-0009)
+  └────► optional LLM (metadata analysis)
 ```
 
-## 上游调用方
+## Upstream Callers
 
-| 调用方 | 入口 | 身份 | 用途 |
+| Caller | Entry | Identity | Purpose |
 |--------|------|------|------|
-| Admin UI | `/`、`/admin/*` | Identity `role=admin` Cookie/JWT | 文件、解析、元数据、导出和搜索管理 |
+| Admin UI | `/`, `/admin/*` | Identity `role=admin` Cookie/JWT | File, parse, metadata, export, and search management |
 
-普通 Identity 用户没有管理员角色，不能登录或调用管理 API。当前 Doctheca
-不提供 Quaestura 专用 HTTP 接口；如果后续出现真实调用方，必须重新设计
-数据契约和服务认证。
+Regular Identity users have no administrator role and cannot log in or call the admin API. Currently Doctheca
+provides no dedicated HTTP interface for Quaestura; if a real caller appears later, the data
+contract and service authentication must be redesigned.
 
-## 下游依赖
+## Downstream Dependencies
 
-| 依赖 | 用途 |
+| Dependency | Purpose |
 |------|------|
-| SignaCore | 密码登录、Token 刷新/撤销、OIDC discovery/JWKS |
-| PostgreSQL | 文件、解析记录和本地同步的 blocks/images |
-| StructaDoc（外部仓库，:8080） | 文档原件与解析产物主责存储；Parse Run 执行（MinerU Provider + LibreOffice 转换回退）；Blocks/Markdown/Assets API |
-| MinIO / SeaweedFS / LocalFile | 仅存量（迁移前上传）文件与解析图片的只读兼容与删除清理 |
-| OpenSearch | 解析 block 全文索引 |
-| OpenAI 兼容 LLM（可选） | 元数据分析 |
+| SignaCore | Password login, token refresh/revocation, OIDC discovery/JWKS |
+| PostgreSQL | Files, parse records, and locally synchronized blocks/images |
+| StructaDoc (external repository, :8080) | Primary-ownership storage of document originals and parse artifacts; Parse Run execution (MinerU provider + LibreOffice conversion fallback); Blocks/Markdown/Assets APIs |
+| MinIO / SeaweedFS / LocalFile | Read-only compatibility and delete cleanup for legacy (pre-migration uploaded) files and parse images only |
+| OpenSearch | Full-text indexing of parse blocks |
+| OpenAI-compatible LLM (optional) | Metadata analysis |
 
-## 服务边界
+## Service Boundaries
 
-- Doctheca 独占写入自己的文档与解析记录表；新文档的原件与解析产物由 StructaDoc 主责存储，Doctheca 只保存 documentId/parseRunId 引用和本地 blocks/images 同步副本（ADR-0009）。
-- Doctheca 不直连 StructaDoc 的数据库或对象存储，一律经其版本化 API。
-- Doctheca 不保存 Quaestura 导入状态或题目 ID。
-- Identity 负责用户凭据验证和 JWT 签发；Doctheca 只验证并消费管理员身份。
+- Doctheca exclusively writes its own document and parse record tables; originals and parse artifacts of new documents are stored under StructaDoc's primary ownership, and Doctheca only keeps documentId/parseRunId references and local blocks/images synchronized copies (ADR-0009).
+- Doctheca does not connect directly to StructaDoc's database or object storage; everything goes through its versioned API.
+- Doctheca does not store Quaestura import status or question IDs.
+- Identity is responsible for user credential validation and JWT issuance; Doctheca only validates and consumes the administrator identity.

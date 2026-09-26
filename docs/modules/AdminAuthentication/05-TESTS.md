@@ -1,53 +1,53 @@
-# 05-TESTS — Doctheca 管理员认证测试
+# 05-TESTS — Doctheca Admin Authentication Tests
 
-## 后端自动化测试
+## Backend automated tests
 
-| 编号 | 场景 | 预期 |
+| ID | Scenario | Expected |
 |------|------|------|
-| AUTH-UT-01 | 未登录访问管理 API | 401 |
-| AUTH-UT-02 | 有效普通用户 JWT 访问管理 API | 403 |
-| AUTH-UT-03 | 有效管理员 JWT 访问管理 API | 请求进入端点 |
-| AUTH-UT-04 | 管理员正确账号密码登录 | 200，设置两个 HttpOnly Cookie，响应不含 Token |
-| AUTH-UT-05 | 错误密码登录 | 401，统一错误消息，无 Cookie |
-| AUTH-UT-06 | 普通账户正确账号密码登录 | 403，无 Cookie |
-| AUTH-UT-07 | Identity 返回伪造、错误 issuer、错误 audience、过期或无 admin 角色 Token | 不建立会话 |
-| AUTH-UT-08 | Access Cookie登录后访问管理 API | 允许 |
-| AUTH-UT-09 | Refresh Cookie轮换 | 新 Token 均验证成功后覆盖 Cookie |
-| AUTH-UT-10 | Refresh Token 无效 | 401 并清除 Cookie |
-| AUTH-UT-11 | 登出 | 调用 revoke 并清除 Cookie |
-| AUTH-UT-12 | Identity revoke 不可用时登出 | 仍清除 Cookie并返回 200 |
-| AUTH-UT-13 | `/health`、静态入口和 SPA fallback | 匿名可访问 |
-| AUTH-UT-14 | `/internal/question-bank/*` 和旧导入状态路径 | 不映射 |
-| AUTH-UT-15 | Identity token 请求 | 字段为 `grantType`、`username`、`password` / `refreshToken`，并发送 Doctheca AppId/AppSecret headers |
-| AUTH-UT-16 | SignaCore 返回 401 拒绝 App 凭据 | 映射为 Identity 不可用，不伪装成用户密码错误 |
+| AUTH-UT-01 | Access the admin API without login | 401 |
+| AUTH-UT-02 | Access the admin API with a valid ordinary-user JWT | 403 |
+| AUTH-UT-03 | Access the admin API with a valid admin JWT | Request reaches the endpoint |
+| AUTH-UT-04 | Admin login with correct credentials | 200, sets two HttpOnly Cookies, response contains no Token |
+| AUTH-UT-05 | Login with a wrong password | 401, uniform error message, no Cookie |
+| AUTH-UT-06 | Ordinary account login with correct credentials | 403, no Cookie |
+| AUTH-UT-07 | Identity returns a forged, wrong-issuer, wrong-audience, expired, or no-admin-role Token | No session established |
+| AUTH-UT-08 | Access the admin API after Access Cookie login | Allowed |
+| AUTH-UT-09 | Refresh Cookie rotation | New Tokens overwrite Cookies only after all validations succeed |
+| AUTH-UT-10 | Invalid Refresh Token | 401 and Cookies cleared |
+| AUTH-UT-11 | Logout | Calls revoke and clears Cookies |
+| AUTH-UT-12 | Logout when Identity revoke is unavailable | Still clears Cookies and returns 200 |
+| AUTH-UT-13 | `/health`, static entries, and SPA fallback | Anonymously accessible |
+| AUTH-UT-14 | `/internal/question-bank/*` and old import-status paths | Not mapped |
+| AUTH-UT-15 | Identity token request | Fields are `grantType`, `username`, `password` / `refreshToken`, and Doctheca AppId/AppSecret headers are sent |
+| AUTH-UT-16 | SignaCore returns 401 rejecting the App credentials | Mapped to Identity unavailable, not disguised as a user-password error |
 
-测试使用固定 RSA 测试密钥和受控 Identity HTTP handler，不依赖真实密码或生产密钥。
+Tests use fixed RSA test keys and a controlled Identity HTTP handler, with no dependency on real passwords or production keys.
 
-## 接口移除回归
+## Interface removal regression
 
-- 不映射任何 `/internal/question-bank/*`。
-- 不存在任何导入状态写接口。
-- Doctheca 不创建或更新 `document_parse_imports`。
-- `start.sh` 不注入共享 Identity 信任或 Quaestura（原 QuestionBank） 配置；只注入 Doctheca App 凭据与自身的 Cookie Secure 开关。
+- No `/internal/question-bank/*` is mapped.
+- No import-status write interface exists.
+- Doctheca does not create or update `document_parse_imports`.
+- `start.sh` does not inject shared Identity trust or Quaestura (formerly QuestionBank) configuration; it only injects Doctheca App credentials and its own Cookie Secure switch.
 
-## 前端验证
+## Frontend verification
 
-当前前端未配置单元测试框架，不为本功能引入新 npm 依赖。必须执行：
+The frontend currently has no unit test framework configured, and no new npm dependencies are introduced for this feature. Must run:
 
 ```bash
 cd frontend
 npm run build
 ```
 
-并手工验证：首次打开显示登录页、错误密码、普通账户拒绝、管理员登录、自动刷新、401/403 跳转和退出。
+And manually verify: login page shown on first open, wrong password, ordinary account rejection, admin login, automatic refresh, 401/403 redirects, and logout.
 
-## 项目验证
+## Project verification
 
-在仓库根目录运行：
+Run from the repository root:
 
 ```bash
 dotnet test src/Tests/Doctheca.Tests/Doctheca.Tests.csproj --configuration Release
 dotnet build src/Doctheca.sln --configuration Release
 ```
 
-真实 Identity 可用时，额外按 `docs/development/verification.md` 执行 Cookie 会话 smoke test。
+When a real Identity is available, additionally run the Cookie session smoke test per `docs/development/verification.md`.

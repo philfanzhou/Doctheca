@@ -1,86 +1,86 @@
-# DocumentExport — 命名与风格约定
+# DocumentExport — Naming and Style Conventions
 
-## 命名约定
+## Naming Conventions
 
-| 类型 | 约定 | 示例 |
+| Type | Convention | Example |
 |------|------|------|
-| 端点静态类 | `XxxEndpoints` | `DocumentExportEndpoints` |
-| Helper 静态类 | `XxxHelper`，internal | `MarkdownExportHelper` |
-| 图片模型 | `DocumentParseImageModel` | — |
-| 方法 | PascalCase，Async 后缀 | `ReplaceImagePathsBase64Async`、`BuildMarkdownZipAsync` |
-| 参数 | camelCase | `markdownContent`、`ossService`、`parseId` |
-| 局部变量 | camelCase | `htmlBody`、`zipFileName`、`presignedUrl` |
+| Endpoint static class | `XxxEndpoints` | `DocumentExportEndpoints` |
+| Helper static class | `XxxHelper`, internal | `MarkdownExportHelper` |
+| Image model | `DocumentParseImageModel` | — |
+| Method | PascalCase, Async suffix | `ReplaceImagePathsBase64Async`, `BuildMarkdownZipAsync` |
+| Parameter | camelCase | `markdownContent`, `ossService`, `parseId` |
+| Local variable | camelCase | `htmlBody`, `zipFileName`, `presignedUrl` |
 
-## 方法命名约定（MarkdownExportHelper）
+## Method Naming Conventions (MarkdownExportHelper)
 
-- `ReplaceImagePathsRelative` — 同步，无 IO
-- `ReplaceImagePathsBase64Async` — 异步，涉及 OSS 下载
-- `ReplaceImagePathsPresignedAsync` — 异步，涉及预签名生成
-- `BuildMarkdownZipAsync` — 异步，涉及 OSS 下载
-- `BuildHtmlStream` — 同步，纯内存变换
+- `ReplaceImagePathsRelative` — synchronous, no IO
+- `ReplaceImagePathsBase64Async` — asynchronous, involves OSS downloads
+- `ReplaceImagePathsPresignedAsync` — asynchronous, involves presigned URL generation
+- `BuildMarkdownZipAsync` — asynchronous, involves OSS downloads
+- `BuildHtmlStream` — synchronous, pure in-memory transformation
 
-异步方法一律 `Async` 后缀；同步方法不附加 `Sync` 后缀。
+Asynchronous methods always carry the `Async` suffix; synchronous methods do not add a `Sync` suffix.
 
-## 日志约定
+## Logging Conventions
 
-- 图片下载失败：`logger.LogWarning(ex, "Failed to download image for export: {ImagePath}", img.ImagePath)`
-- Base64 下载失败：`logger.LogWarning(ex, "Failed to download image for HTML export: {ImagePath}", img.ImagePath)`
-- 预签名失败：`logger.LogWarning(ex, "Failed to generate presigned URL for image: {ImagePath}", img.ImagePath)`
+- Image download failure: `logger.LogWarning(ex, "Failed to download image for export: {ImagePath}", img.ImagePath)`
+- Base64 download failure: `logger.LogWarning(ex, "Failed to download image for HTML export: {ImagePath}", img.ImagePath)`
+- Presigning failure: `logger.LogWarning(ex, "Failed to generate presigned URL for image: {ImagePath}", img.ImagePath)`
 
-所有图片级失败使用 `LogWarning`（可恢复，不阻塞导出），附带异常对象与 `ImagePath` 定位。
+All per-image failures use `LogWarning` (recoverable, does not block the export), with the exception object and `ImagePath` for localization.
 
-## 错误消息约定
+## Error Message Conventions
 
-HTTP 响应消息为中文（面向终端用户），错误码为英文常量：
+HTTP response messages are in Chinese (end-user facing); error codes are English constants:
 
-| 错误码 | 消息 | 场景 |
+| Error code | Message | Scenario |
 |--------|------|------|
-| `DOCTHECA_FILE_NOT_FOUND` | `File not found` | 文件级端点 |
-| `DOCTHECA_FILE_NOT_PARSED` | `File is not parsed yet` | 文件级端点 |
-| `DOCTHECA_PARSE_NOT_FOUND` | `Parse record not found` | 解析级端点 |
-| `DOCTHECA_PARSE_NOT_PARSED` | `Parse record is not parsed yet` | 解析级端点 |
+| `DOCTHECA_FILE_NOT_FOUND` | `File not found` | File-level endpoints |
+| `DOCTHECA_FILE_NOT_PARSED` | `File is not parsed yet` | File-level endpoints |
+| `DOCTHECA_PARSE_NOT_FOUND` | `Parse record not found` | Parse-level endpoints |
+| `DOCTHECA_PARSE_NOT_PARSED` | `Parse record is not parsed yet` | Parse-level endpoints |
 
-响应统一格式：`{ "success": false, "message": "...", "errorCode": "..." }`。
+Uniform response format: `{ "success": false, "message": "...", "errorCode": "..." }`.
 
-## 空值与容错语义
+## Null Handling and Fault Tolerance Semantics
 
-| 值 / 场景 | 语义 |
+| Value / scenario | Semantics |
 |-----------|------|
-| `parse.MarkdownContent ?? ""` | 解析内容为空时以空字符串兜底，不抛 null |
-| `file?.FileName ?? "document"` | 解析级导出文件已删除时文件名回退为 `"document"` |
-| 单张图片 OSS 下载失败 | 跳过该张，不阻塞整份导出 |
-| 路径在 markdown 中不存在 | `Replace` 不生效，保持原文 |
+| `parse.MarkdownContent ?? ""` | Falls back to an empty string when the parse content is null; never throws on null |
+| `file?.FileName ?? "document"` | For parse-level export, the file name falls back to `"document"` when the file has been deleted |
+| Single image OSS download failure | Skip that image; do not block the whole export |
+| Path not present in the markdown | `Replace` has no effect; the original text is kept |
 
-## 路径处理约定
+## Path Handling Conventions
 
-- Markdown 中图片引用匹配三种格式：`(<path>)`、`src="<path>"`、`src='<path>'`
-- 相对路径统一指向 `images/{ImageName}`（小写目录名 + 正斜杠）
-- Base64 data URI 格式：`data:{ContentType};base64,{base64}`（MimeType 取自 `img.ContentType`，默认 `image/jpeg`）
+- Image references in Markdown are matched in three formats: `(<path>)`, `src="<path>"`, `src='<path>'`
+- Relative paths uniformly point to `images/{ImageName}` (lowercase directory name + forward slash)
+- Base64 data URI format: `data:{ContentType};base64,{base64}` (MimeType taken from `img.ContentType`, default `image/jpeg`)
 
-## ZIP 打包约定
+## ZIP Packaging Conventions
 
-- Markdown 条目：`{fileName}.md`，`CompressionLevel.Optimal`
-- 图片条目：`images/{ImageName}`，`CompressionLevel.Fastest`
-- `ZipArchive` 使用 `leaveOpen: true`，确保关闭后 MemoryStream 仍可用
-- 返回前重置 `ms.Position = 0`
+- Markdown entry: `{fileName}.md`, `CompressionLevel.Optimal`
+- Image entries: `images/{ImageName}`, `CompressionLevel.Fastest`
+- `ZipArchive` uses `leaveOpen: true` to keep the MemoryStream usable after it is closed
+- Reset `ms.Position = 0` before returning
 
-## HTML 模板约定
+## HTML Template Conventions
 
-- 文档类型：`<!DOCTYPE html>`
-- 语言：`<html lang="zh-CN">`
-- 编码：`charset=UTF-8`
-- 标题：`WebUtility.HtmlEncode(fileName)`（防 XSS）
-- 样式：内联 `<style>`，不引入外部 CSS
-- 转换：`Markdig.Markdown.ToHtml(markdownContent)`
+- Document type: `<!DOCTYPE html>`
+- Language: `<html lang="zh-CN">`
+- Encoding: `charset=UTF-8`
+- Title: `WebUtility.HtmlEncode(fileName)` (XSS prevention)
+- Styles: inline `<style>`, no external CSS
+- Conversion: `Markdig.Markdown.ToHtml(markdownContent)`
 
-## Dispose 约定
+## Dispose Conventions
 
-- `using var imgStream = await ossService.DownloadAsync(...)` — 每张图片流单独释放
-- `ZipArchive` 包裹在 `using` 中，`leaveOpen: true` 仅对底层 `MemoryStream` 放行
-- `StringBuilder` / `MemoryStream` 无需显式 Dispose
+- `using var imgStream = await ossService.DownloadAsync(...)` — each image stream is released individually
+- `ZipArchive` is wrapped in `using`; `leaveOpen: true` only spares the underlying `MemoryStream`
+- `StringBuilder` / `MemoryStream` need no explicit Dispose
 
-## 端点注册约定
+## Endpoint Registration Conventions
 
-- 使用 `MapGroup` 分组：`/admin/document-files`、`/admin/document-parses`
-- 路径参数约束：`{id:guid}`、`{parseId:guid}`
-- 导出端点要求 `DocthecaAdmin` 策略和 Identity `role=admin`
+- Grouped with `MapGroup`: `/admin/document-files`, `/admin/document-parses`
+- Path parameter constraints: `{id:guid}`, `{parseId:guid}`
+- Export endpoints require the `DocthecaAdmin` policy and Identity `role=admin`

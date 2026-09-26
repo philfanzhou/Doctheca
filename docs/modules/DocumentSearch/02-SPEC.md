@@ -1,14 +1,14 @@
-# DocumentSearch — 详细需求规格 (SPEC)
+# DocumentSearch — Detailed Requirement Specification (SPEC)
 
-## 功能概述
+## Feature Overview
 
-DocumentSearch 提供两大能力：
-1. **OpenSearch 块索引写入**：将解析产生的 `document_parse_blocks` 索引到 OpenSearch，并在解析删除、文件删除、元数据更新时自动维护索引。
-2. **精确关键词搜索**：通过 `GET /admin/documents/search` HTTP API 提供基于 OpenSearch BM25 的关键词搜索，支持短语/单词匹配、元数据过滤、游标分页，OpenSearch 不可用时降级为空结果。
+DocumentSearch provides two main capabilities:
+1. **OpenSearch block index writes**: indexes the `document_parse_blocks` produced by parsing into OpenSearch, and automatically maintains the index on parse deletion, file deletion, and metadata updates.
+2. **Exact keyword search**: provides OpenSearch BM25-based keyword search through the `GET /admin/documents/search` HTTP API, supporting phrase/word matching, metadata filtering, and cursor pagination, and degrading to empty results when OpenSearch is unavailable.
 
-## 1. 接口变更
+## 1. Interface Changes
 
-### 1.1 ISearchIndexService（`src/Domain/Repositories/ISearchIndexService.cs`）
+### 1.1 ISearchIndexService (`src/Domain/Repositories/ISearchIndexService.cs`)
 
 ```csharp
 public interface ISearchIndexService
@@ -23,16 +23,16 @@ public interface ISearchIndexService
 }
 ```
 
-| 方法 | 职责 | 调用时机 |
+| Method | Responsibility | When called |
 |------|------|---------|
-| `EnsureIndexAsync` | 确保索引存在（不存在则创建） | 服务启动时（`Program.cs`） |
-| `IndexParseBlocksAsync` | 将 parse 的所有 blocks 索引到 OpenSearch | 解析完成后 |
-| `DeleteParseIndexAsync` | 按 `parse_id` 删除索引文档 | 删除 parse 记录后 |
-| `DeleteDocumentFileIndexAsync` | 按 `document_file_id` 删除索引文档 | 删除文档文件后 |
-| `UpdateDocumentFileMetadataAsync` | 按 `document_file_id` 刷新 subject/grade/year | 元数据更新后（手动或 LLM） |
-| `ExactSearchAsync` | OpenSearch BM25 搜索 | HTTP 搜索请求 |
+| `EnsureIndexAsync` | Ensures the index exists (creates it if missing) | At service startup (`Program.cs`) |
+| `IndexParseBlocksAsync` | Indexes all of a parse's blocks into OpenSearch | After parse completion |
+| `DeleteParseIndexAsync` | Deletes index documents by `parse_id` | After deleting a parse record |
+| `DeleteDocumentFileIndexAsync` | Deletes index documents by `document_file_id` | After deleting a document file |
+| `UpdateDocumentFileMetadataAsync` | Refreshes subject/grade/year by `document_file_id` | After metadata updates (manual or LLM) |
+| `ExactSearchAsync` | OpenSearch BM25 search | HTTP search requests |
 
-### 1.2 ISearchDomainService（`src/Domain/Services/ISearchDomainService.cs`）
+### 1.2 ISearchDomainService (`src/Domain/Services/ISearchDomainService.cs`)
 
 ```csharp
 public interface ISearchDomainService
@@ -42,9 +42,9 @@ public interface ISearchDomainService
 }
 ```
 
-薄封装 `ISearchIndexService.ExactSearchAsync`，异常时降级为空结果。
+A thin wrapper around `ISearchIndexService.ExactSearchAsync` that degrades to empty results on exceptions.
 
-### 1.3 领域模型（`src/Domain/Models/`）
+### 1.3 Domain Models (`src/Domain/Models/`)
 
 ```csharp
 // SearchResultModel.cs
@@ -86,9 +86,9 @@ public class OpenSearchOptions
 }
 ```
 
-> 注：`SearchResultModel` / `SearchFilterModel` / `OpenSearchOptions` / `SearchMatchType` 分别位于各自同名文件中，**不存在** `SearchConfig.cs`。
+> Note: `SearchResultModel` / `SearchFilterModel` / `OpenSearchOptions` / `SearchMatchType` each live in their own same-named files; `SearchConfig.cs` **does not exist**.
 
-## 2. OpenSearch 索引规格（`BuildIndexBody`）
+## 2. OpenSearch Index Spec (`BuildIndexBody`)
 
 ### 2.1 Settings
 
@@ -108,144 +108,144 @@ public class OpenSearchOptions
 }
 ```
 
-- `english_custom`：标准分词 + 小写 + 停用词 + 词干提取（用于单词匹配，扩展召回）。
-- `english_phrase`：标准分词 + 小写（用于短语匹配，保留短语完整性，不做词干提取）。
+- `english_custom`: standard tokenization + lowercasing + stop words + stemming (for word matching, expanded recall).
+- `english_phrase`: standard tokenization + lowercasing (for phrase matching, preserves phrase integrity, no stemming).
 
 ### 2.2 Mappings
 
-| 字段 | 类型 | 说明 |
+| Field | Type | Description |
 |------|------|------|
-| `parse_id` | keyword | 按 parse 删除 |
-| `document_file_id` | keyword | 按文档删除 |
-| `file_name` | keyword | 搜索结果展示 |
-| `block_id` | keyword | 唯一标识 |
-| `block_type` | keyword | 版面块类型 |
-| `sort_index` | integer | 块顺序 |
-| `image_id` | keyword | 图片 ID |
-| `subject` | keyword | 学科过滤 |
-| `grade` | keyword | 年级过滤 |
-| `year` | keyword | 年份过滤 |
-| `page_number` | integer | 页码 |
-| `text` | text (english_custom) | 索引内容；子字段 `exact`（english_phrase）、`keyword`（ignore_above=256） |
-| `created_at` | date | 创建时间 |
+| `parse_id` | keyword | Deletion by parse |
+| `document_file_id` | keyword | Deletion by document |
+| `file_name` | keyword | Search result display |
+| `block_id` | keyword | Unique identifier |
+| `block_type` | keyword | Layout block type |
+| `sort_index` | integer | Block order |
+| `image_id` | keyword | Image ID |
+| `subject` | keyword | Subject filtering |
+| `grade` | keyword | Grade filtering |
+| `year` | keyword | Year filtering |
+| `page_number` | integer | Page number |
+| `text` | text (english_custom) | Indexed content; sub-fields `exact` (english_phrase), `keyword` (ignore_above=256) |
+| `created_at` | date | Creation time |
 
-> 已移除 legacy 字段：`document_id` / `document_title` / `sentence_id` / `question_id` / `segment_type` / `start_offset` / `end_offset`。
+> Legacy fields removed: `document_id` / `document_title` / `sentence_id` / `question_id` / `segment_type` / `start_offset` / `end_offset`.
 
-## 3. 索引写入规格（`IndexParseBlocksAsync`）
+## 3. Index Write Spec (`IndexParseBlocksAsync`)
 
-### 3.1 输入
+### 3.1 Input
 
-| 参数 | 类型 | 说明 |
+| Parameter | Type | Description |
 |------|------|------|
-| `parseId` | Guid | 解析记录 ID |
-| `documentFileId` | Guid | 文档文件 ID |
-| `fileName` | string | 文件名（搜索结果展示） |
-| `subject` | string? | 学科（从 `document_files` 读取） |
-| `grade` | string? | 年级 |
-| `year` | string? | 年份 |
+| `parseId` | Guid | Parse record ID |
+| `documentFileId` | Guid | Document file ID |
+| `fileName` | string | File name (shown in search results) |
+| `subject` | string? | Subject (read from `document_files`) |
+| `grade` | string? | Grade |
+| `year` | string? | Year |
 
-### 3.2 数据流
+### 3.2 Data Flow
 
 ```
-1. 通过 IDocumentParseBlockRepository.GetByParseIdAsync(parseId) 读取 blocks
-2. 若 blocks 为空 → LogWarning 返回
-3. 遍历 blocks，跳过 string.IsNullOrWhiteSpace(TextContent) 的 block
-4. 构建 bulk 请求（每 block 2 行：index 指令 + 文档），_id = $"block_{block.Id}"
-5. 文档字段：parse_id, document_file_id, file_name, subject, grade, year,
-            page_number (= block.PageId), block_id (= block.Id), block_type,
-            text (= block.TextContent), sort_index, image_id, created_at
-6. 调用 _client.BulkAsync 提交
-7. 成功/失败均记录日志
+1. Read blocks via IDocumentParseBlockRepository.GetByParseIdAsync(parseId)
+2. If blocks are empty → LogWarning and return
+3. Iterate blocks, skipping blocks where string.IsNullOrWhiteSpace(TextContent)
+4. Build the bulk request (2 lines per block: index instruction + document), _id = $"block_{block.Id}"
+5. Document fields: parse_id, document_file_id, file_name, subject, grade, year,
+             page_number (= block.PageId), block_id (= block.Id), block_type,
+             text (= block.TextContent), sort_index, image_id, created_at
+6. Submit via _client.BulkAsync
+7. Log both success and failure
 ```
 
-### 3.3 幂等性
+### 3.3 Idempotency
 
-`_id = $"block_{block.Id}"`，同一 block 重复索引会覆盖已有文档，不会产生重复。
+`_id = $"block_{block.Id}"`; re-indexing the same block overwrites the existing document, so no duplicates are produced.
 
-## 4. 索引删除规格
+## 4. Index Deletion Spec
 
 ### 4.1 DeleteParseIndexAsync
 
-- 构建 `delete_by_query`：`{ query: { term: { parse_id: parseId.ToString() } } }`
-- 调用 `_client.DeleteByQueryAsync`
-- 成功/失败记录日志
+- Build `delete_by_query`: `{ query: { term: { parse_id: parseId.ToString() } } }`
+- Call `_client.DeleteByQueryAsync`
+- Log success/failure
 
 ### 4.2 DeleteDocumentFileIndexAsync
 
-- 构建 `delete_by_query`：`{ query: { term: { document_file_id: documentFileId.ToString() } } }`
-- 调用 `_client.DeleteByQueryAsync`
-- 成功/失败记录日志
+- Build `delete_by_query`: `{ query: { term: { document_file_id: documentFileId.ToString() } } }`
+- Call `_client.DeleteByQueryAsync`
+- Log success/failure
 
-> 两个删除方法**不记录** `deletedCount`，仅记录成功/失败状态码。
+> The two delete methods **do not log** `deletedCount`; they only log the success/failure status code.
 
-## 5. 元数据同步规格（`UpdateDocumentFileMetadataAsync`）
+## 5. Metadata Sync Spec (`UpdateDocumentFileMetadataAsync`)
 
-- 构建 `update_by_query`：`{ query: { term: { document_file_id } }, script: { source: "ctx._source.subject = params.subject; ...", params: { subject, grade, year } } }`
-- 调用 `_client.UpdateByQueryAsync`
-- 成功/失败记录日志
+- Build `update_by_query`: `{ query: { term: { document_file_id } }, script: { source: "ctx._source.subject = params.subject; ...", params: { subject, grade, year } } }`
+- Call `_client.UpdateByQueryAsync`
+- Log success/failure
 
-## 6. 搜索规格（`ExactSearchAsync` / `BuildSearchBody`）
+## 6. Search Spec (`ExactSearchAsync` / `BuildSearchBody`)
 
-### 6.1 查询构建
+### 6.1 Query Building
 
-| 参数 | 处理 |
+| Parameter | Handling |
 |------|------|
-| `phrase = true` | `match_phrase` 查询 `text.exact` 字段（english_phrase 分析器） |
-| `phrase = false` | `match` 查询 `text` 字段（english_custom 分析器，含词干提取） |
+| `phrase = true` | `match_phrase` query on the `text.exact` field (english_phrase analyzer) |
+| `phrase = false` | `match` query on the `text` field (english_custom analyzer, with stemming) |
 | filter.Subject | `term: { subject: { value } }` |
 | filter.Grade | `term: { grade: { value } }` |
 | filter.Year | `term: { year: { value } }` |
-| filter.DocumentTitle | `term: { file_name: { value } }`（注意：C# 属性名为 `DocumentTitle`，映射到索引字段 `file_name`） |
+| filter.DocumentTitle | `term: { file_name: { value } }` (note: the C# property is named `DocumentTitle`, mapped to the index field `file_name`) |
 
-- 无 filter 时 query 直接为 mainQuery；有 filter 时包装为 `bool { must: mainQuery, filter: [...] }`。
-- 空字符串 / null 的 filter 字段**不参与**过滤（`BuildSearchBody` 中用 `string.IsNullOrEmpty` 判断）。
+- With no filter, the query is mainQuery directly; with filters, it is wrapped as `bool { must: mainQuery, filter: [...] }`.
+- Filter fields that are empty strings / null **do not participate** in filtering (checked with `string.IsNullOrEmpty` in `BuildSearchBody`).
 
-### 6.2 排序与分页
+### 6.2 Sorting and Pagination
 
-- 排序：`_score desc` → `block_id asc`（保证分页稳定）。
-- 分页：`search_after` 游标。`pageToken` 为上一页最后一条 `sort` 数组的 Base64 编码；无效 Base64 解码失败时从第一页开始（LogDebug，不抛异常）。
-- `nextToken` 生成条件：`results.Count == pageSize` 时取最后一条 sort 数组 Base64 编码；否则为 `null`。
+- Sorting: `_score desc` → `block_id asc` (guarantees stable pagination).
+- Pagination: `search_after` cursor. `pageToken` is the Base64 encoding of the last `sort` array of the previous page; when invalid Base64 fails to decode, the search starts from the first page (LogDebug, no exception thrown).
+- `nextToken` generation condition: when `results.Count == pageSize`, the Base64 encoding of the last sort array; otherwise `null`.
 
-### 6.3 高亮
+### 6.3 Highlighting
 
-- `highlight` 启用 `text` 字段高亮，`pre_tags = ["<em>"]`，`post_tags = ["</em>"]`。
-- 解析响应时优先使用 `highlight.text[0]` 作为 `AssociatedText`，无高亮时回退到 `_source.text`。
+- `highlight` enables highlighting on the `text` field, `pre_tags = ["<em>"]`, `post_tags = ["</em>"]`.
+- When parsing the response, `highlight.text[0]` is preferred as `AssociatedText`, falling back to `_source.text` when there is no highlight.
 
-### 6.4 响应解析（`ParseSearchResponse`）
+### 6.4 Response Parsing (`ParseSearchResponse`)
 
-| 响应字段 | 读取来源 |
+| Response field | Read from |
 |---------|----------|
 | `DocumentName` | `_source.file_name` |
 | `PageNumber` | `_source.page_number` |
-| `AssociatedText` | `highlight.text[0]`（优先）或 `_source.text` |
-| `Score` | `_score`（缺失默认 0） |
+| `AssociatedText` | `highlight.text[0]` (preferred) or `_source.text` |
+| `Score` | `_score` (defaults to 0 when missing) |
 | `MatchType` | `phrase ? "exact_phrase" : "stemmed"` |
 | `SegmentId` | `_source.block_id` |
-| `StartOffset` | 0（blocks 无 offset） |
-| `EndOffset` | 0（blocks 无 offset） |
-| `CreatedAt` | `_source.created_at`（解析为 DateTimeOffset，失败为 null） |
+| `StartOffset` | 0 (blocks have no offset) |
+| `EndOffset` | 0 (blocks have no offset) |
+| `CreatedAt` | `_source.created_at` (parsed as DateTimeOffset, null on failure) |
 
-- `TotalCount` 取自 `hits.total.value`。
-- `_score` 缺失时 `Score = 0`；`_source` 字段缺失时使用默认值。
+- `TotalCount` comes from `hits.total.value`.
+- When `_score` is missing, `Score = 0`; missing `_source` fields use defaults.
 
-## 7. HTTP 端点规格
+## 7. HTTP Endpoint Spec
 
 ### 7.1 GET /admin/documents/search
 
-定义于 `DocumentSearchEndpoints.cs`，映射路径 `/admin/documents/search`。
+Defined in `DocumentSearchEndpoints.cs`, mapped to the path `/admin/documents/search`.
 
-| 参数 | 类型 | 默认值 | 说明 |
+| Parameter | Type | Default | Description |
 |------|------|--------|------|
-| `query` | string | (必填) | 搜索关键词 |
-| `phrase` | bool | `false` | 是否短语匹配 |
-| `pageSize` | int | `20` | 每页结果数（1-100，超过 100 静默截断） |
-| `pageToken` | string? | `null` | 游标分页 token |
-| `subject` | string? | `null` | 按学科筛选 |
-| `grade` | string? | `null` | 按年级筛选 |
-| `year` | string? | `null` | 按年份筛选 |
-| `documentTitle` | string? | `null` | 按文档标题筛选（映射到索引 `file_name`） |
+| `query` | string | (required) | Search keywords |
+| `phrase` | bool | `false` | Whether to use phrase matching |
+| `pageSize` | int | `20` | Results per page (1-100; values over 100 silently truncated) |
+| `pageToken` | string? | `null` | Cursor pagination token |
+| `subject` | string? | `null` | Filter by subject |
+| `grade` | string? | `null` | Filter by grade |
+| `year` | string? | `null` | Filter by year |
+| `documentTitle` | string? | `null` | Filter by document title (maps to the index field `file_name`) |
 
-**成功响应 (200 OK)**：
+**Success response (200 OK)**:
 ```json
 {
   "results": [
@@ -266,41 +266,41 @@ public class OpenSearchOptions
 }
 ```
 
-**校验失败响应 (400 Bad Request)**：
+**Validation failure response (400 Bad Request)**:
 ```json
 { "success": false, "message": "Query cannot be empty", "errorCode": "DOCTHECA_QUERY_REQUIRED" }
 { "success": false, "message": "Query exceeds 200 characters", "errorCode": "DOCTHECA_QUERY_TOO_LONG" }
 ```
 
-> 注：成功响应**不**包含 `success` 字段；错误消息为**英文**（非中文）。`nextPageToken` 无更多结果时为空字符串 `""`。
+> Note: the success response does **not** include a `success` field; error messages are in **English** (not Chinese). `nextPageToken` is an empty string `""` when there are no more results.
 
-### 7.2 搜索降级
+### 7.2 Search Degradation
 
-- `SearchDomainService.ExactSearchAsync` 捕获 `ISearchIndexService.ExactSearchAsync` 抛出的任意异常，LogWarning 后返回 `(Results: [], TotalCount: 0, NextToken: null)`。
-- `OpenSearchIndexService.ExactSearchAsync` 在 OpenSearch 返回非 200 时抛出 `InvalidOperationException`。
+- `SearchDomainService.ExactSearchAsync` catches any exception thrown by `ISearchIndexService.ExactSearchAsync` and returns `(Results: [], TotalCount: 0, NextToken: null)` after a LogWarning.
+- `OpenSearchIndexService.ExactSearchAsync` throws `InvalidOperationException` when OpenSearch returns a non-200 status.
 
-## 8. 错误处理表
+## 8. Error Handling Table
 
-| 场景 | 处理 |
+| Scenario | Handling |
 |------|------|
-| 查询词为空 | HTTP 400，`DOCTHECA_QUERY_REQUIRED` |
-| 查询词超过 200 字符 | HTTP 400，`DOCTHECA_QUERY_TOO_LONG` |
-| `pageSize` 超限 | 静默截断为 100 |
-| blocks 为空（索引时） | LogWarning 返回，不抛异常 |
-| OpenSearch 连接失败（索引/删除） | 抛异常，调用方捕获后 LogWarning，不阻塞主流程 |
-| `text_content` 为空 | 跳过该 block |
-| OpenSearch 搜索非 200 | 抛 `InvalidOperationException`，`SearchDomainService` 捕获后返回空结果 |
-| `pageToken` 解码失败 | LogDebug，从第一页开始 |
-| 元数据同步失败 | LogWarning，不阻塞 |
+| Empty query | HTTP 400, `DOCTHECA_QUERY_REQUIRED` |
+| Query over 200 characters | HTTP 400, `DOCTHECA_QUERY_TOO_LONG` |
+| `pageSize` over the limit | Silently truncated to 100 |
+| Empty blocks (at index time) | LogWarning and return, no exception thrown |
+| OpenSearch connection failure (index/delete) | Throws; the caller catches it and logs a Warning without blocking the main flow |
+| Empty `text_content` | Skip the block |
+| OpenSearch search non-200 | Throws `InvalidOperationException`; `SearchDomainService` catches it and returns empty results |
+| `pageToken` decode failure | LogDebug, start from the first page |
+| Metadata sync failure | LogWarning, no blocking |
 
-## 9. 实现步骤
+## 9. Implementation Steps
 
-### 9.1 索引写入（`StructaDocParseWorker` 集成）
+### 9.1 Index Writes (`StructaDocParseWorker` Integration)
 
-在 `PersistParseResultAsync` 和 `PersistMergedChunkResultsAsync` 中（仅 `status == DocumentParseStatus.Parsed` 时）：
+In `PersistParseResultAsync` and `PersistMergedChunkResultsAsync` (only when `status == DocumentParseStatus.Parsed`):
 
 ```csharp
-// 解析完成 → 索引 blocks（best-effort）
+// Parse completed → index blocks (best-effort)
 try
 {
     var searchIndexService = scopeProvider.GetRequiredService<ISearchIndexService>();
@@ -312,185 +312,185 @@ catch (Exception ex)
 }
 ```
 
-### 9.2 索引删除（`DocumentParseEndpoints` / `DocumentFileEndpoints` 集成）
+### 9.2 Index Deletion (`DocumentParseEndpoints` / `DocumentFileEndpoints` Integration)
 
-- `DeleteDocumentParse`：解析记录删除后调用 `DeleteParseIndexAsync`（best-effort）。
-- `DeleteDocumentFile`：数据库删除后（Step 4）调用 `DeleteDocumentFileIndexAsync`（best-effort）。
-- `UpdateDocumentFileMetadata`：元数据更新后调用 `UpdateDocumentFileMetadataAsync`（best-effort）。
+- `DeleteDocumentParse`: calls `DeleteParseIndexAsync` after the parse record is deleted (best-effort).
+- `DeleteDocumentFile`: calls `DeleteDocumentFileIndexAsync` after the database delete (Step 4) (best-effort).
+- `UpdateDocumentFileMetadata`: calls `UpdateDocumentFileMetadataAsync` after the metadata update (best-effort).
 
-### 9.3 元数据同步（`StructaDocParseWorker.AnalyzeMetadataIfMissingAsync`）
+### 9.3 Metadata Sync (`StructaDocParseWorker.AnalyzeMetadataIfMissingAsync`)
 
-LLM 分析完成后，调用 `UpdateDocumentFileMetadataAsync(documentFileId, newSubject, newGrade, newYear)` 同步 OpenSearch 索引（best-effort）。
+After LLM analysis completes, call `UpdateDocumentFileMetadataAsync(documentFileId, newSubject, newGrade, newYear)` to sync the OpenSearch index (best-effort).
 
-## 10. 配置
+## 10. Configuration
 
-| 配置节 | 键 | 默认值 |
+| Section | Key | Default |
 |--------|-----|--------|
 | `OpenSearch` | `Url` | `http://localhost:9200` |
 | `OpenSearch` | `IndexName` | `doctheca-segments` |
 
-- 配置绑定：`builder.Services.Configure<OpenSearchOptions>(builder.Configuration.GetSection("OpenSearch"))`。
-- DI 注册：`AddSingleton<ISearchIndexService, OpenSearchIndexService>()`。
-- 数据库初始化使用 `DatabaseInitializer`（无 EF Core Migration）。
+- Configuration binding: `builder.Services.Configure<OpenSearchOptions>(builder.Configuration.GetSection("OpenSearch"))`.
+- DI registration: `AddSingleton<ISearchIndexService, OpenSearchIndexService>()`.
+- Database initialization uses `DatabaseInitializer` (no EF Core Migration).
 
-## 11. 测试策略
+## 11. Testing Strategy
 
-### 11.1 单元测试（UT）
+### 11.1 Unit Tests (UT)
 
-纯逻辑测试（`internal static` 方法），不依赖 OpenSearch HTTP。已实现于 `OpenSearchIndexServiceTests.cs` 与 `SearchDomainServiceTests.cs`，底层分别调用 `OpenSearchIndexManager.BuildIndexBody`、`OpenSearchQueryBuilder.BuildSearchBody`、`OpenSearchResponseParser.ParseSearchResponse`。
+Pure logic tests (`internal static` methods), no OpenSearch HTTP dependency. Implemented in `OpenSearchIndexServiceTests.cs` and `SearchDomainServiceTests.cs`, which underneath call `OpenSearchIndexManager.BuildIndexBody`, `OpenSearchQueryBuilder.BuildSearchBody`, and `OpenSearchResponseParser.ParseSearchResponse` respectively.
 
-- `BuildSearchBody`：query 构建、filter 构建、search_after、sort、highlight。
-- `ParseSearchResponse`：正常解析、phrase MatchType、highlight 优先、nextToken 生成、空结果、缺失字段默认值。
-- `BuildIndexBody`：blocks 字段存在且类型正确、无 legacy 字段、保留分析器。
-- `SearchDomainService.ExactSearchAsync`：委托调用、filter 透传、pageToken 透传、异常降级、空结果。
+- `BuildSearchBody`: query building, filter building, search_after, sort, highlight.
+- `ParseSearchResponse`: normal parsing, phrase MatchType, highlight priority, nextToken generation, empty results, defaults for missing fields.
+- `BuildIndexBody`: block fields present with correct types, no legacy fields, analyzers retained.
+- `SearchDomainService.ExactSearchAsync`: delegation, filter pass-through, pageToken pass-through, exception degradation, empty results.
 
-### 11.2 集成测试（规划）
+### 11.2 Integration Tests (Planned)
 
-依赖真实 OpenSearch HTTP 与数据库，未实现：
-- 解析完成后 OpenSearch 有 blocks 数据。
-- 删除 parse / 文档后 OpenSearch 清理。
-- 搜索命中 blocks 数据。
+Depend on real OpenSearch HTTP and a database; not implemented:
+- After parse completion, OpenSearch has block data.
+- OpenSearch cleanup after deleting a parse / document.
+- Search hits block data.
 
-### 11.3 测试工具
+### 11.3 Test Tooling
 
-- 框架：`xUnit` + `Moq` + `FluentAssertions`。
-- 禁止连接真实 OpenSearch 跑单元测试。
-- 禁止依赖时间戳做精确相等断言。
+- Framework: `xUnit` + `Moq` + `FluentAssertions`.
+- Connecting to a real OpenSearch for unit tests is prohibited.
+- Exact-equality assertions based on timestamps are prohibited.
 
-## 12. 影响范围
+## 12. Impact Scope
 
-| 文件 | 影响 |
+| File | Impact |
 |------|------|
-| `ISearchIndexService.cs` | 6 个方法签名 |
-| `OpenSearchIndexService.cs` | `ISearchIndexService` facade；实际逻辑委托给 `OpenSearch/` 下的辅助类 |
-| `ISearchDomainService.cs` / `SearchDomainService.cs` | 薄封装 + 降级 |
+| `ISearchIndexService.cs` | 6 method signatures |
+| `OpenSearchIndexService.cs` | `ISearchIndexService` facade; actual logic delegated to helper classes under `OpenSearch/` |
+| `ISearchDomainService.cs` / `SearchDomainService.cs` | Thin wrapper + degradation |
 | `DocumentSearchEndpoints.cs` | `GET /admin/documents/search` |
-| `StructaDocParseWorker.cs` | 解析完成后索引（best-effort） |
-| `DocumentParseEndpoints.cs` | 删除 parse 后清理索引 |
-| `DocumentFileEndpoints.cs` | 删除文件后清理索引；元数据更新后同步索引 |
-| `Program.cs` | 启动时 `EnsureIndexAsync`（best-effort） |
+| `StructaDocParseWorker.cs` | Indexing after parse completion (best-effort) |
+| `DocumentParseEndpoints.cs` | Index cleanup after parse deletion |
+| `DocumentFileEndpoints.cs` | Index cleanup after file deletion; index sync after metadata updates |
+| `Program.cs` | `EnsureIndexAsync` at startup (best-effort) |
 
 ---
 
-## 13. 第 2 代 — minerU block 结构化检索规格（演进 V1）
+## 13. Generation 2 — minerU Block Structured Retrieval Spec (Evolving V1)
 
-> 第 2 代复用 V1 同一 OpenSearch 索引（`doctheca-segments`）与同一 `StructaDocParseWorker` 入口，**不新建索引、不新建平行 endpoint、不新建 `BlockXxx` 独立模型类**。第 2 代在 V1 索引写入时**追加** minerU 维度字段与 `blockData` 内嵌对象，在 V1 endpoint `GET /admin/documents/search` 上**追加** minerU 过滤参数与回挂字段，V1 查询路径零变更。
+> Generation 2 reuses the same V1 OpenSearch index (`doctheca-segments`) and the same `StructaDocParseWorker` entry point; **no new index, no parallel endpoint, no standalone `BlockXxx` model classes**. Generation 2 **appends** minerU dimension fields and the embedded `blockData` object during V1 index writes, and **adds** minerU filter parameters and attachment fields on the V1 endpoint `GET /admin/documents/search`; the V1 query path changes zero.
 
-### 13.1 第 2 代接口变更（扩展 V1 组件）
+### 13.1 Generation 2 Interface Changes (Extending V1 Components)
 
-#### 13.1.1 领域模型（`src/Domain/Models/` 扩展，不新增独立类）
+#### 13.1.1 Domain Models (extending `src/Domain/Models/`, no standalone classes)
 
 ```csharp
-// SearchResultModel.cs — 第 2 代追加 optional 字段（老前端不传时 null，向后兼容）
+// SearchResultModel.cs — Generation 2 adds optional fields (null when old frontends do not send them, backward compatible)
 public class SearchResultModel
 {
-    // ... V1 字段不变（含 public double Score = OpenSearch _score）...
-    public string? BlockData { get; set; }                  // [第 2 代] minerU 原始 JSON 原文（详情展示）
-    public float[]? Bbox { get; set; }                      // [第 2 代] minerU bbox [x0,y0,x1,y1]
-    public double? MineruScore { get; set; }                // [第 2 代] minerU 置信度（VLM 后端）
-    // [偏差说明] SPEC 原拟 `float? Score`，但 V1 已有 `public double Score`（OpenSearch _score），
-    // C# 不允许同名字段，故第 2 代新字段命名为 `MineruScore`（与 §13.9.1 `block.MineruScore` 一致）。
-    // HTTP 响应 JSON 字段名仍为 `mineruScore`，前端按此 key 读取。
-    public string? SubType { get; set; }                    // [第 2 代] minerU 二级分类
-    public int? TextLevel { get; set; }                     // [第 2 代] 0=正文,1=h1...;非标题 null
-    public string? TextFormat { get; set; }                 // [第 2 代] latex/markdown/none（VLM）
-    public string? Caption { get; set; }                    // [第 2 代] 拼接 caption 文本（关键词召回）
+    // ... V1 fields unchanged (including public double Score = OpenSearch _score) ...
+    public string? BlockData { get; set; }                  // [Generation 2] raw minerU JSON text (for detail display)
+    public float[]? Bbox { get; set; }                      // [Generation 2] minerU bbox [x0,y0,x1,y1]
+    public double? MineruScore { get; set; }                // [Generation 2] minerU confidence (VLM backend)
+    // [Deviation note] The SPEC originally proposed `float? Score`, but V1 already has `public double Score` (OpenSearch _score);
+    // C# does not allow same-named fields, so the Generation 2 field is named `MineruScore` (consistent with `block.MineruScore` in §13.9.1).
+    // The HTTP response JSON field name remains `mineruScore`; the frontend reads this key.
+    public string? SubType { get; set; }                    // [Generation 2] minerU secondary classification
+    public int? TextLevel { get; set; }                     // [Generation 2] 0=body text,1=h1...; null for non-heading
+    public string? TextFormat { get; set; }                 // [Generation 2] latex/markdown/none (VLM)
+    public string? Caption { get; set; }                    // [Generation 2] concatenated caption text (keyword recall)
 }
 
-// SearchFilterModel.cs — 第 2 代追加 minerU 过滤条件（V1 原有 4 项不变）
+// SearchFilterModel.cs — Generation 2 adds minerU filter conditions (the 4 original V1 items unchanged)
 public class SearchFilterModel
 {
-    // ... V1 字段（DocumentTitle / Subject / Grade / Year）不变 ...
-    public string? BlockType { get; set; }                  // [第 2 代] 精确匹配 minerU type
-    public string? BlockSubType { get; set; }               // [第 2 代] 精确匹配 minerU sub_type
-    public int? PageNumber { get; set; }                    // [第 2 代] minerU page_id
-    public int? TextLevel { get; set; }                     // [第 2 代] minerU text_level
-    public string? TextFormat { get; set; }                 // [第 2 代] minerU text_format
-    public Guid? ParseId { get; set; }                      // [第 2 代] 缩小到某次 parse
-    public Guid? DocumentFileId { get; set; }              // [第 2 代] 缩小到某文档
-    public bool? HasImage { get; set; }                     // [第 2 代] 筛选有 img_path 的 block
+    // ... V1 fields (DocumentTitle / Subject / Grade / Year) unchanged ...
+    public string? BlockType { get; set; }                  // [Generation 2] exact match on minerU type
+    public string? BlockSubType { get; set; }               // [Generation 2] exact match on minerU sub_type
+    public int? PageNumber { get; set; }                    // [Generation 2] minerU page_id
+    public int? TextLevel { get; set; }                     // [Generation 2] minerU text_level
+    public string? TextFormat { get; set; }                 // [Generation 2] minerU text_format
+    public Guid? ParseId { get; set; }                      // [Generation 2] narrow to a specific parse
+    public Guid? DocumentFileId { get; set; }              // [Generation 2] narrow to a specific document
+    public bool? HasImage { get; set; }                     // [Generation 2] select blocks with img_path
 }
 ```
 
-#### 13.1.2 ISearchIndexService 扩展（同一接口追加 minerU 字段索引能力，方法签名不变）
+#### 13.1.2 ISearchIndexService Extension (minerU field indexing added on the same interface, method signatures unchanged)
 
 ```csharp
 public interface ISearchIndexService
 {
-    // V1 6 个方法签名不变；第 2 代在 IndexParseBlocksAsync 实现内追加 minerU 字段
+    // V1's 6 method signatures unchanged; Generation 2 adds minerU fields inside the IndexParseBlocksAsync implementation
     Task IndexParseBlocksAsync(Guid parseId, Guid documentFileId, string fileName,
         string? subject, string? grade, string? year);
-    // ... 其他 5 个方法不变 ...
+    // ... the other 5 methods unchanged ...
 }
 ```
 
-> 第 2 代 minerU 字段在 `IndexParseBlocksAsync` 实现内**与 V1 字段构成同一 bulk 请求**（同一 `_id = $"block_{block.Id}"` 追加字段），不新增一次网络往返、不新增接口方法。
+> Generation 2 minerU fields **form the same bulk request as the V1 fields** inside the `IndexParseBlocksAsync` implementation (fields appended under the same `_id = $"block_{block.Id}"`), adding no extra network round trip and no new interface methods.
 
-#### 13.1.3 ISearchDomainService 扩展（同一 `ExactSearchAsync` 内扩展 minerU filter 分支）
+#### 13.1.3 ISearchDomainService Extension (minerU filter branch extended within the same `ExactSearchAsync`)
 
 ```csharp
 public interface ISearchDomainService
 {
-    // V1 签名不变；第 2 代在 ExactSearchAsync 实现内追加 minerU filter 分支 + 回挂字段解析
+    // V1 signature unchanged; Generation 2 adds the minerU filter branch + attachment field parsing inside the ExactSearchAsync implementation
     Task<(List<SearchResultModel> Results, int TotalCount, string? NextToken)> ExactSearchAsync(
         string query, bool phrase, SearchFilterModel? filter, int pageSize, string? pageToken);
 }
 ```
 
-#### 13.1.4 HTTP 端点（`DocumentSearchEndpoints.cs` 扩展，不新增文件）
+#### 13.1.4 HTTP Endpoint (extending `DocumentSearchEndpoints.cs`, no new files)
 
 ```csharp
-// GET /admin/documents/search — 第 2 代追加可选入参（V1 原有 query/phrase/subject/grade/year/documentTitle/pageSize/pageToken 全部保留）
-// 追加：blockType / pageNumber / parseId / documentFileId / hasImage
-// 当所有 minerU filter 均为 null 时，行为完全等同 V1（零回归）
+// GET /admin/documents/search — Generation 2 adds optional input parameters (all original V1 parameters query/phrase/subject/grade/year/documentTitle/pageSize/pageToken are retained)
+// Added: blockType / pageNumber / parseId / documentFileId / hasImage
+// When all minerU filters are null, behavior is exactly equivalent to V1 (zero regression)
 public static async Task<IResults> Search(...)
 ```
 
-### 13.2 minerU v1 block 字段两层清单
+### 13.2 Two-Layer Inventory of minerU v1 Block Fields
 
-> `[说明] minerU v1 block 真实 schema 在本环境无法在线校验（github.com / pypi.org / opendatalab.github.io 均被网关拦截）。下表基于 `DocumentParseBlockService.ParseBlock` 实际读取路径整理（详见 [03-DESIGN.md §第 2 代演进](./03-DESIGN.md)）。`
+> `[Note] The real minerU v1 block schema cannot be verified online in this environment (github.com / pypi.org / opendatalab.github.io are all blocked by the gateway). The table below is compiled from the actual read path of `DocumentParseBlockService.ParseBlock` (see [03-DESIGN.md §Generation 2 Evolution](./03-DESIGN.md)).`
 
-#### Layer 1（代码已读，权威 — 进入 OpenSearch mapping）
+#### Layer 1 (read by code, authoritative — enters the OpenSearch mapping)
 
-| minerU 字段 | 类型 | 用途 | 代码引用 |
+| minerU field | Type | Purpose | Code reference |
 |------------|------|------|---------|
-| `type` | string（必填） | block 分类；null/空/非字符串 → 整块丢弃 | `DocumentParseBlockService.cs:95-100` |
-| `page_id` | int（可选，缺省 0） | 页码，0-indexed | `DocumentParseBlockService.cs:104-107` |
-| `text` | string 或嵌套结构 | 文本内容，最高优先级 | `DocumentParseBlockService.cs:151`（`ExtractTextContent`） |
-| `content` | string 或嵌套结构 | 文本内容，中优先级（`text` 缺失回退） | 同上 |
-| `body` | string 或嵌套结构 | 文本内容，最低优先级（覆盖 table HTML 等） | 同上 |
-| `img_path` | string（可选） | 仅 `type=image` 时读取，ZIP 内相对路径 | `DocumentParseBlockService.cs:119-132` |
+| `type` | string (required) | Block classification; null/empty/non-string → the whole block is discarded | `DocumentParseBlockService.cs:95-100` |
+| `page_id` | int (optional, defaults to 0) | Page number, 0-indexed | `DocumentParseBlockService.cs:104-107` |
+| `text` | string or nested structure | Text content, highest priority | `DocumentParseBlockService.cs:151` (`ExtractTextContent`) |
+| `content` | string or nested structure | Text content, medium priority (fallback when `text` is missing) | Same as above |
+| `body` | string or nested structure | Text content, lowest priority (covers table HTML, etc.) | Same as above |
+| `img_path` | string (optional) | Read only when `type=image`; relative path inside the ZIP | `DocumentParseBlockService.cs:119-132` |
 
-#### Layer 2（`block_data` 兜底透传 JSONB，代码不解析 — `[待确认]`）
+#### Layer 2 (`block_data` fallback pass-through JSONB, not parsed by code — `[To be confirmed]`)
 
-| 字段 | 证据性质 |
+| Field | Evidence type |
 |------|---------|
-| `angle` | `[推断]` — `docs/database/tables/document_parse_blocks.md:42` 文档表述，无代码读取 |
-| `formula_latex` | `[推断]` — 同上 |
+| `angle` | `[Inferred]` — stated in the `docs/database/tables/document_parse_blocks.md:42` documentation; no code reads it |
+| `formula_latex` | `[Inferred]` — same as above |
 
-> `[说明] minerU v1 block 真实 schema 在本环境无法在线校验（github.com / pypi.org / opendatalab.github.io 均被网关拦截）。首版以项目代码实际读取路径（`DocumentParseBlockService.ParseBlock`）+ MinerU 公开枚举共识为准。其他 minerU 字段（`chars`/`position`/`layout_width`/`images`/`table_html` 等）以 `block_data` jsonb 入库，管理界面通过现有 `GET /admin/document-files/{id}` 查看，延至 facet 需求明确后再追加。`
+> `[Note] The real minerU v1 block schema cannot be verified online in this environment (github.com / pypi.org / opendatalab.github.io are all blocked by the gateway). The first release follows the project code's actual read path (`DocumentParseBlockService.ParseBlock`) plus the MinerU public enumeration consensus. Other minerU fields (`chars`/`position`/`layout_width`/`images`/`table_html`, etc.) are persisted as `block_data` jsonb, viewable in the admin UI via the existing `GET /admin/document-files/{id}`, and deferred until facet requirements are clear.`
 
-### 13.3 第 2 代索引写入规格（扩展 `IndexParseBlocksAsync`，不新增方法）
+### 13.3 Generation 2 Index Write Spec (extending `IndexParseBlocksAsync`, no new methods)
 
-- 与 V1 `IndexParseBlocksAsync` **共享同一 bulk 请求**（追加字段，不新增网络往返）。
-- 每 block 文档在 V1 字段基础上追加：
-  - `x0` / `y0` / `x1` / `y1` (float) — minerU `bbox` 分量（便于范围检索）
-  - `score` (float) — minerU 置信度
-  - `has_image` (boolean) — `img_path` 是否非空（通过 `block.ImageId != null` 判定，不二次解析 minerU JSON）
-  - `sub_type` (string) — minerU 官方字段，区分 block 二级分类（caption/body/footnote 等）
-  - `text_level` (int) — minerU 官方字段，标题层级（0 = 正文, 1 = h1, 2 = h2...；非标题文本写 `-1`）
-  - `text_format` (string) — minerU VLM 后端特有字段（`latex` / `markdown` / `none`）；pipeline 版无此字段时索引空字符串
-  - `caption` (text, english_custom) — 派生字段：将 `image_caption` / `table_caption` / `chart_caption` / `code_caption` 等文本拼接为可检索文本
-  - `_meta.block_data` (object, `enabled:false`) — minerU 原始 JSON 整块回挂，**仅存不索引**（避免写入放大，NFR-11）
-- ⚠️ **bbox 坐标系差异**（minerU 官方）：pipeline 后端 `bbox` 归一化到 0-1000，VLM 后端 `bbox` 归一化到 0-1（百分比）。写入 OpenSearch 前应由 `DocumentParseBlockService.ParseBlock` 统一归一化到 0-1000（pipeline 惯例），避免前端渲染/VLM-pipeline 混合索引的场景下坐标歧义。
-- minerU `type` 与 V1 `block_type` 同源、`page_id` 与 V1 `page_number` 同源、`text|content|body` 与 V1 `text` 同源 → **不新增** alias 字段。
-- `_id = $"block_{block.Id}"` 幂等（与 V1 一致）。
-- 空 `text_content` 的 block 在 V1 被跳过；第 2 代仍跳过（无可检索内容）。
-- best-effort：失败仅 LogWarning，不阻塞解析主流程。
+- **Shares the same bulk request** with V1's `IndexParseBlocksAsync` (fields appended, no extra network round trip).
+- On top of the V1 fields, each block document gains:
+  - `x0` / `y0` / `x1` / `y1` (float) — minerU `bbox` components (facilitate range queries)
+  - `score` (float) — minerU confidence
+  - `has_image` (boolean) — whether `img_path` is non-empty (determined via `block.ImageId != null`, without re-parsing the minerU JSON)
+  - `sub_type` (string) — official minerU field distinguishing secondary block classifications (caption/body/footnote, etc.)
+  - `text_level` (int) — official minerU field, heading level (0 = body text, 1 = h1, 2 = h2...; non-heading text is written as `-1`)
+  - `text_format` (string) — minerU VLM-backend-specific field (`latex` / `markdown` / `none`); indexed as an empty string when the pipeline version lacks this field
+  - `caption` (text, english_custom) — derived field: concatenates `image_caption` / `table_caption` / `chart_caption` / `code_caption` texts into searchable text
+  - `_meta.block_data` (object, `enabled:false`) — the raw minerU JSON attached whole, **stored but not indexed** (avoids write amplification, NFR-11)
+- ⚠️ **bbox coordinate system difference** (minerU official): the pipeline backend normalizes `bbox` to 0-1000, the VLM backend normalizes `bbox` to 0-1 (percentage). Before writing to OpenSearch, `DocumentParseBlockService.ParseBlock` should normalize uniformly to 0-1000 (the pipeline convention) to avoid coordinate ambiguity in frontend rendering / mixed VLM-pipeline index scenarios.
+- minerU `type` shares its source with V1 `block_type`, `page_id` with V1 `page_number`, `text|content|body` with V1 `text` → **no new** alias fields.
+- `_id = $"block_{block.Id}"` is idempotent (same as V1).
+- Blocks with empty `text_content` are skipped in V1; Generation 2 still skips them (nothing searchable).
+- best-effort: failures only LogWarning and do not block the main parsing flow.
 
-### 13.4 第 2 代 OpenSearch mapping 追加
+### 13.4 Generation 2 OpenSearch Mapping Additions
 
-在 V1 `BuildIndexBody` mappings 中追加：
+Appended to the V1 `BuildIndexBody` mappings:
 
 ```json
 "x0":                 { "type": "float" },
@@ -503,44 +503,44 @@ public static async Task<IResults> Search(...)
 "text_level":         { "type": "integer" },
 "text_format":        { "type": "keyword" },
 "caption":            { "type": "text", "analyzer": "english_custom",
-                         "fields": { "keyword": { "type": "keyword", "ignore_above": 256 } } },
+                          "fields": { "keyword": { "type": "keyword", "ignore_above": 256 } } },
 "_meta":              { "type": "object", "enabled": true, "dynamic": false,
-                         "properties": { "block_data": { "type": "object", "enabled": false } } }
+                          "properties": { "block_data": { "type": "object", "enabled": false } } }
 ```
 
-> `_meta.block_data` 使用 `enabled:false` —— 内容存入 `_source` 但**不建索引**，查询时通过 `_source` 回挂，满足 NFR-11。
+> `_meta.block_data` uses `enabled:false` — the content is stored in `_source` but **not indexed**, and is attached from `_source` at query time, satisfying NFR-11.
 >
-> `sub_type` 是 minerU 官方字段（来自 `content_list.json`），用于区分 caption/body/footnote 等二级分类（如 `image_caption` / `image_body` / `table_footnote` / `code` / `algorithm` / `text` / `ref_text`）。
+> `sub_type` is an official minerU field (from `content_list.json`) used to distinguish secondary classifications such as caption/body/footnote (e.g., `image_caption` / `image_body` / `table_footnote` / `code` / `algorithm` / `text` / `ref_text`).
 >
-> `text_level` 是 minerU 官方字段：`0` = 正文文本，`1` = 一级标题，`2` = 二级标题，以此类推；非标题文本块该字段不存在（索引时写入 `-1`）。
+> `text_level` is an official minerU field: `0` = body text, `1` = h1 heading, `2` = h2 heading, and so on; the field is absent for non-heading text blocks (written as `-1` at index time).
 >
-> `text_format` 是 minerU VLM 后端特有字段：`latex` / `markdown` / `none`，用于区分行间公式的格式。
+> `text_format` is a minerU VLM-backend-specific field: `latex` / `markdown` / `none`, used to distinguish the format of interline equations.
 >
-> `caption` 是派生字段：将 `image_caption` / `table_caption` / `chart_caption` / `code_caption` 等 caption 文本拼接为一段可检索文本，使关键词搜索能命中"图注/表注"内容。
+> `caption` is a derived field: it concatenates caption texts such as `image_caption` / `table_caption` / `chart_caption` / `code_caption` into one searchable text so keyword search can hit figure/table caption content.
 
-### 13.5 第 2 代 HTTP 端点规格（扩展 `GET /admin/documents/search`，不新增 endpoint）
+### 13.5 Generation 2 HTTP Endpoint Spec (extending `GET /admin/documents/search`, no new endpoints)
 
-#### GET /admin/documents/search（第 2 代扩展）
+#### GET /admin/documents/search (Generation 2 extension)
 
-定义于 `DocumentSearchEndpoints.cs`（V1 文件扩展，不新增文件）。V1 原有参数全部保留，**追加**可选 minerU 过滤参数：
+Defined in `DocumentSearchEndpoints.cs` (extending the V1 file, no new files). All original V1 parameters are retained, with **added** optional minerU filter parameters:
 
-| 参数 | 类型 | 默认值 | 说明 |
+| Parameter | Type | Default | Description |
 |------|------|--------|------|
-| `blockType` | string? | `null` | 精确匹配 minerU `type`（对应索引字段 `block_type`）；枚举见 §13.3 minerU 字段两层清单 |
-| `blockSubType` | string? | `null` | 精确匹配 minerU `sub_type`（区分 caption/body/footnote，如 `table_caption`、`code`、`algorithm`） |
-| `pageNumber` | int? | `null` | minerU `page_id` 精确匹配（对应索引字段 `page_number`） |
-| `textLevel` | int? | `null` | 精确匹配 minerU `text_level`（`0` = 正文，`1` = 一级标题...；传 `-1` 表示"仅非标题文本"） |
-| `textFormat` | string? | `null` | 精确匹配 minerU `text_format`（`latex` / `markdown` / `none`，VLM 后端特有） |
-| `parseId` | Guid? | `null` | 缩小到某次 parse |
-| `documentFileId` | Guid? | `null` | 缩小到某文档 |
-| `hasImage` | bool? | `null` | 筛选有 `img_path` 的 block（对应索引字段 `has_image`） |
+| `blockType` | string? | `null` | Exact match on minerU `type` (maps to index field `block_type`); see the §13.3 two-layer minerU field inventory for enumerations |
+| `blockSubType` | string? | `null` | Exact match on minerU `sub_type` (distinguishes caption/body/footnote, e.g., `table_caption`, `code`, `algorithm`) |
+| `pageNumber` | int? | `null` | Exact match on minerU `page_id` (maps to index field `page_number`) |
+| `textLevel` | int? | `null` | Exact match on minerU `text_level` (`0` = body text, `1` = h1 heading...; pass `-1` for "non-heading text only") |
+| `textFormat` | string? | `null` | Exact match on minerU `text_format` (`latex` / `markdown` / `none`, VLM-backend-specific) |
+| `parseId` | Guid? | `null` | Narrow to a specific parse |
+| `documentFileId` | Guid? | `null` | Narrow to a specific document |
+| `hasImage` | bool? | `null` | Select blocks with `img_path` (maps to index field `has_image`) |
 
-**校验规则**：
-- V1 原有校验（query 空/过长 → 400）**保留**。
-- 当所有 minerU filter 均为 null 时，行为**完全等同 V1**（零回归）。
-- `pageSize` 超限静默截断为 100（V1 值）；带 minerU filter 时建议前端引导 ≤ 50。
+**Validation rules**:
+- Original V1 validation (empty/too-long query → 400) is **retained**.
+- When all minerU filters are null, behavior is **exactly equivalent to V1** (zero regression).
+- `pageSize` over the limit is silently truncated to 100 (the V1 value); with minerU filters the frontend should guide toward ≤ 50.
 
-**成功响应 (200 OK)**（V1 字段 + 第 2 代追加字段）：
+**Success response (200 OK)** (V1 fields + Generation 2 additions):
 
 ```json
 {
@@ -548,7 +548,7 @@ public static async Task<IResults> Search(...)
     {
       "documentName": "lecture.pdf",
       "pageNumber": 1,
-      "associatedText": "<em>如图所示</em>，AB 是⊙O 的直径...",
+      "associatedText": "<em>As shown in the figure</em>, AB is the diameter of circle O...",
       "score": 1.5,
       "matchType": "stemmed",
       "segmentId": "blk-001",
@@ -569,118 +569,118 @@ public static async Task<IResults> Search(...)
 }
 ```
 
-> 注：成功响应**不**包含 `success` 字段；错误消息为**英文**；`nextPageToken` 无更多结果时为空字符串 `""`。`blockData` / `bbox` / `score` / `subType` / `textLevel` / `textFormat` / `caption` 为 optional 字段，老前端不传时不展示，不影响反序列化。
+> Note: the success response does **not** include a `success` field; error messages are in **English**; `nextPageToken` is an empty string `""` when there are no more results. `blockData` / `bbox` / `score` / `subType` / `textLevel` / `textFormat` / `caption` are optional fields; they are not displayed when old frontends do not send them, and deserialization is unaffected.
 >
-> ⚠️ **bbox 坐标系**：响应 `bbox` = 0-1000 归一化（pipeline 惯例）；前端渲染时需按 `page_size`（来自 `GET /admin/document-files/{id}` 的 `document_files` 记录）还原为像素坐标。VLM 后端的 0-1 百分比坐标已在索引前统一归一化到 0-1000。
+> ⚠️ **bbox coordinate system**: the response `bbox` is 0-1000 normalized (the pipeline convention); when rendering, the frontend must restore pixel coordinates using `page_size` (from the `document_files` record via `GET /admin/document-files/{id}`). The VLM backend's 0-1 percentage coordinates are normalized uniformly to 0-1000 before indexing.
 
-### 13.6 第 2 代查询构建（扩展 `BuildSearchBody`，不新增独立方法）
+### 13.6 Generation 2 Query Building (extending `BuildSearchBody`, no standalone methods)
 
-| 参数 | 处理 |
+| Parameter | Handling |
 |------|------|
-| `keyword` 非空 | `match` 查询 `text` 字段（english_custom 分析器；minerU `text|content|body` 已落地 V1 `text`，同源不复刻） |
-| `blockType` 非空 | `term: { block_type: { value } }`（minerU `type` 与 V1 `block_type` 同源） |
-| `blockSubType` 非空 | `term: { sub_type: { value } }`（minerU `sub_type`，区分 caption/body/footnote） |
-| `pageNumber` 非空 | `term: { page_number: { value } }`（minerU `page_id` 与 V1 `page_number` 同源） |
-| `textLevel` 非空 | `term: { text_level: { value } }`（minerU `text_level`，-1 = 非标题文本） |
-| `textFormat` 非空 | `term: { text_format: { value } }`（VLM 后端特有：`latex` / `markdown` / `none`） |
-| `parseId` 非空 | `term: { parse_id: { value } }` |
-| `documentFileId` 非空 | `term: { document_file_id: { value } }` |
-| `hasImage` 非空 | `term: { has_image: { value } }` |
+| `keyword` non-empty | `match` query on the `text` field (english_custom analyzer; minerU `text|content|body` already lands in V1 `text`, same source, not duplicated) |
+| `blockType` non-empty | `term: { block_type: { value } }` (minerU `type` and V1 `block_type` share the same source) |
+| `blockSubType` non-empty | `term: { sub_type: { value } }` (minerU `sub_type`, distinguishes caption/body/footnote) |
+| `pageNumber` non-empty | `term: { page_number: { value } }` (minerU `page_id` and V1 `page_number` share the same source) |
+| `textLevel` non-empty | `term: { text_level: { value } }` (minerU `text_level`, -1 = non-heading text) |
+| `textFormat` non-empty | `term: { text_format: { value } }` (VLM-backend-specific: `latex` / `markdown` / `none`) |
+| `parseId` non-empty | `term: { parse_id: { value } }` |
+| `documentFileId` non-empty | `term: { document_file_id: { value } }` |
+| `hasImage` non-empty | `term: { has_image: { value } }` |
 
-- 多条件组合为 `bool { must: [...], filter: [... }`（keyword 走 `must`，minerU 精确项走 `filter`；V1 无 keyword 时无 minerU filter，按 V1 路径）。
-- 排序：`_score desc`（有 keyword 时）→ `block_id asc`（稳定分页）；无 keyword 时按 `sort_index asc`。
-- 分页：`search_after` 游标（同 V1）。
-- 高亮：启用 `text` 字段高亮（`<em>...</em>`，复用 V1 高亮字段；minerU `text|content|body` 已与 V1 `text_content` 同源，无需另起 `mineru_text`）。
-- `_source` 包含 `x0/y0/x1/y1/score/has_image` + `_meta.block_data`。
+- Multiple conditions combine as `bool { must: [...], filter: [... }` (keyword goes to `must`, minerU exact terms go to `filter`; V1 without keyword has no minerU filters and follows the V1 path).
+- Sorting: `_score desc` (with keyword) → `block_id asc` (stable pagination); without keyword, `sort_index asc`.
+- Pagination: `search_after` cursor (same as V1).
+- Highlighting: enabled on the `text` field (`<em>...</em>`, reusing the V1 highlight field; minerU `text|content|body` already shares its source with V1 `text_content`, no need for a separate `mineru_text`).
+- `_source` includes `x0/y0/x1/y1/score/has_image` + `_meta.block_data`.
 
-### 13.7 第 2 代响应解析（扩展 `ParseSearchResponse`，不新增独立方法）
+### 13.7 Generation 2 Response Parsing (extending `ParseSearchResponse`, no standalone methods)
 
-在 V1 `ParseSearchResponse` 响应解析逻辑末尾追加 minerU 回挂分支：
+A minerU attachment branch is appended at the end of the V1 `ParseSearchResponse` parsing logic:
 
-| 第 2 代追加响应字段 | 读取来源 |
+| Generation 2 added response field | Read from |
 |-------------------|----------|
-| `BlockData` (string?) | `_source._meta.block_data`（原文 string，第 2 代新增） |
-| `Bbox` (float[]?) | `[_source.x0, _source.y0, _source.x1, _source.y1]`（第 2 代新增） |
-| `MineruScore` (double?) | `_source.score`（第 2 代新增；C# 属性名 `MineruScore` 以避免与 V1 `Score`（OpenSearch `_score`）冲突，详见 §13.1.1 偏差说明） |
-| `SubType` (string?) | `_source.sub_type`（第 2 代新增，caption/body/footnote 等二级分类） |
-| `TextLevel` (int?) | `_source.text_level`（第 2 代新增，标题层级，-1 = 非标题文本） |
-| `TextFormat` (string?) | `_source.text_format`（第 2 代新增，`latex`/`markdown` 等，VLM 后端特有） |
-| `Caption` (string?) | `_source.caption`（第 2 代新增，image_footnote/table_caption 等 caption 文本拼接，用于关键词命中） |
+| `BlockData` (string?) | `_source._meta.block_data` (raw string, new in Generation 2) |
+| `Bbox` (float[]?) | `[_source.x0, _source.y0, _source.x1, _source.y1]` (new in Generation 2) |
+| `MineruScore` (double?) | `_source.score` (new in Generation 2; the C# property is named `MineruScore` to avoid conflicting with V1's `Score` (OpenSearch `_score`); see the deviation note in §13.1.1) |
+| `SubType` (string?) | `_source.sub_type` (new in Generation 2, secondary classification such as caption/body/footnote) |
+| `TextLevel` (int?) | `_source.text_level` (new in Generation 2, heading level, -1 = non-heading text) |
+| `TextFormat` (string?) | `_source.text_format` (new in Generation 2, `latex`/`markdown`, etc., VLM-backend-specific) |
+| `Caption` (string?) | `_source.caption` (new in Generation 2, concatenated caption texts such as image_footnote/table_caption, for keyword hits) |
 
-- `TotalCount` 取自 `hits.total.value`（V1 不变）。
-- `nextToken` 生成条件同 V1（`results.Count == pageSize`）。
-- 当 `_meta.block_data` 缺失时回退 `BlockData = null`（不抛异常，不阻塞响应）。
+- `TotalCount` comes from `hits.total.value` (V1 unchanged).
+- `nextToken` generation condition is the same as V1 (`results.Count == pageSize`).
+- When `_meta.block_data` is missing, falls back to `BlockData = null` (no exception thrown, response not blocked).
 
-### 13.8 第 2 代错误处理表（追加）
+### 13.8 Generation 2 Error Handling Table (additions)
 
-| 场景 | 处理 |
+| Scenario | Handling |
 |------|------|
-| V1 所有 minerU filter 均为 null | 走 V1 路径，行为完全等同（零回归） |
-| `pageSize` 超限 | 静默截断为 100（V1 值不变） |
-| OpenSearch 搜索非 200 | 抛 `InvalidOperationException`，`SearchDomainService` 捕获后返回空结果（V1 降级路径） |
-| `_meta.block_data` 缺失 | `BlockData = null`，不阻塞响应 |
-| `pageToken` 解码失败 | LogDebug，从第一页开始（V1 不变） |
+| All minerU filters null | Takes the V1 path, behavior exactly equivalent (zero regression) |
+| `pageSize` over the limit | Silently truncated to 100 (V1 value unchanged) |
+| OpenSearch search non-200 | Throws `InvalidOperationException`; `SearchDomainService` catches it and returns empty results (V1 degradation path) |
+| `_meta.block_data` missing | `BlockData = null`, response not blocked |
+| `pageToken` decode failure | LogDebug, start from the first page (V1 unchanged) |
 
-> 注：**去掉** `DOCTHECA_FILTER_REQUIRED` 错误码 —— 第 2 代 endpoint 与 V1 共用 `GET /admin/documents/search`；V1 的 `query` 必填校验（空 → 400 `DOCTHECA_QUERY_REQUIRED`）**保留**作为唯一必填守卫，不需要另立 filter 必填守卫。
+> Note: the `DOCTHECA_FILTER_REQUIRED` error code is **dropped** — the Generation 2 endpoint shares `GET /admin/documents/search` with V1; V1's required-`query` validation (empty → 400 `DOCTHECA_QUERY_REQUIRED`) is **retained** as the sole required-field guard, and no separate required-filter guard is needed.
 
-### 13.9 第 2 代实现步骤（扩展 V1，不新建）
+### 13.9 Generation 2 Implementation Steps (extending V1, nothing new built)
 
-#### 13.9.1 索引写入扩展（`StructaDocParseWorker`，扩展 `IndexParseBlocksAsync`）
+#### 13.9.1 Index Write Extension (`StructaDocParseWorker`, extending `IndexParseBlocksAsync`)
 
-在 `IndexBlocksToSearchAsync` 中，V1 bulk 构建后追加 minerU 维度字段：
+In `IndexBlocksToSearchAsync`, minerU dimension fields are appended after the V1 bulk is built:
 
 ```csharp
-// 在 V1 字段构建后追加第 2 代 minerU 维度字段
+// Append Generation 2 minerU dimension fields after the V1 fields are built
 x0            = block.BboxX0,
 y0            = block.BboxY0,
 x1            = block.BboxX1,
 y1            = block.BboxY1,
 score         = block.MineruScore,
 has_image     = block.ImageId != null,
-_meta         = new { block_data = block.BlockData }   // 整块回挂（V1 minerU 同源字段已覆盖 block_type/page_number/text）
+_meta         = new { block_data = block.BlockData }   // attached whole (V1 minerU same-source fields already cover block_type/page_number/text)
 ```
 
-> `BboxX0/Y0/X1/Y1`、`MineruScore` 在 `DocumentParseBlockService.ParseBlock` 阶段从 minerU `block_data` 抽取并写入 block 实体，索引端不二次解析 JSON。`has_image` 通过 `block.ImageId != null` 判定，避免重复解析 minerU JSON。
+> `BboxX0/Y0/X1/Y1` and `MineruScore` are extracted from the minerU `block_data` and written to the block entity during the `DocumentParseBlockService.ParseBlock` stage; the indexing side does not re-parse the JSON. `has_image` is determined via `block.ImageId != null`, avoiding repeated parsing of the minerU JSON.
 
-#### 13.9.2 领域服务与端点扩展
+#### 13.9.2 Domain Service and Endpoint Extensions
 
-- `ISearchIndexService` / `OpenSearchIndexService`：**同一 `IndexParseBlocksAsync` 实现**内追加 minerU 字段；`BuildIndexBody` 追加 minerU 维度映射；**同一 `ExactSearchAsync` 实现**内追加 minerU filter 分支 + `ParseSearchResponse` 追加 minerU 回挂。**不新增接口方法、不新增独立 `Build/Parse` 方法。**
-- `ISearchDomainService` / `SearchDomainService`：同一 `ExactSearchAsync` 内扩展 minerU filter 透传与回挂字段解析；降级模式复用 V1。**不新增 `BlockXxx` 方法。**
-- `DocumentSearchEndpoints.cs`：同一 `GET /admin/documents/search` 端点追加可选 minerU 入参（参数为 null 时行为同 V1）。**不新增 endpoint 文件。**
+- `ISearchIndexService` / `OpenSearchIndexService`: minerU fields added **within the same `IndexParseBlocksAsync` implementation**; `BuildIndexBody` gains minerU dimension mappings; the minerU filter branch added **within the same `ExactSearchAsync` implementation** + minerU attachment in `ParseSearchResponse`. **No new interface methods, no standalone `Build/Parse` methods.**
+- `ISearchDomainService` / `SearchDomainService`: minerU filter pass-through and attachment field parsing extended within the same `ExactSearchAsync`; the degradation pattern reuses V1. **No new `BlockXxx` methods.**
+- `DocumentSearchEndpoints.cs`: the same `GET /admin/documents/search` endpoint gains optional minerU inputs (behavior equals V1 when parameters are null). **No new endpoint files.**
 
-#### 13.9.3 前端扩展
+#### 13.9.3 Frontend Extension
 
-- doctheca 自带前端**改造**现有 `SearchPage.vue`（V1 页保留），新增"高级筛选"抽屉 + 结果行展开 `blockData`/`bbox`/`score` 详情。**不新增**平行 `BlockSearchPage.vue`。
-- 不动 Ruoyu.Admin。
+- The doctheca built-in frontend **modifies** the existing `SearchPage.vue` (the V1 page is retained), adding an "Advanced filters" drawer + result-row expansion of `blockData`/`bbox`/`score` details. **No new** parallel `BlockSearchPage.vue`.
+- Ruoyu.Admin is untouched.
 
-### 13.10 第 2 代配置
+### 13.10 Generation 2 Configuration
 
-复用 V1 `OpenSearch:Url` / `OpenSearch:IndexName`，无新增配置节。
+Reuses V1 `OpenSearch:Url` / `OpenSearch:IndexName`; no new configuration sections.
 
-### 13.11 第 2 代测试策略
+### 13.11 Generation 2 Testing Strategy
 
-#### 13.11.1 单元测试（UT）—— 追加到现有测试文件
+#### 13.11.1 Unit Tests (UT) — added to existing test files
 
-不新增独立测试方法类，在现有 `OpenSearchIndexServiceTests.cs` / `SearchDomainServiceTests.cs` 追加 minerU 断言：
+No standalone test classes; minerU assertions are added to the existing `OpenSearchIndexServiceTests.cs` / `SearchDomainServiceTests.cs`:
 
-- `BuildSearchBody` 追加断言：minerU 过滤条件（`blockType` / `pageNumber` / `hasImage`）走 `filter` 子句；无 minerU filter 时 `BuildSearchBody` 输出与 V1 完全一致。
-- `ParseSearchResponse` 追加断言：`_source._meta.block_data` 正确映射到 `BlockData`；`x0/y0/x1/y1` 组合为 `Bbox`；缺失时回退 null。
-- `SearchDomainService.ExactSearchAsync` 追加断言：minerU filter 透传给索引服务；异常降级仍返回空结果。
+- `BuildSearchBody` assertions added: minerU filter conditions (`blockType` / `pageNumber` / `hasImage`) go to `filter` clauses; with no minerU filters the `BuildSearchBody` output is identical to V1.
+- `ParseSearchResponse` assertions added: `_source._meta.block_data` maps correctly to `BlockData`; `x0/y0/x1/y1` combine into `Bbox`; falls back to null when missing.
+- `SearchDomainService.ExactSearchAsync` assertions added: minerU filters are passed through to the index service; exception degradation still returns empty results.
 
-#### 13.11.2 集成测试（规划，同 V1 集成测试体系）
+#### 13.11.2 Integration Tests (planned, same integration test suite as V1)
 
-- 解析完成后 OpenSearch 有 `x0/y0/x1/y1`/`score`/`has_image`/`_meta.block_data`。
-- `GET /admin/documents/search?keyword=X&blockType=Y` 命中正确 block，响应回挂 `blockData`。
-- `blockData` 回挂与库内存储一致（round-trip）。
+- After parse completion, OpenSearch has `x0/y0/x1/y1`/`score`/`has_image`/`_meta.block_data`.
+- `GET /admin/documents/search?keyword=X&blockType=Y` hits the correct blocks, and the response attaches `blockData`.
+- The attached `blockData` is consistent with database storage (round-trip).
 
-### 13.12 第 2 代影响范围（演进后）
+### 13.12 Generation 2 Impact Scope (after evolution)
 
-| 文件 | 影响 |
+| File | Impact |
 |------|------|
-| `ISearchIndexService.cs` | V1 6 个方法签名不变；实现追加 minerU 字段索引（第 2 代） |
-| `OpenSearchIndexService.cs` | V1 facade 追加 minerU 字段；`OpenSearchIndexManager.BuildIndexBody` 追加 minerU 维度映射；`OpenSearchQueryBuilder.BuildSearchBody` / `OpenSearchResponseParser.ParseSearchResponse` 内追加 minerU filter + 回挂分支 |
-| `ISearchDomainService.cs` / `SearchDomainService.cs` | `ExactSearchAsync` 内追加 minerU filter 透传与回挂字段解析（V1 方法内扩展） |
-| `DocumentSearchEndpoints.cs`（扩展，同一文件） | `GET /admin/documents/search` 追加可选 minerU 入参（V1 原有入参与校验保留） |
-| `StructaDocParseWorker.cs` | `IndexBlocksToSearchAsync` 追加 minerU 维度字段（同一 bulk） |
-| `SearchPage.vue`（doctheca 自带前端 扩展，同一页面） | 加"高级筛选"抽屉 + 结果行展开详情 |
-| `Program.cs` | 无变更（复用 V1 DI 注册） |
+| `ISearchIndexService.cs` | V1's 6 method signatures unchanged; the implementation gains minerU field indexing (Generation 2) |
+| `OpenSearchIndexService.cs` | The V1 facade gains minerU fields; `OpenSearchIndexManager.BuildIndexBody` gains minerU dimension mappings; minerU filter + attachment branches added inside `OpenSearchQueryBuilder.BuildSearchBody` / `OpenSearchResponseParser.ParseSearchResponse` |
+| `ISearchDomainService.cs` / `SearchDomainService.cs` | minerU filter pass-through and attachment field parsing added inside `ExactSearchAsync` (extended within the V1 method) |
+| `DocumentSearchEndpoints.cs` (extension, same file) | `GET /admin/documents/search` gains optional minerU inputs (original V1 inputs and validation retained) |
+| `StructaDocParseWorker.cs` | `IndexBlocksToSearchAsync` gains minerU dimension fields (same bulk) |
+| `SearchPage.vue` (doctheca built-in frontend extension, same page) | Adds the "Advanced filters" drawer + result-row detail expansion |
+| `Program.cs` | No changes (reuses V1 DI registration) |

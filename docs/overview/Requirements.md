@@ -1,29 +1,29 @@
-# Requirements — 服务级需求
+# Requirements — Service-Level Requirements
 
-> 本文件是需求摘要入口。详细功能需求见 [modules/](../modules/README.md) 目录。
+> This file is the requirements summary entry point. For detailed functional requirements see the [modules/](../modules/README.md) directory.
 
-## 功能需求
+## Functional Requirements
 
-### 文档管理与解析
+### Document Management and Parsing
 
-| 编号 | 需求 | 详见 |
+| ID | Requirement | Details |
 |------|------|------|
-| FR-01 | 文档管理：上传文档文件（PDF/DOC/DOCX/PPT/PPTX），原件转发 StructaDoc 主责存储（ADR-0009），本地 `document_files` 表保存引用与元数据；列表/详情/元数据更新/删除（联动解析、图片、索引与 StructaDoc 文档删除） | [DocumentManagement](../modules/DocumentManagement.md) |
-| FR-02 | StructaDoc 文档解析：后台 Worker 调用 StructaDoc API 创建并轮询 Parse Run，成功后把 Blocks/Markdown/Assets 同步到 `document_parses` / `document_parse_blocks` / `document_parse_images`；Office 转档与大文件分块由 StructaDoc 内置能力承担 | [DocumentParse](../modules/DocumentParse.md) |
-| FR-03 | 文档导出：文件级/解析级的 Markdown/HTML 导出，图片路径支持相对/Base64/Presigned 三种模式，支持 ZIP 打包 | [DocumentExport](../modules/DocumentExport/01-FEATURE.md) |
-| FR-04 | 文档元数据分析：解析完成后，文档缺 `subject`/`grade`/`year` 时由 LLM best-effort 自动填充 | [DocumentMetadataAnalysis](../modules/DocumentMetadataAnalysis/01-FEATURE.md) |
-| FR-05 | 更新文档元数据：通过 `PUT /admin/document-files/{id}/metadata` 修改 `subject`/`grade`/`year`，同步刷新 OpenSearch 索引 | [DocumentSearch](../modules/DocumentSearch/01-FEATURE.md) |
-| FR-06 | 精确搜索：基于 OpenSearch 的关键词匹配，支持 subject/grade/year/documentTitle 过滤；含索引写入（解析完成后自动索引） | [DocumentSearch](../modules/DocumentSearch/01-FEATURE.md) |
-| FR-07 | 管理员认证：使用 Identity bootstrap 管理员登录，所有浏览器管理 API 要求有效 `role=admin`，Token 仅存于 HttpOnly Cookie | [AdminAuthentication](../modules/AdminAuthentication/01-FEATURE.md) |
+| FR-01 | Document management: upload document files (PDF/DOC/DOCX/PPT/PPTX); originals are forwarded to StructaDoc for primary-ownership storage (ADR-0009), while the local `document_files` table keeps references and metadata; list/details/metadata update/deletion (cascading to parses, images, indexes, and StructaDoc document deletion) | [DocumentManagement](../modules/DocumentManagement.md) |
+| FR-02 | StructaDoc document parsing: a background Worker calls the StructaDoc API to create and poll Parse Runs; on success it synchronizes Blocks/Markdown/Assets into `document_parses` / `document_parse_blocks` / `document_parse_images`; Office conversion and large-file chunking are handled by StructaDoc's built-in capabilities | [DocumentParse](../modules/DocumentParse.md) |
+| FR-03 | Document export: file-level/parse-level Markdown/HTML export; image paths support relative/Base64/Presigned modes; ZIP packaging supported | [DocumentExport](../modules/DocumentExport/01-FEATURE.md) |
+| FR-04 | Document metadata analysis: after parsing completes, when a document lacks `subject`/`grade`/`year`, an LLM fills them in automatically on a best-effort basis | [DocumentMetadataAnalysis](../modules/DocumentMetadataAnalysis/01-FEATURE.md) |
+| FR-05 | Update document metadata: modify `subject`/`grade`/`year` via `PUT /admin/document-files/{id}/metadata`, refreshing the OpenSearch index accordingly | [DocumentSearch](../modules/DocumentSearch/01-FEATURE.md) |
+| FR-06 | Exact search: OpenSearch-based keyword matching with subject/grade/year/documentTitle filters; includes index writes (auto-indexing after parsing completes) | [DocumentSearch](../modules/DocumentSearch/01-FEATURE.md) |
+| FR-07 | Administrator authentication: login with the Identity bootstrap administrator; all browser admin APIs require a valid `role=admin`; tokens stored only in HttpOnly cookies | [AdminAuthentication](../modules/AdminAuthentication/01-FEATURE.md) |
 
-## 非功能需求
+## Non-Functional Requirements
 
-| 编号 | 需求 |
+| ID | Requirement |
 |------|------|
-| NFR-01 | 搜索响应时间 < 2s（精确搜索） |
-| NFR-02 | 文档解析异步执行（StructaDocParseWorker + StructaDoc 持久化 Parse Run），不阻塞上传响应 |
-| NFR-03 | OpenSearch 索引失败不阻塞解析主流程，仅记日志 |
-| NFR-04 | 数据库使用 PostgreSQL（代码硬编码 `UseNpgsql`） |
-| NFR-05 | 服务单端口：HTTP(5012) |
-| NFR-06 | 管理认证校验 JWT issuer、audience、签名和有效期；普通用户 JWT 必须返回 403 |
-| NFR-07 | SPA、静态文件和健康检查保持匿名，管理 API 必须使用 Identity 管理员身份 |
+| NFR-01 | Search response time < 2s (exact search) |
+| NFR-02 | Document parsing executes asynchronously (StructaDocParseWorker + StructaDoc-persisted Parse Runs), without blocking the upload response |
+| NFR-03 | OpenSearch indexing failures do not block the main parsing flow; they are only logged |
+| NFR-04 | Database uses PostgreSQL (`UseNpgsql` hard-coded) |
+| NFR-05 | Single service port: HTTP(5012) |
+| NFR-06 | Admin authentication validates JWT issuer, audience, signature, and expiry; a regular-user JWT must return 403 |
+| NFR-07 | SPA, static files, and health checks remain anonymous; admin APIs must use the Identity administrator identity |

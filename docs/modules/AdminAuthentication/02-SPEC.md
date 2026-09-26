@@ -1,10 +1,10 @@
-﻿# 02-SPEC — Doctheca 管理员认证规格
+﻿# 02-SPEC — Doctheca Admin Authentication Specification
 
-## HTTP 契约
+## HTTP contract
 
 ### POST `/admin/auth/login`
 
-匿名端点。请求：
+Anonymous endpoint. Request:
 
 ```json
 {
@@ -13,7 +13,7 @@
 }
 ```
 
-成功返回 200，并设置 Access/Refresh HttpOnly Cookie：
+On success returns 200 and sets the Access/Refresh HttpOnly Cookies:
 
 ```json
 {
@@ -26,18 +26,18 @@
 }
 ```
 
-失败语义：
+Failure semantics:
 
-| 场景 | HTTP | 响应消息 |
+| Scenario | HTTP | Response message |
 |------|------|----------|
-| 用户名或密码为空 | 400 | `Username and password are required.` |
-| Identity 拒绝账号密码 | 401 | `Invalid username or password.` |
-| SignaCore 拒绝 Doctheca App 凭据 | 502 | `Identity service is unavailable.` |
-| Identity 登录成功但 Token 无 `role=admin` | 403 | `Administrator access is required.` |
-| Identity 不可用或响应无效 | 502 | `Identity service is unavailable.` |
-| Identity Token 未通过密码学验证 | 502 | `Identity service returned an invalid token.` |
+| Username or password is empty | 400 | `Username and password are required.` |
+| Identity rejects the credentials | 401 | `Invalid username or password.` |
+| SignaCore rejects the Doctheca App credentials | 502 | `Identity service is unavailable.` |
+| Identity login succeeds but the Token has no `role=admin` | 403 | `Administrator access is required.` |
+| Identity is unavailable or responds invalidly | 502 | `Identity service is unavailable.` |
+| Identity Token fails cryptographic validation | 502 | `Identity service returned an invalid token.` |
 
-Doctheca 调用 Identity 的请求体固定为：
+The request body Doctheca sends to Identity is fixed as:
 
 ```json
 {
@@ -47,12 +47,12 @@ Doctheca 调用 Identity 的请求体固定为：
 }
 ```
 
-上述 Doctheca → SignaCore 请求同时携带 Doctheca 自己的 `X-Admin-AppId` /
-`X-Admin-AppSecret`；凭据来自部署 secret，不复用任一 Portal App，也不写入共享 Consul KV。
+The above Doctheca → SignaCore request also carries Doctheca's own `X-Admin-AppId` /
+`X-Admin-AppSecret`; the credentials come from deployment secrets, do not reuse any Portal App, and are never written to shared Consul KV.
 
 ### POST `/admin/auth/refresh`
 
-匿名端点，但要求请求携带有效 Refresh Cookie。Doctheca 调用 Identity：
+Anonymous endpoint, but requires the request to carry a valid Refresh Cookie. Doctheca calls Identity:
 
 ```json
 {
@@ -61,15 +61,15 @@ Doctheca 调用 Identity 的请求体固定为：
 }
 ```
 
-刷新成功后必须重新验证新 Access Token 的签名和 `role=admin`，然后轮换两个 Cookie。无效、过期、已撤销或非管理员 Token 返回 401；Identity 不可用返回 502；两类失败都清除两个 Cookie。refresh grant 与 password grant 使用同一组 Doctheca App 凭据。
+After a successful refresh, the new Access Token's signature and `role=admin` must be re-validated, then both Cookies are rotated. Invalid, expired, revoked, or non-admin Tokens return 401; Identity unavailability returns 502; both failure kinds clear both Cookies. The refresh grant and the password grant use the same set of Doctheca App credentials.
 
 ### POST `/admin/auth/logout`
 
-允许无有效 Access Token 时调用，以保证过期会话仍能退出。若存在 Refresh Cookie，Doctheca best-effort 调用 Identity `POST /api/auth/revoke`；无论 Identity 是否可用，最终均清除两个 Cookie并返回 200。
+May be called without a valid Access Token, so expired sessions can still log out. If a Refresh Cookie exists, Doctheca calls Identity `POST /api/auth/revoke` on a best-effort basis; regardless of Identity availability, both Cookies are ultimately cleared and 200 is returned.
 
 ### GET `/admin/auth/session`
 
-要求管理员策略。返回当前 JWT 中的用户 ID、名称、角色和过期时间，不返回 Token：
+Requires the administrator policy. Returns the user ID, name, roles, and expiry from the current JWT; does not return the Token:
 
 ```json
 {
@@ -83,50 +83,50 @@ Doctheca 调用 Identity 的请求体固定为：
 }
 ```
 
-## 授权矩阵
+## Authorization matrix
 
-| 调用者 | 认证端点 | 其他 `/admin/*` |
+| Caller | Auth endpoints | Other `/admin/*` |
 |--------|----------|-----------------|
-| 未登录浏览器 | login/logout 允许；session 401 | 401 |
-| 普通 Identity JWT | login 403；session 403 | 403 |
-| `role=admin` Identity JWT/Cookie | 允许 | 允许 |
+| Unauthenticated browser | login/logout allowed; session 401 | 401 |
+| Ordinary Identity JWT | login 403; session 403 | 403 |
+| `role=admin` Identity JWT/Cookie | Allowed | Allowed |
 
-## JWT 验证
+## JWT validation
 
-| 项目 | 值/来源 |
+| Item | Value/source |
 |------|---------|
 | Authority | `IdentityService:Authority` |
-| Issuer | `IdentityService:Issuer`，必须显式配置；旧 Issuer 仅放在 `AdditionalValidIssuers` |
-| Audience | `IdentityService:Audience`，必须显式配置 |
-| 签名 | Authority OIDC discovery + JWKS，RS256 |
-| 有效期 | 必须校验；ClockSkew 来自 `IdentityService:ClockSkewSeconds` |
-| 管理员角色 | `role=admin`，大小写不敏感 |
+| Issuer | `IdentityService:Issuer`, must be configured explicitly; old Issuers go only in `AdditionalValidIssuers` |
+| Audience | `IdentityService:Audience`, must be configured explicitly |
+| Signature | Authority OIDC discovery + JWKS, RS256 |
+| Expiry | Must be validated; ClockSkew comes from `IdentityService:ClockSkewSeconds` |
+| Admin role | `role=admin`, case-insensitive |
 
-登录和刷新阶段的显式 Token 校验与请求管线中的 JwtBearer 校验必须使用同一组参数。
+The explicit Token validation during login and refresh and the JwtBearer validation in the request pipeline must use the same set of parameters.
 
-## Cookie
+## Cookies
 
-| Cookie | Path | 属性 | 用途 |
+| Cookie | Path | Attributes | Purpose |
 |--------|------|------|------|
-| `docthecaAccessToken` | `/admin` | HttpOnly, SameSite=Strict, Secure 由配置控制 | 管理 API 身份 |
-| `docthecaRefreshToken` | `/admin/auth` | HttpOnly, SameSite=Strict, Secure 由配置控制 | 刷新与登出 |
+| `docthecaAccessToken` | `/admin` | HttpOnly, SameSite=Strict, Secure controlled by configuration | Admin API identity |
+| `docthecaRefreshToken` | `/admin/auth` | HttpOnly, SameSite=Strict, Secure controlled by configuration | Refresh and logout |
 
-生产 HTTPS 部署必须设置 `Authentication:CookieSecure=true`。当前纯 HTTP 内网部署可显式设置为 `false`，但不得把该配置解释为公网安全部署。
+Production HTTPS deployments must set `Authentication:CookieSecure=true`. The current HTTP-only intranet deployment may explicitly set it to `false`, but that configuration must not be interpreted as safe for public-network deployment.
 
-## 前端行为
+## Frontend behavior
 
-1. 应用启动调用 `/admin/auth/session`。
-2. 200 时加载管理界面；401/403 时显示登录页。
-3. 登录成功后重新请求 session，不读取 Token。
-4. 共享 Axios 客户端遇到非认证端点 401 时，只调用一次 refresh，并发请求共享同一 refresh Promise。
-5. 刷新成功后重试原请求；刷新失败时清理前端会话状态并显示登录页。
-6. 403 不自动重试，显示无权限提示。
-7. 登出完成后立即显示登录页。
+1. On startup the application calls `/admin/auth/session`.
+2. On 200 it loads the admin UI; on 401/403 it shows the login page.
+3. After a successful login it re-requests the session and does not read Tokens.
+4. When the shared Axios client hits a 401 on a non-auth endpoint, it calls refresh only once, and concurrent requests share the same refresh Promise.
+5. After a successful refresh it retries the original request; on refresh failure it clears the frontend session state and shows the login page.
+6. 403 is not retried automatically; a no-permission message is shown.
+7. After logout completes, the login page is shown immediately.
 
-## 安全约束
+## Security constraints
 
-- 不在前端硬编码管理员用户名或密码。
-- 不把密码、Token 或 Cookie 写入日志、异常消息或 API 响应。
-- 登录失败日志只记录通用原因和经过规范化的非敏感关联信息。
-- 管理 API 不启用跨域凭据；前端与后端保持同源。
-- 静态文件和 SPA fallback 必须映射在授权策略之外。
+- Never hardcode administrator usernames or passwords in the frontend.
+- Never write passwords, Tokens, or Cookies to logs, exception messages, or API responses.
+- Login failure logs record only generic reasons and normalized non-sensitive correlation information.
+- Admin APIs do not enable cross-origin credentials; the frontend and backend stay same-origin.
+- Static files and the SPA fallback must be mapped outside the authorization policy.

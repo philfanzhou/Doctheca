@@ -1,99 +1,99 @@
 # 01-FEATURE — Document Metadata Analysis
 
-## 功能概述
+## Feature overview
 
-在解析完成后，自动调用 LLM 分析文档前 2000 字符的 Markdown 内容，识别学科（subject）和年级（grade），并将结果回填到 `document_files` 表。如果文档的 subject/grade/year 已全部有值（人工填写或之前 LLM 分析过），则跳过 LLM 调用。LLM 失败不影响解析流程。
+After parsing completes, the LLM is automatically called to analyze the first 2000 characters of the document's Markdown content, identify the subject and grade, and backfill the results into the `document_files` table. If a document's subject/grade/year all already have values (entered manually or from a previous LLM analysis), the LLM call is skipped. An LLM failure does not affect the parsing flow.
 
-## 背景
+## Background
 
-`document_files` 表当前没有 subject/grade/year 元数据字段。OpenSearch 索引时这些字段留空，导致无法按学科/年级过滤搜索。本功能：
+The `document_files` table currently has no subject/grade/year metadata fields. These fields stay empty during OpenSearch indexing, making it impossible to filter searches by subject/grade. This feature:
 
-1. 为 `document_files` 表新增 subject/grade/year 列（nullable）
-2. 提供手动设置元数据的 API 端点
-3. 在解析完成后自动调用 LLM 填充缺失的元数据
-4. 元数据更新后同步刷新 OpenSearch 索引
+1. Adds subject/grade/year columns (nullable) to the `document_files` table
+2. Provides an API endpoint to set metadata manually
+3. Automatically calls the LLM to fill in missing metadata after parsing completes
+4. Refreshes the OpenSearch index in sync after metadata updates
 
-## 用户故事
+## User stories
 
-- **作为老师**:我上传讲义后，系统自动识别学科和年级，无需手动填写
-- **作为老师**:我可以在解析前或解析后手动指定学科/年级，系统不会覆盖我的选择
-- **作为运维**:LLM 不可用时，解析流程照常完成，只是元数据留空
-- **作为运维**:文档多次解析时，如果元数据已有值，不会重复调用 LLM
+- **As a teacher**: after I upload handouts, the system automatically identifies the subject and grade — no manual entry needed
+- **As a teacher**: I can specify the subject/grade manually before or after parsing, and the system will not override my choice
+- **As an operator**: when the LLM is unavailable, the parsing flow still completes normally and only the metadata stays empty
+- **As an operator**: when a document is parsed multiple times, the LLM is not called again if the metadata already has values
 
-## 功能需求
+## Functional requirements
 
-### FR-01:document_files 新增元数据字段
-- 新增 `subject`(string, nullable, max 50)、`grade`(string, nullable, max 20)、`year`(string, nullable, max 10)三列
-- 上传时这些字段留空（上传接口不传元数据）
-- 通过新的 PUT 端点手动设置
+### FR-01: New metadata fields on document_files
+- Add three columns: `subject` (string, nullable, max 50), `grade` (string, nullable, max 20), `year` (string, nullable, max 10)
+- These fields stay empty at upload time (the upload API does not carry metadata)
+- Set manually via the new PUT endpoint
 
-### FR-02:手动设置元数据端点
+### FR-02: Manual metadata endpoint
 - `PUT /admin/document-files/{id}/metadata`
-- 请求体:`{ "subject": "...", "grade": "...", "year": "..." }`(三个字段均可选，null 表示不修改)
-- 响应:更新后的文档信息
-- 手动设置后，后续解析完成时跳过 LLM 分析（只要三个字段都有值）
+- Request body: `{ "subject": "...", "grade": "...", "year": "..." }` (all three fields optional; null means no change)
+- Response: the updated document information
+- After manual setting, subsequent parse completions skip LLM analysis (as long as all three fields have values)
 
-### FR-03:解析完成后自动 LLM 分析
-- 解析状态变为 `parsed` 后，检查 `document_files` 的 subject/grade/year
-- 若三个字段全部有值 → 跳过 LLM
-- 若任一字段为空 → 调用 LLM 分析 Markdown 前 2000 字符
-- LLM 返回后，仅更新为空的字段（不覆盖已有值）
-- 同步更新 OpenSearch 索引中该 document_file 的所有 blocks 的 subject/grade/year
+### FR-03: Automatic LLM analysis after parsing completes
+- After the parse status becomes `parsed`, check subject/grade/year in `document_files`
+- If all three fields have values → skip the LLM
+- If any field is empty → call the LLM to analyze the first 2000 characters of the Markdown
+- After the LLM returns, only update the fields that are empty (never overwrite existing values)
+- Update subject/grade/year in sync for all blocks of this document_file in the OpenSearch index
 
-### FR-04:LLM 分析输入
-- 输入:解析结果 `MarkdownContent` 的前 2000 字符（人类可读的 Markdown 正文，非 JSON）
-- 提示词聚焦学科和年级识别（不要求分段策略、文档类型等）
-- LLM 返回 JSON:`{ "subject": "...", "grade": "...", "year": "..." }`
+### FR-04: LLM analysis input
+- Input: the first 2000 characters of the parse result `MarkdownContent` (human-readable Markdown body, not JSON)
+- The prompt focuses on subject and grade identification (does not ask for segmentation strategy, document type, etc.)
+- The LLM returns JSON: `{ "subject": "...", "grade": "...", "year": "..." }`
 
-### FR-05:LLM 失败不阻塞
-- LLM 服务未配置（ApiKey 为空）→ 跳过，记 Info 日志
-- LLM 调用失败（网络/超时/解析错误）→ 跳过，记 Warning 日志
-- 解析状态不受影响（仍为 `parsed`）
-- OpenSearch 索引不受影响（blocks 仍已索引，只是 subject/grade/year 为空）
+### FR-05: LLM failure does not block
+- LLM service not configured (ApiKey empty) → skip, log at Info level
+- LLM call fails (network/timeout/parse error) → skip, log at Warning level
+- The parse status is unaffected (remains `parsed`)
+- The OpenSearch index is unaffected (blocks remain indexed, only subject/grade/year are empty)
 
-### FR-06:OpenSearch 索引同步
-- 元数据更新后（LLM 自动或手动），调用 `UpdateDocumentFileMetadataAsync` 刷新 OpenSearch
-- 按 `document_file_id` 匹配，更新所有 blocks 的 subject/grade/year 字段
-- 失败仅记 Warning 日志，不阻塞
+### FR-06: OpenSearch index sync
+- After metadata updates (automatic by LLM or manual), call `UpdateDocumentFileMetadataAsync` to refresh OpenSearch
+- Match by `document_file_id` and update the subject/grade/year fields of all blocks
+- Failures only log a Warning and do not block
 
-## 验收条件
+## Acceptance criteria
 
-| AC | 描述 |
+| AC | Description |
 |----|------|
-| AC-01 | `document_files` 表有 subject/grade/year 列，可为 null |
-| AC-02 | `PUT /admin/document-files/{id}/metadata` 能更新元数据 |
-| AC-03 | 解析完成后，若元数据全有值，不调用 LLM |
-| AC-04 | 解析完成后，若元数据部分缺失，调用 LLM 填充缺失字段 |
-| AC-05 | LLM 失败不影响解析状态和 OpenSearch 索引 |
-| AC-06 | LLM 未配置时跳过分析，不报错 |
-| AC-07 | 元数据更新后 OpenSearch 索引同步刷新 |
-| AC-08 | 手动设置的元数据不会被后续 LLM 分析覆盖 |
+| AC-01 | The `document_files` table has subject/grade/year columns, nullable |
+| AC-02 | `PUT /admin/document-files/{id}/metadata` can update metadata |
+| AC-03 | After parsing completes, the LLM is not called if all metadata fields have values |
+| AC-04 | After parsing completes, the LLM is called to fill the missing fields if metadata is partially missing |
+| AC-05 | LLM failure does not affect the parse status or the OpenSearch index |
+| AC-06 | When the LLM is not configured, analysis is skipped without error |
+| AC-07 | After metadata updates, the OpenSearch index is refreshed in sync |
+| AC-08 | Manually set metadata is not overwritten by subsequent LLM analysis |
 
-## 非功能需求
+## Non-functional requirements
 
-| NFR | 描述 |
+| NFR | Description |
 |-----|------|
-| NFR-01 | LLM 分析异步执行，不阻塞解析状态更新 |
-| NFR-02 | LLM 分析失败仅记日志，不影响任何后续流程 |
-| NFR-03 | LLM 调用使用现有 `LlmDocumentAnalysis` 配置（BaseUrl/ApiKey/Model） |
-| NFR-04 | LLM 输入为人类可读 Markdown（非 JSON），前 2000 字符 |
-| NFR-05 | 日志记录 fileId/parseId/分析结果/失败原因，ApiKey 脱敏 |
+| NFR-01 | LLM analysis runs asynchronously and does not block the parse status update |
+| NFR-02 | LLM analysis failure only logs and does not affect any downstream flow |
+| NFR-03 | LLM calls use the existing `LlmDocumentAnalysis` configuration (BaseUrl/ApiKey/Model) |
+| NFR-04 | LLM input is human-readable Markdown (not JSON), first 2000 characters |
+| NFR-05 | Logs record fileId/parseId/analysis result/failure reason, with the ApiKey masked |
 
-## 数据来源
+## Data sources
 
-- **LLM 输入**:`document_parses.markdown_content` 前 2000 字符
-- **元数据存储**:`document_files.subject` / `grade` / `year`
-- **LLM 配置**:`LlmDocumentAnalysis` 配置段（复用现有配置，不新增）
+- **LLM input**: first 2000 characters of `document_parses.markdown_content`
+- **Metadata storage**: `document_files.subject` / `grade` / `year`
+- **LLM configuration**: `LlmDocumentAnalysis` configuration section (reuses the existing configuration, nothing new)
 
-## 接口清单
+## Interface inventory
 
-| 组件 | 修改 |
+| Component | Change |
 |------|------|
-| `DocumentFileEntity` | 新增 Subject/Grade/Year 列 |
-| `DocumentFileModel` | 新增 Subject/Grade/Year 字段 |
-| `IDocumentFileRepository` | 新增 `UpdateMetadataAsync` |
-| `IDocumentFileService` | 新增 `UpdateMetadataAsync` |
-| `IDocumentAnalysisService` | 新增 `AnalyzeMetadataAsync` 方法 |
-| `ISearchIndexService` | 新增 `UpdateDocumentFileMetadataAsync` 方法 |
-| `StructaDocParseWorker` | 解析完成后调用 LLM 分析元数据 |
-| `DocumentFileEndpoints` | 新增 `PUT /{id}/metadata` 端点 |
+| `DocumentFileEntity` | Add Subject/Grade/Year columns |
+| `DocumentFileModel` | Add Subject/Grade/Year fields |
+| `IDocumentFileRepository` | Add `UpdateMetadataAsync` |
+| `IDocumentFileService` | Add `UpdateMetadataAsync` |
+| `IDocumentAnalysisService` | Add `AnalyzeMetadataAsync` method |
+| `ISearchIndexService` | Add `UpdateDocumentFileMetadataAsync` method |
+| `StructaDocParseWorker` | Call LLM metadata analysis after parsing completes |
+| `DocumentFileEndpoints` | Add `PUT /{id}/metadata` endpoint |
