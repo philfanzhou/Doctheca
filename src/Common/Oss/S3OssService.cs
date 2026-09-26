@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Reactive.Linq;
 using System.Threading.Tasks;
 using Minio;
 using Minio.DataModel.Args;
@@ -303,12 +302,10 @@ public class S3OssService : IOssService
                 .WithPrefix(prefix)
                 .WithRecursive(true);
 
-            var observable = _internalClient.ListObjectsAsync(listArgs);
-            var items = await observable.ToList();
-
-            foreach (var item in items)
+            var items = new List<OssObjectInfo>();
+            await foreach (var item in _internalClient.ListObjectsEnumAsync(listArgs))
             {
-                objects.Add(new OssObjectInfo
+                items.Add(new OssObjectInfo
                 {
                     ObjectPath = item.Key,
                     Size = (long)item.Size,
@@ -316,6 +313,8 @@ public class S3OssService : IOssService
                     IsZombie = false
                 });
             }
+
+            objects.AddRange(items);
         }
         catch
         {
