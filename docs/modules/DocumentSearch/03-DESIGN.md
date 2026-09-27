@@ -187,7 +187,7 @@ See [02-SPEC.md §1.1](./02-SPEC.md#11-isearchindexservice).
 
 ```csharp
 // OpenSearchIndexService constructor
-public class OpenSearchIndexService : ISearchIndexService, IDisposable
+public sealed class OpenSearchIndexService : ISearchIndexService
 {
     public OpenSearchIndexService(
         IOptions<OpenSearchOptions> options,
@@ -202,7 +202,7 @@ public class OpenSearchIndexService : ISearchIndexService, IDisposable
 - `IOptions<OpenSearchOptions>`: OpenSearch configuration.
 - `IServiceProvider`: used to create a scope to resolve `IDocumentParseBlockRepository` (scoped lifetime).
 - `ILogger<OpenSearchIndexService>`: structured logging.
-- `OpenSearchLowLevelClient` is created via `new` in the constructor; the service implements `IDisposable`, and `Dispose()` calls `(_client as IDisposable)?.Dispose()`, released by the DI container when the singleton is destroyed. The currently referenced `OpenSearch.Net` 1.8.0 package does not expose a public `Dispose()` method on `OpenSearchLowLevelClient`, hence the defensive cast; if a future version implements `IDisposable`, disposal takes effect automatically.
+- `ConnectionConfiguration` and `OpenSearchLowLevelClient` are created via `new` in the constructor. The service is registered as a singleton and lives for the lifetime of the process; it does not implement `IDisposable`. In the referenced `OpenSearch.Net` 2.2.0 package, `OpenSearchLowLevelClient` does not implement `IDisposable`; `ConnectionConfiguration` does, but it is not disposed explicitly and is reclaimed when the process exits.
 
 ```csharp
 // SearchDomainService constructor
@@ -307,7 +307,7 @@ An OpenSearch index's mapping **cannot be modified online** once created (field 
 
 **Solution**: write `mapping_version` into the index `_meta`, compare version numbers at startup, and delete and rebuild the index on mismatch.
 
-- The `CurrentMappingVersion` constant is defined in `OpenSearchIndexService` and incremented on every mapping change to `BuildIndexBody`
+- The `CurrentMappingVersion` constant is defined in `OpenSearchIndexManager` and incremented on every mapping change to `BuildIndexBody`
 - `BuildIndexBody`'s `_meta` field gains `mapping_version`
 - `EnsureIndexExistsAsync` reads the index `_meta.mapping_version`; if missing or lower than the current version, delete and rebuild
 - Rebuilding is best-effort: deletion failure → LogWarning, startup not blocked; creation failure after successful deletion → LogWarning, startup not blocked
