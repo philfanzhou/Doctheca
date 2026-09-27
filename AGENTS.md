@@ -1,6 +1,6 @@
 # Doctheca 协作规范
 
-Doctheca 是通用的文档库与检索服务：.NET 10 最小 API、Vue 3 管理前端、单容器部署（API + SPA 同进程，容器内监听 5012）。文档解析与 Office→PDF 转换委托外部 [StructaDoc](https://github.com/philfanzhou/StructaDoc) 服务（ADR-0009），本服务只保存引用与本地 Blocks/Images 同步副本，并提供全文精确检索。它于 2026-09-26 从 Ruoyu.Study monorepo 的 `ruoyu.doclibrary`（更早名 `ruoyu.docretrieval`）迁出，保留子树提交历史，采用 MIT License。
+Doctheca 是通用的文档库与检索服务：.NET 最小 API、Vue 3 管理前端、单容器部署（API + SPA 同进程，容器内监听 5012）。文档解析与 Office→PDF 转换委托外部 [StructaDoc](https://github.com/philfanzhou/StructaDoc) 服务（ADR-0009），本服务只保存引用与本地 Blocks/Images 同步副本，并提供全文精确检索。它于 2026-09-26 从 Ruoyu.Study monorepo 的 `ruoyu.doclibrary`（更早名 `ruoyu.docretrieval`）迁出，保留子树提交历史，采用 MIT License。
 
 ## 维护方式
 
