@@ -6,7 +6,7 @@ How to set up and run `doctheca` locally.
 
 | Dependency | Required | Description |
 |------|----------|------|
-| .NET 10 SDK | Yes | The project targets `net10.0` |
+| .NET 10 SDK | Yes | The project targets `net10.0`; the exact SDK version is pinned by `global.json` |
 | PostgreSQL | Yes | The default connection string points to `localhost:5432` (`doctheca`)|
 | OpenSearch | Optional | Full-text search index; default address `http://localhost:9200`; recommended Docker image version `2.19.5` (the service references the `OpenSearch.Net` 2.2.0 client) |
 | MinIO / SeaweedFS | Optional | S3-compatible object storage; the local fallback `Oss:InternalEndpoint` is `localhost:8333`; can be switched to local file-system storage via `USE_LOCAL_OSS=1` |
