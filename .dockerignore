@@ -1,0 +1,35 @@
+# Keep host build outputs and local artifacts out of the Docker build context.
+# The image must always be built from clean sources: the Dockerfile installs
+# frontend dependencies with `npm ci`, restores and publishes the backend, and
+# injects the freshly built admin console into src/Host/wwwroot.
+
+# Version control
+.git/
+
+# .NET build outputs (host bin/obj would overwrite the in-container restore and publish)
+**/bin/
+**/obj/
+**/publish/
+**/TestResults/
+
+# Frontend dependencies and build outputs (host node_modules would overwrite the
+# in-container `npm ci` result; host wwwroot would leave stale files under src/Host/wwwroot)
+**/node_modules/
+**/wwwroot/
+**/dist/
+**/coverage/
+
+# IDE, OS and log noise
+.vs/
+.idea/
+**/*.user
+**/*.suo
+**/.DS_Store
+**/Thumbs.db
+**/*.log
+
+# Local agent scratch directories (not part of the image)
+.agent/
+.claude/
+.trae/
+.worktrees/
