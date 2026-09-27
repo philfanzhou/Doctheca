@@ -1,97 +1,97 @@
-# 01-FEATURE — DocumentExport 文档导出
+# 01-FEATURE — DocumentExport Document Export
 
-## 功能概述
+## Feature Overview
 
-将已解析文档（`document_parses` 状态为 `parsed`）的 Markdown 内容导出为可下载文件。支持两种导出维度（文件级 / 解析级）与两种导出格式（Markdown / HTML），共 4 个端点。Markdown 导出将 Markdown 正文与图片打包为 ZIP；HTML 导出将图片 Base64 内联后通过 Markdig 转为自包含 HTML 文档。
+Exports the Markdown content of parsed documents (`document_parses` with status `parsed`) as downloadable files. Supports two export dimensions (file-level / parse-level) and two export formats (Markdown / HTML), for a total of 4 endpoints. Markdown export packages the Markdown body and images into a ZIP; HTML export inlines images as Base64 and converts them via Markdig into a self-contained HTML document.
 
-## 背景
+## Background
 
-解析产物的图片存在两种来源（ADR-0009）：**存量解析**的 `markdown_content` 引用 OSS 绝对路径（如 `documents/mineru/task-123/abc.jpg`），字节从 OSS 读取；**新解析**的 Markdown 引用相对路径（`images/<name>`），字节经 `ParseImageContentSource` 从 StructaDoc Asset 流式读取。直接分发的 Markdown 在离线环境下图片无法加载。本功能：
+Images in parse output come from two sources (ADR-0009): for **legacy parses**, `markdown_content` references OSS absolute paths (e.g. `documents/mineru/task-123/abc.jpg`) and the bytes are read from OSS; for **new parses**, the Markdown references relative paths (`images/<name>`) and the bytes are streamed from StructaDoc Assets via `ParseImageContentSource`. Markdown distributed as-is cannot load images in offline environments. This feature:
 
-1. 提供文件级导出（按 `document_file_id` 取最新解析记录）
-2. 提供解析级导出（直接按 `parse_id` 指定某次解析）
-3. Markdown 导出将图片路径改写为相对路径（`images/<name>`）并打包为 ZIP，保证离线可用
-4. HTML 导出将图片下载后 Base64 内联，生成单文件自包含 HTML
+1. Provides file-level export (takes the latest parse record by `document_file_id`)
+2. Provides parse-level export (directly specifies a parse by `parse_id`)
+3. Markdown export rewrites image paths to relative paths (`images/<name>`) and packages everything into a ZIP to guarantee offline usability
+4. HTML export downloads images and inlines them as Base64, producing a single self-contained HTML file
 
-## 用户故事
+## User Stories
 
-- **作为老师**:我上传讲义并解析完成后，可以一键下载 Markdown 源码包（含图片），方便二次编辑
-- **作为老师**:我可以直接下载 HTML 版本，浏览器打开即可查看，图片内联无需联网
-- **作为运维**:我可以直接指定某次解析记录导出，不依赖"最新一次解析"
-- **作为运维**:导出时如果图片来源（OSS 或 StructaDoc）下载某张图片失败，该张图片跳过，不阻塞整份导出
+- **As a teacher**: after I upload lecture notes and parsing completes, I can download a Markdown source package (with images) in one click for further editing
+- **As a teacher**: I can download the HTML version directly and open it in a browser; images are inlined with no network access needed
+- **As an operator**: I can export a specific parse record directly, without depending on "the latest parse"
+- **As an operator**: during export, if an image source (OSS or StructaDoc) fails to download a particular image, that image is skipped without blocking the whole export
 
-## 功能需求
+## Functional Requirements
 
-### FR-01:文件级 Markdown 导出（ZIP）
+### FR-01: File-level Markdown export (ZIP)
 - `GET /admin/document-files/{id}/export/markdown`
-- 取该文件最新解析记录，将 `MarkdownContent` 中图片引用统一改写为相对路径 `images/<ImageName>`，打包为 `{fileName}_markdown.zip`
-- ZIP 内包含一个 `.md` 文件（Optimal 压缩）和一个 `images/` 目录（Fastest 压缩）
+- Takes the file's latest parse record, uniformly rewrites image references in `MarkdownContent` to relative paths `images/<ImageName>`, and packages them into `{fileName}_markdown.zip`
+- The ZIP contains one `.md` file (Optimal compression) and one `images/` directory (Fastest compression)
 
-### FR-02:文件级 HTML 导出
+### FR-02: File-level HTML export
 - `GET /admin/document-files/{id}/export/html`
-- 取该文件最新解析记录，将图片下载后 Base64 内联到 Markdown，再通过 `Markdig.Markdown.ToHtml` 转为 HTML，返回 `{fileName}.html`
+- Takes the file's latest parse record, downloads images and inlines them as Base64 into the Markdown, then converts to HTML via `Markdig.Markdown.ToHtml`, returning `{fileName}.html`
 
-### FR-03:解析级 Markdown 导出（ZIP）
+### FR-03: Parse-level Markdown export (ZIP)
 - `GET /admin/document-parses/{parseId}/export/markdown`
-- 直接按 `parseId` 取解析记录，逻辑同 FR-01
+- Takes the parse record directly by `parseId`; logic identical to FR-01
 
-### FR-04:解析级 HTML 导出
+### FR-04: Parse-level HTML export
 - `GET /admin/document-parses/{parseId}/export/html`
-- 直接按 `parseId` 取解析记录，逻辑同 FR-02
+- Takes the parse record directly by `parseId`; logic identical to FR-02
 
-### FR-05:图片路径三种处理模式
-- **相对路径**（`ReplaceImagePathsRelative`）：用于 Markdown/ZIP 导出，路径改写为 `images/<ImageName>`
-- **Base64 内联**（`ReplaceImagePathsBase64Async`）：用于 HTML 导出，下载图片转为 `data:{ContentType};base64,...`
-- **浏览器 URL**（`ReplaceImagePathsAsync` + URL resolver）：详情页使用——存量解析生成 1 小时有效期 OSS 预签名 URL；新解析生成代理端点 URL `/admin/document-parses/{parseId}/images/{imageId}/content`
+### FR-05: Three image path handling modes
+- **Relative paths** (`ReplaceImagePathsRelative`): used for Markdown/ZIP export; paths are rewritten to `images/<ImageName>`
+- **Base64 inline** (`ReplaceImagePathsBase64Async`): used for HTML export; images are downloaded and converted to `data:{ContentType};base64,...`
+- **Browser URL** (`ReplaceImagePathsAsync` + URL resolver): used by the detail page — legacy parses generate OSS presigned URLs valid for 1 hour; new parses generate proxy endpoint URLs `/admin/document-parses/{parseId}/images/{imageId}/content`
 
-### FR-06:导出前置校验
-- 文件不存在 → 404 `DOCTHECA_FILE_NOT_FOUND`
-- 解析记录不存在 → 404 `DOCTHECA_PARSE_NOT_FOUND`
-- 解析状态非 `parsed` → 422 `DOCTHECA_FILE_NOT_PARSED` / `DOCTHECA_PARSE_NOT_PARSED`
+### FR-06: Export precondition validation
+- File not found → 404 `DOCTHECA_FILE_NOT_FOUND`
+- Parse record not found → 404 `DOCTHECA_PARSE_NOT_FOUND`
+- Parse status is not `parsed` → 422 `DOCTHECA_FILE_NOT_PARSED` / `DOCTHECA_PARSE_NOT_PARSED`
 
-### FR-07:图片下载失败容错
-- 单张图片下载失败（OSS 或 StructaDoc）→ 记 Warning 日志，跳过该张，不阻塞整份导出
-- 浏览器 URL 生成失败 → 记 Warning 日志，跳过该张
+### FR-07: Image download failure tolerance
+- A single image download failure (OSS or StructaDoc) → log a Warning, skip that image, do not block the whole export
+- Browser URL generation failure → log a Warning, skip that image
 
-## 验收条件
+## Acceptance Criteria
 
-| AC | 描述 |
+| AC | Description |
 |----|------|
-| AC-01 | 文件级 Markdown 导出返回 ZIP，内含 `.md` 与 `images/` |
-| AC-02 | 文件级 HTML 导出返回自包含 HTML，图片以 Base64 内联 |
-| AC-03 | 解析级导出与文件级导出结果一致（同一 parseId） |
-| AC-04 | 文件不存在返回 404 + `DOCTHECA_FILE_NOT_FOUND` |
-| AC-05 | 解析记录不存在返回 404 + `DOCTHECA_PARSE_NOT_FOUND` |
-| AC-06 | 解析未完成返回 422 + 对应错误码 |
-| AC-07 | 单张图片下载失败（OSS 或 StructaDoc）不阻塞导出，记 Warning 日志 |
-| AC-08 | Markdown 导出中图片路径为相对路径 `images/<ImageName>` |
-| AC-09 | HTML 导出中图片为 `data:{ContentType};base64,...` 格式 |
+| AC-01 | File-level Markdown export returns a ZIP containing `.md` and `images/` |
+| AC-02 | File-level HTML export returns self-contained HTML with images inlined as Base64 |
+| AC-03 | Parse-level export produces the same result as file-level export (same parseId) |
+| AC-04 | Missing file returns 404 + `DOCTHECA_FILE_NOT_FOUND` |
+| AC-05 | Missing parse record returns 404 + `DOCTHECA_PARSE_NOT_FOUND` |
+| AC-06 | Incomplete parse returns 422 + the corresponding error code |
+| AC-07 | A single image download failure (OSS or StructaDoc) does not block the export; a Warning is logged |
+| AC-08 | Image paths in Markdown export are relative paths `images/<ImageName>` |
+| AC-09 | Images in HTML export use the `data:{ContentType};base64,...` format |
 
-## 非功能需求
+## Non-functional Requirements
 
-| NFR | 描述 |
+| NFR | Description |
 |-----|------|
-| NFR-01 | 导出为流式返回（`Results.Stream`），不落地磁盘 |
-| NFR-02 | ZIP/HTML 在内存中构建（`MemoryStream`），请求结束后释放 |
-| NFR-03 | 图片下载失败为 best-effort，不阻塞整份导出 |
-| NFR-04 | 仅 HTTP，无 gRPC |
-| NFR-05 | 导出不改变解析状态，不触发重新解析 |
-| NFR-06 | 日志记录导出文件名、parseId、图片下载失败原因 |
+| NFR-01 | Export is streamed (`Results.Stream`), never touching disk |
+| NFR-02 | ZIP/HTML are built in memory (`MemoryStream`) and released after the request ends |
+| NFR-03 | Image download failures are best-effort and do not block the whole export |
+| NFR-04 | HTTP only, no gRPC |
+| NFR-05 | Export does not change parse status or trigger re-parsing |
+| NFR-06 | Logs record the export file name, parseId, and image download failure reasons |
 
-## 数据来源
+## Data Sources
 
-- **Markdown 内容**:`document_parses.markdown_content`
-- **图片列表**:`document_parse_images`（按 `parse_id` 查询）
-- **图片二进制**:OSS（`IOssService.DownloadAsync`）
-- **文件名校验**:`document_files.file_name`（解析级导出时若文件不存在则回退为 `"document"`）
+- **Markdown content**: `document_parses.markdown_content`
+- **Image list**: `document_parse_images` (queried by `parse_id`)
+- **Image binaries**: OSS (`IOssService.DownloadAsync`)
+- **File name validation**: `document_files.file_name` (falls back to `"document"` for parse-level export when the file no longer exists)
 
-## 接口清单
+## Interface Inventory
 
-| 组件 | 修改 |
+| Component | Change |
 |------|------|
-| `DocumentExportEndpoints` | 新增 4 个端点 + `MapDocumentExportEndpoints` |
-| `MarkdownExportHelper` | 新增 `ReplaceImagePathsRelative` / `ReplaceImagePathsBase64Async` / `ReplaceImagePathsPresignedAsync` / `BuildMarkdownZipAsync` / `BuildHtmlStream` |
-| `IDocumentParseService` | 复用现有 `GetByIdAsync` / `GetLatestByFileIdAsync` / `GetImagesByParseIdAsync` |
-| `IDocumentFileService` | 复用现有 `GetByIdAsync` |
-| `IOssService` | 复用现有 `DownloadAsync` / `GetPresignedUrlAsync` |
-| `Program.cs` | 注册 `MapDocumentExportEndpoints` |
+| `DocumentExportEndpoints` | Add 4 endpoints + `MapDocumentExportEndpoints` |
+| `MarkdownExportHelper` | Add `ReplaceImagePathsRelative` / `ReplaceImagePathsBase64Async` / `ReplaceImagePathsPresignedAsync` / `BuildMarkdownZipAsync` / `BuildHtmlStream` |
+| `IDocumentParseService` | Reuse existing `GetByIdAsync` / `GetLatestByFileIdAsync` / `GetImagesByParseIdAsync` |
+| `IDocumentFileService` | Reuse existing `GetByIdAsync` |
+| `IOssService` | Reuse existing `DownloadAsync` / `GetPresignedUrlAsync` |
+| `Program.cs` | Register `MapDocumentExportEndpoints` |

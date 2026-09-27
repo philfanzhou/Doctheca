@@ -1,33 +1,33 @@
 # Verification Guide
 
-## 前置条件
+## Prerequisites
 
-- Doctheca：`http://localhost:5012`
-- Identity：`http://localhost:5002`
-- SignaCore 已完成首次应用设置并创建管理员
-- 管理员密码来自部署 secret 中保存的首次设置结果
-- Doctheca 已配置 `IdentityService:Authority`
+- Doctheca: `http://localhost:5012`
+- Identity: `http://localhost:5002`
+- SignaCore has completed first-time application setup and created the administrator
+- The admin password comes from the first-setup result stored in the deployment secrets
+- Doctheca has `IdentityService:Authority` configured
 
-不得把真实密码、Token 或 Cookie 提交到仓库或粘贴到测试报告。
+Never commit real passwords, tokens or cookies to the repository or paste them into test reports.
 
-## 匿名入口
+## Anonymous Entry Points
 
 ```bash
 curl -i http://localhost:5012/
 curl -i http://localhost:5012/health
 ```
 
-预期均非 401。健康检查返回 200。
+Neither is expected to return 401. The health check returns 200.
 
-## 未登录管理 API
+## Admin API Without Login
 
 ```bash
 curl -i http://localhost:5012/admin/document-files
 ```
 
-预期：401。
+Expected: 401.
 
-## 管理员登录
+## Admin Login
 
 ```bash
 curl -i -X POST http://localhost:5012/admin/auth/login \
@@ -36,11 +36,11 @@ curl -i -X POST http://localhost:5012/admin/auth/login \
   -c doctheca.cookies
 ```
 
-预期：200；响应体不含 `accessToken` 或 `refreshToken`；`Set-Cookie` 包含 HttpOnly 的 `docthecaAccessToken` 和 `docthecaRefreshToken`。
+Expected: 200; the response body contains no `accessToken` or `refreshToken`; `Set-Cookie` includes the HttpOnly `docthecaAccessToken` and `docthecaRefreshToken`.
 
-用户名来自 SignaCore 首次设置及数据库中的 `Admin:Username`，不应由 Doctheca 前端硬编码。
+The username comes from the SignaCore first-time setup and `Admin:Username` in the database; it should not be hardcoded by the Doctheca front end.
 
-## 错误密码与普通账户
+## Wrong Password & Regular Accounts
 
 ```bash
 curl -i -X POST http://localhost:5012/admin/auth/login \
@@ -48,20 +48,20 @@ curl -i -X POST http://localhost:5012/admin/auth/login \
   -d '{"username":"admin","password":"wrong-password"}'
 ```
 
-预期：401，统一错误消息，不设置认证 Cookie。
+Expected: 401 with a uniform error message; no auth cookies are set.
 
-使用正确的普通 Identity 账户密码重复调用，预期：403，不设置认证 Cookie。
+Repeat the call with the correct password of a regular Identity account; expected: 403, no auth cookies set.
 
-## 会话与管理操作
+## Session & Admin Operations
 
 ```bash
 curl -i http://localhost:5012/admin/auth/session -b doctheca.cookies
 curl -i http://localhost:5012/admin/document-files -b doctheca.cookies
 ```
 
-预期：200，session 的 `roles` 包含 `admin`，响应不包含 Token。
+Expected: 200; the session's `roles` include `admin`; responses contain no tokens.
 
-上传、解析、元数据、删除、搜索和导出请求都必须携带 Cookie。例如：
+Upload, parse, metadata, delete, search and export requests must all carry the cookies. For example:
 
 ```bash
 curl -i -X POST http://localhost:5012/admin/document-files/upload \
@@ -69,7 +69,7 @@ curl -i -X POST http://localhost:5012/admin/document-files/upload \
   -F "file=@test.pdf"
 ```
 
-## 刷新
+## Refresh
 
 ```bash
 curl -i -X POST http://localhost:5012/admin/auth/refresh \
@@ -77,9 +77,9 @@ curl -i -X POST http://localhost:5012/admin/auth/refresh \
   -c doctheca.cookies
 ```
 
-预期：200，轮换两个 Cookie，响应体不含 Token。无效 Refresh Cookie返回 401 并清除认证 Cookie。
+Expected: 200; both cookies are rotated and the response body contains no tokens. An invalid refresh cookie returns 401 and clears the auth cookies.
 
-## 登出
+## Logout
 
 ```bash
 curl -i -X POST http://localhost:5012/admin/auth/logout \
@@ -89,16 +89,16 @@ curl -i -X POST http://localhost:5012/admin/auth/logout \
 curl -i http://localhost:5012/admin/document-files -b doctheca.cookies
 ```
 
-预期：登出返回 200；后续管理请求返回 401。
+Expected: logout returns 200; subsequent admin requests return 401.
 
-## 已移除接口
+## Removed Endpoints
 
-`/internal/question-bank/*`、旧 `/admin/document-parses/importable` 和
-`POST .../import-status` 均不应映射。
+`/internal/question-bank/*`, the old `/admin/document-parses/importable` and
+`POST .../import-status` must all be unmapped.
 
-## 自动化验证
+## Automated Verification
 
-在仓库根目录运行：
+Run at the repository root:
 
 ```bash
 dotnet test src/Tests/Doctheca.Tests/Doctheca.Tests.csproj --configuration Release
@@ -108,4 +108,4 @@ cd frontend
 npm run build
 ```
 
-> Doctheca 是独立仓库，验证不再依赖 Ruoyu.Study monorepo 的 `tests/integration/scripts/pre-commit.sh`；上述命令即本仓库的完整本地验证（另见根 `AGENTS.md` 的「验证」一节）。
+> Doctheca is a standalone repository; verification no longer depends on the Ruoyu.Study monorepo's `tests/integration/scripts/pre-commit.sh`. The commands above are this repository's complete local verification (see also the "Verification" section of the root `AGENTS.md`).

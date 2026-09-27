@@ -1,21 +1,21 @@
 # Document Library
 
-Document Library 定义教育文档及其可搜索解析结果。它不拥有 Question Catalog 的导入状态或题目。
+Document Library defines educational documents and their searchable parse results. It does not own Question Catalog import status or questions.
 
 ## Language
 
 **Document File**:
-进入文档库并作为解析来源的完整文档。
-_Avoid_: Question、Upload Record
+A complete document that enters the document library and serves as the source for parsing.
+_Avoid_: Question, Upload Record
 
 **Document Parse**:
-一次把 Document File 转换为结构化内容的结果。
-_Avoid_: Document File、Import Job
+The result of one conversion of a Document File into structured content.
+_Avoid_: Document File, Import Job
 
 **Parse Block**:
-Document Parse 中可独立检索和定位的内容单元。
-_Avoid_: Question Content、Page
+A content unit within a Document Parse that can be independently retrieved and located.
+_Avoid_: Question Content, Page
 
 **Parse Image**:
-Document Parse 从原文档提取并保留关联的图片。
-_Avoid_: Learner Image、Question Image
+An image extracted by a Document Parse from the original document with its association preserved.
+_Avoid_: Learner Image, Question Image

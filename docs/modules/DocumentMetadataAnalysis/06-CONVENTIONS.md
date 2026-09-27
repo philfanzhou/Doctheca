@@ -1,24 +1,24 @@
-# DocumentMetadataAnalysis — 命名与风格约定
+# DocumentMetadataAnalysis — Naming and style conventions
 
-## 命名约定
+## Naming conventions
 
-| 类型 | 约定 | 示例 |
+| Kind | Convention | Example |
 |------|------|------|
-| 接口 | `I` 前缀 + PascalCase | `IDocumentAnalysisService` |
-| 实现类 | PascalCase，无后缀 | `DocumentAnalysisService` |
-| Record（DTO） | PascalCase | `DocumentMetadataAnalysis` |
-| 常量 | PascalCase | `SubjectEnglish` |
-| 方法 | PascalCase，Async 后缀 | `AnalyzeMetadataAsync` |
-| 参数 | camelCase | `textPreview` |
+| Interface | `I` prefix + PascalCase | `IDocumentAnalysisService` |
+| Implementation class | PascalCase, no suffix | `DocumentAnalysisService` |
+| Record (DTO) | PascalCase | `DocumentMetadataAnalysis` |
+| Constant | PascalCase | `SubjectEnglish` |
+| Method | PascalCase, Async suffix | `AnalyzeMetadataAsync` |
+| Parameter | camelCase | `textPreview` |
 
-## 日志约定
+## Logging conventions
 
-- 成功/信息：`LogInformation`，含 fileId/parseId
-- 降级/可恢复：`LogWarning`，含异常对象
-- 未预期错误：`LogError`，含异常对象
-- LLM 密钥脱敏：使用 `SensitiveDataMasker.MaskApiKey()`
+- Success/informational: `LogInformation`, including fileId/parseId
+- Degraded/recoverable: `LogWarning`, including the exception object
+- Unexpected errors: `LogError`, including the exception object
+- LLM key masking: use `SensitiveDataMasker.MaskApiKey()`
 
-关键日志消息：
+Key log messages:
 ```
 "Metadata already set for file {FileId}, skip LLM analysis"
 "LLM not configured, skip metadata analysis for file {FileId}"
@@ -28,28 +28,28 @@
 "Failed to sync OpenSearch metadata for file {FileId}"
 ```
 
-## 错误消息约定
+## Error message conventions
 
-错误消息使用中文（面向终端用户），但代码内部异常消息使用英文：
-- `"LLM metadata analysis failed"` — 内部异常消息
-- HTTP 响应消息由端点层控制
+Error messages use Chinese (end-user facing), while internal exception messages in code use English:
+- `"LLM metadata analysis failed"` — internal exception message
+- HTTP response messages are controlled by the endpoint layer
 
-## 空值语义
+## Null semantics
 
-| 值 | 语义 |
+| Value | Semantics |
 |----|------|
-| `null` | 不修改（UpdateMetadataAsync 参数） |
-| `""`（空字符串） | 清空字段 |
-| `DocumentMetadataAnalysis` 字段为 null | LLM 无法确定该字段 |
+| `null` | No change (UpdateMetadataAsync parameters) |
+| `""` (empty string) | Clear the field |
+| `DocumentMetadataAnalysis` field is null | The LLM could not determine the field |
 
-## LLM 配置约定
+## LLM configuration conventions
 
-- 配置节：`LlmDocumentAnalysis`(`DocumentAnalysisOptions.SectionName`)
-- `IDocumentAnalysisService` 仅在配置节存在且 `ApiKey` 非空时注册(`Program.cs` 条件 DI),未注册时 Worker 以 `GetService` 取 null 后 skip
-- 温度固定为 0.1(`DocumentAnalysisOptions.Temperature` 只读属性,结构化输出)
-- 流式 SSE 调用,stream idle timeout 默认 60s(`StreamIdleTimeoutSeconds`)
-- ContextLength 支持 `128K` / `1M` / 纯数字等人类友好格式,未配置时动态 GET `/v1/models/{Model}` 获取,仍失败则禁用 LLM
+- Configuration section: `LlmDocumentAnalysis` (`DocumentAnalysisOptions.SectionName`)
+- `IDocumentAnalysisService` is only registered when the configuration section exists and `ApiKey` is non-empty (conditional DI in `Program.cs`); when not registered, the Worker gets null via `GetService` and then skips
+- Temperature fixed at 0.1 (`DocumentAnalysisOptions.Temperature` read-only property, structured output)
+- Streaming SSE calls, stream idle timeout defaults to 60s (`StreamIdleTimeoutSeconds`)
+- ContextLength supports human-friendly formats such as `128K` / `1M` / plain numbers; when not configured it is fetched dynamically via GET `/v1/models/{Model}`, and if that also fails the LLM is disabled
 
-## 空值校验边界
+## Null validation boundary
 
-> 本功能**不强制校验** subject/grade/year 的取值范围。`DocthecaConstants.ValidSubjects` / `ValidGrades` 仅作为 LLM 提示词示例与 future 校验储备;`UpdateMetadataAsync` 与 Entity 列约束仅做 `MaxLength` + nullable 兜底。
+> This feature **does not enforce validation** of the value ranges for subject/grade/year. `DocthecaConstants.ValidSubjects` / `ValidGrades` serve only as LLM prompt examples and a reserve for future validation; `UpdateMetadataAsync` and the Entity column constraints only provide `MaxLength` + nullable fallbacks.

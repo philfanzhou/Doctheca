@@ -1,13 +1,13 @@
-# Doctheca 文档
+# Doctheca Documentation
 
-doctheca 是文档检索服务（纯 HTTP，端口 5012），负责文档上传、解析、管理与精确搜索能力。gRPC 已移除。
+doctheca is a document retrieval service (pure HTTP, port 5012) responsible for document upload, parsing, management, and exact search. gRPC has been removed.
 
-## 入口
+## Entry Points
 
-| 入口 | 用途 |
+| Entry | Purpose |
 |------|------|
-| [overview/](./overview/README.md) | 服务级总览 |
-| [modules/](./modules/README.md) | 内部业务功能 |
-| [Integration/](./Integration/README.md) | 外部系统交互 |
-| [database/](./database/README.md) | 数据结构与数据主责 |
-| [development/](./development/README.md) | 开发执行支持 |
+| [overview/](./overview/README.md) | Service-level overview |
+| [modules/](./modules/README.md) | Internal business features |
+| [Integration/](./Integration/README.md) | External system interactions |
+| [database/](./database/README.md) | Data structures and data ownership |
+| [development/](./development/README.md) | Development execution support |

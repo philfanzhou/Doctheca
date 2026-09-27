@@ -1,14 +1,14 @@
-# document_parse_imports — 遗留兼容表
+# document_parse_imports — Legacy Compatibility Table
 
-> 下文的 Quaestura 是原 QuestionBank 服务，已迁出为独立仓库（ADR-0011）。此表在迁出前即已从 Doctheca 移除。
+> Quaestura below is the former QuestionBank service, migrated out as an independent repository (ADR-0011). This table had already been removed from Doctheca before that migration.
 
-`document_parse_imports` 曾用于由 Quaestura 向 Doctheca 回写导入状态。该设计无法与 Quaestura 题目写入处于同一数据库事务，不能可靠防止重复导入，并造成跨服务数据所有权混乱。
+`document_parse_imports` was once used by Quaestura to write import status back into Doctheca. That design could not share a database transaction with Quaestura's question writes, could not reliably prevent duplicate imports, and created cross-service data-ownership confusion.
 
-当前 Doctheca 不提供 Quaestura 集成接口；如果未来重新建立集成，导入幂等责任应由 Quaestura 承担：
+Doctheca currently provides no Quaestura integration interface; if the integration is re-established in the future, import idempotency responsibility should belong to Quaestura:
 
-- Doctheca 运行时不再映射、查询、创建或更新此表。
-- `DatabaseInitializer` 不再创建此表。
-- 升级过程不会自动执行 `DROP TABLE`，已有环境中的表和数据保持不动。
-- 如需删除遗留表，必须通过单独的备份、影响检查和显式 SQL 变更完成。
+- The Doctheca runtime no longer maps, queries, creates, or updates this table.
+- `DatabaseInitializer` no longer creates this table.
+- The upgrade process does not automatically execute `DROP TABLE`; the table and data in existing environments are left untouched.
+- Removing the legacy table must be done through a separate backup, impact check, and explicit SQL change.
 
-历史字段仅用于识别遗留数据：`id`、`parse_id`、`imported_by`、`status`、`note`、`imported_question_ids`、`created_at`、`updated_at`。
+Historical fields, listed only to identify legacy data: `id`, `parse_id`, `imported_by`, `status`, `note`, `imported_question_ids`, `created_at`, `updated_at`.

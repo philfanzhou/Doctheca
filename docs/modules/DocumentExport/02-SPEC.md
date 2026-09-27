@@ -1,75 +1,75 @@
-# 02-SPEC — DocumentExport 详细规格
+# 02-SPEC — DocumentExport Detailed Specification
 
-## 1. HTTP 端点
+## 1. HTTP Endpoints
 
-### 1.1 ExportMarkdown — 文件级 Markdown 导出（ZIP）
+### 1.1 ExportMarkdown — File-level Markdown export (ZIP)
 
 ```
 GET /admin/document-files/{id:guid}/export/markdown
 ```
 
-**请求参数**（路径）:`id` — `document_files` 表主键
+**Request parameters** (path): `id` — primary key of the `document_files` table
 
-**处理流程**:
-1. `fileService.GetByIdAsync(id)` → null 则 404
-2. `parseService.GetLatestByFileIdAsync(id)` → null 或 `Status != parsed` 则 422
-3. `parseService.GetImagesByParseIdAsync(parse.Id)` — 获取图片列表
-4. `MarkdownExportHelper.ReplaceImagePathsRelative(markdownContent, images)` — 路径改写
-5. `MarkdownExportHelper.BuildMarkdownZipAsync(fileName, markdown, images, ossService, logger)` — 构建 ZIP
+**Processing flow**:
+1. `fileService.GetByIdAsync(id)` → 404 if null
+2. `parseService.GetLatestByFileIdAsync(id)` → 422 if null or `Status != parsed`
+3. `parseService.GetImagesByParseIdAsync(parse.Id)` — fetch the image list
+4. `MarkdownExportHelper.ReplaceImagePathsRelative(markdownContent, images)` — rewrite paths
+5. `MarkdownExportHelper.BuildMarkdownZipAsync(fileName, markdown, images, ossService, logger)` — build the ZIP
 6. `Results.Stream(zipStream, "application/zip", "{name}_markdown.zip")`
 
-**响应**:
-- 200:`application/zip` 流，文件名 `{fileName}_markdown.zip`
-- 404:`{ "success": false, "message": "File not found", "errorCode": "DOCTHECA_FILE_NOT_FOUND" }`
-- 422:`{ "success": false, "message": "File is not parsed yet", "errorCode": "DOCTHECA_FILE_NOT_PARSED" }`
+**Responses**:
+- 200: `application/zip` stream, file name `{fileName}_markdown.zip`
+- 404: `{ "success": false, "message": "File not found", "errorCode": "DOCTHECA_FILE_NOT_FOUND" }`
+- 422: `{ "success": false, "message": "File is not parsed yet", "errorCode": "DOCTHECA_FILE_NOT_PARSED" }`
 
-### 1.2 ExportHtml — 文件级 HTML 导出
+### 1.2 ExportHtml — File-level HTML export
 
 ```
 GET /admin/document-files/{id:guid}/export/html
 ```
 
-**处理流程**:
-1. 同 1.1 步骤 1-2
+**Processing flow**:
+1. Same as steps 1-2 in 1.1
 2. `parseService.GetImagesByParseIdAsync(parse.Id)`
-3. `await MarkdownExportHelper.ReplaceImagePathsBase64Async(markdownContent, images, ossService, logger)` — 图片 Base64 内联
-4. `MarkdownExportHelper.BuildHtmlStream(fileName, markdown)` — 转为 HTML
+3. `await MarkdownExportHelper.ReplaceImagePathsBase64Async(markdownContent, images, ossService, logger)` — inline images as Base64
+4. `MarkdownExportHelper.BuildHtmlStream(fileName, markdown)` — convert to HTML
 5. `Results.Stream(htmlStream, "text/html", "{name}.html")`
 
-**响应**:
-- 200:`text/html` 流，文件名 `{fileName}.html`
-- 404 / 422：同 1.1
+**Responses**:
+- 200: `text/html` stream, file name `{fileName}.html`
+- 404 / 422: same as 1.1
 
-### 1.3 ExportParseMarkdown — 解析级 Markdown 导出（ZIP）
+### 1.3 ExportParseMarkdown — Parse-level Markdown export (ZIP)
 
 ```
 GET /admin/document-parses/{parseId:guid}/export/markdown
 ```
 
-**请求参数**（路径）:`parseId` — `document_parses` 表主键
+**Request parameters** (path): `parseId` — primary key of the `document_parses` table
 
-**处理流程**:
-1. `parseService.GetByIdAsync(parseId)` → null 则 404
-2. `Status != parsed` 则 422
+**Processing flow**:
+1. `parseService.GetByIdAsync(parseId)` → 404 if null
+2. 422 if `Status != parsed`
 3. `fileService.GetByIdAsync(parse.DocumentFileId)` → `fileName = file?.FileName ?? "document"`
-4. 同 1.1 步骤 3-6
+4. Same as steps 3-6 in 1.1
 
-**响应**:
-- 200:`application/zip` 流
-- 404:`{ "success": false, "message": "Parse record not found", "errorCode": "DOCTHECA_PARSE_NOT_FOUND" }`
-- 422:`{ "success": false, "message": "Parse record is not parsed yet", "errorCode": "DOCTHECA_PARSE_NOT_PARSED" }`
+**Responses**:
+- 200: `application/zip` stream
+- 404: `{ "success": false, "message": "Parse record not found", "errorCode": "DOCTHECA_PARSE_NOT_FOUND" }`
+- 422: `{ "success": false, "message": "Parse record is not parsed yet", "errorCode": "DOCTHECA_PARSE_NOT_PARSED" }`
 
-### 1.4 ExportParseHtml — 解析级 HTML 导出
+### 1.4 ExportParseHtml — Parse-level HTML export
 
 ```
 GET /admin/document-parses/{parseId:guid}/export/html
 ```
 
-**处理流程**:同 1.3 的解析记录校验 + 1.2 的 HTML 构建流程。
+**Processing flow**: the parse-record validation of 1.3 + the HTML build flow of 1.2.
 
-**响应**:同 1.2，错误码同 1.3。
+**Responses**: same as 1.2, with the error codes of 1.3.
 
-## 2. 路由注册
+## 2. Route Registration
 
 ```csharp
 // DocumentExportEndpoints.cs
@@ -87,105 +87,105 @@ public static WebApplication MapDocumentExportEndpoints(this WebApplication app)
 }
 ```
 
-`Program.cs` 中注册:app.MapDocumentExportEndpoints();
+Registered in `Program.cs`: app.MapDocumentExportEndpoints();
 
-## 3. 图片路径三种模式规格
+## 3. Specification of the Three Image Path Modes
 
-### 3.1 ReplaceImagePathsRelative（同步）
+### 3.1 ReplaceImagePathsRelative (synchronous)
 
-将 OSS 绝对路径改写为相对路径，用于 Markdown/ZIP 导出。
+Rewrites OSS absolute paths to relative paths; used for Markdown/ZIP export.
 
 ```
-输入:markdown 图片段，替换规则（每张 img）:
+Input: markdown image segments; replacement rules (per img):
   "({img.ImagePath})"            → "(images/{img.ImageName})"
   "src=\"{img.ImagePath}\""      → "src=\"images/{img.ImageName}\""
   "src='{img.ImagePath}'"        → "src='images/{img.ImageName}'"
 ```
 
-- **无 OSS 调用**，纯字符串替换
-- **不匹配的路径保持不变**
+- **No OSS calls**; pure string replacement
+- **Paths that do not match are left unchanged**
 
-### 3.2 ReplaceImagePathsBase64Async（异步）
+### 3.2 ReplaceImagePathsBase64Async (asynchronous)
 
-下载图片并转为 Base64 data URI，用于 HTML 导出。
+Downloads images and converts them to Base64 data URIs; used for HTML export.
 
 ```
-对每张 img:
+For each img:
   1. ossService.DownloadAsync(img.ImagePath) → Stream
   2. CopyTo MemoryStream → byte[]
   3. Convert.ToBase64String → base64
   4. dataUri = $"data:{img.ContentType};base64,{base64}"
-  5. 替换（6 种格式）:
+  5. Replace (6 formats):
      "({img.ImagePath})"                        → "({dataUri})"
      "src=\"{img.ImagePath}\""                  → "src=\"{dataUri}\""
      "src='{img.ImagePath}'"                    → "src='{dataUri}'"
      "(images/{img.ImageName})"                 → "({dataUri})"
      "src=\"images/{img.ImageName}\""           → "src=\"{dataUri}\""
      "src='images/{img.ImageName}'"             → "src='{dataUri}'"
-  catch Exception → logger.LogWarning, 跳过
+  catch Exception → logger.LogWarning, skip
 ```
 
-- 替换格式覆盖 OSS 路径、相对路径、单双引号，保证已改写路径也能再次处理
-- `img.ContentType` 默认 `"image/jpeg"`（`DocumentParseImageModel` 默认值）
+- The replacement formats cover OSS paths, relative paths, and single/double quotes, so already-rewritten paths can be processed again
+- `img.ContentType` defaults to `"image/jpeg"` (the `DocumentParseImageModel` default)
 
-### 3.3 ReplaceImagePathsPresignedAsync（异步，当前未接入端点）
+### 3.3 ReplaceImagePathsPresignedAsync (asynchronous, not currently wired into any endpoint)
 
-生成预签名 URL，供浏览器查看。
+Generates presigned URLs for browser viewing.
 
 ```
-对每张 img:
-  1. ossService.GetPresignedUrlAsync(img.ImagePath, 3600) → presignedUrl（1 小时有效期）
-  2. 替换（4 种格式）:
+For each img:
+  1. ossService.GetPresignedUrlAsync(img.ImagePath, 3600) → presignedUrl (valid for 1 hour)
+  2. Replace (4 formats):
      "({img.ImagePath})"                        → "({presignedUrl})"
      "(images/{img.ImageName})"                 → "({presignedUrl})"
      "src=\"{img.ImagePath}\""                  → "src=\"{presignedUrl}\""
      "src=\"images/{img.ImageName}\""           → "src=\"{presignedUrl}\""
-  catch Exception → logger.LogWarning, 跳过
+  catch Exception → logger.LogWarning, skip
 ```
 
-> **注意**:此方法当前由端点代码调用链**未实际接入**。作为 helper 能力保留，未来可在"浏览器内预览"场景启用。接入时不影响现有 4 个端点行为。
+> **Note**: this method is **not actually wired into** the current endpoint call chain. It is kept as a helper capability and may be enabled in the future for "in-browser preview" scenarios. Wiring it in does not affect the behavior of the existing 4 endpoints.
 
-## 4. ZIP 打包规格 — BuildMarkdownZipAsync
+## 4. ZIP Packaging Specification — BuildMarkdownZipAsync
 
 ```
-输入:fileName, markdownContent, images, ossService, logger
-输出:MemoryStream（Position = 0）
+Input: fileName, markdownContent, images, ossService, logger
+Output: MemoryStream (Position = 0)
 
 1. new MemoryStream()
 2. new ZipArchive(ms, ZipArchiveMode.Create, leaveOpen: true)
-3. 创建 entry "{Path.GetFileNameWithoutExtension(fileName)}.md"（CompressionLevel.Optimal）
-   - StreamWriter 写入 markdownContent
-4. 对每张 img:
+3. Create entry "{Path.GetFileNameWithoutExtension(fileName)}.md" (CompressionLevel.Optimal)
+   - Write markdownContent with StreamWriter
+4. For each img:
    - ossService.DownloadAsync(img.ImagePath)
-   - 创建 entry $"images/{img.ImageName}"（CompressionLevel.Fastest）
-   - CopyToAsync 写入
-   catch Exception → logger.LogWarning, 跳过
+   - Create entry $"images/{img.ImageName}" (CompressionLevel.Fastest)
+   - Write via CopyToAsync
+   catch Exception → logger.LogWarning, skip
 5. ms.Position = 0; return ms
 ```
 
-- 文本用 Optimal（压缩率高），图片用 Fastest（图片已压缩，无需高压缩率）
-- `leaveOpen: true` 确保 ZipArchive 关闭后 MemoryStream 仍可用
+- Text uses Optimal (higher compression ratio); images use Fastest (images are already compressed, so a high compression ratio is unnecessary)
+- `leaveOpen: true` ensures the MemoryStream remains usable after the ZipArchive is closed
 
-## 5. HTML 转换规格 — BuildHtmlStream
+## 5. HTML Conversion Specification — BuildHtmlStream
 
 ```
-输入:fileName, markdownContent
-输出:MemoryStream
+Input: fileName, markdownContent
+Output: MemoryStream
 
 1. Markdig.Markdown.ToHtml(markdownContent) → htmlBody
-2. 构建完整 HTML 文档:
+2. Build the complete HTML document:
    - "<!DOCTYPE html>"
    - "<html lang=\"zh-CN\">"
-   - <head>:charset UTF-8, viewport, title=HtmlEncode(fileName), 内联 <style>
-   - <body>:htmlBody
+   - <head>: charset UTF-8, viewport, title=HtmlEncode(fileName), inline <style>
+   - <body>: htmlBody
 3. Encoding.UTF8.GetBytes → MemoryStream
 ```
 
-**内联 CSS** 覆盖:`body`(字体/宽度/行高/颜色)、`img`(max-width)、`table`/`th`/`td`(边框)、`blockquote`、`code`、`pre`。
+**Inline CSS** covers: `body` (font/width/line height/color), `img` (max-width), `table`/`th`/`td` (borders), `blockquote`, `code`, `pre`.
 
-## 6. 实现步骤
+## 6. Implementation Steps
 
-### 6.1 ExportMarkdownCore（共享）
+### 6.1 ExportMarkdownCore (shared)
 
 ```
 1. parseService.GetImagesByParseIdAsync(parse.Id) → images
@@ -195,7 +195,7 @@ public static WebApplication MapDocumentExportEndpoints(this WebApplication app)
 5. Results.Stream(zipStream, "application/zip", zipFileName)
 ```
 
-### 6.2 ExportHtmlCore（共享）
+### 6.2 ExportHtmlCore (shared)
 
 ```
 1. parseService.GetImagesByParseIdAsync(parse.Id) → images
@@ -205,65 +205,65 @@ public static WebApplication MapDocumentExportEndpoints(this WebApplication app)
 5. Results.Stream(htmlStream, "text/html", htmlFileName)
 ```
 
-### 6.3 解析级导出文件名回退
+### 6.3 Parse-level export file name fallback
 
-解析级导出时若关联文件已删除，`file?.FileName ?? "document"` — 保证 ZIP/HTML 文件名不回退为空。
+For parse-level export, if the associated file has been deleted, `file?.FileName ?? "document"` — ensures the ZIP/HTML file name never falls back to empty.
 
-## 7. 错误处理
+## 7. Error Handling
 
-| 场景 | HTTP | 错误码 | 处理 |
+| Scenario | HTTP | Error code | Handling |
 |------|------|--------|------|
-| 文件不存在 | 404 | `DOCTHECA_FILE_NOT_FOUND` | 文件级端点 |
-| 解析记录不存在 | 404 | `DOCTHECA_PARSE_NOT_FOUND` | 解析级端点 |
-| 文件未解析 | 422 | `DOCTHECA_FILE_NOT_PARSED` | 文件级端点 |
-| 解析记录未解析 | 422 | `DOCTHECA_PARSE_NOT_PARSED` | 解析级端点 |
-| 单张图片 OSS 下载失败 | — | — | 记 Warning 日志，跳过该张 |
-| 单张图片预签名失败 | — | — | 记 Warning 日志，跳过该张 |
+| File not found | 404 | `DOCTHECA_FILE_NOT_FOUND` | File-level endpoints |
+| Parse record not found | 404 | `DOCTHECA_PARSE_NOT_FOUND` | Parse-level endpoints |
+| File not parsed | 422 | `DOCTHECA_FILE_NOT_PARSED` | File-level endpoints |
+| Parse record not parsed | 422 | `DOCTHECA_PARSE_NOT_PARSED` | Parse-level endpoints |
+| Single image OSS download failure | — | — | Log a Warning, skip that image |
+| Single image presigning failure | — | — | Log a Warning, skip that image |
 
-## 8. 测试策略
+## 8. Testing Strategy
 
-### 8.1 单元测试 (UT)
+### 8.1 Unit Tests (UT)
 
-纯逻辑测试，不依赖 HTTP / OSS / 数据库。位于 `DocumentExportLogicTests.cs`，共 12 个测试。
+Pure logic tests with no dependency on HTTP / OSS / database. Located in `DocumentExportLogicTests.cs`, 12 tests in total.
 
-| # | 测试方法 | 覆盖 |
+| # | Test method | Coverage |
 |---|---------|------|
-| UT-DE-01 | `MarkdownPathReplacement_ReplacesS3PathWithRelativePath` | FR-05（相对路径） |
-| UT-DE-02 | `MarkdownPathReplacement_ReplacesSrcAttribute` | FR-05（双引号 src） |
-| UT-DE-03 | `MarkdownPathReplacement_ReplacesSrcAttribute_SingleQuotes` | FR-05（单引号 src） |
-| UT-DE-04 | `MarkdownPathReplacement_ReplacesMixedQuoteFormats` | FR-05（混合格式） |
-| UT-DE-05 | `MarkdownPathReplacement_HandlesMultipleImages` | FR-05（多图） |
-| UT-DE-06 | `MarkdownPathReplacement_DoesNotReplaceIfPathNotFound` | FR-05（路径不匹配） |
-| UT-DE-07 | `HtmlExport_ReplacesS3PathWithDataUri` | FR-05（Base64） |
-| UT-DE-08 | `Markdig_ConvertsMarkdownToHtml` | FR-02（Markdig 基础转换） |
-| UT-DE-09 | `Markdig_ConvertsMarkdownWithImageToHtml` | FR-02（Markdig 图片转换） |
-| UT-DE-10 | `HtmlTemplate_GeneratesValidHtmlDocument` | FR-02（HTML 模板） |
-| UT-DE-11 | `ZipExport_ContainsMarkdownAndImages` | FR-01（ZIP 结构） |
-| UT-DE-12 | `Base64Conversion_RoundTripsCorrectly` | FR-05（Base64 往返） |
+| UT-DE-01 | `MarkdownPathReplacement_ReplacesS3PathWithRelativePath` | FR-05 (relative path) |
+| UT-DE-02 | `MarkdownPathReplacement_ReplacesSrcAttribute` | FR-05 (double-quoted src) |
+| UT-DE-03 | `MarkdownPathReplacement_ReplacesSrcAttribute_SingleQuotes` | FR-05 (single-quoted src) |
+| UT-DE-04 | `MarkdownPathReplacement_ReplacesMixedQuoteFormats` | FR-05 (mixed formats) |
+| UT-DE-05 | `MarkdownPathReplacement_HandlesMultipleImages` | FR-05 (multiple images) |
+| UT-DE-06 | `MarkdownPathReplacement_DoesNotReplaceIfPathNotFound` | FR-05 (path not matched) |
+| UT-DE-07 | `HtmlExport_ReplacesS3PathWithDataUri` | FR-05 (Base64) |
+| UT-DE-08 | `Markdig_ConvertsMarkdownToHtml` | FR-02 (Markdig basic conversion) |
+| UT-DE-09 | `Markdig_ConvertsMarkdownWithImageToHtml` | FR-02 (Markdig image conversion) |
+| UT-DE-10 | `HtmlTemplate_GeneratesValidHtmlDocument` | FR-02 (HTML template) |
+| UT-DE-11 | `ZipExport_ContainsMarkdownAndImages` | FR-01 (ZIP structure) |
+| UT-DE-12 | `Base64Conversion_RoundTripsCorrectly` | FR-05 (Base64 round trip) |
 
-### 8.2 集成测试（未实现）
+### 8.2 Integration Tests (not implemented)
 
-| # | 测试用例 | 覆盖 |
+| # | Test case | Coverage |
 |---|---------|------|
-| IT-DE-01 | 文件级 Markdown 导出返回有效 ZIP | AC-01 |
-| IT-DE-02 | 文件级 HTML 导出返回含 Base64 的 HTML | AC-02 |
-| IT-DE-03 | 解析级导出与文件级导出结果一致 | AC-03 |
-| IT-DE-04 | 文件不存在返回 404 | AC-04 |
-| IT-DE-05 | 解析记录不存在返回 404 | AC-05 |
-| IT-DE-06 | 未解析返回 422 | AC-06 |
+| IT-DE-01 | File-level Markdown export returns a valid ZIP | AC-01 |
+| IT-DE-02 | File-level HTML export returns HTML containing Base64 | AC-02 |
+| IT-DE-03 | Parse-level export matches file-level export | AC-03 |
+| IT-DE-04 | Missing file returns 404 | AC-04 |
+| IT-DE-05 | Missing parse record returns 404 | AC-05 |
+| IT-DE-06 | Not parsed returns 422 | AC-06 |
 
-## 9. 影响范围
+## 9. Impact Scope
 
-| 组件 | 影响 |
+| Component | Impact |
 |------|------|
-| `DocumentExportEndpoints` | 新增 4 个端点 + `MapDocumentExportEndpoints` |
-| `MarkdownExportHelper` | 新增 5 个静态方法 |
-| `Program.cs` | 注册 `MapDocumentExportEndpoints` |
-| `document_parses` 表 | 只读，不修改 |
-| `document_parse_images` 表 | 只读，不修改 |
-| `document_files` 表 | 只读，不修改 |
-| OSS | 只读下载，不写入 |
+| `DocumentExportEndpoints` | Add 4 endpoints + `MapDocumentExportEndpoints` |
+| `MarkdownExportHelper` | Add 5 static methods |
+| `Program.cs` | Register `MapDocumentExportEndpoints` |
+| `document_parses` table | Read-only, not modified |
+| `document_parse_images` table | Read-only, not modified |
+| `document_files` table | Read-only, not modified |
+| OSS | Read-only downloads, no writes |
 
-## 10. 部署脚本
+## 10. Deployment Scripts
 
-**不修改**。导出功能复用现有 OSS / 数据库 / 解析链路配置，无需新增环境变量或配置节。
+**Not modified**. The export feature reuses the existing OSS / database / parse pipeline configuration; no new environment variables or configuration sections are required.

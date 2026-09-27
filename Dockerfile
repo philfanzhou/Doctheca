@@ -10,7 +10,7 @@ COPY frontend/ ./
 RUN npm run build
 
 # ========== Stage 2: Build & Publish Backend ==========
-FROM mcr.microsoft.com/dotnet/sdk:8.0 AS backend-build
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS backend-build
 WORKDIR /src
 
 COPY src/Common/Doctheca.Common.csproj src/Common/
@@ -31,7 +31,7 @@ COPY --from=frontend-build /wwwroot src/Host/wwwroot
 RUN dotnet publish "src/Host/Doctheca.Host.csproj" -c Release -o /app/publish /p:UseAppHost=false
 
 # ========== Stage 3: Runtime ==========
-FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS final
+FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS final
 
 # No LibreOffice dependency: document parsing and Office-to-PDF conversion are
 # delegated to the external StructaDoc service (ADR-0009).

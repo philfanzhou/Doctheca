@@ -1,213 +1,213 @@
-# DocumentSearch — OpenSearch 块索引与精确搜索
+# DocumentSearch — OpenSearch Block Indexing and Exact Search
 
-## 功能概述
+## Feature Overview
 
-将解析产生的版面块（`document_parse_blocks`）索引到 OpenSearch，并在解析完成/删除/元数据变更时自动维护索引；同时通过 HTTP API 提供基于 OpenSearch BM25 的精确关键词搜索能力，支持短语匹配、单词匹配、元数据过滤和游标分页。
+Indexes the layout blocks produced by parsing (`document_parse_blocks`) into OpenSearch and automatically maintains the index on parse completion/deletion/metadata changes; also provides exact keyword search based on OpenSearch BM25 through an HTTP API, supporting phrase matching, word matching, metadata filtering, and cursor pagination.
 
-本模块合并了原 ExactSearch 与 OpenSearchBlockIndexing 两个模块的全部能力。
+This module merges all capabilities of the former ExactSearch and OpenSearchBlockIndexing modules.
 
-> 本文档分两代能力，**演进**关系而非并列关系：
-> - **第 1 代（已实现）**：索引写入 + 精确关键词搜索（FR-01 ~ FR-09，05-TESTS 现存用例）。
-> - **第 2 代（本节新规划）**：在第 1 代之上，**演进** minerU v1 JSON 的 block 级结构化检索能力——同一 OpenSearch 索引追加 minerU 维度字段、同一 endpoint `GET /admin/documents/search` 追加 blockType/pageNumber/hasImage 过滤参数 + 命中回挂 `blockData`/`bbox`/`score`、同一前端 `SearchPage.vue` 追加"高级筛选"抽屉。**不新增**平行 endpoint、不新增 `BlockXxx` 独立模型类、不新增平行检索页。
+> This document covers two generations of capabilities in an **evolutionary** rather than parallel relationship:
+> - **Generation 1 (implemented)**: index writes + exact keyword search (FR-01 ~ FR-09, existing cases in 05-TESTS).
+> - **Generation 2 (newly planned in this section)**: on top of Generation 1, **evolve** block-level structured retrieval over minerU v1 JSON — the same OpenSearch index gains minerU dimension fields, the same endpoint `GET /admin/documents/search` gains blockType/pageNumber/hasImage filter parameters + hits carrying `blockData`/`bbox`/`score`, and the same frontend `SearchPage.vue` gains an "Advanced filters" drawer. **No new** parallel endpoint, no new standalone `BlockXxx` model classes, no new parallel search page.
 
-## 背景
+## Background
 
-Doctheca 文档解析采用 StructaDoc 管线（ADR-0009，存量数据为历史 MinerU 产物），数据表为 `document_files` / `document_parses` / `document_parse_blocks` / `document_parse_images`。搜索功能基于解析产物的版面块（blocks），每个 block 作为一个 OpenSearch 文档，索引字段来自 `document_parse_blocks` 表与 `document_files` 表的元数据。
+Doctheca document parsing uses the StructaDoc pipeline (ADR-0009; existing data consists of historical MinerU artifacts), with the tables `document_files` / `document_parses` / `document_parse_blocks` / `document_parse_images`. Search is based on the layout blocks (blocks) of parse artifacts: each block becomes one OpenSearch document, with index fields taken from the `document_parse_blocks` table and metadata from the `document_files` table.
 
-索引与搜索共享同一套 OpenSearch mapping（`BuildIndexBody`），保证写入字段与查询字段一致。索引操作均为 best-effort：失败仅记 Warning 日志，不阻塞解析/删除主流程。搜索在 OpenSearch 不可用时降级为空结果。
+Indexing and search share the same OpenSearch mapping (`BuildIndexBody`), ensuring written fields and queried fields stay consistent. All index operations are best-effort: failures only log a Warning and do not block the main parsing/deletion flows. Search degrades to empty results when OpenSearch is unavailable.
 
-## 用户故事
+## User Stories
 
-- **作为老师**：我上传讲义并完成解析后，搜索功能能立即检索到讲义内容。
-- **作为老师**：我按学科/年级/年份筛选搜索范围，快速定位目标文档。
-- **作为运维**：我删除某次解析结果时，对应的 OpenSearch 索引自动清理，不残留脏数据。
-- **作为运维**：我删除整个文档时，该文档所有解析版本的 OpenSearch 索引自动清理。
-- **作为运维**：我手动更新文档元数据（或 LLM 自动分析）后，OpenSearch 索引中的元数据同步刷新。
+- **As a teacher**: after I upload lecture notes and parsing completes, search can immediately retrieve the lecture content.
+- **As a teacher**: I filter the search scope by subject/grade/year to quickly locate target documents.
+- **As an ops engineer**: when I delete a parse result, the corresponding OpenSearch index is cleaned up automatically, leaving no dirty data.
+- **As an ops engineer**: when I delete an entire document, the OpenSearch indexes of all its parse versions are cleaned up automatically.
+- **As an ops engineer**: after I manually update document metadata (or LLM auto-analysis runs), the metadata in the OpenSearch index is refreshed in sync.
 
-### 第 2 代用户故事（演进 V1，block 级结构化检索）
+### Generation 2 User Stories (evolving V1, block-level structured retrieval)
 
-- **作为老师**：我希望在管理界面用关键词 + 块类型（如"文本块"/"图片块"）筛选，快速定位到某份讲义里所有满足条件的 block，并能直接看到该 block 在 minerU 原始 JSON 里的完整字段（bbox / page / type…），便于核对 MinerU 解析是否正确。
-- **作为运维**：我希望（在同一搜索入口内）跨文档按 minerU 字段过滤（如所有 `type=equation` 的 block、所有含 image 的 block、高置信度 block），以审计解析覆盖率与质量。
-- **作为技术管理者**：我确认演进方式是在现有 `GET /admin/documents/search` 上扩展，而不是另开 `GET /admin/documents/blocks` 或新建 `BlockXxx` 独立模型 / 独立前端页，避免检索逻辑分裂为两套维护。
+- **As a teacher**: I want to filter in the admin UI by keyword + block type (e.g., "text block" / "image block") to quickly locate all matching blocks in a lecture, and directly see the block's complete fields in the raw minerU JSON (bbox / page / type…) so I can verify whether MinerU parsed it correctly.
+- **As an ops engineer**: I want to filter across documents by minerU fields (within the same search entry point) — e.g., all `type=equation` blocks, all blocks with images, high-confidence blocks — to audit parse coverage and quality.
+- **As a technical lead**: I confirm the evolution extends the existing `GET /admin/documents/search` instead of opening `GET /admin/documents/blocks` or creating standalone `BlockXxx` models / a separate frontend page, avoiding splitting retrieval logic into two systems to maintain.
 
-## 功能需求
+## Functional Requirements
 
-### FR-01：解析完成后索引 blocks
-- 解析状态变为 `parsed` 后，自动将该 parse 的所有 `document_parse_blocks` 索引到 OpenSearch。
-- 索引以 `block_{blockId}` 为 `_id`，支持幂等覆盖（重复索引不会产生重复文档）。
-- 仅索引 `text_content` 非空且非纯空白的 block（`null` / 空字符串 / 纯空白无可检索内容，使用 `string.IsNullOrWhiteSpace` 判断）。
+### FR-01: Index blocks after parse completion
+- After the parse status becomes `parsed`, all `document_parse_blocks` of that parse are automatically indexed into OpenSearch.
+- Indexing uses `block_{blockId}` as `_id`, supporting idempotent overwrites (re-indexing does not produce duplicate documents).
+- Only blocks with non-empty, non-whitespace `text_content` are indexed (`null` / empty string / whitespace-only has nothing searchable; checked with `string.IsNullOrWhiteSpace`).
 
-### FR-02：单文档多次解析多次索引
-- 同一 `document_file_id` 可以有多个 `parse_id`（不同模型版本或重新解析）。
-- 每次 parse 完成都独立索引，每个 parse 的 blocks 独立存储（`_id` 含 `blockId`，不冲突）。
+### FR-02: Multiple parses of one document indexed separately
+- The same `document_file_id` can have multiple `parse_id`s (different model versions or re-parsing).
+- Each completed parse is indexed independently, and each parse's blocks are stored separately (`_id` contains `blockId`, so no conflicts).
 
-### FR-03：删除 parse 结果时清理索引
-- `DELETE /admin/document-parses/{parseId}` 触发时，按 `parse_id` 删除该 parse 的所有 OpenSearch 索引文档。
-- 清理失败不阻塞删除操作（仅记 Warning 日志）。
+### FR-03: Clean up the index when a parse result is deleted
+- When `DELETE /admin/document-parses/{parseId}` fires, all OpenSearch index documents of that parse are deleted by `parse_id`.
+- Cleanup failure does not block the delete operation (Warning logged only).
 
-### FR-04：删除文档时清理索引
-- `DELETE /admin/document-files/{id}` 触发时，按 `document_file_id` 删除该文档所有 parse 的 OpenSearch 索引文档。
-- 清理失败不阻塞删除操作（仅记 Warning 日志）。
+### FR-04: Clean up the index when a document is deleted
+- When `DELETE /admin/document-files/{id}` fires, the OpenSearch index documents of all parses of that document are deleted by `document_file_id`.
+- Cleanup failure does not block the delete operation (Warning logged only).
 
-### FR-05：元数据更新后同步索引
-- 手动更新元数据（`PUT /admin/document-files/{id}/metadata`）或 LLM 自动分析后，按 `document_file_id` 刷新 OpenSearch 索引中的 `subject` / `grade` / `year` 字段。
-- 失败仅记 Warning 日志，不阻塞。
+### FR-05: Sync the index after metadata updates
+- After a manual metadata update (`PUT /admin/document-files/{id}/metadata`) or LLM auto-analysis, the `subject` / `grade` / `year` fields in the OpenSearch index are refreshed by `document_file_id`.
+- Failures only log a Warning and do not block.
 
-### FR-06：索引字段映射
-- 每个 block 作为一个 OpenSearch 文档，字段映射：
-  - `parse_id` (keyword) — 支持按 parse 删除
-  - `document_file_id` (keyword) — 支持按文档删除
-  - `file_name` (keyword) — 文档名（搜索结果展示）
-  - `subject` / `grade` / `year` (keyword) — 元数据过滤（索引时从 `document_files` 表读取文件已有 metadata 写入；若文件尚未填写则写入空字符串 `""`，即此时按该字段过滤不会命中）
-  - `page_number` (integer) — 页码（取自 `block.PageId`）
-  - `block_id` (keyword) — 唯一标识
-  - `block_type` (keyword) — 版面块类型
-  - `text` (text, english_custom 分析器) — 索引内容（来自 `text_content`）
-  - `sort_index` (integer) — 块顺序
-  - `image_id` (keyword) — 图片 ID
-  - `created_at` (date) — 创建时间
+### FR-06: Index field mapping
+- Each block becomes one OpenSearch document with the field mapping:
+  - `parse_id` (keyword) — supports deletion by parse
+  - `document_file_id` (keyword) — supports deletion by document
+  - `file_name` (keyword) — document name (shown in search results)
+  - `subject` / `grade` / `year` (keyword) — metadata filtering (at index time the file's existing metadata is read from the `document_files` table; if the file has none yet, an empty string `""` is written, so filtering by that field will not match at that point)
+  - `page_number` (integer) — page number (taken from `block.PageId`)
+  - `block_id` (keyword) — unique identifier
+  - `block_type` (keyword) — layout block type
+  - `text` (text, english_custom analyzer) — indexed content (from `text_content`)
+  - `sort_index` (integer) — block order
+  - `image_id` (keyword) — image ID
+  - `created_at` (date) — creation time
 
-### FR-07：精确关键词搜索
-- `GET /admin/documents/search` 提供基于 OpenSearch BM25 的关键词搜索。
-- 支持短语匹配（`phrase=true`，使用 `text.exact` 字段）和单词匹配（`phrase=false`，使用 `text` 字段）。
-- 支持按 `subject` / `grade` / `year` / `documentTitle` 元数据过滤。
-- 支持游标分页（`search_after`，`pageToken` 为上一页最后一条 sort 数组的 Base64 编码）。
+### FR-07: Exact keyword search
+- `GET /admin/documents/search` provides OpenSearch BM25-based keyword search.
+- Supports phrase matching (`phrase=true`, using the `text.exact` field) and word matching (`phrase=false`, using the `text` field).
+- Supports metadata filtering by `subject` / `grade` / `year` / `documentTitle`.
+- Supports cursor pagination (`search_after`; `pageToken` is the Base64 encoding of the last sort array of the previous page).
 
-### FR-08：搜索降级
-- OpenSearch 不可用或查询异常时，`SearchDomainService` 返回空结果并记录 LogWarning，不中断请求。
+### FR-08: Search degradation
+- When OpenSearch is unavailable or a query fails, `SearchDomainService` returns empty results and logs a LogWarning without interrupting the request.
 
-### FR-09：搜索参数校验
-- 查询词为空返回 HTTP 400（`DOCTHECA_QUERY_REQUIRED`）。
-- 查询词超过 200 字符返回 HTTP 400（`DOCTHECA_QUERY_TOO_LONG`）。
-- `page_size` 默认 20，最小 1，最大 100（超过 100 静默截断）。
+### FR-09: Search parameter validation
+- An empty query returns HTTP 400 (`DOCTHECA_QUERY_REQUIRED`).
+- A query over 200 characters returns HTTP 400 (`DOCTHECA_QUERY_TOO_LONG`).
+- `page_size` defaults to 20, minimum 1, maximum 100 (values over 100 are silently truncated).
 
-### FR-10：第 2 代 — 扩展 V1 endpoint 支持 minerU 字段过滤
-- 在现有 `GET /admin/documents/search` **追加**可选过滤参数（V1 原有 query/phrase/subject/grade/year/documentTitle 全部保留）：
-  - `blockType`（string?，精确匹配 minerU `type`，对应索引字段 `block_type`）
-  - `pageNumber`（int?，精确匹配 minerU `page_id`，对应索引字段 `page_number`）
-  - `hasImage`（bool?，筛选有 `img_path` 的 block，对应索引字段 `has_image`）
-  - `parseId`（Guid?，缩小到某次 parse）
-  - `documentFileId`（Guid?，缩小到某文档）
-- 过滤条件与 V1 keyword 条件**组合为 `AND`**（keyword 走 `must`，minerU 精确项走 `filter`）。
-- 当所有 minerU filter 均为 null 时，行为**完全等同 V1**（零回归）。
-- 游标分页复用 V1 `search_after` 模式（`pageToken` Base64 为最后一条 `sort` 数组）。
+### FR-10: Generation 2 — extend the V1 endpoint with minerU field filtering
+- The existing `GET /admin/documents/search` **gains** optional filter parameters (all original V1 parameters query/phrase/subject/grade/year/documentTitle are retained):
+  - `blockType` (string?, exact match on minerU `type`, maps to index field `block_type`)
+  - `pageNumber` (int?, exact match on minerU `page_id`, maps to index field `page_number`)
+  - `hasImage` (bool?, selects blocks with `img_path`, maps to index field `has_image`)
+  - `parseId` (Guid?, narrows to a specific parse)
+  - `documentFileId` (Guid?, narrows to a specific document)
+- Filter conditions **combine with `AND`** with the V1 keyword conditions (keyword goes to `must`, minerU exact terms go to `filter`).
+- When all minerU filters are null, behavior is **exactly equivalent to V1** (zero regression).
+- Cursor pagination reuses the V1 `search_after` pattern (`pageToken` is the Base64 of the last `sort` array).
 
-### FR-11：第 2 代 — 命中结果回挂 minerU block 原始 JSON
-- 搜索结果每条追加 `blockData`（`document_parse_blocks.block_data` 原始 JSON 字符串），让前端能在不二次请求 `GET /admin/documents/files/{id}` 的情况下直接展示命中 block 的完整 minerU 字段。
-- 同时追加 `bbox`（float[4]）与 `score`（float）字段，便于管理界面做视觉区域与置信度核对。
-- V1 的 `SearchResultModel` **向后兼容扩展**：新增 `BlockData` / `Bbox` / `Score` 为 optional 字段；不传/不展示的前端（含 Ruoyu.Admin 现有引用）不受影响。**不新建** `BlockResultModel` 独立类。
+### FR-11: Generation 2 — attach the raw minerU block JSON to search hits
+- Each search result gains `blockData` (the raw JSON string from `document_parse_blocks.block_data`), letting the frontend display the hit block's complete minerU fields directly without a second request to `GET /admin/documents/files/{id}`.
+- Also gains `bbox` (float[4]) and `score` (float) fields so the admin UI can verify visual regions and confidence.
+- V1's `SearchResultModel` is **extended backward-compatibly**: `BlockData` / `Bbox` / `Score` are added as optional fields; frontends that do not send/display them (including existing Ruoyu.Admin references) are unaffected. **No new** standalone `BlockResultModel` class.
 
-### FR-12：第 2 代 — minerU 字段进入 OpenSearch mapping
-- 在 V1 `BuildIndexBody` 追加 minerU 维度字段（详见 [02-SPEC.md §13.4](./02-SPEC.md)）：
-  - `x0` / `y0` / `x1` / `y1`（float，bbox 分量，便于范围检索）
-  - `score`（float，minerU 置信度）
-  - `has_image`（bool，`img_path` 是否非空）
-  - `_meta.block_data`（object, `enabled:false`，仅存不索引，用于回挂）
-- minerU `type` 与 V1 `block_type` 同源、`page_id` 与 V1 `page_number` 同源、`text|content|body` 与 V1 `text` 同源 → **不新增** alias 字段，仅暴露 V1 已有字段作为过滤参数。
-- `[说明] minerU v1 block 真实 schema 在本环境无法在线校验（github.com / pypi.org / opendatalab.github.io 均被网关拦截）。首版以项目代码实际读取路径（`DocumentParseBlockService.ParseBlock`）+ MinerU 公开枚举共识为准；其他 minerU 字段（`chars`/`position`/`layout_width`/`images`/`table_html` 等）以 `block_data` jsonb 入库，管理界面通过现有 `GET /admin/document-files/{id}` 查看，延至 facet 需求明确后再追加。`
+### FR-12: Generation 2 — minerU fields enter the OpenSearch mapping
+- V1's `BuildIndexBody` gains minerU dimension fields (see [02-SPEC.md §13.4](./02-SPEC.md)):
+  - `x0` / `y0` / `x1` / `y1` (float, bbox components, facilitate range queries)
+  - `score` (float, minerU confidence)
+  - `has_image` (bool, whether `img_path` is non-empty)
+  - `_meta.block_data` (object, `enabled:false`, stored but not indexed, used for attachment)
+- minerU `type` shares its source with V1 `block_type`, `page_id` with V1 `page_number`, `text|content|body` with V1 `text` → **no new** alias fields; only existing V1 fields are exposed as filter parameters.
+- `[Note] The real minerU v1 block schema cannot be verified online in this environment (github.com / pypi.org / opendatalab.github.io are all blocked by the gateway). The first release follows the project code's actual read path (`DocumentParseBlockService.ParseBlock`) plus the MinerU public enumeration consensus; other minerU fields (`chars`/`position`/`layout_width`/`images`/`table_html`, etc.) are persisted as `block_data` jsonb, viewable in the admin UI via the existing `GET /admin/document-files/{id}`, and deferred until facet requirements are clear.`
 
-### FR-13：第 2 代 — 管理界面 block 检索入口（演进 SearchPage.vue）
-- 在 doctheca **自带前端**（`frontend/`）**改造**现有 `SearchPage.vue`，新增"高级筛选"抽屉（minerU 字段过滤）+ 结果行展开显示 `blockData`/`bbox`/`score`。**不新增**平行 `BlockSearchPage.vue` 页。
-- 查询面板（V1 关键词输入框保留，追加）：blockType 下拉（基于历史数据聚合候选值）、pageNumber 数字输入、parseId / documentFileId 文本输入、hasImage 复选框。
-- 结果表格列（V1 列保留，追加）：块类型 / 页码 / 抽取文本（前 80 字） / 详情按钮（弹窗展示 `blockData` 格式化 JSON + bbox + score）。
-- 选中行可跳转 `ParseResultsPage.vue`（已存在）定位到对应 parse。
-- **不动 Ruoyu.Admin**（Ruoyu.Admin 当前无 doctheca 相关视图，且无 BFF 转发；迁移至 Ruoyu.Admin 属于独立大工程，本模块文档不包圆）。
+### FR-13: Generation 2 — admin UI block search entry point (evolving SearchPage.vue)
+- The doctheca **built-in frontend** (`frontend/`) **modifies** the existing `SearchPage.vue`, adding an "Advanced filters" drawer (minerU field filtering) + result-row expansion showing `blockData`/`bbox`/`score`. **No new** parallel `BlockSearchPage.vue` page.
+- Query panel (V1 keyword input retained, additions): blockType dropdown (candidate values aggregated from historical data), pageNumber numeric input, parseId / documentFileId text inputs, hasImage checkbox.
+- Result table columns (V1 columns retained, additions): block type / page number / extracted text (first 80 characters) / details button (modal showing formatted `blockData` JSON + bbox + score).
+- Selected rows can navigate to `ParseResultsPage.vue` (already exists) to locate the corresponding parse.
+- **Ruoyu.Admin is untouched** (Ruoyu.Admin currently has no doctheca-related views and no BFF forwarding; migrating to Ruoyu.Admin is a separate large project that this module's documentation does not cover).
 
-## 验收条件
+## Acceptance Criteria
 
-| AC | 描述 |
+| AC | Description |
 |----|------|
-| AC-01 | 解析完成后，该 parse 的 blocks 出现在 OpenSearch 索引中 |
-| AC-02 | 同一文档多次解析，每次 parse 的 blocks 独立索引，`_id` 不冲突 |
-| AC-03 | `DELETE /admin/document-parses/{parseId}` 后，该 parse 的 OpenSearch 索引文档被删除 |
-| AC-04 | `DELETE /admin/document-files/{id}` 后，该文档所有 parse 的 OpenSearch 索引文档被删除 |
-| AC-05 | `PUT /admin/document-files/{id}/metadata` 后，OpenSearch 索引中的 subject/grade/year 同步刷新 |
-| AC-06 | `GET /admin/documents/search` 能搜到解析产生的 blocks |
-| AC-07 | 短语匹配使用 `text.exact` 字段，单词匹配使用 `text` 字段 |
-| AC-08 | 搜索在 OpenSearch 不可用时返回空结果并记录 LogWarning |
-| AC-09 | 索引失败不阻塞解析流程（仅记 Warning 日志） |
-| AC-10 | 删除索引失败不阻塞删除操作（仅记 Warning 日志） |
-| AC-11 | 查询词为空/过长返回 HTTP 400 并附带对应错误码 |
-| AC-12 | `page_size` 超过 100 静默截断为 100 |
+| AC-01 | After parse completion, the parse's blocks appear in the OpenSearch index |
+| AC-02 | Multiple parses of the same document index each parse's blocks independently with non-conflicting `_id`s |
+| AC-03 | After `DELETE /admin/document-parses/{parseId}`, that parse's OpenSearch index documents are deleted |
+| AC-04 | After `DELETE /admin/document-files/{id}`, the OpenSearch index documents of all the document's parses are deleted |
+| AC-05 | After `PUT /admin/document-files/{id}/metadata`, subject/grade/year in the OpenSearch index are refreshed in sync |
+| AC-06 | `GET /admin/documents/search` can find blocks produced by parsing |
+| AC-07 | Phrase matching uses the `text.exact` field; word matching uses the `text` field |
+| AC-08 | Search returns empty results with a LogWarning when OpenSearch is unavailable |
+| AC-09 | Indexing failure does not block the parsing flow (Warning logged only) |
+| AC-10 | Index deletion failure does not block the delete operation (Warning logged only) |
+| AC-11 | An empty/too-long query returns HTTP 400 with the corresponding error code |
+| AC-12 | `page_size` over 100 is silently truncated to 100 |
 
-### 第 2 代验收条件（演进 V1）
+### Generation 2 Acceptance Criteria (evolving V1)
 
-| AC | 描述 |
+| AC | Description |
 |----|------|
-| AC-13 | `GET /admin/documents/search?keyword=X&blockType=Y` 按 minerU type 过滤命中正确 block |
-| AC-14 | `GET /admin/documents/search` 按 `pageNumber` 精确过滤命中正确 block |
-| AC-15 | `GET /admin/documents/search` 按 `hasImage=true` 筛选携带 image 的 block |
-| AC-16 | `GET /admin/documents/search` 按 `parseId` / `documentFileId` 缩小范围 |
-| AC-17 | V1 行为零回归：所有 minerU filter 均为 null 时，响应与改造前完全一致 |
-| AC-18 | `GET /admin/documents/search` 命中结果回挂 `blockData`（与库内 `block_data` 原文 round-trip 一致） |
-| AC-19 | `GET /admin/documents/search` 命中结果回挂 `bbox` / `score` 字段 |
-| AC-20 | 游标分页在 minerU filter 命中集上稳定工作（连续翻页无重复/遗漏） |
-| AC-21 | `SearchPage.vue` 高级筛选抽屉 + 结果行展开 `blockData` 弹窗可正常渲染 |
-| AC-22 | 第 2 代 minerU schema 全面覆盖前，其他 minerU 字段（chars/position/table_html 等）以 `block_data` jsonb 入库，不阻塞首版发布 |
+| AC-13 | `GET /admin/documents/search?keyword=X&blockType=Y` filters by minerU type and hits the correct blocks |
+| AC-14 | `GET /admin/documents/search` filters exactly by `pageNumber` and hits the correct blocks |
+| AC-15 | `GET /admin/documents/search` with `hasImage=true` selects blocks carrying images |
+| AC-16 | `GET /admin/documents/search` narrows scope by `parseId` / `documentFileId` |
+| AC-17 | V1 zero regression: when all minerU filters are null, the response is exactly the same as before the change |
+| AC-18 | `GET /admin/documents/search` hits attach `blockData` (round-trip identical to the `block_data` stored in the database) |
+| AC-19 | `GET /admin/documents/search` hits attach `bbox` / `score` fields |
+| AC-20 | Cursor pagination works stably over minerU-filtered hit sets (consecutive pages have no duplicates/omissions) |
+| AC-21 | The `SearchPage.vue` advanced-filters drawer + result-row `blockData` expansion modal render correctly |
+| AC-22 | Before full Generation 2 minerU schema coverage, other minerU fields (chars/position/table_html, etc.) are persisted as `block_data` jsonb and do not block the first release |
 
-## 非功能需求
+## Non-Functional Requirements
 
-| NFR | 描述 |
+| NFR | Description |
 |-----|------|
-| NFR-01 | 索引操作 best-effort，不阻塞解析状态更新 |
-| NFR-02 | 索引/删除失败仅记日志，不影响主流程 |
-| NFR-03 | 删除索引使用 `delete_by_query`，支持按 `parse_id` / `document_file_id` 批量删除 |
-| NFR-04 | 搜索不可用时返回空结果，不中断请求 |
-| NFR-05 | 所有操作记录结构化日志，含 `parseId` / `documentFileId` / `blockCount` |
-| NFR-06 | 搜索 P95 < 200ms |
-| NFR-07 | HTTP API 错误消息不暴露内部异常堆栈 |
+| NFR-01 | Index operations are best-effort and do not block parse status updates |
+| NFR-02 | Index/delete failures only log and do not affect the main flow |
+| NFR-03 | Index deletion uses `delete_by_query`, supporting batch deletion by `parse_id` / `document_file_id` |
+| NFR-04 | Returns empty results when search is unavailable, without interrupting the request |
+| NFR-05 | All operations log structured entries containing `parseId` / `documentFileId` / `blockCount` |
+| NFR-06 | Search P95 < 200ms |
+| NFR-07 | HTTP API error messages do not expose internal exception stacks |
 
-### 第 2 代非功能需求（演进 V1）
+### Generation 2 Non-Functional Requirements (evolving V1)
 
-| NFR | 描述 |
+| NFR | Description |
 |-----|------|
-| NFR-08 | minerU `type` 与已有索引 `block_type` 同源、`page_id` 与 `page_number` 同源、`text|content|body` 与 `text` 同源 → 写入时不重复抽取，仅新增真正新维度（bbox/score/has_image/block_data） |
-| NFR-09 | 带 minerU filter 的查询默认单页上限 50（每 block 携带完整 `blockData` JSONB，避免响应体过大）；超出截断；V1 纯 keyword 路径保持 100 |
-| NFR-10 | 第 2 代检索链路 P95 < 500ms（携带 `blockData`，放宽 V1 的 200ms 目标；后续通过列投影与 gzip 压缩收敛） |
-| NFR-11 | `blockData` 全文以 `_meta.block_data`（`enabled:false`）存 `_source`，不进入全文索引，避免写入放大 |
-| NFR-12 | 第 2 代演进置于 doctheca 自带前端（改造 `SearchPage.vue`），不扩大 Ruoyu.Admin 的 BFF 边界（本次范围控制） |
+| NFR-08 | minerU `type` shares its source with the existing index `block_type`, `page_id` with `page_number`, `text|content|body` with `text` → no re-extraction at write time; only genuinely new dimensions are added (bbox/score/has_image/block_data) |
+| NFR-09 | Queries with minerU filters default to a per-page cap of 50 (each block carries the full `blockData` JSONB, avoiding oversized response bodies); values above are truncated; the V1 keyword-only path keeps 100 |
+| NFR-10 | Generation 2 retrieval path P95 < 500ms (carrying `blockData`, relaxing V1's 200ms target; to be converged later via column projection and gzip compression) |
+| NFR-11 | Full `blockData` is stored in `_source` as `_meta.block_data` (`enabled:false`), kept out of the full-text index to avoid write amplification |
+| NFR-12 | The Generation 2 evolution lives in the doctheca built-in frontend (modifying `SearchPage.vue`) and does not expand Ruoyu.Admin's BFF boundary (scope control for this iteration) |
 
-## 数据来源
+## Data Sources
 
-- **索引源**：`document_parse_blocks` 表（解析结果的结构化输出），通过 `IDocumentParseBlockRepository.GetByParseIdAsync` 读取。
-- **元数据来源**：`document_files` 表的 `subject` / `grade` / `year` 字段。索引时从文件记录读取写入；后续通过 `UpdateDocumentFileMetadataAsync` 同步更新。
-- **第 2 代新增数据源**：`document_parse_blocks.block_data`（minerU 原始 JSONB）→ 抽取 `bbox`（→ x0/y0/x1/y1）、`score`、`has_image`、`_meta.block_data`（整块回挂）。minerU `type`/`page_id`/`text|content|body`/`img_path` 已在第 1 代库落地为 `block_type`/`page_number`/`text_content`/`ImageId`，本次不二次解析。
-- **代码使用视图**（DocumentParseBlockService.ParseBlock 实际读取 minerU v1 block key）：type / page_id / text|content|body / img_path，见 [03-DESIGN.md §第 2 代演进](./03-DESIGN.md)。
+- **Index source**: the `document_parse_blocks` table (structured output of parse results), read via `IDocumentParseBlockRepository.GetByParseIdAsync`.
+- **Metadata source**: the `subject` / `grade` / `year` fields of the `document_files` table. Read from the file record at index time; updated later in sync via `UpdateDocumentFileMetadataAsync`.
+- **Generation 2 new data source**: `document_parse_blocks.block_data` (raw minerU JSONB) → extract `bbox` (→ x0/y0/x1/y1), `score`, `has_image`, `_meta.block_data` (attached whole). minerU `type`/`page_id`/`text|content|body`/`img_path` already landed in the Generation 1 database as `block_type`/`page_number`/`text_content`/`ImageId`; they are not re-parsed here.
+- **Code usage view** (minerU v1 block keys actually read by DocumentParseBlockService.ParseBlock): type / page_id / text|content|body / img_path; see [03-DESIGN.md §Generation 2 Evolution](./03-DESIGN.md).
 
-## 接口清单
+## Interface Inventory
 
-### 第 1 代（不变）
+### Generation 1 (unchanged)
 
-| 组件 | 修改 |
+| Component | Changes |
 |------|------|
-| `ISearchIndexService` | 定义 6 个方法（不变，第 2 代在同一接口追加 minerU 字段索引能力） |
-| `OpenSearchIndexService` | 实现 `ISearchIndexService`；`BuildIndexBody` / `BuildSearchBody` / `ParseSearchResponse` 为 `internal static` 纯逻辑 |
-| `ISearchDomainService` | 定义 `ExactSearchAsync`（薄封装 + 降级） |
-| `SearchDomainService` | 实现 `ISearchDomainService`，异常时返回空结果 |
-| `DocumentSearchEndpoints` | `GET /admin/documents/search` 端点 |
-| `StructaDocParseWorker` | 解析完成后调用 `IndexParseBlocksAsync`（best-effort） |
-| `DocumentParseEndpoints` | `DeleteDocumentParse` 调用 `DeleteParseIndexAsync`（best-effort） |
-| `DocumentFileEndpoints` | `DeleteDocumentFile` 调用 `DeleteDocumentFileIndexAsync`（best-effort）；`UpdateDocumentFileMetadata` 调用 `UpdateDocumentFileMetadataAsync`（best-effort） |
+| `ISearchIndexService` | Defines 6 methods (unchanged; Generation 2 adds minerU field indexing capability on the same interface) |
+| `OpenSearchIndexService` | Implements `ISearchIndexService`; `BuildIndexBody` / `BuildSearchBody` / `ParseSearchResponse` are `internal static` pure logic |
+| `ISearchDomainService` | Defines `ExactSearchAsync` (thin wrapper + degradation) |
+| `SearchDomainService` | Implements `ISearchDomainService`, returns empty results on exceptions |
+| `DocumentSearchEndpoints` | `GET /admin/documents/search` endpoint |
+| `StructaDocParseWorker` | Calls `IndexParseBlocksAsync` after parse completion (best-effort) |
+| `DocumentParseEndpoints` | `DeleteDocumentParse` calls `DeleteParseIndexAsync` (best-effort) |
+| `DocumentFileEndpoints` | `DeleteDocumentFile` calls `DeleteDocumentFileIndexAsync` (best-effort); `UpdateDocumentFileMetadata` calls `UpdateDocumentFileMetadataAsync` (best-effort) |
 
-### 第 2 代演进（扩展 V1 组件，不新增平行类）
+### Generation 2 Evolution (extending V1 components, no parallel classes)
 
-| 组件 | 职责 | 调用时机 |
+| Component | Responsibility | When called |
 |------|------|---------|
-| `ISearchIndexService` / `OpenSearchIndexService` | 追加 minerU 维度索引能力（在 `IndexParseBlocksAsync` 同一 bulk 追加字段：x0/y0/x1/y1/score/has_image/_meta.block_data）；追加 `ExactSearchAsync` 的 minerU filter 分支与 `blockData` 回挂解析（现有 6 个方法签名不变） | 随 V1 解析完成同一 best-effort 入口；HTTP 查询扩展 |
-| `SearchResultModel`（`src/Domain/Models/` 扩展） | 追加 optional `BlockData` / `Bbox` / `Score` 字段（老前端不传时 null） | HTTP 响应契约 |
-| `SearchFilterModel`（`src/Domain/Models/` 扩展） | 追加 `BlockType` / `PageNumber` / `ParseId` / `DocumentFileId` / `HasImage` 过滤条件 | HTTP 查询入参契约 |
-| `DocumentSearchEndpoints`（`src/Service/Endpoints/` 扩展） | `GET /admin/documents/search` 端点追加可选 filter 入参（FR-10）；参数为 null 时行为等同 V1 | 管理界面 block 检索入口（同一页面） |
-| `SearchDomainService`（扩展） | `ExactSearchAsync` 内追加 minerU filter 分支并解析 minerU 回挂字段；**不新增** `BlockXxx` 方法 | HTTP 处理委托 |
-| `SearchPage.vue`（doctheca 自带前端 扩展） | 现有搜索页加"高级筛选"抽屉 + 结果行展开矿工 U 详情；**不新增**平行 `BlockSearchPage.vue` | 前端管理界面 |
+| `ISearchIndexService` / `OpenSearchIndexService` | Adds minerU dimension indexing (fields appended in the same bulk of `IndexParseBlocksAsync`: x0/y0/x1/y1/score/has_image/_meta.block_data); adds the minerU filter branch and `blockData` attachment parsing to `ExactSearchAsync` (existing 6 method signatures unchanged) | Same best-effort entry point as V1 parse completion; HTTP query extension |
+| `SearchResultModel` (extending `src/Domain/Models/`) | Adds optional `BlockData` / `Bbox` / `Score` fields (null when old frontends do not send them) | HTTP response contract |
+| `SearchFilterModel` (extending `src/Domain/Models/`) | Adds `BlockType` / `PageNumber` / `ParseId` / `DocumentFileId` / `HasImage` filter conditions | HTTP query input contract |
+| `DocumentSearchEndpoints` (extending `src/Service/Endpoints/`) | The `GET /admin/documents/search` endpoint gains optional filter inputs (FR-10); behavior equals V1 when parameters are null | Admin UI block search entry point (same page) |
+| `SearchDomainService` (extended) | `ExactSearchAsync` gains the minerU filter branch and parses minerU attachment fields; **no new** `BlockXxx` methods | HTTP handler delegate |
+| `SearchPage.vue` (doctheca built-in frontend, extended) | The existing search page gains an "Advanced filters" drawer + result-row minerU detail expansion; **no new** parallel `BlockSearchPage.vue` | Frontend admin UI |
 
-## 文档索引
+## Document Index
 
-| 文档 | 说明 |
+| Document | Description |
 |------|------|
-| [01-FEATURE.md](./01-FEATURE.md) | 功能概述、用户故事、验收条件（本文档） |
-| [02-SPEC.md](./02-SPEC.md) | 需求规格、接口变更、实现步骤、错误处理、测试策略 |
-| [03-DESIGN.md](./03-DESIGN.md) | 设计决策、数据流、依赖关系 |
-| [04-TASKS.md](./04-TASKS.md) | 任务拆解、命令速查 |
-| [05-TESTS.md](./05-TESTS.md) | 单元测试表、FR/AC 映射 |
-| [06-CONVENTIONS.md](./06-CONVENTIONS.md) | 命名、日志、错误消息、代码风格 |
-| _第 2 代跨文档决策_ | minerU 字段维度分层（复用 V1 block_type/page_number/text + 新增 bbox/score/has_image/block_data）详见 [03-DESIGN.md §第 2 代演进](./03-DESIGN.md) |
+| [01-FEATURE.md](./01-FEATURE.md) | Feature overview, user stories, acceptance criteria (this document) |
+| [02-SPEC.md](./02-SPEC.md) | Requirement spec, interface changes, implementation steps, error handling, testing strategy |
+| [03-DESIGN.md](./03-DESIGN.md) | Design decisions, data flows, dependencies |
+| [04-TASKS.md](./04-TASKS.md) | Task breakdown, command quick reference |
+| [05-TESTS.md](./05-TESTS.md) | Unit test tables, FR/AC mapping |
+| [06-CONVENTIONS.md](./06-CONVENTIONS.md) | Naming, logging, error messages, code style |
+| _Generation 2 cross-document decisions_ | minerU field dimension layering (reusing V1 block_type/page_number/text + new bbox/score/has_image/block_data); see [03-DESIGN.md §Generation 2 Evolution](./03-DESIGN.md) |

@@ -1,84 +1,84 @@
-# document_parse_blocks — 文档解析 Block 表
+# document_parse_blocks — Document Parse Block Table
 
-> 本文件是 `document_parse_blocks` 表的唯一事实源。
+> This file is the single source of truth for the `document_parse_blocks` table.
 
-## 设计目的
+## Design Purpose
 
-本表存储解析产物的**结构化 block 行**。存量数据由历史 MinerU `content_list.json` 解析写入；新数据由 StructaDoc Blocks 同步映射写入（ADR-0009，`StructaDocParseResultSync`）。支持：
-- 按页查询（`WHERE parse_id=? AND page_id=?`）
-- 按类型查询（`WHERE block_type='equation'`）
-- 全文搜索（`text_content` GIN 索引）
-- 按 page 顺序获取（`ORDER BY page_id, sort_index`）
+This table stores the **structured block rows** of parse artifacts. Legacy data was written by parsing historical MinerU `content_list.json`; new data is written by mapping StructaDoc Blocks synchronization (ADR-0009, `StructaDocParseResultSync`). It supports:
+- Query by page (`WHERE parse_id=? AND page_id=?`)
+- Query by type (`WHERE block_type='equation'`)
+- Full-text search (`text_content` GIN index)
+- Fetch in page order (`ORDER BY page_id, sort_index`)
 
-## 字段清单
+## Field Inventory
 
-| 字段名 | 类型 | 约束 | 默认值 | 说明 |
+| Field | Type | Constraints | Default | Description |
 |--------|------|------|--------|------|
-| `id` | `UUID` | PRIMARY KEY | | block 唯一标识 |
-| `parse_id` | `UUID` | NOT NULL, FK → `document_parses(id)` ON DELETE CASCADE | | 关联解析 |
-| `page_id` | `INT` | NOT NULL | | 所属页（0-indexed） |
-| `sort_index` | `INT` | NOT NULL | | 在 page 内的阅读顺序 |
-| `block_type` | `VARCHAR(20)` | NOT NULL | | 类型（存量常见值：`text` / `image` / `equation` / `code` / `table` / `list`；新记录为 StructaDoc canonical 类型：`title` / `text` / `list` / `table` / `formula` / `image` / `code` / `header` / `footer` / `footnote` / `unknown`，实际值由解析产物决定，消费方须容忍新增值） |
-| `text_content` | `TEXT` | NULL | | 文本/HTML/LaTeX（block 主体） |
-| `image_id` | `UUID` | NULL, FK → `document_parse_images(id)` ON DELETE SET NULL | | 仅 `block_type='image'` 时有值 |
-| `block_data` | `JSONB` | NOT NULL | | ⭐ 整块原 JSON（兜底）：存量为 MinerU content_list 项原文；新记录为 StructaDoc block 的规范化 JSON（camelCase） |
-| `created_at` | `TIMESTAMP WITH TIME ZONE` | NOT NULL | `NOW()` | 创建时间 |
-| `sub_type` | `VARCHAR(50)` | NULL | | [第 2 代] minerU 二级分类（如 `image_body`/`table_caption`/`text`/`ref_text`） |
-| `text_level` | `INT` | NOT NULL | `-1` | [第 2 代] 标题级别：0=正文,1=h1,2=h2...；非标题文本为 `-1` |
-| `text_format` | `VARCHAR(20)` | NOT NULL | `''` | [第 2 代] 文本格式（VLM 后端）：`latex`/`markdown`/`none` |
-| `bbox_x0` | `REAL` | NULL | | [第 2 代] bbox 左上 X（归一化到 0-1000 pipeline 惯例） |
-| `bbox_y0` | `REAL` | NULL | | [第 2 代] bbox 左上 Y |
-| `bbox_x1` | `REAL` | NULL | | [第 2 代] bbox 右下 X |
-| `bbox_y1` | `REAL` | NULL | | [第 2 代] bbox 右下 Y |
-| `score` | `REAL` | NULL | | [第 2 代] 置信度：存量为 minerU VLM score；新记录为 StructaDoc `confidence`（0-1） |
-| `caption` | `TEXT` | NULL | | [第 2 代] 拼接 caption 文本（存量专有；新记录为 NULL） |
+| `id` | `UUID` | PRIMARY KEY | | Block unique identifier |
+| `parse_id` | `UUID` | NOT NULL, FK → `document_parses(id)` ON DELETE CASCADE | | Associated parse |
+| `page_id` | `INT` | NOT NULL | | Owning page (0-indexed) |
+| `sort_index` | `INT` | NOT NULL | | Reading order within the page |
+| `block_type` | `VARCHAR(20)` | NOT NULL | | Type (common legacy values: `text` / `image` / `equation` / `code` / `table` / `list`; new records use StructaDoc canonical types: `title` / `text` / `list` / `table` / `formula` / `image` / `code` / `header` / `footer` / `footnote` / `unknown`; actual values are determined by the parse artifacts, and consumers must tolerate new values) |
+| `text_content` | `TEXT` | NULL | | Text/HTML/LaTeX (block body) |
+| `image_id` | `UUID` | NULL, FK → `document_parse_images(id)` ON DELETE SET NULL | | Only set when `block_type='image'` |
+| `block_data` | `JSONB` | NOT NULL | | ⭐ Whole-block original JSON (fallback): legacy records hold the original MinerU content_list item; new records hold the normalized JSON of the StructaDoc block (camelCase) |
+| `created_at` | `TIMESTAMP WITH TIME ZONE` | NOT NULL | `NOW()` | Creation time |
+| `sub_type` | `VARCHAR(50)` | NULL | | [Gen 2] minerU secondary classification (e.g. `image_body`/`table_caption`/`text`/`ref_text`) |
+| `text_level` | `INT` | NOT NULL | `-1` | [Gen 2] Heading level: 0=body,1=h1,2=h2...; non-heading text is `-1` |
+| `text_format` | `VARCHAR(20)` | NOT NULL | `''` | [Gen 2] Text format (VLM backend): `latex`/`markdown`/`none` |
+| `bbox_x0` | `REAL` | NULL | | [Gen 2] bbox top-left X (normalized to the 0-1000 pipeline convention) |
+| `bbox_y0` | `REAL` | NULL | | [Gen 2] bbox top-left Y |
+| `bbox_x1` | `REAL` | NULL | | [Gen 2] bbox bottom-right X |
+| `bbox_y1` | `REAL` | NULL | | [Gen 2] bbox bottom-right Y |
+| `score` | `REAL` | NULL | | [Gen 2] Confidence: legacy records hold the minerU VLM score; new records hold StructaDoc `confidence` (0-1) |
+| `caption` | `TEXT` | NULL | | [Gen 2] Concatenated caption text (legacy-specific; NULL for new records) |
 
-## 索引
+## Indexes
 
-| 索引名 | 列 | 说明 |
+| Index | Columns | Description |
 |--------|-----|------|
-| `PK_document_parse_blocks` | `id` | 主键 |
-| `IX_document_parse_blocks_parse_id_page_id_sort_index` | `(parse_id, page_id, sort_index)` | 按页顺序读 |
-| `IX_document_parse_blocks_block_type` | `block_type` | 按类型过滤 |
-| `IX_document_parse_blocks_image_id` | `image_id` | 按图片关联查询 |
+| `PK_document_parse_blocks` | `id` | Primary key |
+| `IX_document_parse_blocks_parse_id_page_id_sort_index` | `(parse_id, page_id, sort_index)` | Read in page order |
+| `IX_document_parse_blocks_block_type` | `block_type` | Filter by type |
+| `IX_document_parse_blocks_image_id` | `image_id` | Query by image association |
 
-## 关键设计点
+## Key Design Points
 
-- **`block_data` 存整块原 JSON**：解析产物格式演进加新字段时，**无需改 schema**，所有新字段都在 JSONB 里
-- 经常查的字段（page、type、text）单独提出来建索引——查询性能 OK
-- 不常查的字段（angle、formula_latex）放在 `block_data` 里——不占结构化存储空间
-- `image_id` 软关联到 `document_parse_images`（SET NULL）——图片被删时 block 仍保留，但失去图片引用
-- **[第 2 代] 结构化维度字段**：`sub_type`/`text_level`/`text_format`/`bbox_x0..y1`/`score`/`caption` 为独立列，支持 OpenSearch mapping 索引与 SQL 过滤；`block_data` JSONB 仍保留整块原文（兜底 + `_meta.block_data` 回挂）
-- **[第 2 代] bbox 归一化**：统一 0-1000 惯例入库。存量为启发式判断（pipeline [0,1000] / VLM [0,1]×1000）；新记录由 StructaDoc 0-1 归一化坐标 ×1000 映射
-- **新管线映射约定**：`page_id` = StructaDoc `pageNumber` − 1（null → 0）；`sort_index` 页内递增；`text_level` 由 subtype `heading-N` 推导；`text_format` = `contentFormat`
+- **`block_data` stores the whole-block original JSON**: when the parse artifact format evolves and adds fields, **no schema change is needed**; all new fields live in the JSONB
+- Frequently queried fields (page, type, text) are extracted into their own indexed columns — query performance is fine
+- Rarely queried fields (angle, formula_latex) stay inside `block_data` — they do not consume structured storage space
+- `image_id` is a soft association to `document_parse_images` (SET NULL) — when an image is deleted the block is kept but loses its image reference
+- **[Gen 2] Structured dimension fields**: `sub_type`/`text_level`/`text_format`/`bbox_x0..y1`/`score`/`caption` are independent columns, supporting OpenSearch mapping indexes and SQL filtering; the `block_data` JSONB still keeps the whole original block (fallback + re-attachment as `_meta.block_data`)
+- **[Gen 2] bbox normalization**: unified to the 0-1000 convention on write. Legacy records use heuristic detection (pipeline [0,1000] / VLM [0,1]×1000); new records are mapped from StructaDoc's 0-1 normalized coordinates ×1000
+- **New-pipeline mapping conventions**: `page_id` = StructaDoc `pageNumber` − 1 (null → 0); `sort_index` increments within a page; `text_level` is derived from subtype `heading-N`; `text_format` = `contentFormat`
 
-## 填充流程
+## Population Flow
 
 ```
-StructaDoc Parse Run succeeded（StructaDocParseResultSync）
+StructaDoc Parse Run succeeded (StructaDocParseResultSync)
   ↓
-GET /api/v1/parse-runs/{id}/blocks（limit=1000，跟随 nextSequence 翻页）
+GET /api/v1/parse-runs/{id}/blocks (limit=1000, paging via nextSequence)
   ↓
-先删后插 INSERT INTO document_parse_blocks
-  对每个 block（按 sequence 排序）:
-    parse_id       = 当前解析 ID
-    page_id        = block.pageNumber - 1（null → 0）
-    sort_index     = 在 page 内的递增索引
-    block_type     = block.type
-    text_content   = block.content
-    block_data     = block 的规范化 JSON
-    image_id       = block.assetId → document_parse_images 映射
-    sub_type       = block.subtype
-    text_level     = subtype heading-N → N，否则 -1
-    text_format    = block.contentFormat
-    bbox_x0/y0/x1/y1 = block.boundingBox ×1000（0-1 → 0-1000）
-    score          = block.confidence
-    caption        = NULL
+Delete-then-insert INSERT INTO document_parse_blocks
+   For each block (ordered by sequence):
+     parse_id       = current parse ID
+     page_id        = block.pageNumber - 1 (null → 0)
+     sort_index     = incrementing index within the page
+     block_type     = block.type
+     text_content   = block.content
+     block_data     = normalized JSON of the block
+     image_id       = block.assetId → document_parse_images mapping
+     sub_type       = block.subtype
+     text_level     = subtype heading-N → N, otherwise -1
+     text_format    = block.contentFormat
+     bbox_x0/y0/x1/y1 = block.boundingBox ×1000 (0-1 → 0-1000)
+     score          = block.confidence
+     caption        = NULL
 ```
 
-> 存量记录的填充流程（MinerU Worker 下载 ZIP → 解析 content_list.json → DocumentParseBlockService.ParseBlock）已随 ADR-0009 移除，历史数据只读保留。
+> The legacy-record population flow (MinerU Worker downloads ZIP → parses content_list.json → DocumentParseBlockService.ParseBlock) was removed with ADR-0009; historical data is kept read-only.
 
-## 特殊说明
+## Special Notes
 
-- 与 `document_parse_images` 是 `block_type='image'` 时一对一关系，但不是 DB 外键强约束（用 `image_id` 软引用）
-- 删除 `document_parse` 时本表通过 CASCADE 自动删除
+- Has a one-to-one relationship with `document_parse_images` when `block_type='image'`, but it is not a hard DB foreign-key constraint (soft reference via `image_id`)
+- Deleting a `document_parse` automatically deletes this table's rows via CASCADE

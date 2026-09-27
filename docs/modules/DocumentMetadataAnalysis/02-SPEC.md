@@ -1,21 +1,21 @@
-# 02-SPEC — Document Metadata Analysis 详细规格
+# 02-SPEC — Document Metadata Analysis detailed specification
 
-## 1. 数据库变更
+## 1. Database changes
 
-### 1.1 document_files 表新增列
+### 1.1 New columns on document_files
 
-| 列名 | 类型 | 约束 | 说明 |
+| Column | Type | Constraint | Description |
 |------|------|------|------|
-| `subject` | varchar(50) | nullable | 学科:English/语文/数学/物理/化学/生物/其他 |
-| `grade` | varchar(20) | nullable | 年级:K/G1-G12 |
-| `year` | varchar(10) | nullable | 年份:4位数字如 2024 |
+| `subject` | varchar(50) | nullable | Subject: English/Chinese/Math/Physics/Chemistry/Biology/Other (stored values are the Chinese literals defined in `DocthecaConstants`) |
+| `grade` | varchar(20) | nullable | Grade: K/G1-G12 |
+| `year` | varchar(10) | nullable | Year: 4 digits, e.g. 2024 |
 
-#### 数据库初始化方式
+#### Database initialization approach
 
-本服务**不使用 EF Core Migration**。数据库初始化由 `DatabaseInitializer.cs` 通过原生 SQL 完成:
+This service **does not use EF Core Migration**. Database initialization is done by `DatabaseInitializer.cs` via raw SQL:
 
-- **新建库路径** — `GetTableCreationSql("document_files")` 返回的 `CREATE TABLE IF NOT EXISTS document_files (...)` 已直接内联 `subject character varying(50) NULL` / `grade character varying(20) NULL` / `year character varying(10) NULL` 三列(位于 `updated_at` 之后、主键约束之前)。
-- **存量库路径** — `EnsureColumnsAsync` 中的 `ADD COLUMN IF NOT EXISTS` 兜底:
+- **Fresh database path** — the `CREATE TABLE IF NOT EXISTS document_files (...)` returned by `GetTableCreationSql("document_files")` already inlines the three columns `subject character varying(50) NULL` / `grade character varying(20) NULL` / `year character varying(10) NULL` (after `updated_at`, before the primary key constraint).
+- **Existing database path** — the `ADD COLUMN IF NOT EXISTS` fallback in `EnsureColumnsAsync`:
 
 ```sql
 ALTER TABLE document_files ADD COLUMN IF NOT EXISTS subject character varying(50) NULL;
@@ -23,9 +23,9 @@ ALTER TABLE document_files ADD COLUMN IF NOT EXISTS grade character varying(20) 
 ALTER TABLE document_files ADD COLUMN IF NOT EXISTS year character varying(10) NULL;
 ```
 
-两条路径均带 `IF NOT EXISTS` 幂等保护,可重复执行。`DatabaseInitializer.InitializeAsync` 在 `Program.cs` 启动时调用。
+Both paths carry `IF NOT EXISTS` idempotency guards and can be executed repeatedly. `DatabaseInitializer.InitializeAsync` is called at startup in `Program.cs`.
 
-### 1.2 实体与模型映射
+### 1.2 Entity and model mapping
 
 ```csharp
 // DocumentFileEntity.cs
@@ -42,9 +42,9 @@ public string? Grade { get; set; }
 public string? Year { get; set; }
 ```
 
-`DocumentFileModel` 同步新增对应字段。`DocumentFileRepository` 内部的 `private static MapToEntity` / `MapToModel` 同步映射(与 Entity 的 Subject/Grade/Year 对应)。
+`DocumentFileModel` adds the corresponding fields in sync. The `private static MapToEntity` / `MapToModel` inside `DocumentFileRepository` map them in sync (matching the Entity's Subject/Grade/Year).
 
-## 2. 接口变更
+## 2. Interface changes
 
 ### 2.1 IDocumentFileRepository
 
@@ -102,7 +102,7 @@ Task<DocumentMetadataAnalysis?> AnalyzeMetadataAsync(string textPreview, Cancell
 Task UpdateDocumentFileMetadataAsync(Guid documentFileId, string? subject, string? grade, string? year);
 ```
 
-### 2.5 HTTP 端点
+### 2.5 HTTP endpoints
 
 ```
 PUT /admin/document-files/{id}/metadata
@@ -131,7 +131,7 @@ Response 200:
 Response 404: { "success": false, "message": "File not found", "errorCode": "DOCTHECA_FILE_NOT_FOUND" }
 ```
 
-**DTO 定义** (`DocumentFileEndpoints.cs`):
+**DTO definition** (`DocumentFileEndpoints.cs`):
 
 ```csharp
 /// <summary>
@@ -146,9 +146,9 @@ public record UpdateMetadataRequest
 }
 ```
 
-**空值语义**:`null` 表示"不修改";`""`(空字符串)会被写入 DB(实际为空串,不视为 NULL)。当前实现不在端点层做 MaxLength 校验,由 DB 列约束兜底(subject=50, grade=20, year=10)。
+**Null semantics**: `null` means "no change"; `""` (empty string) is written to the DB (stored as an actual empty string, not treated as NULL). The current implementation does no MaxLength validation at the endpoint layer; the DB column constraints act as the fallback (subject=50, grade=20, year=10).
 
-## 3. DocumentMetadataAnalysis 模型
+## 3. DocumentMetadataAnalysis model
 
 ```csharp
 namespace Doctheca.Domain.Models;
@@ -164,76 +164,78 @@ public record DocumentMetadataAnalysis
 }
 ```
 
-> 注: 反序列化使用 `JsonNamingPolicy.SnakeCaseLower` + `JsonIgnoreCondition.WhenWritingNull`,响应中字段为空字符串 / 空白 / `"null"` 字面量时均视为 null。
+> Note: Deserialization uses `JsonNamingPolicy.SnakeCaseLower` + `JsonIgnoreCondition.WhenWritingNull`; response fields that are empty strings / whitespace / the `"null"` literal are all treated as null.
 ```
 
-## 4. LLM 提示词
+## 4. LLM prompt
 
-`BuildMetadataAnalysisPrompt` 构造 prompt,请求体由 `BuildRequestBody` 组装(含 system + user 双角色、`max_tokens`、`temperature`、`stream = true`)。
+`BuildMetadataAnalysisPrompt` builds the prompt; the request body is assembled by `BuildRequestBody` (including system + user roles, `max_tokens`, `temperature`, `stream = true`).
 
-**system prompt**:`直接返回JSON，不要解释。`
+> Note: the prompts below are quoted in English translation; the runtime prompt text in `DocumentAnalysisPromptBuilder.cs` and `DocumentAnalysisService.cs` remains Chinese by design (the analyzed documents are Chinese).
 
-**user prompt**(`BuildMetadataAnalysisPrompt`,字符串插值):
+**system prompt**: `Return JSON directly, no explanation.`
+
+**user prompt** (`BuildMetadataAnalysisPrompt`, string interpolation):
 
 ```
-你是一个文档分析专家。分析以下文档内容，识别学科和年级。
+You are a document analysis expert. Analyze the following document content and identify the subject and grade.
 
-学科类型：
-- English：英语教材、阅读材料
-- 语文：语文教材、文言文、现代文
-- 数学：数学教材、习题集
-- 物理：物理教材、实验报告
-- 化学：化学教材、实验报告
-- 生物：生物教材
-- 其他：无法明确判断
+Subject types:
+- English: English textbooks, reading materials
+- Chinese: Chinese language textbooks, classical Chinese, modern Chinese texts
+- Math: math textbooks, problem sets
+- Physics: physics textbooks, lab reports
+- Chemistry: chemistry textbooks, lab reports
+- Biology: biology textbooks
+- Other: cannot be clearly determined
 
-年级（从标题或内容推断）：
-- K：幼儿园/学前
-- G1-G12：小学一年级到高三
-- 无法判断时返回 null
+Grade (inferred from the title or content):
+- K: kindergarten/preschool
+- G1-G12: grade 1 of elementary school through grade 12 of high school
+- Return null when it cannot be determined
 
-年份（从标题、页眉、版权页等推断，4位数字）：
-- 无法判断时返回 null
+Year (inferred from the title, header, copyright page, etc., 4 digits):
+- Return null when it cannot be determined
 
-请分析以下文档内容并返回 JSON。只返回 JSON，不要有其他文字。
+Analyze the following document content and return JSON. Return only JSON, no other text.
 
 ```json
 {
-  "subject": "学科或null",
-  "grade": "年级或null",
-  "year": "年份或null"
+  "subject": "subject or null",
+  "grade": "grade or null",
+  "year": "year or null"
 }
 ```
 
-文档内容：
+Document content:
 ---
 {{textPreview}}
 ---
 ```
 
-## 5. 实现规格
+## 5. Implementation specifications
 
 ### 5.1 DocumentAnalysisService.AnalyzeMetadataAsync
 
 ```
-1. await InitializeAsync(ct)  // 首次调用时解析 ContextLength、计算内部字段 _chunkSize / _maxTokensValue，不修改注入的 DocumentAnalysisOptions
+1. await InitializeAsync(ct)  // On first call, resolves ContextLength and computes the internal fields _chunkSize / _maxTokensValue; does not modify the injected DocumentAnalysisOptions
 2. if textPreview is null/whitespace → return null, log warning "Empty text preview provided for metadata analysis"
-3. if ChunkSize <= 0 || MaxTokensValue <= 0 (LLM 初始化失败/未配置)→ return null, log info
+3. if ChunkSize <= 0 || MaxTokensValue <= 0 (LLM initialization failed/not configured) → return null, log info
 4. truncate textPreview to first 2000 chars
 5. DocumentAnalysisPromptBuilder.BuildMetadataAnalysisPrompt(preview)
-6. BuildRequestBody(prompt) → system="直接返回JSON，不要解释。" + user prompt, stream=true
+6. BuildRequestBody(prompt) → system="Return JSON directly, no explanation." + user prompt, stream=true
 7. try:
    - CallStreamingAsync(requestBody, ct)
-   - DocumentAnalysisResponseParser.ParseMetadataAnalysis(response, _logger, JsonOptions): 去 markdown 代码块包装、反序列化、空字符串/空白/"null"字面量→null
+   - DocumentAnalysisResponseParser.ParseMetadataAnalysis(response, _logger, JsonOptions): strip markdown code block wrapping, deserialize, empty string/whitespace/"null" literal → null
    - return result
 8. catch any exception:
    - log warning(ex) "LLM metadata analysis failed, returning null"
    - return null
 ```
 
-### 5.2 StructaDocParseWorker 集成
+### 5.2 StructaDocParseWorker integration
 
-在 `PersistParseResultAsync` 和 `PersistMergedChunkResultsAsync` 末尾（状态变为 Parsed 之后、OpenSearch 索引之后）调用新方法:
+Call the new method at the end of `PersistParseResultAsync` and `PersistMergedChunkResultsAsync` (after the status becomes Parsed and after OpenSearch indexing):
 
 ```
 AnalyzeMetadataIfMissingAsync(parse.DocumentFileId, result.Markdown, scopeProvider, ct)
@@ -244,20 +246,20 @@ AnalyzeMetadataIfMissingAsync(documentFileId, markdownContent, scopeProvider, ct
 1. resolve IDocumentFileService from scope
 2. get document file by id
 3. if file not found → log warning "Document file not found for metadata analysis: {FileId}", return
-4. if file.Subject/file.Grade/file.Year 全部非空(!IsNullOrWhitespace) →
+4. if file.Subject/file.Grade/file.Year are all non-empty (!IsNullOrWhitespace) →
      log info "Metadata already set for file {FileId}, skip LLM analysis (Subject={Subject}, Grade={Grade}, Year={Year})", return
-5. resolve IDocumentAnalysisService? from scope (GetService, 可能 null)
+5. resolve IDocumentAnalysisService? from scope (GetService, may be null)
 6. if llmService is null → log info "LLM not configured, skip metadata analysis for file {FileId}", return
 7. if markdownContent is null/whitespace → log info "No markdown content for file {FileId}, skip metadata analysis", return
-8. extract first 2000 chars of markdownContent (Worker 层截断,AnalyzeMetadataAsync 内会二次截断作为冗余保护)
+8. extract first 2000 chars of markdownContent (truncated at the Worker layer; AnalyzeMetadataAsync truncates again as redundant protection)
 9. log info "Starting LLM metadata analysis for file {FileId}"
 10. try:
     - analysis = await llmService.AnalyzeMetadataAsync(textPreview, ct)
     - if analysis is null → log warning "LLM metadata analysis returned null for file {FileId}", return
-    - determine newSubject = file.Subject 非空 ? file.Subject : analysis.Subject
-      (即: IsNullOrWhitespace(file.Subject) 时取 analysis.Subject,否则保留原值)
-    - determine newGrade / newYear 同理
-    - if newSubject == file.Subject && newGrade == file.Grade && newYear == file.Year (无变化)→
+    - determine newSubject = file.Subject non-empty ? file.Subject : analysis.Subject
+      (i.e., take analysis.Subject when IsNullOrWhitespace(file.Subject), otherwise keep the original value)
+    - determine newGrade / newYear the same way
+    - if newSubject == file.Subject && newGrade == file.Grade && newYear == file.Year (no change) →
         log info "LLM did not provide any missing metadata for file {FileId}", return
     - await fileService.UpdateMetadataAsync(documentFileId, newSubject, newGrade, newYear)
     - log info "Metadata updated by LLM for file {FileId}: Subject={Subject}, Grade={Grade}, Year={Year}"
@@ -280,7 +282,7 @@ AnalyzeMetadataIfMissingAsync(documentFileId, markdownContent, scopeProvider, ct
 
 ### 5.4 OpenSearchIndexService.UpdateDocumentFileMetadataAsync
 
-使用 OpenSearch `_update_by_query` API 按 `document_file_id` 匹配并更新 subject/grade/year:
+Uses the OpenSearch `_update_by_query` API to match by `document_file_id` and update subject/grade/year:
 
 ```json
 {
@@ -292,70 +294,70 @@ AnalyzeMetadataIfMissingAsync(documentFileId, markdownContent, scopeProvider, ct
 }
 ```
 
-## 6. 错误处理
+## 6. Error handling
 
-| 场景 | 处理 | 代码位置 |
+| Scenario | Handling | Code location |
 |------|------|---------|
-| LLM 服务未注册(ApiKey 为空) | `IDocumentAnalysisService` 未注册,Worker 取到 null 后 skip,记 Info 日志 | `Program.cs` DI 条件注册;`StructaDocParseWorker.AnalyzeMetadataIfMissingAsync` |
-| LLM 未初始化/已禁用(ChunkSize<=0) | `AnalyzeMetadataAsync` 内部 return null,记 Info 日志 | `DocumentAnalysisService.AnalyzeMetadataAsync:171-175` |
-| LLM 调用超时/网络错误 | catch → return null,Worker 记 Warning 日志 | `StructaDocParseWorker` |
-| LLM 返回非 JSON | `ParseMetadataAnalysis` catch JsonException → return null | `DocumentAnalysisService:294-298` |
-| LLM 返回的空字符串/空白/"null"字面量 | 视为 null,仅填充实际有值的字段 | `DocumentAnalysisService.ParseMetadataAnalysis:277-285` |
-| OpenSearch 更新失败 | inner try/catch,记 Warning 日志(syncEx),不阻塞 | `StructaDocParseWorker` |
-| 文档不存在 | `GetByIdAsync` → null,记 Warning 日志,不阻塞 | `StructaDocParseWorker` |
-| HTTP 请求体解析失败 | 端点层 catch → 400 `"Invalid request body"` | `DocumentFileEndpoints:285-289` |
+| LLM service not registered (ApiKey empty) | `IDocumentAnalysisService` not registered; the Worker gets null and skips, logging at Info | `Program.cs` conditional DI registration; `StructaDocParseWorker.AnalyzeMetadataIfMissingAsync` |
+| LLM not initialized/disabled (ChunkSize<=0) | `AnalyzeMetadataAsync` returns null internally, logging at Info | `DocumentAnalysisService.AnalyzeMetadataAsync:171-175` |
+| LLM call timeout/network error | catch → return null; the Worker logs at Warning | `StructaDocParseWorker` |
+| LLM returns non-JSON | `ParseMetadataAnalysis` catches JsonException → return null | `DocumentAnalysisService:294-298` |
+| LLM returns empty strings/whitespace/"null" literals | Treated as null; only fields with actual values are filled | `DocumentAnalysisService.ParseMetadataAnalysis:277-285` |
+| OpenSearch update fails | inner try/catch, logs Warning (syncEx), does not block | `StructaDocParseWorker` |
+| Document does not exist | `GetByIdAsync` → null, logs Warning, does not block | `StructaDocParseWorker` |
+| HTTP request body parse failure | endpoint layer catch → 400 `"Invalid request body"` | `DocumentFileEndpoints:285-289` |
 
-## 7. 测试策略
+## 7. Test strategy
 
-### 7.1 当前测试现状
+### 7.1 Current test status
 
-**当前无单元测试**。`src/Tests/Doctheca.Tests/` 目录下不存在 `DocumentAnalysisServiceTests.cs`,元分析相关功能目前零测试覆盖。
+**No unit tests at present.** `DocumentAnalysisServiceTests.cs` does not exist under `src/Tests/Doctheca.Tests/`; the metadata analysis functionality currently has zero test coverage.
 
-### 7.2 建议单元测试方向 (UT)
+### 7.2 Suggested unit test directions (UT)
 
-以下测试方向基于纯逻辑 `internal` 可测方法设计,不依赖 LLM HTTP 或数据库:
+The following test directions are designed around pure-logic `internal` testable methods, with no dependency on LLM HTTP or the database:
 
 - `DocumentAnalysisPromptBuilder.BuildMetadataAnalysisPrompt(string textPreview)`
 - `DocumentAnalysisResponseParser.ParseMetadataAnalysis(string response, ILogger<DocumentAnalysisService> logger, JsonSerializerOptions jsonOptions)`
 - `DocumentAnalysisService.ParseTokenCount(string? value)`
 
-| # | 建议覆盖方向 | 涉及方法 | 覆盖 |
+| # | Suggested coverage | Methods involved | Covers |
 |---|------------|---------|------|
-| UT-DM-01 | 空文本/空白文本 → `AnalyzeMetadataAsync` 返回 null | `AnalyzeMetadataAsync` | FR-04, FR-05 |
-| UT-DM-02 | `ChunkSize <= 0`(LLM 未初始化)→ 返回 null | `AnalyzeMetadataAsync` | FR-05 |
-| UT-DM-03 | 有效 JSON 响应 → 返回正确 subject/grade/year | `DocumentAnalysisResponseParser.ParseMetadataAnalysis` | FR-03, FR-04 |
-| UT-DM-04 | JSON 中字段为空字符串 / 空白 → 视为 null | `DocumentAnalysisResponseParser.ParseMetadataAnalysis` | FR-04 |
-| UT-DM-05 | JSON 中字段为 `"null"` 字符串字面量 → 视为 null | `DocumentAnalysisResponseParser.ParseMetadataAnalysis` | FR-04 |
-| UT-DM-06 | 无效 JSON → 返回 null | `DocumentAnalysisResponseParser.ParseMetadataAnalysis` | FR-05 |
-| UT-DM-07 | 长文本输入 → 截断到 2000 字符 | `AnalyzeMetadataAsync` | FR-04 |
-| UT-DM-08 | `BuildMetadataAnalysisPrompt` 包含学科/年级/年份说明 | `DocumentAnalysisPromptBuilder.BuildMetadataAnalysisPrompt` | FR-04 |
-| UT-DM-09 | `BuildMetadataAnalysisPrompt` 不含拆段策略关键词 | `DocumentAnalysisPromptBuilder.BuildMetadataAnalysisPrompt` | FR-04 |
-| UT-DM-10 | markdown 代码块包装的 JSON 可正确解析 | `DocumentAnalysisResponseParser.ParseMetadataAnalysis` | FR-04 |
-| UT-DM-11 | `"128K"` / `"1M"` / 纯数字 → 正确解析 token 数 | `DocumentAnalysisService.ParseTokenCount` | 初始化逻辑 |
+| UT-DM-01 | Empty/whitespace text → `AnalyzeMetadataAsync` returns null | `AnalyzeMetadataAsync` | FR-04, FR-05 |
+| UT-DM-02 | `ChunkSize <= 0` (LLM not initialized) → returns null | `AnalyzeMetadataAsync` | FR-05 |
+| UT-DM-03 | Valid JSON response → returns correct subject/grade/year | `DocumentAnalysisResponseParser.ParseMetadataAnalysis` | FR-03, FR-04 |
+| UT-DM-04 | JSON fields are empty strings / whitespace → treated as null | `DocumentAnalysisResponseParser.ParseMetadataAnalysis` | FR-04 |
+| UT-DM-05 | JSON field is the `"null"` string literal → treated as null | `DocumentAnalysisResponseParser.ParseMetadataAnalysis` | FR-04 |
+| UT-DM-06 | Invalid JSON → returns null | `DocumentAnalysisResponseParser.ParseMetadataAnalysis` | FR-05 |
+| UT-DM-07 | Long text input → truncated to 2000 characters | `AnalyzeMetadataAsync` | FR-04 |
+| UT-DM-08 | `BuildMetadataAnalysisPrompt` contains subject/grade/year instructions | `DocumentAnalysisPromptBuilder.BuildMetadataAnalysisPrompt` | FR-04 |
+| UT-DM-09 | `BuildMetadataAnalysisPrompt` contains no segmentation strategy keywords | `DocumentAnalysisPromptBuilder.BuildMetadataAnalysisPrompt` | FR-04 |
+| UT-DM-10 | JSON wrapped in a markdown code block parses correctly | `DocumentAnalysisResponseParser.ParseMetadataAnalysis` | FR-04 |
+| UT-DM-11 | `"128K"` / `"1M"` / plain numbers → token counts parsed correctly | `DocumentAnalysisService.ParseTokenCount` | Initialization logic |
 
-### 7.3 建议集成测试方向 (IT)
+### 7.3 Suggested integration test directions (IT)
 
-| # | 建议覆盖方向 | 覆盖 |
+| # | Suggested coverage | Covers |
 |---|------------|------|
-| IT-DM-01 | 解析完成后元数据全有值时不调用 LLM | AC-03 |
-| IT-DM-02 | 解析完成后元数据缺失时调用 LLM 填充 | AC-04 |
-| IT-DM-03 | LLM 失败不影响解析状态 | AC-05 |
-| IT-DM-04 | LLM 未配置时跳过分析 | AC-06 |
-| IT-DM-05 | 手动设置元数据后 OpenSearch 同步刷新 | AC-07 |
-| IT-DM-06 | LLM 不覆盖已有元数据 | AC-08 |
+| IT-DM-01 | After parsing completes, the LLM is not called when all metadata fields have values | AC-03 |
+| IT-DM-02 | After parsing completes, the LLM is called to fill missing metadata | AC-04 |
+| IT-DM-03 | LLM failure does not affect the parse status | AC-05 |
+| IT-DM-04 | Analysis is skipped when the LLM is not configured | AC-06 |
+| IT-DM-05 | OpenSearch is refreshed in sync after manually setting metadata | AC-07 |
+| IT-DM-06 | The LLM does not overwrite existing metadata | AC-08 |
 
-## 8. 影响范围
+## 8. Impact scope
 
-| 组件 | 影响 |
+| Component | Impact |
 |------|------|
-| `document_files` 表 | 新增 3 列（nullable） |
-| `DocumentFileEndpoints` | 新增 PUT 端点 |
-| `StructaDocParseWorker` | 解析完成后增加元数据分析步骤 |
-| `DocumentAnalysisService` | 新增 AnalyzeMetadataAsync 方法（不修改现有方法） |
-| `OpenSearchIndexService` | 新增 UpdateDocumentFileMetadataAsync 方法 |
-| 前端管理页 | 后续可添加元数据显示/编辑（本期不实现） |
-| 部署脚本 | 无变更（复用现有 LLM 配置） |
+| `document_files` table | 3 new columns (nullable) |
+| `DocumentFileEndpoints` | New PUT endpoint |
+| `StructaDocParseWorker` | Metadata analysis step added after parsing completes |
+| `DocumentAnalysisService` | New AnalyzeMetadataAsync method (existing methods unchanged) |
+| `OpenSearchIndexService` | New UpdateDocumentFileMetadataAsync method |
+| Admin frontend page | Metadata display/edit can be added later (not implemented in this iteration) |
+| Deployment scripts | No change (reuses the existing LLM configuration) |
 
-## 9. 部署脚本
+## 9. Deployment scripts
 
-**不修改**。现有 `start.sh` 中的 `LLM_API_KEY` / `LLM_BASE_URL` / `LLM_MODEL` 配置保留，`AnalyzeMetadataAsync` 复用同一套 `LlmDocumentAnalysis` 配置。
+**Not modified.** The existing `LLM_API_KEY` / `LLM_BASE_URL` / `LLM_MODEL` configuration in `start.sh` is kept; `AnalyzeMetadataAsync` reuses the same `LlmDocumentAnalysis` configuration.

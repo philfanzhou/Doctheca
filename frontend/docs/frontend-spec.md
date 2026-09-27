@@ -1,294 +1,294 @@
-# Doctheca Admin 前端规格
+# Doctheca Admin Frontend Specification
 
-## 1. 概述
+## 1. Overview
 
-Doctheca Admin 是文档库的管理后台前端,供本地管理员上传文档、触发解析（StructaDoc 管线，ADR-0009）、查看解析结果、测试检索功能。
+Doctheca Admin is the management back-office frontend of the document library, used by local administrators to upload documents, trigger parsing (StructaDoc pipeline, ADR-0009), view parse results and test retrieval.
 
-- 技术栈:Vue 3.5 + TypeScript + Vite + Element Plus(表单/分页控件)+ 手写 SCSS design-token 系统(展示层组件)
-- 部署:由 Doctheca 后端 Host 静态托管(`wwwroot/`),与后端同源,无需独立部署
-- 访问:HTTP `:5012`
+- Tech stack: Vue 3.5 + TypeScript + Vite + Element Plus (form/pagination controls) + a hand-written SCSS design-token system (presentation-layer components)
+- Deployment: statically hosted by the Doctheca backend Host (`wwwroot/`), same-origin with the backend, no separate deployment needed
+- Access: HTTP `:5012`
 
-## 2. 依赖策略
+## 2. Dependency Policy
 
-**Element Plus 作为表单/分页 UI 库(按 ADR-001 引入),展示层组件(button / card / table / drawer / modal / toast / sidebar / topbar 等)按 2026-07-20 重设计稿手写实现。**
+**Element Plus serves as the form/pagination UI library (introduced per ADR-001); presentation-layer components (button / card / table / drawer / modal / toast / sidebar / topbar, etc.) are implemented by hand according to the 2026-07-20 redesign mockup.**
 
-迁移令:ADR-001 + Redesign-2026-07-Admin-Console.md(`docs/overview/`)。
+Migration mandate: ADR-001 + Redesign-2026-07-Admin-Console.md (`docs/overview/`).
 
-| 依赖 | 用途 | 必要性 |
+| Dependency | Purpose | Necessity |
 |------|------|--------|
-| `vue` | 框架(3.5) | 必需 |
-| `typescript` | 类型 | 必需 |
-| `vite` | 构建 | 必需 |
-| `axios` | HTTP 请求 | 必需 |
-| `element-plus` | 表单/分页控件(ElInput/ElSelect/ElInputNumber/ElPagination/ElSwitch/ElCheckbox/ElMessageBox) | 必需 |
-| `element-plus/theme-chalk` | SCSS 主题(主色 token 镜像) | 必需 |
-| `sass` | SCSS 编译 | 必需 |
-| `unplugin-auto-import` / `unplugin-vue-components` | EP 组件按需自动导入 | 必需 |
+| `vue` | Framework (3.5) | Required |
+| `typescript` | Types | Required |
+| `vite` | Build | Required |
+| `axios` | HTTP requests | Required |
+| `element-plus` | Form/pagination controls (ElInput/ElSelect/ElInputNumber/ElPagination/ElSwitch/ElCheckbox/ElMessageBox) | Required |
+| `element-plus/theme-chalk` | SCSS theme (primary-color token mirror) | Required |
+| `sass` | SCSS compilation | Required |
+| `unplugin-auto-import` / `unplugin-vue-components` | On-demand auto-import of EP components | Required |
 
-**不在依赖内:**
-- 其他 UI 库(Naive / Arco / Ant Design Vue / Vuetify)
-- 图表库(SVG 折线/甜甜圈图由 `ChartLine.vue` / `ChartDonut.vue` 原生描画)
-- `marked`(解析结果 Markdown 以 `<pre>` 原文展示)
-- `@element-plus/icons-vue`(改用自维护 `utils/icons.ts`,27 个线性 SVG 图标)
+**Not among the dependencies:**
+- Other UI libraries (Naive / Arco / Ant Design Vue / Vuetify)
+- Chart libraries (SVG line/donut charts are drawn natively by `ChartLine.vue` / `ChartDonut.vue`)
+- `marked` (parse-result Markdown is shown verbatim in a `<pre>`)
+- `@element-plus/icons-vue` (replaced by the self-maintained `utils/icons.ts`, 27 linear SVG icons)
 
-## 3. 访问控制
+## 3. Access Control
 
-Doctheca 管理后台使用 SignaCore bootstrap 管理员账户登录：
+The Doctheca admin console logs in with the SignaCore bootstrap administrator account:
 
-- 应用启动先调用 `GET /admin/auth/session`；有效管理员会话加载管理界面，否则显示登录页。
-- 登录页调用 `POST /admin/auth/login`，不预填或硬编码管理员用户名/密码。
-- Access Token 与 Refresh Token 仅由后端保存到 HttpOnly、SameSite=Strict Cookie；前端不读取 Token，不写入 localStorage/sessionStorage。
-- 共享 Axios 客户端遇到管理 API 401 时只自动调用一次 `/admin/auth/refresh`，并发请求共享同一 refresh Promise；刷新失败回到登录页。
-- 403 显示“无管理员权限”，不自动重试。
-- 退出调用 `/admin/auth/logout`，后端撤销 Refresh Token并清除 Cookie，前端立即回到登录页。
-- 静态文件与登录页面匿名加载，避免“未登录无法加载登录页”的死锁。
+- On startup the app first calls `GET /admin/auth/session`; a valid admin session loads the admin UI, otherwise the login page is shown.
+- The login page calls `POST /admin/auth/login` and does not prefill or hardcode the admin username/password.
+- Access and refresh tokens are stored only by the backend in HttpOnly, SameSite=Strict cookies; the frontend never reads tokens and never writes them to localStorage/sessionStorage.
+- When the shared Axios client hits a 401 on an admin API, it calls `/admin/auth/refresh` automatically only once, and concurrent requests share the same refresh promise; on refresh failure it returns to the login page.
+- 403 shows "no admin permission" and does not retry automatically.
+- Logout calls `/admin/auth/logout`; the backend revokes the refresh token and clears the cookies, and the frontend immediately returns to the login page.
+- Static files and the login page load anonymously, avoiding the "cannot load the login page without being logged in" deadlock.
 
-> 后端在登录、刷新和每次管理 API 请求中验证 Identity JWT；只有 `role=admin` 可以建立并使用管理会话。
+> The backend validates the Identity JWT on login, refresh and every admin API request; only `role=admin` can establish and use an admin session.
 
-## 4. 页面结构
+## 4. Page Structure
 
-### 4.1 整体布局(App.vue)
+### 4.1 Overall Layout (App.vue)
 
 ```
 ┌────────────────────────────────────────────┐
-│ Sidebar  │ Topbar(面包屑 + 时钟 + env-tag) │
-│ 深色侧栏  ├────────────────────────────────┤
-│  - Brand  │  #view(动态视图)                │
-│  - 概览    │   - OverviewPage (#overview)    │
-│  - 文档管理│   - DocManagePage (#docs)       │
-│  - 解析结果│   - DocDetailPage (#detail/:id) │
-│  - 检索测试│   - ParseResultsPage (#results) │
+│ Sidebar  │ Topbar (breadcrumb + clock + env-tag) │
+│ Dark sidebar ├────────────────────────────────┤
+│  - Brand  │  #view (dynamic views)          │
+│  - Overview │   - OverviewPage (#overview)    │
+│  - Doc mgmt │   - DocManagePage (#docs)       │
+│  - Results │   - DocDetailPage (#detail/:id) │
+│  - Search  │   - ParseResultsPage (#results) │
 │  - Foot   │   - SearchPage (#search)        │
 └────────────────────────────────────────────┘
 ```
 
-- **路由**:Hash 路由(`#overview` / `#docs` / `#detail/:id` / `#results` / `#search`),由 `App.vue` 解析,不引入 vue-router
-- **视图切换过渡**:`#view` 容器在切换时添加 `.leaving` class 触发 150ms 模糊+位移过渡,结束后 swap 内容
-- **导航项**:概览、文档管理、解析结果、检索测试(4 项);`detail` 状态下侧栏高亮"文档管理"
-- **侧栏指示器**:`Sidebar.vue` 内置 `.nav-indicator` 滑块,active 切换时 0.22s spring translateY 跟随
-- **移动端**:`window.innerWidth < 900` 时,Topbar 显示 hamburger 按钮,侧栏转为抽屉式
-- **provide/inject**:`navigate` / `openDocDetail` / `backToDocs` 三个函数 provide 给后代视图
+- **Routing**: hash routing (`#overview` / `#docs` / `#detail/:id` / `#results` / `#search`), parsed by `App.vue`; vue-router is not introduced
+- **View-switch transition**: on switch the `#view` container gets a `.leaving` class that triggers a 150ms blur + translate transition, then the content is swapped when it ends
+- **Nav items**: Overview, Doc Management, Parse Results, Search Test (4 items); in the `detail` state the sidebar highlights "Doc Management"
+- **Sidebar indicator**: `Sidebar.vue` has a built-in `.nav-indicator` slider that follows the active switch with a 0.22s spring translateY
+- **Mobile**: when `window.innerWidth < 900`, the Topbar shows a hamburger button and the sidebar turns into a drawer
+- **provide/inject**: the three functions `navigate` / `openDocDetail` / `backToDocs` are provided to descendant views
 
-### 4.2 OverviewPage(概览,新增)
+### 4.2 OverviewPage (Overview, new)
 
-- **数据来源**:`client.listDocumentFiles(1, 100)` + `client.listDocumentParses(1, 100)` 并发拉取
-- **4 张统计卡**(`StatCard.vue`):文档总数、解析中、已解析、解析失败,数字滚动 0.9s cubic ease-out
-- **解析状态甜甜圈**(`ChartDonut.vue`):4 段(已解析/未解析/解析中/失败),stroke-dasharray 描画动画 0.9s,逐段 0.12s 错峰;中心显示总数
-- **解析吞吐折线**(`ChartLine.vue`):近 30 天完成的解析任务数(由 parses.parsedAt 分桶),Catmull-Rom 平滑曲线,stroke-dashoffset 描画动画 1.1s
-- **最近上传 Feed**:前 5 条文档记录,点击行 inject 调用 `openDocDetail(f.id)` 进入详情页
+- **Data source**: `client.listDocumentFiles(1, 100)` + `client.listDocumentParses(1, 100)` fetched concurrently
+- **4 stat cards** (`StatCard.vue`): total documents, parsing, parsed, parse failed; numbers count up over 0.9s cubic ease-out
+- **Parse-status donut** (`ChartDonut.vue`): 4 segments (parsed/unparsed/parsing/failed), stroke-dasharray drawing animation 0.9s, staggered 0.12s per segment; the center shows the total count
+- **Parse-throughput line chart** (`ChartLine.vue`): parse tasks completed in the last 30 days (bucketed by parses.parsedAt), Catmull-Rom smoothed curve, stroke-dashoffset drawing animation 1.1s
+- **Recent uploads feed**: the first 5 document records; clicking a row uses the injected `openDocDetail(f.id)` to enter the detail page
 
-### 4.3 DocManagePage(文档管理)
+### 4.3 DocManagePage (Doc Management)
 
-- **StatusStrip**:4 档状态切换(全部/待解析/解析中/失败),active 态 primary 边框 + 3px ring;选中状态会作为 `parseStatus` 参数传给 `client.listDocumentFiles`,触发后端过滤
-- **upload-zone**:点击 + 拖拽上传,进度条 `progress-track` + `progress-fill`
-- **table.data-table**:自定义表格(文件名/类型/上传时间/解析状态/操作),行可点击进入详情
-- **轮询**:解析中状态自动轮询(5s 间隔,无活跃任务时停止)
-- **分页**:EP `el-pagination`
-- **业务逻辑保留**:`client.listDocumentFiles / uploadDocumentFile / parseDocumentFile / deleteDocumentFile`,删除确认 `ElMessageBox.confirm`
-- **目录结构**:逻辑抽取到 `views/DocManagePage/useDocManage.ts`,子组件为 `FileUploadZone.vue` / `FileListTable.vue`
+- **StatusStrip**: 4-state switch (All/Pending parse/Parsing/Failed); the active state has a primary border + 3px ring; the selected state is passed to `client.listDocumentFiles` as the `parseStatus` parameter, triggering backend filtering
+- **upload-zone**: click + drag-and-drop upload, progress bar `progress-track` + `progress-fill`
+- **table.data-table**: custom table (file name/type/upload time/parse status/actions); rows are clickable to enter the detail
+- **Polling**: the parsing status polls automatically (5s interval, stops when there are no active tasks)
+- **Pagination**: EP `el-pagination`
+- **Business logic preserved**: `client.listDocumentFiles / uploadDocumentFile / parseDocumentFile / deleteDocumentFile`; delete confirmation via `ElMessageBox.confirm`
+- **Directory structure**: logic extracted into `views/DocManagePage/useDocManage.ts`; subcomponents are `FileUploadZone.vue` / `FileListTable.vue`
 
-### 4.4 DocDetailPage(文档详情,新增)
+### 4.4 DocDetailPage (Document Detail, new)
 
-- **数据来源**:`client.getDocumentFile(id)`(返回 `DocumentFileDetail`,含 parses 数组)
-- **路由参数**:`docId` prop,由 `App.vue` 注入
-- **页面结构**:返回按钮 + 文件信息(文件名/类型/上传时间)+ 4 张迷你统计卡(已解析/解析中/失败/VLM/Pipeline 计数)+ parses 列表
-- **每条 parse 卡片**:
-  - 顶部:模型 badge(VLM=amber / Pipeline=green)+ 状态 badge + 解析时间 + 删除按钮
-  - 错误信息:error-box(红色背景)
-  - 操作按钮组(parsed 状态):Markdown / HTML 预览 / JSON / V2 / Model / Layout / 图片 / 导出 MD / 导出 HTML
-  - 解析中状态:渐变进度条 + "5 秒后自动刷新"提示
-- **业务逻辑保留**:与 ParseResultsPage 等价的 preview/export/delete 调用,使用 `useToast` 替代 `ElMessage`
-- **轮询**:有 pending/parsing 状态时 5s 轮询 `getDocumentFile(id)`
-- **安全预览**:Markdown / JSON / Images 预览统一走 `utils/preview.ts`,通过 `Blob` + `URL.createObjectURL` 打开新窗口,避免 `document.write`;新窗口带 `noopener,noreferrer`
-- **目录结构**:逻辑抽取到 `views/DocDetailPage/useDocumentDetail.ts`,子组件为 `FileHeader.vue` / `FileInfoCard.vue` / `ParseStatsCard.vue` / `ParseRecordCard.vue`
+- **Data source**: `client.getDocumentFile(id)` (returns `DocumentFileDetail`, including the parses array)
+- **Route parameter**: `docId` prop, injected by `App.vue`
+- **Page structure**: back button + file info (file name/type/upload time) + 4 mini stat cards (parsed/parsing/failed/VLM/Pipeline counts) + parses list
+- **Each parse card**:
+  - Top: model badge (VLM=amber / Pipeline=green) + status badge + parse time + delete button
+  - Error message: error-box (red background)
+  - Action button group (parsed state): Markdown / HTML preview / JSON / V2 / Model / Layout / Images / Export MD / Export HTML
+  - Parsing state: gradient progress bar + "auto-refresh in 5 seconds" hint
+- **Business logic preserved**: preview/export/delete calls equivalent to ParseResultsPage, using `useToast` instead of `ElMessage`
+- **Polling**: polls `getDocumentFile(id)` every 5s while there are pending/parsing states
+- **Safe preview**: Markdown / JSON / Images previews all go through `utils/preview.ts`, opening a new window via `Blob` + `URL.createObjectURL` and avoiding `document.write`; new windows carry `noopener,noreferrer`
+- **Directory structure**: logic extracted into `views/DocDetailPage/useDocumentDetail.ts`; subcomponents are `FileHeader.vue` / `FileInfoCard.vue` / `ParseStatsCard.vue` / `ParseRecordCard.vue`
 
-### 4.5 ParseResultsPage(解析结果)
+### 4.5 ParseResultsPage (Parse Results)
 
-- **StatusStrip**:4 档状态切换(全部/已解析/解析中/失败);选中状态会作为 `status` 参数传给 `client.listDocumentParses`,触发后端过滤
-- **table.data-table**:文件名/模型/状态/解析时间/错误信息/操作列
-- **按钮显示逻辑**:status=parsed 时显示所有预览/导出按钮;始终显示删除按钮
-- **VLM 和 Pipeline 模式统一显示所有按钮**(不再按 modelVersion 过滤)
-- **业务逻辑保留**:`client.listDocumentParses / deleteDocumentParse / exportParseMarkdown / exportParseHtml`,以及 `client.getDocumentFile(fileId)` 拉取详情后调用 `parse.{markdownContent|contentList|contentListV2|modelJson|layoutJson|images}`
-- **分页**:EP `el-pagination`
-- **安全预览**:Markdown / JSON / Images 预览统一走 `utils/preview.ts`,通过 `Blob` + `URL.createObjectURL` 打开新窗口,避免 `document.write`;新窗口带 `noopener,noreferrer`
-- **目录结构**:逻辑抽取到 `views/ParseResultsPage/useParseResults.ts`,子组件为 `ParseResultsTable.vue`
+- **StatusStrip**: 4-state switch (All/Parsed/Parsing/Failed); the selected state is passed to `client.listDocumentParses` as the `status` parameter, triggering backend filtering
+- **table.data-table**: file name/model/status/parse time/error message/actions columns
+- **Button visibility logic**: when status=parsed all preview/export buttons are shown; the delete button is always shown
+- **VLM and Pipeline modes uniformly show all buttons** (no longer filtered by modelVersion)
+- **Business logic preserved**: `client.listDocumentParses / deleteDocumentParse / exportParseMarkdown / exportParseHtml`, plus `client.getDocumentFile(fileId)` to fetch the detail and then access `parse.{markdownContent|contentList|contentListV2|modelJson|layoutJson|images}`
+- **Pagination**: EP `el-pagination`
+- **Safe preview**: Markdown / JSON / Images previews all go through `utils/preview.ts`, opening a new window via `Blob` + `URL.createObjectURL` and avoiding `document.write`; new windows carry `noopener,noreferrer`
+- **Directory structure**: logic extracted into `views/ParseResultsPage/useParseResults.ts`; subcomponent is `ParseResultsTable.vue`
 
-### 4.6 SearchPage(检索测试)
+### 4.6 SearchPage (Search Test)
 
-- **检索栏**:关键词输入 + 短语查询 checkbox + 搜索按钮 + 高级筛选按钮(带 active dot)+ 清空按钮 + Dev 模式切换
-- **结果列表**(卡片式,取代 el-table):
-  - 卡片头:页码 badge + 块类型 badge + subType + 匹配类型 badge + textFormat badge + 序号
-  - 卡片体:文档标题 + 匹配文本(关键词 `<mark>` 高亮)+ caption 预览
-  - 卡片底:BM25 score bar + mineruScore score bar + textLevel + bbox + 创建时间 + "查看 blockData"展开按钮
-- **展开详情**:BM25 / mineruScore / bbox / textLevel / Segment ID 5 张 detail-cell + Dev 模式下展示 dev-block(blockData 原始 JSON,深色背景)
-- **[Gen-2] 高级筛选抽屉**(AppDrawer):
-  - blockType(el-select filterable + allow-create,候选见原 spec)
+- **Search bar**: keyword input + phrase-query checkbox + search button + advanced-filter button (with active dot) + clear button + Dev mode toggle
+- **Result list** (card style, replacing el-table):
+  - Card header: page-number badge + block-type badge + subType + match-type badge + textFormat badge + sequence number
+  - Card body: document title + matched text (keywords highlighted with `<mark>`) + caption preview
+  - Card footer: BM25 score bar + mineruScore score bar + textLevel + bbox + creation time + "view blockData" expand button
+- **Expanded detail**: 5 detail-cells for BM25 / mineruScore / bbox / textLevel / Segment ID + in Dev mode a dev-block (raw blockData JSON, dark background)
+- **[Gen-2] Advanced filter drawer** (AppDrawer):
+  - blockType (el-select filterable + allow-create; see the original spec for candidates)
   - blockSubType / pageNumber / textLevel / textFormat / parseId / documentFileId / hasImage
-  - 8 个 minerU 过滤参数全部保留;空值不透传(零回归)
-- **业务逻辑保留**:`client.searchTest(query, phrase, 20, undefined, ...8个minerU参数)`,调用顺序与原 ParseResultsPage 一致
-- **检索关键词高亮**:`highlightText(text, query)` 用 `<mark>` 包裹命中词,匹配文本通过 `v-html` 渲染,使用 `escapeHtml` 安全转义
-- **目录结构**:逻辑抽取到 `views/SearchPage/useSearch.ts` + `searchFormatters.ts`,子组件为 `SearchBar.vue` / `SearchFiltersDrawer.vue` / `SearchResultCard.vue`
+  - All 8 minerU filter parameters are preserved; empty values are not passed through (zero regression)
+- **Business logic preserved**: `client.searchTest(query, phrase, 20, undefined, ...8 minerU parameters)`, with the same call order as the original ParseResultsPage
+- **Keyword highlighting**: `highlightText(text, query)` wraps hits in `<mark>`; matched text is rendered via `v-html` and safely escaped with `escapeHtml`
+- **Directory structure**: logic extracted into `views/SearchPage/useSearch.ts` + `searchFormatters.ts`; subcomponents are `SearchBar.vue` / `SearchFiltersDrawer.vue` / `SearchResultCard.vue`
 
-## 5. 样式规范
+## 5. Style Standards
 
-### 5.1 全局样式层级
+### 5.1 Global Style Hierarchy
 
-`main.ts` 引入顺序(后者覆盖前者):
+Import order in `main.ts` (later imports override earlier ones):
 
-1. `./styles/element-variables.scss` — EP 主题 SCSS(`@forward` + `@use` 注入主色 `#4F46E5`)
-2. `./styles/tokens.scss` — `:root` CSS 变量(逐字搬运自样稿,与 EP 变量镜像)
-3. `./styles/app.scss` — `@use` 聚合入口,按职责拆分为 SCSS partials(`base/` / `layout/` / `components/` / `pages/` / `utilities/`)
-4. `./style.css` — 排版辅助类(`.page-header` / `.page-title` / `.page-subtitle`)
+1. `./styles/element-variables.scss` — EP theme SCSS (`@forward` + `@use` injecting the primary color `#4F46E5`)
+2. `./styles/tokens.scss` — `:root` CSS variables (copied verbatim from the mockup, mirroring the EP variables)
+3. `./styles/app.scss` — `@use` aggregation entry, split by responsibility into SCSS partials (`base/` / `layout/` / `components/` / `pages/` / `utilities/`)
+4. `./style.css` — typography helper classes (`.page-header` / `.page-title` / `.page-subtitle`)
 
-`app.scss` 不再包含全局元素 reset 或 ID 选择器:
-- reset 限定在 `.doctheca-admin *` 作用域内
-- `#app` / `#view` / `#toast-root` 改为 `.app` / `.view` / `.toast-root`
-- 元素选择器迁移到对应 class,避免污染 Element Plus 默认样式
+`app.scss` no longer contains a global element reset or ID selectors:
+- the reset is confined to the `.doctheca-admin *` scope
+- `#app` / `#view` / `#toast-root` became `.app` / `.view` / `.toast-root`
+- element selectors were migrated to the corresponding classes to avoid polluting Element Plus default styles
 
-### 5.2 Design Token(tokens.scss)
+### 5.2 Design Tokens (tokens.scss)
 
-| Token 类别 | 关键变量 | 来源 |
+| Token category | Key variables | Source |
 |------|------|------|
-| 主色 | `--primary: #4f46e5` / `--primary-hover: #4338ca` / `--primary-soft: #eef2ff` / `--primary-line: #c7d2fe` | 样稿 |
-| 文字色 | `--ink: #0f172a` / `--text: #1f2937` / `--text-2: #475569` / `--text-3: #94a3b8` | 样稿 |
-| 背景/表面 | `--bg: #f8fafc` / `--surface: #ffffff` / `--surface-2: #f1f5f9` | 样稿 |
-| 边框 | `--border: #e2e8f0` / `--border-2: #eef2f7` | 样稿 |
-| 阴影 | `--shadow-sm` / `--shadow` / `--shadow-hover` / `--shadow-float` | 样稿 |
-| 动效曲线 | `--ease: cubic-bezier(0.4, 0, 0.2, 1)` / `--spring: cubic-bezier(0.34, 1.56, 0.64, 1)` | 样稿 |
-| 字体 | `--mono: 'SF Mono', Menlo, Monaco, Consolas, monospace` | 样稿 |
-| EP 镜像 | `--el-color-primary: var(--primary)` 等 | 同步主色 |
+| Primary color | `--primary: #4f46e5` / `--primary-hover: #4338ca` / `--primary-soft: #eef2ff` / `--primary-line: #c7d2fe` | Mockup |
+| Text colors | `--ink: #0f172a` / `--text: #1f2937` / `--text-2: #475569` / `--text-3: #94a3b8` | Mockup |
+| Background/surface | `--bg: #f8fafc` / `--surface: #ffffff` / `--surface-2: #f1f5f9` | Mockup |
+| Border | `--border: #e2e8f0` / `--border-2: #eef2f7` | Mockup |
+| Shadow | `--shadow-sm` / `--shadow` / `--shadow-hover` / `--shadow-float` | Mockup |
+| Motion curves | `--ease: cubic-bezier(0.4, 0, 0.2, 1)` / `--spring: cubic-bezier(0.34, 1.56, 0.64, 1)` | Mockup |
+| Font | `--mono: 'SF Mono', Menlo, Monaco, Consolas, monospace` | Mockup |
+| EP mirror | `--el-color-primary: var(--primary)` etc. | Synced with the primary color |
 
-### 5.3 组件映射
+### 5.3 Component Mapping
 
-| 组件类别 | 实现方式 |
+| Component category | Implementation |
 |------|------|
-| 按钮(`.btn` / `.btn-ghost` / `.btn-danger` / `.btn-sm`) | 手写 SCSS class,设计 token 驱动 |
-| 卡片(`.card` / `.hoverable` / `.card-head` / `.card-title` / `.card-sub`) | 手写 SCSS class |
-| 表格(`table.data-table` / `.table-wrap`) | 手写原生 `<table>` + SCSS |
-| 徽章(`.badge.gray/green/amber/red/blue/indigo` + `.dot` + `.pulse`) | 手写 SCSS class |
-| Chips / Strip / Stat / Feed | 手写 SCSS class(`StatusStrip.vue` / `StatCard.vue` 等组件使用) |
-| 抽屉(`AppDrawer.vue` + `.drawer` + `.overlay`) | Teleport + 手写 SCSS,spring 入场 0.3s |
-| 弹窗(`AppModal.vue` + `.modal` + `.overlay`) | Teleport + 手写 SCSS,scale + translateY spring 入场 |
-| Toast(`AppToast.vue` + `.toast` + `useToast`) | Teleport + 全局单例,success/error 两态,spring 入场 0.3s |
-| 图表(`ChartLine.vue` / `ChartDonut.vue`) | 原生 SVG,stroke-dashoffset/dasharray 描画动画;`ChartLine` 的 `labels` 在拼入 SVG 前经 HTML/SVG 转义 |
-| 图标(`Icon` / `iconHtml(name)`) | `utils/icons.ts`,27 个线性 SVG,stroke 1.6 round |
-| 输入框 / Select / 数字输入 / Switch / Checkbox | EP 组件(`el-input` / `el-select` / `el-input-number` / `el-switch` / `el-checkbox`) |
-| 分页 | EP `el-pagination`(layout="sizes, prev, pager, next, jumper") |
-| 确认对话框 | EP `ElMessageBox.confirm`(保留,与 window.confirm 等价) |
-| Loading | EP `v-loading` 指令 |
-| 错误/成功提示 | `useToast()` composable,替代 `ElMessage` |
+| Buttons (`.btn` / `.btn-ghost` / `.btn-danger` / `.btn-sm`) | Hand-written SCSS classes, driven by design tokens |
+| Cards (`.card` / `.hoverable` / `.card-head` / `.card-title` / `.card-sub`) | Hand-written SCSS classes |
+| Tables (`table.data-table` / `.table-wrap`) | Hand-written native `<table>` + SCSS |
+| Badges (`.badge.gray/green/amber/red/blue/indigo` + `.dot` + `.pulse`) | Hand-written SCSS classes |
+| Chips / Strip / Stat / Feed | Hand-written SCSS classes (used by components such as `StatusStrip.vue` / `StatCard.vue`) |
+| Drawer (`AppDrawer.vue` + `.drawer` + `.overlay`) | Teleport + hand-written SCSS, spring entrance 0.3s |
+| Modal (`AppModal.vue` + `.modal` + `.overlay`) | Teleport + hand-written SCSS, scale + translateY spring entrance |
+| Toast (`AppToast.vue` + `.toast` + `useToast`) | Teleport + global singleton, success/error states, spring entrance 0.3s |
+| Charts (`ChartLine.vue` / `ChartDonut.vue`) | Native SVG, stroke-dashoffset/dasharray drawing animation; `ChartLine`'s `labels` are HTML/SVG-escaped before being spliced into the SVG |
+| Icons (`Icon` / `iconHtml(name)`) | `utils/icons.ts`, 27 linear SVGs, stroke 1.6 round |
+| Input / Select / number input / Switch / Checkbox | EP components (`el-input` / `el-select` / `el-input-number` / `el-switch` / `el-checkbox`) |
+| Pagination | EP `el-pagination` (layout="sizes, prev, pager, next, jumper") |
+| Confirm dialog | EP `ElMessageBox.confirm` (kept, equivalent to window.confirm) |
+| Loading | EP `v-loading` directive |
+| Error/success notifications | `useToast()` composable, replacing `ElMessage` |
 
-> 状态映射:`getFileStatusLabel(status)` 返回中文标签;`statusBadgeHtml(status)` 返回 badge HTML 字符串。
+> Status mapping: `getFileStatusLabel(status)` returns Chinese labels; `statusBadgeHtml(status)` returns a badge HTML string.
 
-### 5.4 已清理的死代码
+### 5.4 Cleaned-Up Dead Code
 
-以下 CSS 类已从 style.css 移除(对应功能未实现或已删除):
-- Segment Refinement 相关(`.segment-*`、`.split-*`、`.profile-*`)
-- 旧版弹窗(`.dialog-*`、`.modal-*`)
-- 未使用的过滤器栏(`.filter-bar*`、`.filter-input`)
-- 2026-07-20 重设计:从 ADR-001 EP 组件包装切换为样稿对齐的手写 SCSS class(EP 仅保留表单/分页)
+The following CSS classes have been removed from style.css (the corresponding features were never implemented or were deleted):
+- Segment Refinement related (`.segment-*`, `.split-*`, `.profile-*`)
+- Legacy dialogs (`.dialog-*`, `.modal-*`)
+- Unused filter bar (`.filter-bar*`, `.filter-input`)
+- 2026-07-20 redesign: switched from ADR-001 EP component wrappers to mockup-aligned hand-written SCSS classes (EP kept only for forms/pagination)
 
-## 6. API 客户端
+## 6. API Client
 
-管理业务端点和参数保持不变；所有模块复用带 Cookie 会话与 401/403 处理的共享 Axios 客户端。
+Admin business endpoints and parameters stay unchanged; all modules reuse the shared Axios client with cookie session and 401/403 handling.
 
-客户端按领域拆分为多个模块,`services/docApi.ts` 继续作为兼容 facade 导出 `createDocApiClient` 与所有类型:
+The client is split into multiple modules by domain; `services/docApi.ts` continues to act as a compatibility facade exporting `createDocApiClient` and all types:
 
-| 文件 | 职责 |
+| File | Responsibility |
 |------|------|
-| `services/types.ts` | 共享接口类型(`SearchResult` / `DocumentFile` / `DocumentFileDetail` / `DocumentParse` / `ApiResponse` / `DocPagedResponse`) |
-| `services/httpClient.ts` | 共享 Axios 实例、单次刷新、401 重试和 403 通知 |
-| `services/authApi.ts` | login / refresh / logout / session，会话状态不含 Token |
-| `services/documentApi.ts` | 文档文件相关:上传、列表、详情、解析、删除、导出 Markdown/HTML |
-| `services/parseApi.ts` | 解析记录相关:列表、删除、导出 Markdown/HTML |
-| `services/searchApi.ts` | 检索测试:searchTest |
-| `services/exportApi.ts` | 导出下载:Markdown / HTML blob 下载辅助 |
+| `services/types.ts` | Shared interface types (`SearchResult` / `DocumentFile` / `DocumentFileDetail` / `DocumentParse` / `ApiResponse` / `DocPagedResponse`) |
+| `services/httpClient.ts` | Shared Axios instance, single-flight refresh, 401 retry and 403 notification |
+| `services/authApi.ts` | login / refresh / logout / session; session state contains no tokens |
+| `services/documentApi.ts` | Document files: upload, list, detail, parse, delete, export Markdown/HTML |
+| `services/parseApi.ts` | Parse records: list, delete, export Markdown/HTML |
+| `services/searchApi.ts` | Search test: searchTest |
+| `services/exportApi.ts` | Export downloads: Markdown / HTML blob download helpers |
 | `services/error.ts` | `getDocErrorMessage` |
-| `services/docApi.ts` | 兼容 facade:内部委托到各模块,保留原有导出签名 |
+| `services/docApi.ts` | Compatibility facade: delegates internally to the modules, keeping the original export signatures |
 
-| 方法 | 端点 | 说明 |
+| Method | Endpoint | Description |
 |------|------|------|
-| `login` | `POST /admin/auth/login` | Identity 管理员账号密码登录 |
-| `getSession` | `GET /admin/auth/session` | 获取当前管理员会话 |
-| `refreshSession` | `POST /admin/auth/refresh` | 使用 HttpOnly Refresh Cookie轮换会话 |
-| `logout` | `POST /admin/auth/logout` | 撤销刷新令牌并清理 Cookie |
-| `uploadDocumentFile` | `POST /admin/document-files/upload` | 上传文件(multipart) |
-| `listDocumentFiles` | `GET /admin/document-files` | 文件列表(分页+parseStatus+fileName筛选) |
-| `getDocumentFile` | `GET /admin/document-files/:id` | 文件详情(含 parses + images) |
-| `parseDocumentFile` | `POST /admin/document-files/:id/parse` | 触发解析(modelVersion 参数) |
-| `deleteDocumentFile` | `DELETE /admin/document-files/:id` | 删除文件 |
-| `exportMarkdown` / `exportHtml` | `GET /admin/document-files/:id/export/*` | 导出 |
-| `listDocumentParses` | `GET /admin/document-parses` | 解析记录列表(分页+status+search筛选) |
-| `deleteDocumentParse` | `DELETE /admin/document-parses/:id` | 删除解析记录 |
-| `exportParseMarkdown` / `exportParseHtml` | `GET /admin/document-parses/:id/export/*` | 导出解析结果 |
-| `searchTest` | `GET /admin/documents/search` | 检索测试(8 个 minerU 过滤参数透传) |
+| `login` | `POST /admin/auth/login` | Identity admin account/password login |
+| `getSession` | `GET /admin/auth/session` | Get the current admin session |
+| `refreshSession` | `POST /admin/auth/refresh` | Rotate the session using the HttpOnly refresh cookie |
+| `logout` | `POST /admin/auth/logout` | Revoke the refresh token and clear cookies |
+| `uploadDocumentFile` | `POST /admin/document-files/upload` | Upload a file (multipart) |
+| `listDocumentFiles` | `GET /admin/document-files` | File list (pagination + parseStatus + fileName filters) |
+| `getDocumentFile` | `GET /admin/document-files/:id` | File detail (including parses + images) |
+| `parseDocumentFile` | `POST /admin/document-files/:id/parse` | Trigger parsing (modelVersion parameter) |
+| `deleteDocumentFile` | `DELETE /admin/document-files/:id` | Delete a file |
+| `exportMarkdown` / `exportHtml` | `GET /admin/document-files/:id/export/*` | Export |
+| `listDocumentParses` | `GET /admin/document-parses` | Parse record list (pagination + status + search filters) |
+| `deleteDocumentParse` | `DELETE /admin/document-parses/:id` | Delete a parse record |
+| `exportParseMarkdown` / `exportParseHtml` | `GET /admin/document-parses/:id/export/*` | Export parse results |
+| `searchTest` | `GET /admin/documents/search` | Search test (passes through the 8 minerU filter parameters) |
 
-## 7. 测试
+## 7. Testing
 
-前端**无单元测试框架**(package.json 未配置 vitest/jest)。验证方式:
-1. `npm run build`(vue-tsc 类型检查 + vite 构建)必须通过,零错误零警告
-2. 人工验证匿名加载、错误密码、普通账户拒绝、管理员登录、Cookie 自动刷新、401/403 处理和退出
+The frontend has **no unit-test framework** (package.json configures neither vitest nor jest). Verification approach:
+1. `npm run build` (vue-tsc type check + vite build) must pass with zero errors and zero warnings
+2. Manual verification of anonymous loading, wrong password, regular-account rejection, admin login, automatic cookie refresh, 401/403 handling and logout
 
-后端 UT 不受前端重构影响(前端重构不改变 API 契约)。
+Backend unit tests are unaffected by the frontend refactor (the frontend refactor does not change API contracts).
 
-## 8. 重构记录
+## 8. Refactoring Log
 
-### 2026-07-29: Identity 管理员认证设计
+### 2026-07-29: Identity Admin Authentication Design
 
-- 管理后台恢复应用层认证，只有 Identity JWT 中包含 `role=admin` 的账户可用。
-- 认证材料改为 Access/Refresh HttpOnly Cookie，前端不持有 Token。
-- 新增登录页、启动会话检查、单次刷新、退出和 401/403 处理。
-- 静态文件和 SPA fallback 保持匿名；所有管理业务 API 要求管理员策略。
-- QuestionBank（现外部仓库 Quaestura，ADR-0011）接口移出 `/admin`，改为独立的只读 internal API，不复用浏览器管理员会话（该 internal API 其后已整体移除）。
+- The admin console restored application-layer authentication; only accounts whose Identity JWT contains `role=admin` can use it.
+- Credentials changed to Access/Refresh HttpOnly Cookies; the frontend holds no tokens.
+- Added a login page, startup session check, single-flight refresh, logout and 401/403 handling.
+- Static files and the SPA fallback remain anonymous; all admin business APIs require the admin policy.
+- QuestionBank (now the external repository Quaestura, ADR-0011) endpoints moved out of `/admin` into a separate read-only internal API that does not reuse the browser admin session (that internal API was later removed entirely).
 
-### 2026-07-22: 前端大文件重构与问题修复
+### 2026-07-22: Frontend Large-File Refactor & Bug Fixes
 
-- **输入**:`docs/development/frontend-audit-2026-07.md` 审计结论 + 任务计划 task-10-15
-- **问题修复**:
-  - StatusStrip 在 `DocManagePage` / `ParseResultsPage` 中未实际过滤列表 — 已传入 `parseStatus`/`status` 参数
-  - `document.write` 新窗口预览存在 XSS 风险 — 统一迁移到 `utils/preview.ts`,使用 `Blob` + `URL.createObjectURL`,新窗口带 `noopener,noreferrer`
-  - `ChartLine.vue` 的 `labels` 未转义拼入 SVG — 已增加 HTML/SVG 转义
-- **大文件拆分**:
-  - `styles/app.scss`(1668 行)拆分为 SCSS partials:base/reset、layout/shell、components、pages、utilities
-  - `SearchPage.vue`(610 行)拆分为 `SearchPage/` 目录(SearchPage.vue / SearchBar.vue / SearchFiltersDrawer.vue / SearchResultCard.vue / useSearch.ts / searchFormatters.ts)
-  - `DocDetailPage.vue`(571 行)拆分为 `DocDetailPage/` 目录(DocDetailPage.vue / FileHeader.vue / FileInfoCard.vue / ParseStatsCard.vue / ParseRecordCard.vue / useDocumentDetail.ts)
-  - `ParseResultsPage.vue`(448 行)拆分为 `ParseResultsPage/` 目录(ParseResultsPage.vue / ParseResultsTable.vue / useParseResults.ts)
-  - `DocManagePage.vue`(365 行)拆分为 `DocManagePage/` 目录(DocManagePage.vue / FileUploadZone.vue / FileListTable.vue / useDocManage.ts)
-  - `services/docApi.ts`(252 行)按领域拆分为 `types.ts` / `documentApi.ts` / `parseApi.ts` / `searchApi.ts` / `exportApi.ts` / `error.ts`,`docApi.ts` 保留为兼容 facade
-- **样式污染整改**:
-  - `* { ... }` reset 限定在 `.doctheca-admin *`
-  - `#app` / `#view` / `#toast-root` 改为 `.app` / `.view` / `.toast-root`
-  - 同步更新 `App.vue` / `index.html` / `AppToast.vue`
-- **业务逻辑零改动**:API 端点/参数/校验/轮询/确认框完全等价
+- **Input**: audit findings from `docs/development/frontend-audit-2026-07.md` + task plan task-10-15
+- **Bug fixes**:
+  - StatusStrip did not actually filter the list in `DocManagePage` / `ParseResultsPage` — the `parseStatus`/`status` parameters are now passed
+  - `document.write` new-window previews posed an XSS risk — uniformly migrated to `utils/preview.ts` using `Blob` + `URL.createObjectURL`, with new windows carrying `noopener,noreferrer`
+  - `ChartLine.vue`'s `labels` were spliced into the SVG unescaped — HTML/SVG escaping added
+- **Large-file splits**:
+  - `styles/app.scss` (1668 lines) split into SCSS partials: base/reset, layout/shell, components, pages, utilities
+  - `SearchPage.vue` (610 lines) split into the `SearchPage/` directory (SearchPage.vue / SearchBar.vue / SearchFiltersDrawer.vue / SearchResultCard.vue / useSearch.ts / searchFormatters.ts)
+  - `DocDetailPage.vue` (571 lines) split into the `DocDetailPage/` directory (DocDetailPage.vue / FileHeader.vue / FileInfoCard.vue / ParseStatsCard.vue / ParseRecordCard.vue / useDocumentDetail.ts)
+  - `ParseResultsPage.vue` (448 lines) split into the `ParseResultsPage/` directory (ParseResultsPage.vue / ParseResultsTable.vue / useParseResults.ts)
+  - `DocManagePage.vue` (365 lines) split into the `DocManagePage/` directory (DocManagePage.vue / FileUploadZone.vue / FileListTable.vue / useDocManage.ts)
+  - `services/docApi.ts` (252 lines) split by domain into `types.ts` / `documentApi.ts` / `parseApi.ts` / `searchApi.ts` / `exportApi.ts` / `error.ts`; `docApi.ts` kept as a compatibility facade
+- **Style-pollution remediation**:
+  - `* { ... }` reset confined to `.doctheca-admin *`
+  - `#app` / `#view` / `#toast-root` changed to `.app` / `.view` / `.toast-root`
+  - `App.vue` / `index.html` / `AppToast.vue` updated accordingly
+- **Zero business-logic changes**: API endpoints/parameters/validation/polling/confirm dialogs fully equivalent
 
-### 2026-07-20: 高保真还原样稿重设计
+### 2026-07-20: High-Fidelity Mockup Redesign
 
-- **输入**:`prototype/admin-console-redesign.html`(样稿,Doctheca 部分)
-- **输出**:5 个视图(OverviewPage 新增 / DocManagePage 重写 / DocDetailPage 新增 / ParseResultsPage 重写 / SearchPage 重写)+ 8 个组件(Sidebar / Topbar / AppDrawer / AppModal / AppToast / ChartLine / ChartDonut / StatCard / StatusStrip)+ 3 个 composables(useToast / useCountUp)+ 1 个 icons 工具
-- **样式**:`tokens.scss`(CSS 变量)+ `app.scss`(组件类库)+ `element-variables.scss`(EP 主色 `#4F46E5`)+ `style.css`(排版 helper)
-- **路由**:Hash 路由(4 主页 + detail 子页),provide/inject 跨层级通信
-- **业务逻辑零改动**:`git diff` 纯展示层,API 端点/参数/校验/轮询/确认框完全等价(自查见 `Redesign-2026-07-Admin-Console.md` §业务零改动自查清单)
-- **设计文档**:`docs/overview/Redesign-2026-07-Admin-Console.md`(权威规格,含 design token / 组件模式 / 文件清单 / 业务零改动自查)
-- **EP 保留范围**:el-input / el-select / el-input-number / el-pagination / el-switch / el-checkbox / ElMessageBox(表单与分页控件);其余展示层组件(button / card / table / drawer / modal / toast / sidebar / topbar / charts)全部手写以达高保真
+- **Input**: `prototype/admin-console-redesign.html` (mockup, Doctheca portion)
+- **Output**: 5 views (OverviewPage new / DocManagePage rewritten / DocDetailPage new / ParseResultsPage rewritten / SearchPage rewritten) + 8 components (Sidebar / Topbar / AppDrawer / AppModal / AppToast / ChartLine / ChartDonut / StatCard / StatusStrip) + 3 composables (useToast / useCountUp) + 1 icons utility
+- **Styles**: `tokens.scss` (CSS variables) + `app.scss` (component class library) + `element-variables.scss` (EP primary color `#4F46E5`) + `style.css` (typography helpers)
+- **Routing**: hash routing (4 main pages + detail subpage), provide/inject cross-level communication
+- **Zero business-logic changes**: `git diff` is purely presentation-layer; API endpoints/parameters/validation/polling/confirm dialogs fully equivalent (self-check: see `Redesign-2026-07-Admin-Console.md` §zero-business-change self-check checklist)
+- **Design document**: `docs/overview/Redesign-2026-07-Admin-Console.md` (authoritative spec, including design tokens / component patterns / file inventory / zero-business-change self-check)
+- **EP retention scope**: el-input / el-select / el-input-number / el-pagination / el-switch / el-checkbox / ElMessageBox (form and pagination controls); all other presentation-layer components (button / card / table / drawer / modal / toast / sidebar / topbar / charts) are hand-written for high fidelity
 
-### 2026-07-04: 移除 Identity 鉴权
+### 2026-07-04: Removed Identity Authentication
 
-- 删除 `LoginPage.vue`、`authService.ts`(无登录页、无 Token 存储)
-- `App.vue` 移除登录检查、用户区域、登出按钮
-- `docApi.ts` 改用普通 axios,移除 `createAuthenticatedClient`
-- 后端移除 `AuthEndpoints.cs`、JWT Bearer 中间件、IdentityService HttpClient
-- `.gitignore` 移除 `authService.js` 条目
+- Deleted `LoginPage.vue` and `authService.ts` (no login page, no token storage)
+- `App.vue` removed the login check, user area and logout button
+- `docApi.ts` switched to plain axios; `createAuthenticatedClient` removed
+- Backend removed `AuthEndpoints.cs`, the JWT Bearer middleware and the IdentityService HttpClient
+- `.gitignore` removed the `authService.js` entry
 
-### 2026-07-10: ADR-001 迁移到 Element Plus
+### 2026-07-10: ADR-001 Migration to Element Plus
 
-- 重新引入 element-plus ^2.10.0 / @element-plus/icons-vue ^2.3.1 / sass ^1.80.0 / unplugin-auto-import ^0.18.3 / unplugin-vue-components ^0.27.4
-- vite.config.ts 启用 AutoImport + Components(ElementPlusResolver,importStyle: false)
-- 新增 `src/styles/element-variables.scss`(@forward + @use 注入品牌 SCSS token)
-- main.ts 引入 element-variables.scss 编译全量 themed CSS
-- 保留 minerU 第 2 代检索能力(DS-13~DS-18):8 个 minerU 过滤参数 + 行展开 blockData 详情 + mineruScore 独立展示
+- Reintroduced element-plus ^2.10.0 / @element-plus/icons-vue ^2.3.1 / sass ^1.80.0 / unplugin-auto-import ^0.18.3 / unplugin-vue-components ^0.27.4
+- vite.config.ts enabled AutoImport + Components (ElementPlusResolver, importStyle: false)
+- Added `src/styles/element-variables.scss` (@forward + @use injecting brand SCSS tokens)
+- main.ts imports element-variables.scss to compile the full themed CSS
+- Retained minerU Gen-2 retrieval capabilities (DS-13~DS-18): 8 minerU filter parameters + row-expanded blockData detail + standalone mineruScore display
 
-### 2026-07-03: UI 重构
+### 2026-07-03: UI Refactor
 
-- 移除 element-plus / @element-plus/icons-vue / marked / @types/marked 依赖
-- style.css 清理约 600 行死代码,统一 CSS 变量命名
-- (注:此次重构后被 ADR-001 部分回滚,再被 2026-07-20 重设计进一步演进)
+- Removed the element-plus / @element-plus/icons-vue / marked / @types/marked dependencies
+- Cleaned about 600 lines of dead code from style.css and unified CSS variable naming
+- (Note: this refactor was later partially rolled back by ADR-001, then further evolved by the 2026-07-20 redesign)

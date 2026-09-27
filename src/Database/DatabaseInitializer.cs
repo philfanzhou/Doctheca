@@ -22,10 +22,10 @@ public static class DatabaseInitializer
         // Column migrations for legacy databases (migrations stamped but DDL not applied)
         var alterStatements = new[]
         {
-            // document_parses: 新增 content_list + zip_path（阶段 2）
+            // document_parses: add content_list + zip_path (phase 2)
             "ALTER TABLE document_parses ADD COLUMN IF NOT EXISTS content_list jsonb NULL",
             "ALTER TABLE document_parses ADD COLUMN IF NOT EXISTS zip_path character varying(500) NULL",
-            // document_parses: model_version (解析模型版本 vlm/pipeline)
+            // document_parses: model_version (parse model version: vlm/pipeline)
             "ALTER TABLE document_parses ADD COLUMN IF NOT EXISTS model_version character varying(20) NOT NULL DEFAULT 'vlm'",
             // document_parses: new jsonb columns for MinerU pipeline output
             "ALTER TABLE document_parses ADD COLUMN IF NOT EXISTS content_list_v2 jsonb NULL",

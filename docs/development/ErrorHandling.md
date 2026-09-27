@@ -1,91 +1,91 @@
-# 错误处理规范
+# Error Handling Standards
 
-## HTTP 状态码使用规则
+## HTTP Status Code Rules
 
-HTTP 端点实现中必须使用标准的 HTTP 状态码，不得自定义状态码：
+HTTP endpoint implementations must use standard HTTP status codes; custom status codes are not allowed:
 
-| HTTP 状态码 | 使用场景 | 示例 |
+| HTTP status code | When to use | Example |
 |-------------|----------|------|
-| `400 Bad Request` | 请求参数验证失败 | ID 格式无效、必填字段为空 |
-| `401 Unauthorized` | 缺少、过期或无效的身份 | 未登录管理请求 |
-| `403 Forbidden` | 身份有效但权限不足 | 普通 Identity 用户访问管理员接口 |
-| `404 Not Found` | 请求的资源不存在 | 学生不存在、错题不存在 |
-| `409 Conflict` | 资源已存在（创建时冲突） | 重复提交 |
-| `422 Unprocessable Entity` | 业务前置条件不满足 | 审核非待审核状态的错题 |
-| `502 Bad Gateway` | Identity 等同步下游返回无效响应或不可达 | 管理员登录时 Identity 不可用 |
-| `500 Internal Server Error` | 服务内部错误 | 数据库异常、未预期的错误 |
-| `503 Service Unavailable` | 服务不可用 | 依赖服务宕机 |
+| `400 Bad Request` | Request parameter validation failed | Invalid ID format, required field empty |
+| `401 Unauthorized` | Missing, expired or invalid identity | Admin request without login |
+| `403 Forbidden` | Valid identity but insufficient permissions | Regular Identity user accessing an admin endpoint |
+| `404 Not Found` | Requested resource does not exist | Student not found, wrong question not found |
+| `409 Conflict` | Resource already exists (conflict on creation) | Duplicate submission |
+| `422 Unprocessable Entity` | Business precondition not met | Auditing a wrong question that is not in the pending-audit state |
+| `502 Bad Gateway` | A synchronous downstream such as Identity returned an invalid response or is unreachable | Identity unavailable during admin login |
+| `500 Internal Server Error` | Internal service error | Database exception, unexpected error |
+| `503 Service Unavailable` | Service unavailable | Dependent service down |
 
-## 错误信息规范
+## Error Message Standards
 
-1. 认证与服务间协议错误使用简洁、稳定的英文消息；前端负责展示中文文案
-2. 错误信息不得暴露账户是否存在、密码校验细节、Token内容或内部异常
-3. 同一类错误在各端点中使用相同措辞
+1. Authentication and inter-service protocol errors use concise, stable English messages; the front end is responsible for presenting Chinese copy
+2. Error messages must not reveal whether an account exists, password-validation details, token contents or internal exceptions
+3. The same class of error uses identical wording across endpoints
 
-## 错误响应格式
+## Error Response Format
 
-所有 HTTP 端点返回统一的 JSON 错误响应格式：
+All HTTP endpoints return a unified JSON error response format:
 
 ```json
 {
   "success": false,
-  "message": "错误描述信息",
+  "message": "Error description message",
   "errorCode": "ERROR_CODE"
 }
 ```
 
-- 领域异常映射为对应的 HTTP 状态码（400 / 404 / 409 / 422）
-- 其他未捕获异常统一返回 500，错误信息脱敏
+- Domain exceptions map to the corresponding HTTP status code (400 / 404 / 409 / 422)
+- All other uncaught exceptions return 500 with a sanitized error message
 
-## 参数验证
+## Parameter Validation
 
-参数验证应在 HTTP 端点方法入口处进行，尽早返回错误。
+Parameter validation should happen at the entry of HTTP endpoint methods, returning errors as early as possible.
 
-## 日志规范
+## Logging Standards
 
-- 使用结构化日志占位符，不要使用字符串插值
-- 异常对象必须传入：使用 `LogError(ex, ...)` 而非 `LogError(ex.Message, ...)`
-- 预期内的 NotFound 使用 Warning 级别
-- 不记录密码、Access/Refresh Token、Cookie、手机号等敏感信息
+- Use structured logging placeholders; do not use string interpolation
+- The exception object must be passed in: use `LogError(ex, ...)` rather than `LogError(ex.Message, ...)`
+- Expected NotFound cases use the Warning level
+- Never log passwords, access/refresh tokens, cookies, phone numbers or other sensitive information
 
-### Serilog + Loki 日志系统
+### Serilog + Loki Logging System
 
-Doctheca 使用 Serilog 替代原生 Microsoft.Extensions.Logging，双写到 Console + Grafana Loki。与 Identity 服务接入方式完全一致。
+Doctheca uses Serilog instead of the native Microsoft.Extensions.Logging, dual-writing to Console + Grafana Loki. The integration is exactly the same as in the Identity service.
 
-配置入口：`Program.cs` 中 `UseAgentSerilog("Doctheca")`，读取 `appsettings.json` 中 `Serilog` 配置节。
+Configuration entry point: `UseAgentSerilog("Doctheca")` in `Program.cs`, reading the `Serilog` configuration section in `appsettings.json`.
 
-Loki 地址统一通过配置键 `Loki:Uri` 注入，`Program.cs` 启动时读取并覆盖 `Serilog:WriteTo:1:Args:uri` 配置键：
+The Loki address is injected uniformly through the config key `Loki:Uri`; `Program.cs` reads it at startup and overrides the `Serilog:WriteTo:1:Args:uri` config key:
 
-| 配置键 | 来源 | 示例值 | 说明 |
+| Config key | Source | Example value | Description |
 |--------|------|--------|------|
-| `Loki:Uri` | Consul `config/ruoyu/shared.json` | http://ruoyu-loki:3100 | 推荐由 Consul 共享配置提供 |
-| `Loki:Uri`（fallback） | `appsettings.json` | http://localhost:3100 | Consul 不可达时的兜底地址 |
+| `Loki:Uri` | Consul `config/ruoyu/shared.json` | http://ruoyu-loki:3100 | Recommended to be provided by the Consul shared configuration |
+| `Loki:Uri` (fallback) | `appsettings.json` | http://localhost:3100 | Fallback address when Consul is unreachable |
 
-> **容错机制**：如果 `Loki:Uri` 未设置（Consul 和 appsettings 均未提供），Loki Sink 使用 appsettings.json 中 `Serilog:WriteTo:1:Args:uri` 的 fallback 地址 `http://ruoyu-loki:3100`。Loki 不可达时 Sink 异步重试，不影响服务启动。`start.sh` 不传 `LOKI_URI` 环境变量，Loki 地址完全由 Consul 提供。
+> **Fault tolerance**: If `Loki:Uri` is not set (neither Consul nor appsettings provides it), the Loki Sink uses the fallback address `http://ruoyu-loki:3100` in `Serilog:WriteTo:1:Args:uri` from appsettings.json. When Loki is unreachable the sink retries asynchronously and does not affect service startup. `start.sh` does not pass a `LOKI_URI` environment variable; the Loki address is provided entirely by Consul.
 
-### 敏感字段脱敏
+### Sensitive Field Masking
 
-写入日志（含 Loki）前，必须对以下字段脱敏。日志最终会进入 Loki 仪表盘，明文敏感信息会违反合规要求：
+The following fields must be masked before being written to logs (including Loki). Logs ultimately end up in Loki dashboards, and plaintext sensitive information would violate compliance requirements:
 
-| 字段类型 | 脱敏规则 | 示例 |
+| Field type | Masking rule | Example |
 |----------|---------|------|
-| LLM ApiKey / StructaDoc ApiKey | 保留前 4 + 后 4，中间用 `****` 替换；长度不足 8 位时全部替换为 `****` | `sk-a****1b2c` |
-| OSS AccessKey / SecretKey | 完全不记录 | — |
-| 密码 / JWT / Refresh Token / Cookie | 完全不记录 | — |
+| LLM ApiKey / StructaDoc ApiKey | Keep the first 4 + last 4 characters and replace the middle with `****`; if shorter than 8 characters, replace the whole value with `****` | `sk-a****1b2c` |
+| OSS AccessKey / SecretKey | Never logged | — |
+| Passwords / JWT / Refresh Token / Cookie | Never logged | — |
 
-实现位置：`Doctheca.Ai.SensitiveDataMasker` 静态工具类（位于 vendored 库 `src/Ai`）。业务代码中使用 `_logger.LogInformation("... ApiKey={ApiKey}", SensitiveDataMasker.MaskApiKey(apiKey))` 形式调用。
+Implementation location: the `Doctheca.Ai.SensitiveDataMasker` static utility class (in the vendored library `src/Ai`). Business code calls it in the form `_logger.LogInformation("... ApiKey={ApiKey}", SensitiveDataMasker.MaskApiKey(apiKey))`.
 
-> 数据库字段不受此规则约束，仍按业务需要存储原始值；该规则仅约束日志输出。
+> Database fields are not subject to this rule and still store original values as the business requires; the rule only constrains log output.
 
-### CorrelationId 流转
+### CorrelationId Flow
 
-CorrelationId 适用于 HTTP 路径，便于在 Loki 中跨服务追踪请求链路：
+CorrelationId applies to the HTTP path, making it easy to trace request chains across services in Loki:
 
-- HTTP 路径：由 `CorrelationIdMiddleware`（ASP.NET Core 中间件）从请求头 `x-correlation-id` 读取或新建，写入 `HttpContext.Items` 并通过 `BeginScope` 注入日志上下文；响应头回写 `x-correlation-id` 便于调用方关联。
+- HTTP path: `CorrelationIdMiddleware` (ASP.NET Core middleware) reads it from the `x-correlation-id` request header or creates a new one, writes it into `HttpContext.Items` and injects it into the logging context via `BeginScope`; the response header writes `x-correlation-id` back so callers can correlate.
 
-HTTP 控制器（`DocumentFileEndpoints` 等）必须在该中间件作用范围内。
+HTTP controllers (`DocumentFileEndpoints`, etc.) must be within the scope of this middleware.
 
-中间件管道位置（`Program.cs` 中注册顺序）：
+Middleware pipeline position (registration order in `Program.cs`):
 
 ```
 UseMiddleware<CorrelationIdMiddleware>()
@@ -95,4 +95,4 @@ UseMiddleware<CorrelationIdMiddleware>()
   → MapHealth / MapFallbackToFile
 ```
 
-静态文件与 SPA fallback 保持匿名；管理 route group 要求 `DocthecaAdmin`。
+Static files and the SPA fallback remain anonymous; the admin route group requires `DocthecaAdmin`.
