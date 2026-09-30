@@ -30,7 +30,7 @@ The service uses **PostgreSQL** (`UseNpgsql`; the connection string comes from `
 Host=localhost;Port=5432;Database=doctheca;Username=phil
 ```
 
-The database and tables are created automatically at startup via `DatabaseInitializer.InitializeAsync` (`CREATE TABLE IF NOT EXISTS`).
+The database and tables are created automatically at startup: `DocthecaMigrationExecutor` applies the EF Core baseline migration `20260930161548_InitialCreate` to an empty database and takes over a legacy database after verifying its structure; an unknown structure is refused with `DOCTHECA_DB_SCHEMA_INCOMPATIBLE` (see [Migrations](../database/migrations.md)).
 
 ## Running the Service
 
