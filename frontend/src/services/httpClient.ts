@@ -1,4 +1,5 @@
 import axios, { AxiosError, type InternalAxiosRequestConfig } from 'axios'
+import { getProblemDetailsTitle } from './error'
 
 interface RetriableRequestConfig extends InternalAxiosRequestConfig {
   docthecaRetry?: boolean
@@ -27,6 +28,25 @@ function isAuthRequest(config: InternalAxiosRequestConfig | undefined): boolean 
   return config?.url?.startsWith('/admin/auth/') ?? false
 }
 
+// Unhandled exceptions on the marked JSON admin endpoints arrive as application/problem+json
+// with a fixed, safe `title`. Normalizing that title into AxiosError.message on the single
+// response-error path of both clients gives every existing `e.message` consumer a readable
+// error without touching each call site; business JSON errors (data.message) and the
+// 401 refresh/single-retry and 403 handling below stay exactly as they are.
+function normalizeProblemDetailsMessage(error: AxiosError): AxiosError {
+  const title = getProblemDetailsTitle(error.response)
+  if (title !== null) {
+    error.message = title
+  }
+
+  return error
+}
+
+authHttpClient.interceptors.response.use(
+  (response) => response,
+  (error: AxiosError) => Promise.reject(normalizeProblemDetailsMessage(error))
+)
+
 async function refreshAuthentication(): Promise<void> {
   if (!refreshPromise) {
     refreshPromise = authHttpClient
@@ -43,6 +63,7 @@ async function refreshAuthentication(): Promise<void> {
 httpClient.interceptors.response.use(
   (response) => response,
   async (error: AxiosError) => {
+    normalizeProblemDetailsMessage(error)
     const status = error.response?.status
     const config = error.config as RetriableRequestConfig | undefined
 

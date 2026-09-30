@@ -2,12 +2,24 @@
 import { ref } from 'vue'
 import { AxiosError } from 'axios'
 import { useAdminSession } from '../composables/useAdminSession'
+import { isProblemDetailsResponse } from '../services/error'
 
 const { login } = useAdminSession()
 const username = ref('')
 const password = ref('')
 const submitting = ref(false)
 const errorMessage = ref('')
+
+// Server-side failures (any 5xx, or a problem+json response from the ServiceMantle
+// boundary on the marked JSON admin endpoints) are service errors, not credential errors.
+function isServiceFailure(error: unknown): boolean {
+  if (!(error instanceof AxiosError)) {
+    return false
+  }
+
+  const status = error.response?.status
+  return (status !== undefined && status >= 500) || isProblemDetailsResponse(error.response)
+}
 
 async function submit(): Promise<void> {
   if (!username.value.trim() || !password.value) {
@@ -25,6 +37,8 @@ async function submit(): Promise<void> {
       errorMessage.value = '该账户没有管理员权限。'
     } else if (error instanceof AxiosError && error.response?.status === 502) {
       errorMessage.value = '认证服务暂时不可用，请稍后重试。'
+    } else if (isServiceFailure(error)) {
+      errorMessage.value = '服务暂时不可用，请稍后重试。'
     } else {
       errorMessage.value = '用户名或密码错误。'
     }

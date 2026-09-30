@@ -17,7 +17,11 @@
          explicit AllowInsecureHttp acceptance this host relies on (same combination already
          shipped in Ruoyu.Admin). Do not float this version. -->
     <PackageReference Include="ServiceMantle.Logging" Version="0.2.1-rc.1" />
-    <PackageReference Include="ServiceMantle.Web" Version="0.2.0" />
+    <!-- Pinned pre-release: 0.2.1-rc.1 is the first Web package carrying the safe Problem
+         Details middleware and AddConditionalExceptionMapping this host relies on (0.2.0
+         has neither). Must stay in lockstep with the Service layer's direct ServiceMantle.Web
+         reference so the same assembly is never double-pinned. Do not float this version. -->
+    <PackageReference Include="ServiceMantle.Web" Version="0.2.1-rc.1" />
   </ItemGroup>
 
   <ItemGroup>

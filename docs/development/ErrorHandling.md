@@ -35,7 +35,71 @@ All HTTP endpoints return a unified JSON error response format:
 ```
 
 - Domain exceptions map to the corresponding HTTP status code (400 / 404 / 409 / 422)
-- All other uncaught exceptions return 500 with a sanitized error message
+- All other uncaught exceptions return 500 with a sanitized error message; on the marked JSON
+  admin endpoints they are normalized into the safe Problem Details protocol below
+
+## Unhandled Exceptions on Marked JSON Admin Endpoints: Safe Problem Details (ServiceMantle)
+
+Uncaught exceptions on the marked JSON admin endpoints are converted by the ServiceMantle
+Problem Details middleware (`UseServiceMantleProblemDetails()`, gated by a `UseWhen` branch on
+the `RequireServiceMantleSecurityResponseHeaders` marker) into a fixed, safe response:
+
+- `500` with content type `application/problem+json` and exactly the fields `type`, `title`,
+  `status`, `correlationId`, `errorCode`.
+- Fixed public values for unmapped exceptions: type
+  `urn:servicemantle:error:http.internal_server_error`, title `An unexpected error occurred.`,
+  errorCode `http.internal_server_error`.
+- The same correlation id in the `x-correlation-id` response header, the body `correlationId`,
+  and the request log scope `CorrelationId`.
+- Exception message, inner exceptions, `Exception.Data`, type names, and stack traces never
+  appear in the response body or in the library log event (which carries only the fixed safe
+  code and the correlation id), in any environment — Development and Production answer the
+  identical body.
+- The six security response headers (see `docs/overview/Integration.md`) also cover problem
+  responses, each as a single value: the security-header middleware runs outside the branch and
+  writes via `OnStarting`.
+
+A `BadHttpRequestException` escaping a handler or the server-side body-read stage keeps its
+framework status through ordered conditional mappings registered on the single ServiceMantle
+foundation builder (first matching candidate wins; the unconditional 400 default is declared
+last):
+
+| Status | errorCode | title |
+|---|---|---|
+| `413` | `http.payload_too_large` | The request payload is too large. |
+| `415` | `http.unsupported_media_type` | The request media type is not supported. |
+| `400` (unconditional default) | `http.request_invalid` | The request could not be processed. |
+
+Boundary: only endpoints carrying `RequireServiceMantleSecurityResponseHeaders` — the same 13
+marked JSON admin endpoints as the security-header baseline — enter the boundary. Static files,
+the SPA fallback, health endpoints, HTML/ZIP exports, and the parse image content proxy never
+do; new JSON admin endpoints inherit the protocol only when explicitly marked.
+
+What is deliberately NOT covered (existing behavior preserved):
+
+- Business responses produced by endpoints (`success/data/message/errorCode` JSON, including
+  400/401/403/422/502/503) are never wrapped, and auth 401/403 challenges are not exceptions,
+  so they are never replaced.
+- Minimal-API parameter binding failures never reach the boundary: a malformed JSON body stays
+  a `400` with an empty body; a mismatched request Content-Type is routed to the framework's
+  synthesized 415 endpoint, which carries no marker and no `AllowAnonymous` metadata — so
+  authenticated callers get `415` with an empty body and anonymous callers get the `401`
+  challenge from the host's authorization fallback policy. Neither becomes a problem response.
+- The multipart body-length limit (200 MB on upload) surfaces as a
+  `System.IO.InvalidDataException`, not a `BadHttpRequestException`; it is deliberately
+  unmapped and normalizes to the generic problem `500` — the same unhandled status as before
+  this protocol existed (only the body shape changes; no 413).
+- Caller cancellation (`RequestAborted`) keeps propagating without a problem body; an
+  independently thrown `OperationCanceledException` normalizes to `500`.
+- Once a response has started, the library swallows the exception (safe log only) and the
+  status and already-sent bytes are unchanged — streaming/rendering contracts stay outside the
+  boundary on purpose. No transaction rollback or retry safety is implied: side effects may
+  already be committed, so clients must rely on `errorCode`/status (never `detail` or title
+  copy) and must not blindly retry an operation that may have completed.
+
+Rollback: remove the `UseWhen` branch and the conditional-mapping registration from
+`Program.cs` and pin `ServiceMantle.Web` back to `0.2.0` in both the Host and Service projects;
+the other ServiceMantle slices (logging, health probes, security headers) keep working.
 
 ## Parameter Validation
 
@@ -121,10 +185,13 @@ Middleware pipeline position (registration order in `Program.cs`):
 
 ```
 UseServiceMantleCorrelationId()
+  → UseRouting()
+  → UseServiceMantleSecurityResponseHeaders()
+  → UseWhen(security-headers marker) { UseServiceMantleProblemDetails() }
   → UseDefaultFiles() / UseStaticFiles()
   → UseAuthentication() / UseAuthorization()
-  → MapAdminAuthEndpoints / MapAdminEndpoints
-  → MapHealth / MapFallbackToFile
+  → MapAdminAuthEndpoints / MapDocument{File,Parse,Export,Search}Endpoints
+  → MapServiceMantleHealthEndpoints / MapFallbackToFile
 ```
 
 Static files and the SPA fallback remain anonymous; the admin route group requires `DocthecaAdmin`.

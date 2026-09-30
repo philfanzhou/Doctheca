@@ -16,8 +16,11 @@
          by the Host's ServiceMantle foundation) and the
          RequireServiceMantleSecurityResponseHeaders marker for the JSON admin endpoints (the
          capability and middleware themselves are registered by the Host). The Service layer
-         references the library only for those types and never references the Host. -->
-    <PackageReference Include="ServiceMantle.Web" Version="0.2.0" />
+         references the library only for those types and never references the Host.
+         Pinned pre-release: kept in lockstep with the Host's ServiceMantle.Web version
+         (0.2.1-rc.1 carries the safe Problem Details boundary the Host registers) so the
+         same assembly is never double-pinned. Do not float this version. -->
+    <PackageReference Include="ServiceMantle.Web" Version="0.2.1-rc.1" />
   </ItemGroup>
 
   <PropertyGroup>
