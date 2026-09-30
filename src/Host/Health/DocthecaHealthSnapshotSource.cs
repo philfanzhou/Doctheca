@@ -14,9 +14,10 @@ namespace Doctheca.Host.Health;
 /// Read-only by contract: the probe never runs DDL, never parses/indexes, never triggers
 /// installation or registration, and never reads business rows. It combines two facts:
 /// <list type="number">
-/// <item>The process-local <see cref="DocthecaStartupReceipt"/>: before the initializer
-/// completed (or when it failed and the host somehow kept serving), migrationStatus can never
-/// be published as Succeeded and readiness fails closed.</item>
+/// <item>The process-local <see cref="DocthecaStartupReceipt"/>: the three-state startup
+/// observation (Running → Succeeded | Failed) driven by the migration orchestration outcome.
+/// Before the startup gate succeeded — or when it failed and the host somehow kept serving —
+/// migrationStatus is never published as Succeeded and readiness fails closed.</item>
 /// <item>A cancellation-aware zero-row probe of the exact tables/columns the current EF model
 /// maps: first the connection is opened, then each mapped table is queried with
 /// <c>SELECT &lt;mapped columns&gt; FROM &lt;table&gt; WHERE FALSE</c>. Table and column names
@@ -24,6 +25,8 @@ namespace Doctheca.Host.Health;
 /// read or returned.</item>
 /// </list>
 /// Failure mapping (all value-free, fixed safe codes, no raw input or exception content):
+/// startup still running → <c>(PendingSetup, Running, Unreachable, doctheca.startup_incomplete)</c>;
+/// startup failed → <c>(PendingSetup, Failed, Unreachable, doctheca.startup_failed)</c>;
 /// connection failure → <c>(Completed, Succeeded, Unreachable, doctheca.database_unreachable)</c>;
 /// mapped table/column probe failure → <c>(Completed, Failed, Reachable, doctheca.schema_unavailable)</c>;
 /// unknown exceptions propagate so the library answers its own safe code; cancellation
@@ -34,8 +37,11 @@ public sealed class DocthecaHealthSnapshotSource(
     DocthecaStartupReceipt startupReceipt,
     DocthecaDbContext dbContext) : IServiceHealthSnapshotSource
 {
-    /// <summary>The initializer has not completed in this process.</summary>
+    /// <summary>The startup gate has not reached a terminal state in this process.</summary>
     public const string StartupIncompleteErrorCode = "doctheca.startup_incomplete";
+
+    /// <summary>A startup phase (validation, preparation, or orchestration) failed.</summary>
+    public const string StartupFailedErrorCode = "doctheca.startup_failed";
 
     /// <summary>The current database connection could not be established.</summary>
     public const string DatabaseUnreachableErrorCode = "doctheca.database_unreachable";
@@ -48,13 +54,19 @@ public sealed class DocthecaHealthSnapshotSource(
     {
         cancellationToken.ThrowIfCancellationRequested();
 
-        if (!startupReceipt.InitializationCompleted)
+        var startupState = startupReceipt.StartupState;
+        if (startupState != ServiceMigrationReadinessState.Succeeded)
         {
+            // Running: the startup gate is still deciding. Failed: a phase refused startup; a
+            // failed production host never listens, so this value exists for honest observation
+            // in injected scenarios and the race window before the process exits.
             return new ServiceHealthSnapshot(
                 ServiceStartupPhase.PendingSetup,
-                ServiceMigrationReadinessState.Running,
+                startupState,
                 ServiceDatabaseReadinessState.Unreachable,
-                StartupIncompleteErrorCode);
+                startupState == ServiceMigrationReadinessState.Failed
+                    ? StartupFailedErrorCode
+                    : StartupIncompleteErrorCode);
         }
 
         var connection = dbContext.Database.GetDbConnection();

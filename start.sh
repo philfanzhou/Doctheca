@@ -19,6 +19,10 @@ OPENSEARCH_INDEX="doctheca-segments"
 
 DB_NAME="doctheca"
 
+# Optional: allow startup to create the missing target database (see docs/development/Deployment.md).
+# Empty keeps the default refusal (DOCTHECA_DB_CREATION_NOT_ALLOWED); set to true/false to override.
+DATABASE_ALLOW_CREATE="${DATABASE_ALLOW_CREATE:-}"
+
 LLM_API_KEY="${LLM_API_KEY:-}"
 LLM_BASE_URL="${LLM_BASE_URL:-https://api.siliconflow.cn/v1}"
 LLM_MODEL="${LLM_MODEL:-Qwen/Qwen2.5-7B-Instruct}"
@@ -45,6 +49,7 @@ docker run -d \
   -e CONSUL_TOKEN="${CONSUL_TOKEN}" \
   -e Endpoints__Http="${HTTP_PORT}" \
   -e Database__Name="${DB_NAME}" \
+  ${DATABASE_ALLOW_CREATE:+-e Database__AllowCreate="${DATABASE_ALLOW_CREATE}"} \
   -e Authentication__CookieSecure="${DOCTHECA_COOKIE_SECURE}" \
   -e IdentityService__AppId="${IDENTITY_APP_ID}" \
   -e IdentityService__AppSecret="${IDENTITY_APP_SECRET}" \

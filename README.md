@@ -66,6 +66,8 @@ IDENTITY_APP_ID=<appid> IDENTITY_APP_SECRET=<secret> ./start.sh
 
 `start.sh` reads shared configuration (PostgreSQL, OSS, OpenSearch, Loki, StructaDoc) from Consul KV; environment variables can override. See [`docs/development/Deployment.md`](docs/development/Deployment.md).
 
+The target PostgreSQL database must exist before startup: a missing database is refused by default with the fixed error `DOCTHECA_DB_CREATION_NOT_ALLOWED` (`DATABASE_ALLOW_CREATE=true` opts into automatic creation). Startup runs the EF Core migrations under a PostgreSQL advisory lock, so multiple instances starting against the same database serialize and only one executes the migration. See [`docs/database/migrations.md`](docs/database/migrations.md).
+
 ### Local .NET
 
 ```bash

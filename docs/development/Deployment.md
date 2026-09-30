@@ -18,6 +18,7 @@ The startup script `start.sh` only keeps the following kinds of parameters:
 - `CONSUL_TOKEN`
 - `Endpoints:Http`
 - The database-name part of `ConnectionStrings:Default`
+- `DATABASE_ALLOW_CREATE` (maps to `Database__AllowCreate`; unset keeps the default refusal)
 - `OpenSearch:IndexName`
 - `LlmDocumentAnalysis:*`
 - `StructaDoc:ApiKey`
@@ -197,6 +198,38 @@ The database connection string is assembled at runtime from the following two pa
 
 After startup, if the configuration is correct, the diagnostic logs should show the final effective PostgreSQL host and database name.
 
+### Database creation policy (`Database:AllowCreate`)
+
+| Key | Default | Values | Description |
+|-----|---------|--------|-------------|
+| `Database:AllowCreate` (env `Database__AllowCreate`) | `false` | `true` / `false` only | Whether startup may create the target database when it is verifiably missing. Any other value refuses startup with `DOCTHECA_DB_ALLOW_CREATE_INVALID`. |
+
+- By default a missing `doctheca` database refuses startup with the fixed error code
+  `DOCTHECA_DB_CREATION_NOT_ALLOWED` and writes nothing. Implicit database creation (the old
+  EF `Migrate` behavior) is retired.
+- Deployments that relied on implicit creation must either create the database manually before
+  upgrading (`CREATE DATABASE doctheca OWNER <migration user>;`) or set
+  `Database__AllowCreate=true`. With creation enabled, the migration account needs CREATEDB and
+  access to the `postgres` maintenance database; the maintenance connection uses the same
+  credentials as the target connection string (only the database name differs) and never reaches
+  the logs.
+- Unreachable servers, authentication or permission failures, and server/database identity
+  conflicts are refused with the provider's safe `database_target_preparation.*` codes — never
+  answered with a creation fallback.
+
+### Multi-instance startup semantics
+
+Startup database work runs in three phases (see [Migrations](../database/migrations.md)):
+deployment validation, target preparation, and migration orchestration under a PostgreSQL session
+advisory lock keyed by the `doctheca` service id. When several instances start against the same
+database, only the lock holder executes the migration; the others wait (fixed 30-second acquire
+budget), re-read the state, and skip. Lock timeout, lease loss, a too-new database version, a
+failed migration, or a mismatching final state all exit the process non-zero with the safe
+`migration.*` error codes. During an upgrade window, stop the old (lock-free) version first — do
+not mix old and new versions against the same database. The readiness `migrationStatus` field
+follows the same orchestration result (`succeeded` only after the held-lock final inspection
+passed).
+
 ## Startup Command
 
 ```bash
@@ -220,9 +253,10 @@ The Consul initialization script uses `cas=0` and only creates KVs that do not y
 The post-deployment smoke check should hit `http://127.0.0.1:5012/health/live` for process liveness and `http://127.0.0.1:5012/health/ready` (or its `/health` alias) for database readiness on the Doctheca target host. Note the contract change: `/health` is now a readiness alias returning `200 {"status":"ready",...}` only once the startup initializer completed and a read-only schema probe succeeded, and `503 {"status":"not_ready",...}` otherwise — it no longer returns the old always-`healthy` payload with a `timestamp`.
 
 The service automatically performs the following at startup:
-1. `DocthecaMigrationExecutor` — applies the EF Core baseline migration `20260930161548_InitialCreate` to an empty database; verifies and takes over a legacy database (idempotent backfills + baseline registration); refuses an unknown or conflicting structure with the fixed error code `DOCTHECA_DB_SCHEMA_INCOMPATIBLE` (see [Migrations](../database/migrations.md))
-2. `OpenSearchIndexService.EnsureIndexAsync` — create the search index (best-effort)
-3. `IDocumentAnalysisService.InitializeAsync` — LLM initialization (if an ApiKey is configured)
+1. Deployment validation and target preparation — ServiceMantle observes the resolved PostgreSQL target; a verifiably missing database is created only when `Database:AllowCreate=true` (by default startup refuses with `DOCTHECA_DB_CREATION_NOT_ALLOWED` and writes nothing); unreachable or conflicting targets are refused with safe `database_target_preparation.*` codes
+2. `DocthecaMigrationExecutor` under the ServiceMantle `DatabaseMigrationOrchestrator` — applies the EF Core baseline migration `20260930161548_InitialCreate` to an empty database under the PostgreSQL advisory lock (multi-instance starts serialize; only one instance executes); verifies and takes over a legacy database (idempotent backfills + baseline registration); refuses an unknown or conflicting structure with the fixed error code `DOCTHECA_DB_SCHEMA_INCOMPATIBLE` or the orchestrator's `migration.*` safe codes (see [Migrations](../database/migrations.md))
+3. `OpenSearchIndexService.EnsureIndexAsync` — create the search index (best-effort)
+4. `IDocumentAnalysisService.InitializeAsync` — LLM initialization (if an ApiKey is configured)
 
 ## Prebuilt Images & Version Releases
 

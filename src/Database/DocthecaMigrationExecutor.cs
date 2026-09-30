@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.Logging;
 using Npgsql;
+using ServiceMantle.Migration;
 
 namespace Doctheca.Database;
 
@@ -12,6 +13,18 @@ namespace Doctheca.Database;
 /// The EF-migration executor for the Doctheca document library database (issue #52).
 /// </summary>
 /// <remarks>
+/// <para>
+/// Since issue #53 the executor also implements <see cref="IDatabaseMigrationExecutor"/> for the
+/// shared ServiceMantle <c>DatabaseMigrationOrchestrator</c>: its internal
+/// <see cref="DatabaseState"/> classification maps one-to-one onto
+/// <see cref="MigrationObservationState"/> except that a verified legacy database
+/// (<see cref="DatabaseState.LegacyTakeoverRequired"/>) is reported as
+/// <see cref="MigrationObservationState.PendingMigration"/> — the orchestrator's "execute once
+/// under the lock" signal. The interface methods are explicit implementations around the same
+/// public inspection/execution entry points; the takeover, backfill, stamp, and refusal
+/// semantics delivered by issue #52 are unchanged and <c>__EFMigrationsHistory</c> remains
+/// owned by this executor.
+/// </para>
 /// <para>
 /// <c>InspectAsync</c> is strictly read-only (PostgreSQL catalogs only) and classifies the target
 /// database against the single known baseline migration:
@@ -40,7 +53,7 @@ namespace Doctheca.Database;
 /// logs never contain SQL statement text or connection values.
 /// </para>
 /// </remarks>
-public sealed class DocthecaMigrationExecutor
+public sealed class DocthecaMigrationExecutor : IDatabaseMigrationExecutor
 {
     internal const string InitialCreateMigrationId = "20260930161548_InitialCreate";
     internal const string HistoryTableName = "__EFMigrationsHistory";
@@ -66,6 +79,41 @@ public sealed class DocthecaMigrationExecutor
         _context = context;
         _logger = logger;
     }
+
+    /// <inheritdoc cref="IDatabaseMigrationExecutor.InspectAsync"/>
+    /// <remarks>
+    /// Explicit interface implementation for the shared orchestrator: the same read-only
+    /// inspection as <see cref="InspectAsync"/>, translated into the ServiceMantle observation
+    /// states (<see cref="DatabaseState.LegacyTakeoverRequired"/> becomes
+    /// <see cref="MigrationObservationState.PendingMigration"/>).
+    /// </remarks>
+    async ValueTask<MigrationObservationState> IDatabaseMigrationExecutor.InspectAsync(
+        CancellationToken cancellationToken)
+    {
+        var state = await InspectAsync(cancellationToken).ConfigureAwait(false);
+        return ToObservationState(state);
+    }
+
+    /// <inheritdoc cref="IDatabaseMigrationExecutor.ExecuteAsync"/>
+    /// <remarks>
+    /// Explicit interface implementation: the identical execution path (re-verify, backfill,
+    /// stamp, migrate, or refuse) observed by the orchestrator's cancellation token.
+    /// </remarks>
+    ValueTask IDatabaseMigrationExecutor.ExecuteAsync(CancellationToken cancellationToken) =>
+        new(ExecuteAsync(cancellationToken));
+
+    /// <summary>
+    /// The fixed translation from this executor's classification to the ServiceMantle
+    /// observation states consumed by <c>DatabaseMigrationOrchestrator</c>.
+    /// </summary>
+    internal static MigrationObservationState ToObservationState(DatabaseState state) => state switch
+    {
+        DatabaseState.Empty => MigrationObservationState.Empty,
+        DatabaseState.CurrentVersionCompatible => MigrationObservationState.CurrentVersionCompatible,
+        DatabaseState.LegacyTakeoverRequired => MigrationObservationState.PendingMigration,
+        DatabaseState.VersionTooNew => MigrationObservationState.VersionTooNew,
+        _ => MigrationObservationState.InspectionFailed,
+    };
 
     /// <summary>The read-only classification of the target database.</summary>
     public enum DatabaseState

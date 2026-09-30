@@ -12,6 +12,11 @@
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
     <PackageReference Include="OpenSearch.Net" Version="2.2.0" />
     <PackageReference Include="ServiceMantle.Diagnostics" Version="0.2.1" />
+    <!-- PostgreSQL migration capabilities for the startup orchestration (issue #53): the
+         session advisory lock provider (PostgreSqlMigrationLockProvider) and the target
+         preparation provider (PostgreSqlDatabaseTargetPreparationProvider). Same 0.2.1
+         release tag as every other ServiceMantle package in this host. -->
+    <PackageReference Include="ServiceMantle.Database.PostgreSql" Version="0.2.1" />
     <!-- All ServiceMantle packages in this host share the 0.2.1 release tag so contracts and
          transitive dependencies stay consistent across the same host. 0.2.1 is the GA of the
          capabilities this host relies on (bounded per-category MinimumLevelOverrides, fixed
