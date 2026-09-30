@@ -21,7 +21,7 @@ using Xunit;
 namespace Doctheca.Tests.Integration;
 
 /// <summary>
-/// ServiceMantle security response-header baseline on the real host: exactly the 13 JSON admin
+/// ServiceMantle security response-header baseline on the real host: exactly the 16 JSON admin
 /// endpoints are marked and carry the six immutable single-value headers on success (2xx),
 /// business failure (4xx), and 401/403 challenges alike; a downstream component that pre-writes
 /// duplicate or wrong values converges back to the single baseline value because the library
@@ -46,13 +46,17 @@ public sealed class ServiceMantleSecurityHeadersTests : ServiceMantleIntegration
         ("Content-Security-Policy", CspValue),
     ];
 
-    // The exact 13 marked JSON admin endpoints (method + normalized route pattern).
+    // The exact 16 marked JSON admin endpoints (method + normalized route pattern): the
+    // legacy auth area plus the three hosted-login endpoints added by issue #47.
     private static readonly HashSet<string> ExpectedMarked = new(StringComparer.Ordinal)
     {
         "POST /admin/auth/login",
         "POST /admin/auth/refresh",
         "POST /admin/auth/logout",
         "GET /admin/auth/session",
+        "GET /admin/auth/oidc/start",
+        "GET /admin/auth/oidc/callback",
+        "GET /admin/auth/oidc/csrf",
         "POST /admin/document-files/upload",
         "GET /admin/document-files",
         "GET /admin/document-files/{id:guid}",
@@ -80,7 +84,7 @@ public sealed class ServiceMantleSecurityHeadersTests : ServiceMantleIntegration
     }
 
     [Fact]
-    public void MarkedEndpoints_AreExactlyTheThirteenJsonAdminEndpoints()
+    public void MarkedEndpoints_AreExactlyTheSixteenJsonAdminEndpoints()
     {
         using var factory = CreateFactory();
         var endpoints = factory.Services.GetRequiredService<EndpointDataSource>().Endpoints
@@ -95,7 +99,7 @@ public sealed class ServiceMantleSecurityHeadersTests : ServiceMantleIntegration
         var marked = endpoints.Where(pair => pair.Marked).Select(pair => pair.Key).ToHashSet();
         var all = endpoints.Select(pair => pair.Key).ToHashSet();
 
-        // Exactly the 13 JSON admin endpoints are marked — no more, no fewer.
+        // Exactly the 16 JSON admin endpoints are marked — no more, no fewer.
         Assert.True(
             marked.SetEquals(ExpectedMarked),
             $"marked set mismatch.\n  extra: {string.Join(", ", marked.Except(ExpectedMarked))}\n" +
