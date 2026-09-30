@@ -42,9 +42,9 @@ builder.Services.AddScoped<IServiceHealthSnapshotSource, DocthecaHealthSnapshotS
 
 builder.Configuration.AddRuoyuConsulConfiguration(builder.Configuration);
 
-// ========== Serilog (Console + Grafana Loki) ==========
-builder.Configuration.AddRuoyuLokiSink();
-builder.Host.UseRuoyuSerilog("Doctheca");
+// ========== ServiceMantle logging (Console + optional Grafana Loki) ==========
+// Registered after the Consul configuration source so Loki:Uri from Consul KV is visible.
+builder.AddDocthecaLogging();
 
 var consulOptions = RuoyuConsulOptions.Bind(builder.Configuration);
 var consulRuntimeState = RuoyuConsulRuntimeState.Instance;
@@ -207,102 +207,111 @@ var identityTrust = app.Services
     .GetRequiredService<IOptions<IdentityAuthenticationOptions>>()
     .Value;
 
-app.Logger.LogInformation("Doctheca Service starting");
-app.Logger.LogInformation(
-    "Identity trust: Authority={Authority}, Issuers={Issuers}, Audience={Audience}, RequireHttpsMetadata={RequireHttpsMetadata}",
-    identityTrust.Authority,
-    string.Join(",", identityTrust.GetValidIssuers()),
-    identityTrust.Audience,
-    identityTrust.RequireHttpsMetadata);
-app.Logger.LogInformation("Endpoints: HTTP={HttpPort}", httpPort);
-app.Logger.LogInformation(
-    "Consul startup diagnostics: Address={Address}, Token={Token}, Source={Source}, KeyCount={KeyCount}, Prefixes={Prefixes}, LastError={LastError}",
-    $"{consulOptions.Host}:{consulOptions.Port}",
-    StartupDiagnosticsFormatter.MaskSecret(consulOptions.Token),
-    consulRuntimeState.Source,
-    consulRuntimeState.KeyCount,
-    StartupDiagnosticsFormatter.SummarizePrefixes(consulRuntimeState.LoadedPrefixes),
-    StartupDiagnosticsFormatter.SummarizeError(consulRuntimeState.LastError));
+// Startup diagnostics and initialization run on the main thread outside any request scope.
+// The retired global Serilog enrichers used to stamp every log line with identity; under the
+// ServiceMantle pipeline identity comes from explicit scopes, so the whole startup region
+// opens one ServiceLogContext scope (ServiceName/ServiceVersion/InstanceId, deliberately no
+// HTTP CorrelationId) and disposes it before the request pipeline starts.
+var serviceLogContext = app.Services.GetRequiredService<ServiceMantle.Web.Logging.ServiceLogContext>();
+using (serviceLogContext.BeginScope(app.Logger))
 {
-    var csb = new DbConnectionStringBuilder { ConnectionString = connectionString };
-    app.Logger.LogInformation("Database: PostgreSQL {Host}:{Port}/{Database}", csb["Host"], csb.TryGetValue("Port", out var dbPort) ? dbPort : "5432", csb["Database"]);
-}
-app.Logger.LogInformation(
-    "Effective configuration diagnostics: PostgreSqlHost={PostgreSqlHost}, PostgreSqlPort={PostgreSqlPort}, PostgreSqlUsername={PostgreSqlUsername}, PostgreSqlPassword={PostgreSqlPassword}, DatabaseName={DatabaseName}, LokiUri={LokiUri}, OpenSearchUrl={OpenSearchUrl}",
-    StartupDiagnosticsFormatter.SummarizeValue(builder.Configuration["PostgreSql:Host"]),
-    StartupDiagnosticsFormatter.SummarizeValue(builder.Configuration["PostgreSql:Port"]),
-    StartupDiagnosticsFormatter.SummarizeValue(builder.Configuration["PostgreSql:Username"]),
-    StartupDiagnosticsFormatter.SummarizePassword(builder.Configuration["PostgreSql:Password"]),
-    StartupDiagnosticsFormatter.SummarizeValue(builder.Configuration["Database:Name"]),
-    StartupDiagnosticsFormatter.SummarizeValue(builder.Configuration["Loki:Uri"]),
-    StartupDiagnosticsFormatter.SummarizeValue(builder.Configuration["OpenSearch:Url"]));
-app.Logger.LogInformation("OSS: {OssType}", useLocalOss ? "local" : "S3");
-app.Logger.LogInformation("OpenSearch: {Url}", builder.Configuration["OpenSearch:Url"] ?? "(not configured)");
-
-var structaDocConfig = builder.Configuration.GetSection(StructaDocOptions.SectionName).Get<StructaDocOptions>()
-    ?? new StructaDocOptions();
-app.Logger.LogInformation(
-    "StructaDoc: BaseUrl={BaseUrl}, ApiKey={ApiKeyStatus}",
-    structaDocConfig.BaseUrl ?? "(not configured)",
-    string.IsNullOrEmpty(structaDocConfig.ApiKey) ? "(empty - parsing disabled)" : SensitiveDataMasker.MaskApiKey(structaDocConfig.ApiKey));
-
-// Log LLM configuration
-var llmApiKey = builder.Configuration["LlmDocumentAnalysis:ApiKey"];
-var llmBaseUrl = builder.Configuration["LlmDocumentAnalysis:BaseUrl"];
-var llmModel = builder.Configuration["LlmDocumentAnalysis:Model"];
-var llmContextLength = builder.Configuration["LlmDocumentAnalysis:ContextLength"];
-var llmEnabled = !string.IsNullOrEmpty(llmApiKey);
-app.Logger.LogInformation(
-    "LLM Document Analysis: Enabled={Enabled}, BaseUrl={BaseUrl}, Model={Model}, ContextLength={ContextLength}, ApiKey={ApiKeyStatus}",
-    llmEnabled,
-    llmBaseUrl ?? "(not configured)",
-    llmModel ?? "(not configured)",
-    llmContextLength ?? "(not configured)",
-    string.IsNullOrEmpty(llmApiKey) ? "(empty - service disabled)" : SensitiveDataMasker.MaskApiKey(llmApiKey));
-
-// Initialize LLM document analysis at startup
-if (llmEnabled)
-{
-    using var llmScope = app.Services.CreateScope();
-    var llmService = llmScope.ServiceProvider.GetService<IDocumentAnalysisService>();
-    if (llmService != null)
+    app.Logger.LogInformation("Doctheca Service starting");
+    app.Logger.LogInformation(
+        "Identity trust: Authority={Authority}, Issuers={Issuers}, Audience={Audience}, RequireHttpsMetadata={RequireHttpsMetadata}",
+        identityTrust.Authority,
+        string.Join(",", identityTrust.GetValidIssuers()),
+        identityTrust.Audience,
+        identityTrust.RequireHttpsMetadata);
+    app.Logger.LogInformation("Endpoints: HTTP={HttpPort}", httpPort);
+    app.Logger.LogInformation(
+        "Consul startup diagnostics: Address={Address}, Token={Token}, Source={Source}, KeyCount={KeyCount}, Prefixes={Prefixes}, LastError={LastError}",
+        $"{consulOptions.Host}:{consulOptions.Port}",
+        StartupDiagnosticsFormatter.MaskSecret(consulOptions.Token),
+        consulRuntimeState.Source,
+        consulRuntimeState.KeyCount,
+        StartupDiagnosticsFormatter.SummarizePrefixes(consulRuntimeState.LoadedPrefixes),
+        StartupDiagnosticsFormatter.SummarizeError(consulRuntimeState.LastError));
     {
+        var csb = new DbConnectionStringBuilder { ConnectionString = connectionString };
+        app.Logger.LogInformation("Database: PostgreSQL {Host}:{Port}/{Database}", csb["Host"], csb.TryGetValue("Port", out var dbPort) ? dbPort : "5432", csb["Database"]);
+    }
+    app.Logger.LogInformation(
+        "Effective configuration diagnostics: PostgreSqlHost={PostgreSqlHost}, PostgreSqlPort={PostgreSqlPort}, PostgreSqlUsername={PostgreSqlUsername}, PostgreSqlPassword={PostgreSqlPassword}, DatabaseName={DatabaseName}, LokiUri={LokiUri}, OpenSearchUrl={OpenSearchUrl}",
+        StartupDiagnosticsFormatter.SummarizeValue(builder.Configuration["PostgreSql:Host"]),
+        StartupDiagnosticsFormatter.SummarizeValue(builder.Configuration["PostgreSql:Port"]),
+        StartupDiagnosticsFormatter.SummarizeValue(builder.Configuration["PostgreSql:Username"]),
+        StartupDiagnosticsFormatter.SummarizePassword(builder.Configuration["PostgreSql:Password"]),
+        StartupDiagnosticsFormatter.SummarizeValue(builder.Configuration["Database:Name"]),
+        StartupDiagnosticsFormatter.SummarizeValue(builder.Configuration["Loki:Uri"]),
+        StartupDiagnosticsFormatter.SummarizeValue(builder.Configuration["OpenSearch:Url"]));
+    app.Logger.LogInformation("OSS: {OssType}", useLocalOss ? "local" : "S3");
+    app.Logger.LogInformation("OpenSearch: {Url}", builder.Configuration["OpenSearch:Url"] ?? "(not configured)");
+
+    var structaDocConfig = builder.Configuration.GetSection(StructaDocOptions.SectionName).Get<StructaDocOptions>()
+        ?? new StructaDocOptions();
+    app.Logger.LogInformation(
+        "StructaDoc: BaseUrl={BaseUrl}, ApiKey={ApiKeyStatus}",
+        structaDocConfig.BaseUrl ?? "(not configured)",
+        string.IsNullOrEmpty(structaDocConfig.ApiKey) ? "(empty - parsing disabled)" : SensitiveDataMasker.MaskApiKey(structaDocConfig.ApiKey));
+
+    // Log LLM configuration
+    var llmApiKey = builder.Configuration["LlmDocumentAnalysis:ApiKey"];
+    var llmBaseUrl = builder.Configuration["LlmDocumentAnalysis:BaseUrl"];
+    var llmModel = builder.Configuration["LlmDocumentAnalysis:Model"];
+    var llmContextLength = builder.Configuration["LlmDocumentAnalysis:ContextLength"];
+    var llmEnabled = !string.IsNullOrEmpty(llmApiKey);
+    app.Logger.LogInformation(
+        "LLM Document Analysis: Enabled={Enabled}, BaseUrl={BaseUrl}, Model={Model}, ContextLength={ContextLength}, ApiKey={ApiKeyStatus}",
+        llmEnabled,
+        llmBaseUrl ?? "(not configured)",
+        llmModel ?? "(not configured)",
+        llmContextLength ?? "(not configured)",
+        string.IsNullOrEmpty(llmApiKey) ? "(empty - service disabled)" : SensitiveDataMasker.MaskApiKey(llmApiKey));
+
+    // Initialize LLM document analysis at startup
+    if (llmEnabled)
+    {
+        using var llmScope = app.Services.CreateScope();
+        var llmService = llmScope.ServiceProvider.GetService<IDocumentAnalysisService>();
+        if (llmService != null)
+        {
+            try
+            {
+                await llmService.InitializeAsync();
+            }
+            catch (Exception ex)
+            {
+                app.Logger.LogWarning(ex, "LLM document analysis initialization failed at startup");
+            }
+        }
+    }
+
+    using (var scope = app.Services.CreateScope())
+    {
+        var dbContext = scope.ServiceProvider.GetRequiredService<DocthecaDbContext>();
+        var loggerFactory = scope.ServiceProvider.GetRequiredService<ILoggerFactory>();
+        await DatabaseInitializer.InitializeAsync(dbContext, loggerFactory);
+        // One-way process-local receipt: only a successful initializer return may publish
+        // migrationStatus=Succeeded later, and only together with a passing read-only schema
+        // probe (the initializer swallows some ALTER failures, so this alone is not proof).
+        scope.ServiceProvider.GetRequiredService<DocthecaStartupReceipt>()
+            .MarkInitializationCompleted();
+    }
+
+    // Initialize search indices
+    using (var initScope = app.Services.CreateScope())
+    {
+        var searchIndexService = initScope.ServiceProvider.GetRequiredService<ISearchIndexService>();
+        var initLogger = initScope.ServiceProvider.GetRequiredService<ILogger<Program>>();
         try
         {
-            await llmService.InitializeAsync();
+            await searchIndexService.EnsureIndexAsync();
+            initLogger.LogInformation("Search index initialization completed");
         }
         catch (Exception ex)
         {
-            app.Logger.LogWarning(ex, "LLM document analysis initialization failed at startup");
+            initLogger.LogWarning(ex, "Search index initialization failed");
         }
-    }
-}
-
-using (var scope = app.Services.CreateScope())
-{
-    var dbContext = scope.ServiceProvider.GetRequiredService<DocthecaDbContext>();
-    var loggerFactory = scope.ServiceProvider.GetRequiredService<ILoggerFactory>();
-    await DatabaseInitializer.InitializeAsync(dbContext, loggerFactory);
-    // One-way process-local receipt: only a successful initializer return may publish
-    // migrationStatus=Succeeded later, and only together with a passing read-only schema
-    // probe (the initializer swallows some ALTER failures, so this alone is not proof).
-    scope.ServiceProvider.GetRequiredService<DocthecaStartupReceipt>()
-        .MarkInitializationCompleted();
-}
-
-// Initialize search indices
-using (var initScope = app.Services.CreateScope())
-{
-    var searchIndexService = initScope.ServiceProvider.GetRequiredService<ISearchIndexService>();
-    var initLogger = initScope.ServiceProvider.GetRequiredService<ILogger<Program>>();
-    try
-    {
-        await searchIndexService.EnsureIndexAsync();
-        initLogger.LogInformation("Search index initialization completed");
-    }
-    catch (Exception ex)
-    {
-        initLogger.LogWarning(ex, "Search index initialization failed");
     }
 }
 

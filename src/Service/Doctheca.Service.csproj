@@ -11,6 +11,10 @@
     <PackageReference Include="Markdig" Version="1.4.0" />
     <PackageReference Include="OpenSearch.Net" Version="2.2.0" />
     <PackageReference Include="PdfPig" Version="0.1.16" />
+    <!-- ServiceLogContext for the background worker's own identity scope; the singleton
+         instance is owned and registered by the Host's ServiceMantle foundation. The Service
+         layer references the library only for that type and never references the Host. -->
+    <PackageReference Include="ServiceMantle.Web" Version="0.2.0" />
   </ItemGroup>
 
   <PropertyGroup>
