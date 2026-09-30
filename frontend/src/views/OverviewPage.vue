@@ -171,7 +171,6 @@ onMounted(load)
             <div class="card-title">解析吞吐</div>
             <div class="card-sub">近 30 天完成的解析任务数</div>
           </div>
-          <span class="badge green"><span class="dot"></span>MinerU 在线</span>
         </div>
         <ChartLine :data="trend" :labels="trendLabels" />
       </div>
