@@ -76,6 +76,38 @@ gone and `status` is now `ready`/`not_ready` rather than `healthy`.
 | OpenSearch write failure | Does not block the main parsing flow; logs a Warning |
 | OpenSearch query failure | Returns empty results and logs a Warning |
 
+## Admin JSON Security Response Headers (ServiceMantle)
+
+The JSON admin API responses carry an immutable six-header security baseline applied by the
+ServiceMantle security response-header middleware (`AddSecurityResponseHeaders()` on the single
+foundation builder + `UseServiceMantleSecurityResponseHeaders()` inserted after routing and
+before authentication/authorization, so 401/403 challenges are covered too). Each header is
+written exactly once via `OnStarting`, so a downstream component that pre-writes a duplicate or
+a different value converges back to the single baseline value; the baseline cannot be weakened
+by business components.
+
+| Header | Value |
+|------|------|
+| `Cache-Control` | `no-store` |
+| `Pragma` | `no-cache` |
+| `X-Content-Type-Options` | `nosniff` |
+| `X-Frame-Options` | `DENY` |
+| `Referrer-Policy` | `no-referrer` |
+| `Content-Security-Policy` | `default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'` |
+
+The baseline applies to exactly the 13 marked JSON admin endpoints — the four
+`/admin/auth/{login,refresh,logout,session}` entries; the six `/admin/document-files`
+list/detail/upload/parse/metadata/delete entries; the two `/admin/document-parses` list/delete
+entries; and `/admin/documents/search`. Endpoints are marked individually with
+`RequireServiceMantleSecurityResponseHeaders`; the marker is a response classification, not an
+authorization credential.
+
+The CSP baseline is deliberately NOT applied to the rendering contracts, which keep their
+existing behavior: the SPA and static assets, the four HTML/ZIP export endpoints, the parse
+image content proxy, and the health endpoints. The strict `default-src 'none'` CSP would break
+browser rendering of HTML previews, so those responses stay unmarked. New JSON admin endpoints
+must opt in explicitly; HTML/image/export responses must not reuse the JSON CSP.
+
 ## Service Identity, Correlation & Base Telemetry (ServiceMantle)
 
 Doctheca registers the ServiceMantle host foundation (`ServiceMantle.Web` /

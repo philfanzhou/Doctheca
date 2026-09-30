@@ -40,6 +40,12 @@ serviceMantle.AddServiceMantleHealthEndpoints(options =>
 builder.Services.AddSingleton<DocthecaStartupReceipt>();
 builder.Services.AddScoped<IServiceHealthSnapshotSource, DocthecaHealthSnapshotSource>();
 
+// ========== ServiceMantle security response headers (marked JSON admin endpoints) ==========
+// Immutable six-header baseline (Cache-Control/Pragma/X-Content-Type-Options/X-Frame-Options/
+// Referrer-Policy/Content-Security-Policy) applied only to endpoints explicitly marked with
+// RequireServiceMantleSecurityResponseHeaders; no weakening options exist.
+serviceMantle.AddSecurityResponseHeaders();
+
 builder.Configuration.AddRuoyuConsulConfiguration(builder.Configuration);
 
 // ========== ServiceMantle logging (Console + optional Grafana Loki) ==========
@@ -320,6 +326,14 @@ using (serviceLogContext.BeginScope(app.Logger))
 // ServiceMantle request scope and receives the x-correlation-id response header, injected via
 // OnStarting before any response starts (static file responses included).
 app.UseServiceMantleCorrelationId();
+
+// Explicit routing ahead of the security-header middleware so the matched endpoint's marker
+// metadata is resolvable there; inserting the middleware before authentication/authorization
+// also covers 401/403 challenge responses of marked endpoints. The correlation id stays the
+// outermost middleware, and static files/SPA fallback carry no marker so their rendering
+// contracts are untouched.
+app.UseRouting();
+app.UseServiceMantleSecurityResponseHeaders();
 
 app.UseDefaultFiles();
 app.UseStaticFiles();

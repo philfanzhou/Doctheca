@@ -20,8 +20,11 @@ public static class DocumentParseEndpoints
         var group = app.MapGroup("/admin/document-parses")
             .RequireAuthorization(DocthecaAuthorizationPolicies.Admin);
 
-        group.MapGet("/", ListDocumentParses);
-        group.MapDelete("/{parseId:guid}", DeleteDocumentParse);
+        // The two JSON endpoints carry the ServiceMantle security response-header baseline;
+        // the image content endpoint below deliberately does not (binary rendering contract).
+        group.MapGet("/", ListDocumentParses).RequireServiceMantleSecurityResponseHeaders();
+        group.MapDelete("/{parseId:guid}", DeleteDocumentParse)
+            .RequireServiceMantleSecurityResponseHeaders();
         group.MapGet("/{parseId:guid}/images/{imageId:guid}/content", GetParseImageContent);
 
         return app;
