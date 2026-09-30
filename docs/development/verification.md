@@ -14,10 +14,11 @@ Never commit real passwords, tokens or cookies to the repository or paste them i
 
 ```bash
 curl -i http://localhost:5012/
-curl -i http://localhost:5012/health
+curl -i http://localhost:5012/health/live
+curl -i http://localhost:5012/health/ready
 ```
 
-Neither is expected to return 401. The health check returns 200.
+None is expected to return 401. `/health/live` returns `200 {"status":"live"}` whenever the process is up (it never queries the database). `/health/ready` — and its `/health` alias — return `200 {"status":"ready",...}` only when the startup initializer completed and a read-only probe of the mapped PostgreSQL tables/columns succeeded, otherwise `503 {"status":"not_ready",...}` with a value-free safe error code. This is a contract change from the previous `/health`, which always returned `{"status":"healthy","timestamp":...}`; the `timestamp` field is gone.
 
 ## Admin API Without Login
 

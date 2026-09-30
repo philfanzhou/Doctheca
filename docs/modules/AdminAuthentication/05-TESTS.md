@@ -16,7 +16,7 @@
 | AUTH-UT-10 | Invalid Refresh Token | 401 and Cookies cleared |
 | AUTH-UT-11 | Logout | Calls revoke and clears Cookies |
 | AUTH-UT-12 | Logout when Identity revoke is unavailable | Still clears Cookies and returns 200 |
-| AUTH-UT-13 | `/health`, static entries, and SPA fallback | Anonymously accessible |
+| AUTH-UT-13 | The health probes (`/health/live`, `/health/ready`, `/health`), static entries, and SPA fallback | Anonymously accessible |
 | AUTH-UT-14 | `/internal/question-bank/*` and old import-status paths | Not mapped |
 | AUTH-UT-15 | Identity token request | Fields are `grantType`, `username`, `password` / `refreshToken`, and Doctheca AppId/AppSecret headers are sent |
 | AUTH-UT-16 | SignaCore returns 401 rejecting the App credentials | Mapped to Identity unavailable, not disguised as a user-password error |
