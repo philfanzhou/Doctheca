@@ -19,7 +19,7 @@ See [relations.md](relations.md).
 
 ## Migration History
 
-This project does not use EF Core Migration; instead it uses a SQL-based initialization strategy via [DatabaseInitializer](../../src/Database/DatabaseInitializer.cs). Table structures are created automatically at application startup (`CREATE TABLE IF NOT EXISTS`).
+The schema is managed with EF Core migrations through [DocthecaMigrationExecutor](../../src/Database/DocthecaMigrationExecutor.cs): empty databases migrate from the `20260930161548_InitialCreate` baseline, verified legacy databases are taken over (safe backfills plus baseline registration), and unknown or conflicting structures fail startup with the fixed error code `DOCTHECA_DB_SCHEMA_INCOMPATIBLE`. See [migrations.md](migrations.md) for the full rules and upgrade notes.
 
 ## Database Configuration
 

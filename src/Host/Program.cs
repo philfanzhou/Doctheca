@@ -323,10 +323,16 @@ using (serviceLogContext.BeginScope(app.Logger))
     {
         var dbContext = scope.ServiceProvider.GetRequiredService<DocthecaDbContext>();
         var loggerFactory = scope.ServiceProvider.GetRequiredService<ILoggerFactory>();
-        await DatabaseInitializer.InitializeAsync(dbContext, loggerFactory);
-        // One-way process-local receipt: only a successful initializer return may publish
-        // migrationStatus=Succeeded later, and only together with a passing read-only schema
-        // probe (the initializer swallows some ALTER failures, so this alone is not proof).
+        // Migration-baseline executor (issue #52): empty databases really migrate; verified
+        // legacy databases are taken over (safe backfills + baseline registration); any unknown
+        // or conflicting structure fails startup with a fixed error code instead of being
+        // silently repaired or stamped.
+        await new DocthecaMigrationExecutor(
+                dbContext,
+                loggerFactory.CreateLogger(nameof(DocthecaMigrationExecutor)))
+            .ExecuteAsync();
+        // One-way process-local receipt: only a successful executor return may publish
+        // migrationStatus=Succeeded later, together with the passing read-only schema probe.
         scope.ServiceProvider.GetRequiredService<DocthecaStartupReceipt>()
             .MarkInitializationCompleted();
     }

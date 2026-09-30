@@ -16,4 +16,8 @@
     <ProjectReference Include="..\Domain\Doctheca.Domain.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="Doctheca.Tests" />
+  </ItemGroup>
+
 </Project>

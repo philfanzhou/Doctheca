@@ -20,6 +20,8 @@ public class DocthecaDbContext : DbContext
 
         modelBuilder.Entity<DocumentFileEntity>(entity =>
         {
+            entity.HasIndex(e => e.FileName);
+
             entity.Property(e => e.CreatedAt).HasDefaultValueSql("NOW()");
             entity.Property(e => e.UpdatedAt).HasDefaultValueSql("NOW()");
 
@@ -31,6 +33,7 @@ public class DocthecaDbContext : DbContext
         {
             entity.HasIndex(e => e.Status);
             entity.HasIndex(e => e.DocumentFileId);
+            entity.HasIndex(e => e.ModelVersion);
 
             entity.Property(e => e.ContentList).HasColumnType("jsonb");
             entity.Property(e => e.ContentListV2).HasColumnType("jsonb");
