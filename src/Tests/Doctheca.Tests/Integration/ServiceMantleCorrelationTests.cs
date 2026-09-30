@@ -50,8 +50,8 @@ public sealed partial class ServiceMantleCorrelationTests : ServiceMantleIntegra
             Assert.Equal(HttpStatusCode.OK, spa.StatusCode);
             Assert.Equal(ValidValue, spa.Headers.GetValues(CorrelationHeaderName).Single());
 
-            // Anonymous health.
-            using var health = await client.GetAsync("/health");
+            // Anonymous liveness probe (always 200, never queries the database).
+            using var health = await client.GetAsync("/health/live");
             Assert.Equal(HttpStatusCode.OK, health.StatusCode);
             Assert.Equal(ValidValue, health.Headers.GetValues(CorrelationHeaderName).Single());
 
@@ -73,7 +73,7 @@ public sealed partial class ServiceMantleCorrelationTests : ServiceMantleIntegra
         using var factory = CreateFactory();
         using var client = factory.CreateClient();
 
-        using var health = await client.GetAsync("/health");
+        using var health = await client.GetAsync("/health/live");
         Assert.Equal(HttpStatusCode.OK, health.StatusCode);
         Assert.Matches(GeneratedIdPattern(), health.Headers.GetValues(CorrelationHeaderName).Single());
 
@@ -94,7 +94,7 @@ public sealed partial class ServiceMantleCorrelationTests : ServiceMantleIntegra
         using var client = factory.CreateClient();
         client.DefaultRequestHeaders.TryAddWithoutValidation(CorrelationHeaderName, value);
 
-        using var response = await client.GetAsync("/health");
+        using var response = await client.GetAsync("/health/live");
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var resolved = response.Headers.GetValues(CorrelationHeaderName).Single();
@@ -111,7 +111,7 @@ public sealed partial class ServiceMantleCorrelationTests : ServiceMantleIntegra
             CorrelationHeaderName,
             new string('a', 65)); // one character beyond the 64-character maximum
 
-        using var response = await client.GetAsync("/health");
+        using var response = await client.GetAsync("/health/live");
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Matches(GeneratedIdPattern(), response.Headers.GetValues(CorrelationHeaderName).Single());
@@ -126,7 +126,7 @@ public sealed partial class ServiceMantleCorrelationTests : ServiceMantleIntegra
         client.DefaultRequestHeaders.TryAddWithoutValidation(
             CorrelationHeaderName, "another-valid-id-1234");
 
-        using var response = await client.GetAsync("/health");
+        using var response = await client.GetAsync("/health/live");
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var resolved = response.Headers.GetValues(CorrelationHeaderName).Single();
@@ -151,7 +151,7 @@ public sealed partial class ServiceMantleCorrelationTests : ServiceMantleIntegra
         var responses = await Task.WhenAll(Enumerable.Range(0, requestCount).Select(async index =>
         {
             var expected = $"conc-{index:D2}-abcdef";
-            using var request = new HttpRequestMessage(HttpMethod.Get, "/health");
+            using var request = new HttpRequestMessage(HttpMethod.Get, "/health/live");
             request.Headers.Add(CorrelationHeaderName, expected);
             using var response = await client.SendAsync(request);
             return (
@@ -192,7 +192,7 @@ public sealed partial class ServiceMantleCorrelationTests : ServiceMantleIntegra
         using var client = factory.CreateClient();
         client.DefaultRequestHeaders.Add(CorrelationHeaderName, ValidValue);
 
-        using var response = await client.GetAsync("/health");
+        using var response = await client.GetAsync("/health/live");
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var correlationId = response.Headers.GetValues(CorrelationHeaderName).Single();

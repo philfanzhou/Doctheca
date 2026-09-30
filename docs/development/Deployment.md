@@ -217,7 +217,7 @@ Callers access Doctheca via `DocthecaService:Url` in Consul `config/ruoyu/servic
 
 The Consul initialization script uses `cas=0` and only creates KVs that do not yet exist. Modifying the initialization JSON does not overwrite existing values; during migration you must also update the live KV. If callers read this configuration only at startup, they must also be restarted after the live KV is updated.
 
-The post-deployment smoke check should hit `http://127.0.0.1:5012/health` on the Doctheca target host.
+The post-deployment smoke check should hit `http://127.0.0.1:5012/health/live` for process liveness and `http://127.0.0.1:5012/health/ready` (or its `/health` alias) for database readiness on the Doctheca target host. Note the contract change: `/health` is now a readiness alias returning `200 {"status":"ready",...}` only once the startup initializer completed and a read-only schema probe succeeded, and `503 {"status":"not_ready",...}` otherwise — it no longer returns the old always-`healthy` payload with a `timestamp`.
 
 The service automatically performs the following at startup:
 1. `DatabaseInitializer.InitializeAsync` — table creation + column migration (SQL-based, no EF Core Migration)

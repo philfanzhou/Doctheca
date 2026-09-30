@@ -40,10 +40,31 @@ Main admin endpoints:
 ## Anonymous Entry Points
 
 - `/`, static resources, and SPA fallback
-- `/health`
+- `/health/live` (liveness), `/health/ready` and its `/health` alias (readiness)
 - `/admin/auth/login`
 - `/admin/auth/refresh`
 - `/admin/auth/logout`
+
+### Health Probes
+
+Doctheca exposes the fixed ServiceMantle health endpoints, all anonymous and always JSON
+(they are mapped ahead of the SPA fallback, so they never return `index.html`):
+
+| Endpoint | Purpose | Healthy response |
+|------|------|------|
+| `GET /health/live` | Liveness: the process is up. Never resolves the snapshot source or queries the database. | `200 {"status":"live"}` |
+| `GET /health/ready` | Readiness: the startup initializer completed **and** a read-only probe of the EF-mapped PostgreSQL tables/columns succeeded. | `200 {"status":"ready","phase":"completed","migrationStatus":"succeeded","databaseStatus":"reachable","errorCode":null}` |
+| `GET /health` | Readiness alias — **a public contract change**: it now returns the readiness projection instead of the old always-`healthy` liveness payload with a `timestamp`. | same as `/health/ready` |
+
+Readiness fails closed to `503 {"status":"not_ready",...}` with a value-free safe code when the
+initializer has not completed (`doctheca.startup_incomplete`), a mapped table/column is not
+readable (`doctheca.schema_unavailable`), the database is unreachable
+(`doctheca.database_unreachable`), or the probe times out / fails inside the library
+(`health.probe_timeout` / `health.probe_failed`). Readiness is re-sampled on every request —
+nothing is cached in the background — so a recovered database is reflected by the next call.
+Use `/health/live` for process liveness and `/health/ready` (or `/health`) for database
+readiness. Callers that parsed the old `/health` body must migrate: the `timestamp` field is
+gone and `status` is now `ready`/`not_ready` rather than `healthy`.
 
 ## Failure Semantics
 

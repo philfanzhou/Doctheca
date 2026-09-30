@@ -9,10 +9,10 @@ namespace Doctheca.Tests.Integration;
 /// <summary>
 /// Proves the fixed route and identity contract of the real host is unchanged after replacing
 /// the local correlation middleware with the ServiceMantle pipeline: static assets, the SPA
-/// fallback, the anonymous auth entries, and <c>/health</c> stay anonymous; unauthenticated
-/// admin API calls return 401; non-admin tokens return 403; valid admin Bearer and cookie
-/// sessions still reach the real endpoints. Every response — anonymous or not — carries the
-/// correlation header injected by the first middleware.
+/// fallback, the anonymous auth entries, and the ServiceMantle health endpoints stay
+/// anonymous; unauthenticated admin API calls return 401; non-admin tokens return 403; valid
+/// admin Bearer and cookie sessions still reach the real endpoints. Every response — anonymous
+/// or not — carries the correlation header injected by the first middleware.
 /// </summary>
 [Collection(ServiceMantleIntegrationCollection.Name)]
 public sealed class ServiceMantleRouteContractTests : ServiceMantleIntegrationTestBase
@@ -50,11 +50,12 @@ public sealed class ServiceMantleRouteContractTests : ServiceMantleIntegrationTe
             Assert.Equal(HttpStatusCode.OK, spaRoute.StatusCode);
             Assert.Equal("text/html", spaRoute.Content.Headers.ContentType?.MediaType);
 
-            // The existing health endpoint stays anonymous with its original payload.
+            // /health is now the ServiceMantle readiness alias: anonymous, JSON, and 200
+            // with the ready projection while the test database is healthy.
             using var health = await client.GetAsync("/health");
             Assert.Equal(HttpStatusCode.OK, health.StatusCode);
             Assert.Equal("application/json", health.Content.Headers.ContentType?.MediaType);
-            Assert.Contains("\"status\":\"healthy\"", await health.Content.ReadAsStringAsync());
+            Assert.Contains("\"status\":\"ready\"", await health.Content.ReadAsStringAsync());
 
             // The anonymous auth entries are reachable without a session: login with an empty
             // body reaches the endpoint (400 validation), it is not gated by 401.

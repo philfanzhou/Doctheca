@@ -47,11 +47,11 @@ Authentication
 Authorization
 Anonymous auth endpoints
 Admin route groups -> DocthecaAdmin policy
-Anonymous /health
+Anonymous health probes (/health/live, /health/ready, /health)
 Anonymous SPA fallback
 ```
 
-Static files, `/health`, login/refresh/logout, and the SPA fallback are not intercepted by the admin policy. `/admin/auth/session` alone requires `DocthecaAdmin`.
+Static files, the health probes (`/health/live`, `/health/ready`, and the `/health` alias), login/refresh/logout, and the SPA fallback are not intercepted by the admin policy. `/admin/auth/session` alone requires `DocthecaAdmin`.
 
 ## Login data flow
 

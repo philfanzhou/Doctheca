@@ -24,7 +24,7 @@ The admin frontend continues to be statically hosted by the Doctheca Host and de
 | AC-08 | Access Tokens and Refresh Tokens are stored only in HttpOnly, SameSite=Strict Cookies |
 | AC-09 | After the Access Token expires, one-time token rotation completes via the Refresh Cookie |
 | AC-10 | Logout calls Identity to revoke the Refresh Token and unconditionally clears the local Cookies |
-| AC-11 | The SPA, login page, static files, and `/health` remain anonymously accessible |
+| AC-11 | The SPA, login page, static files, and the health probes (`/health/live`, `/health/ready`, `/health`) remain anonymously accessible |
 | AC-12 | Logs never record passwords, JWTs, Refresh Tokens, or Cookies |
 
 ## Scope

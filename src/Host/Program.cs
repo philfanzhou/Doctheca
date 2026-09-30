@@ -18,7 +18,9 @@ using Doctheca.Service.Parsing;
 using Doctheca.Service.StructaDoc;
 using Doctheca.Host;
 using Doctheca.Host.Authentication;
+using Doctheca.Host.Health;
 using Doctheca.Consul;
+using ServiceMantle.Health;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -27,6 +29,16 @@ var builder = WebApplication.CreateBuilder(args);
 // builder instead of regenerating the identity or registering a second root (see
 // DocthecaServiceMantleExtensions for the identity and no-exporter contract).
 var serviceMantle = builder.Services.AddDocthecaServiceMantleFoundation();
+
+// ========== ServiceMantle health probes (live + readiness, /health alias) ==========
+// No dependency contributors are registered: readiness is exactly the startup receipt plus
+// the read-only PostgreSQL probe owned by DocthecaHealthSnapshotSource below.
+serviceMantle.AddServiceMantleHealthEndpoints(options =>
+{
+    options.ProbeTimeout = TimeSpan.FromSeconds(3);
+});
+builder.Services.AddSingleton<DocthecaStartupReceipt>();
+builder.Services.AddScoped<IServiceHealthSnapshotSource, DocthecaHealthSnapshotSource>();
 
 builder.Configuration.AddRuoyuConsulConfiguration(builder.Configuration);
 
@@ -271,6 +283,11 @@ using (var scope = app.Services.CreateScope())
     var dbContext = scope.ServiceProvider.GetRequiredService<DocthecaDbContext>();
     var loggerFactory = scope.ServiceProvider.GetRequiredService<ILoggerFactory>();
     await DatabaseInitializer.InitializeAsync(dbContext, loggerFactory);
+    // One-way process-local receipt: only a successful initializer return may publish
+    // migrationStatus=Succeeded later, and only together with a passing read-only schema
+    // probe (the initializer swallows some ALTER failures, so this alone is not proof).
+    scope.ServiceProvider.GetRequiredService<DocthecaStartupReceipt>()
+        .MarkInitializationCompleted();
 }
 
 // Initialize search indices
@@ -309,8 +326,14 @@ app.MapDocumentParseEndpoints();
 app.MapDocumentExportEndpoints();
 app.MapDocumentSearchEndpoints();
 
-app.MapGet("/health", () => Results.Ok(new { status = "healthy", timestamp = DateTimeOffset.UtcNow }))
-    .AllowAnonymous();
+// ServiceMantle fixed health endpoints: GET /health/live (liveness, never touches the
+// database), GET /health/ready and the GET /health alias (readiness projection). All three
+// are anonymous and mapped ahead of the SPA fallback, so they always answer JSON. Note the
+// deliberate public contract change: /health is now a readiness alias (503 while not ready)
+// instead of the old always-healthy liveness payload with a timestamp.
+app.MapGroup(string.Empty)
+    .AllowAnonymous()
+    .MapServiceMantleHealthEndpoints();
 app.MapFallbackToFile("index.html").AllowAnonymous();
 
 app.Run();
