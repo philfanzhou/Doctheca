@@ -108,4 +108,22 @@ cd frontend
 npm run build
 ```
 
+### Test prerequisites
+
+- The unit and hosting tests run everywhere the .NET SDK runs; no external service is needed.
+- The container-backed integration tests in `Doctheca.Tests.Integration` boot the real
+  `Program.cs` host through `WebApplicationFactory` against a one-off PostgreSQL via
+  Testcontainers, so they require a reachable Docker daemon (the first run pulls
+  `postgres:16-alpine`). They never touch a production Consul, Identity, StructaDoc,
+  OpenSearch, or Loki endpoint: Consul and the log sinks point at a closed loopback port with
+  the Consul disk cache disabled, external clients are replaced by in-process doubles, the
+  LLM stays disabled, and every credential (including the per-run PostgreSQL password and the
+  JWT signing key) is synthetic and never leaves the test process.
+- To run only the Docker-free tests:
+
+```bash
+dotnet test src/Doctheca.sln --configuration Release \
+  --filter "FullyQualifiedName!~Doctheca.Tests.Integration"
+```
+
 > Doctheca is a standalone repository; verification no longer depends on the Ruoyu.Study monorepo's `tests/integration/scripts/pre-commit.sh`. The commands above are this repository's complete local verification (see also the "Verification" section of the root `AGENTS.md`).

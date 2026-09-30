@@ -81,14 +81,15 @@ Implementation location: the `Doctheca.Ai.SensitiveDataMasker` static utility cl
 
 CorrelationId applies to the HTTP path, making it easy to trace request chains across services in Loki:
 
-- HTTP path: `CorrelationIdMiddleware` (ASP.NET Core middleware) reads it from the `x-correlation-id` request header or creates a new one, writes it into `HttpContext.Items` and injects it into the logging context via `BeginScope`; the response header writes `x-correlation-id` back so callers can correlate.
+- HTTP path: the ServiceMantle correlation ID middleware (`app.UseServiceMantleCorrelationId()` from the `ServiceMantle.Web` package) resolves exactly one Correlation ID per request. A caller-supplied `x-correlation-id` request header is reused verbatim only when it carries exactly one value of 1–64 characters whose first character is an ASCII letter or digit and whose remaining characters are ASCII letters, digits, `.`, `_`, or `-`. Missing, whitespace, overlong, illegal, comma-joined, or repeated values are discarded as a whole and replaced by a generated 32-character lowercase hexadecimal id. The resolved value is published to the `x-correlation-id` response header (injected via `OnStarting` before any response starts, so a downstream write converges back to the same single value), to the `HttpContext` accessor (`context.GetServiceMantleCorrelationId()`), and to the request log scope as the `CorrelationId` field, alongside the `ServiceName`, `ServiceVersion`, and `InstanceId` identity fields from the ServiceMantle host foundation.
+- The original request headers are never rewritten; rejected raw input never reaches the logs; exceptions and cancellation propagate untouched with the request scope released; and the id is not propagated to outbound `HttpClient` calls (OpenTelemetry W3C trace propagation is a separate protocol).
 
-HTTP controllers (`DocumentFileEndpoints`, etc.) must be within the scope of this middleware.
+HTTP controllers (`DocumentFileEndpoints`, etc.), static files, and the SPA fallback must be within the scope of this middleware.
 
 Middleware pipeline position (registration order in `Program.cs`):
 
 ```
-UseMiddleware<CorrelationIdMiddleware>()
+UseServiceMantleCorrelationId()
   → UseDefaultFiles() / UseStaticFiles()
   → UseAuthentication() / UseAuthorization()
   → MapAdminAuthEndpoints / MapAdminEndpoints
@@ -96,3 +97,5 @@ UseMiddleware<CorrelationIdMiddleware>()
 ```
 
 Static files and the SPA fallback remain anonymous; the admin route group requires `DocthecaAdmin`.
+
+> A Correlation ID is a log-correlation value only: it is not unique, unguessable, or authenticated, and must never be used for authorization, idempotency, replay protection, or audit subject identity. During a request, the ServiceMantle request scope supplies the current `CorrelationId`/`ServiceName`/`ServiceVersion`/`InstanceId` values to the logging pipeline; the legacy global Serilog enrichers remain as the fallback for non-request logs until the logging migration task unifies them.

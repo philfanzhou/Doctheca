@@ -22,6 +22,12 @@ using Doctheca.Consul;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// ========== ServiceMantle (service identity, correlation id, base telemetry) ==========
+// The single foundation registration root; later ServiceMantle migration slices extend this
+// builder instead of regenerating the identity or registering a second root (see
+// DocthecaServiceMantleExtensions for the identity and no-exporter contract).
+var serviceMantle = builder.Services.AddDocthecaServiceMantleFoundation();
+
 builder.Configuration.AddRuoyuConsulConfiguration(builder.Configuration);
 
 // ========== Serilog (Console + Grafana Loki) ==========
@@ -283,7 +289,11 @@ using (var initScope = app.Services.CreateScope())
     }
 }
 
-app.UseMiddleware<CorrelationIdMiddleware>();
+// First middleware in the pipeline: everything registered below (static files, the SPA
+// fallback, authentication, and every API/image/export response) runs inside the
+// ServiceMantle request scope and receives the x-correlation-id response header, injected via
+// OnStarting before any response starts (static file responses included).
+app.UseServiceMantleCorrelationId();
 
 app.UseDefaultFiles();
 app.UseStaticFiles();
@@ -304,3 +314,9 @@ app.MapGet("/health", () => Results.Ok(new { status = "healthy", timestamp = Dat
 app.MapFallbackToFile("index.html").AllowAnonymous();
 
 app.Run();
+
+// Exposes the minimal-hosting entry point to WebApplicationFactory<Program> for the
+// container-backed integration tests in src/Tests/Doctheca.Tests/Integration.
+public partial class Program
+{
+}
