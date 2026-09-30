@@ -58,6 +58,22 @@ const trend = computed(() => {
   return arr
 })
 
+// Axis labels for the trend chart, matching the real 30-day window (last tick is today).
+// Tick indices mirror ChartLine's even label distribution: round(i * (n - 1) / (count - 1)).
+const trendLabels = computed(() => {
+  const days = trend.value.length
+  if (days < 2) return []
+  const count = Math.min(7, days)
+  const now = new Date()
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
+  return Array.from({ length: count }, (_, i) => {
+    const idx = Math.round((i * (days - 1)) / (count - 1))
+    if (idx === days - 1) return '今天'
+    const d = new Date(todayStart - (days - 1 - idx) * 86400000)
+    return `${d.getMonth() + 1}/${d.getDate()}`
+  })
+})
+
 const recentFiles = computed(() => files.value.slice(0, 5))
 
 const fileStatusBadge = (status: string | null): string => {
@@ -157,7 +173,7 @@ onMounted(load)
           </div>
           <span class="badge green"><span class="dot"></span>MinerU 在线</span>
         </div>
-        <ChartLine :data="trend" />
+        <ChartLine :data="trend" :labels="trendLabels" />
       </div>
     </div>
 
