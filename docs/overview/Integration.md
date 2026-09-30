@@ -108,6 +108,21 @@ image content proxy, and the health endpoints. The strict `default-src 'none'` C
 browser rendering of HTML previews, so those responses stay unmarked. New JSON admin endpoints
 must opt in explicitly; HTML/image/export responses must not reuse the JSON CSP.
 
+### Unhandled Error Protocol (Safe Problem Details)
+
+The same 13 marked JSON admin endpoints — the four `/admin/auth/{login,refresh,logout,session}`
+entries; the six `/admin/document-files` list/detail/upload/parse/metadata/delete entries; the
+two `/admin/document-parses` list/delete entries; and `/admin/documents/search` — are also the
+exact boundary of the ServiceMantle safe Problem Details protocol: an unhandled exception
+becomes a fixed `application/problem+json` response carrying exactly
+`type`/`title`/`status`/`correlationId`/`errorCode` (never exception message, `Data`, or stack),
+shares one correlation id with the `x-correlation-id` response header and the request log
+scope, and carries the same six single-value security headers as above. Business JSON
+responses, 401/403 challenges, and parameter binding failures are never wrapped, and the
+rendering contracts (SPA/static/health/exports/image proxy) never enter the boundary. For the
+full protocol, fixed error codes, and explicit non-guarantees see
+[ErrorHandling](../development/ErrorHandling.md).
+
 ## Service Identity, Correlation & Base Telemetry (ServiceMantle)
 
 Doctheca registers the ServiceMantle host foundation (`ServiceMantle.Web` /

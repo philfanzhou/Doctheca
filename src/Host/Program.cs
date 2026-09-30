@@ -21,6 +21,7 @@ using Doctheca.Host.Authentication;
 using Doctheca.Host.Health;
 using Doctheca.Consul;
 using ServiceMantle.Health;
+using ServiceMantle.Web.Http;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -45,6 +46,32 @@ builder.Services.AddScoped<IServiceHealthSnapshotSource, DocthecaHealthSnapshotS
 // Referrer-Policy/Content-Security-Policy) applied only to endpoints explicitly marked with
 // RequireServiceMantleSecurityResponseHeaders; no weakening options exist.
 serviceMantle.AddSecurityResponseHeaders();
+
+// ========== ServiceMantle safe Problem Details (marked JSON admin endpoints) ==========
+// Conditional mapping for the only exception type whose framework status must survive the
+// boundary: a BadHttpRequestException escaping a handler or the server-side body-read stage
+// keeps its status through ordered candidates (413 → 415 → unconditional 400 default declared
+// last; the library picks the first matching candidate and rejects a second unconditional
+// candidate at startup). Everything else falls through to the library's fixed, safe 500. No
+// Exception-wide mapping is registered, no exception message/detail is projected into the
+// response, and no extension fields are used.
+serviceMantle.AddConditionalExceptionMapping<BadHttpRequestException>(
+[
+    new ExceptionMappingCandidate<BadHttpRequestException>(
+        StatusCodes.Status413PayloadTooLarge,
+        "http.payload_too_large",
+        "The request payload is too large.",
+        condition: exception => exception.StatusCode == StatusCodes.Status413PayloadTooLarge),
+    new ExceptionMappingCandidate<BadHttpRequestException>(
+        StatusCodes.Status415UnsupportedMediaType,
+        "http.unsupported_media_type",
+        "The request media type is not supported.",
+        condition: exception => exception.StatusCode == StatusCodes.Status415UnsupportedMediaType),
+    new ExceptionMappingCandidate<BadHttpRequestException>(
+        StatusCodes.Status400BadRequest,
+        "http.request_invalid",
+        "The request could not be processed."),
+]);
 
 builder.Configuration.AddRuoyuConsulConfiguration(builder.Configuration);
 
@@ -334,6 +361,20 @@ app.UseServiceMantleCorrelationId();
 // contracts are untouched.
 app.UseRouting();
 app.UseServiceMantleSecurityResponseHeaders();
+
+// Safe Problem Details boundary for the marked JSON admin endpoints only: the UseWhen branch
+// runs exactly for endpoints carrying the RequireServiceMantleSecurityResponseHeaders marker
+// resolved by the explicit UseRouting above, so static files, the SPA fallback, health, image
+// proxies, and HTML/ZIP exports never enter it (the library swallows exceptions once a
+// response has started, which streaming/rendering contracts must not inherit). The branch
+// builder is an independent IApplicationBuilder instance, so this composition does not
+// conflict with the library's PipelineComposition rules for UseServiceMantlePipeline; the
+// security-header middleware stays outside the branch and writes its six headers via
+// OnStarting, so problem responses carry the same single-value baseline.
+app.UseWhen(
+    context => context.GetEndpoint()?.Metadata
+        .GetMetadata<SecurityResponseHeadersMetadata>() is not null,
+    branch => branch.UseServiceMantleProblemDetails());
 
 app.UseDefaultFiles();
 app.UseStaticFiles();
