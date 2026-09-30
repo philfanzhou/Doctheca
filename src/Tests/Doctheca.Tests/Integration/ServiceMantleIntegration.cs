@@ -122,8 +122,9 @@ public abstract class ServiceMantleIntegrationTestBase
     };
 
     // Hermetic overrides for every outbound dependency of the real Program.cs: Consul points
-    // at a closed loopback port with the disk cache disabled, the Loki sinks point at a closed
-    // loopback port, OpenSearch/StructaDoc are replaced by doubles (see CreateFactory), and the
+    // at a closed loopback port with the disk cache disabled, the empty Loki:Uri disables the
+    // ServiceMantle Grafana Loki remote sink (Console stays on), OpenSearch/StructaDoc are
+    // replaced by doubles (see CreateFactory), and the
     // LLM stays disabled because its ApiKey is empty. The IdentityService values mirror the
     // synthetic entries of appsettings.Testing.json and are supplied explicitly so every
     // factory — including ones pointed at a temporary content root without any appsettings
@@ -135,7 +136,6 @@ public abstract class ServiceMantleIntegrationTestBase
             ["Consul:Port"] = "1",
             ["Consul:EnableCache"] = "false",
             ["Loki:Uri"] = "",
-            ["Serilog:WriteTo:1:Args:uri"] = "http://127.0.0.1:1",
             ["OpenSearch:Url"] = "http://127.0.0.1:1",
             ["StructaDoc:BaseUrl"] = "",
             ["LlmDocumentAnalysis:ApiKey"] = "",
@@ -297,7 +297,7 @@ public abstract class ServiceMantleIntegrationTestBase
 /// disposed. The ServiceMantle request scope is an <c>IReadOnlyList&lt;KeyValuePair&lt;string, object?&gt;&gt;</c>
 /// of named fields; replacing the logger factory with a plain one captures that scope state
 /// directly — the same scope surface the Serilog pipeline consumes. Actual Console/Loki
-/// delivery belongs to the later logging migration task and is not asserted here.
+/// delivery is asserted separately in <c>ServiceMantleLoggingTests</c>.
 /// </summary>
 public sealed class RequestScopeCapture : ILoggerProvider
 {

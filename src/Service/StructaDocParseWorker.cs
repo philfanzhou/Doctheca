@@ -2,6 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using ServiceMantle.Web.Logging;
 using Doctheca.Common.Oss;
 using Doctheca.Domain.Models;
 using Doctheca.Domain.Repositories;
@@ -21,16 +22,25 @@ public sealed class StructaDocParseWorker : BackgroundService
 {
     private readonly IServiceProvider _serviceProvider;
     private readonly ILogger<StructaDocParseWorker> _logger;
+    private readonly ServiceLogContext _logContext;
     private readonly TimeSpan _pollInterval = TimeSpan.FromSeconds(5);
 
-    public StructaDocParseWorker(IServiceProvider serviceProvider, ILogger<StructaDocParseWorker> logger)
+    public StructaDocParseWorker(
+        IServiceProvider serviceProvider,
+        ILogger<StructaDocParseWorker> logger,
+        ServiceLogContext logContext)
     {
         _serviceProvider = serviceProvider;
         _logger = logger;
+        _logContext = logContext;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        // The worker runs outside any HTTP request: open one explicit ServiceMantle identity
+        // scope (ServiceName/ServiceVersion/InstanceId) for its whole lifetime instead of
+        // inventing a per-request CorrelationId it does not have.
+        using var identityScope = _logContext.BeginScope(_logger);
         _logger.LogInformation("StructaDoc parse worker started");
 
         while (!stoppingToken.IsCancellationRequested)

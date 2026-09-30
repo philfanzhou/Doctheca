@@ -34,11 +34,11 @@ Doctheca/
 ├── src/
 │   ├── Common/              # Doctheca.Common (vendored snapshot from ruoyu.common)
 │   ├── Ai/                  # Doctheca.Ai (OpenAI-compatible client, SSE reader, masker)
-│   ├── Consul/              # Doctheca.Consul (Consul KV + Serilog/Loki)
+│   ├── Consul/              # Doctheca.Consul (Consul KV configuration)
 │   ├── Database/            # EF Core entities & repositories
 │   ├── Domain/              # domain services & models
 │   ├── Service/             # minimal API endpoints, StructaDoc client, OpenSearch, parse sync, LLM analysis
-│   ├── Host/                # host composition, admin auth, wwwroot SPA
+│   ├── Host/                # host composition, admin auth, ServiceMantle logging, wwwroot SPA
 │   ├── Tests/               # unit & integration tests
 │   └── Doctheca.sln
 ├── docs/                    # inherited Chinese documentation
