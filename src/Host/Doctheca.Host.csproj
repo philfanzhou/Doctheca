@@ -11,6 +11,8 @@
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.12" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
     <PackageReference Include="OpenSearch.Net" Version="2.2.0" />
+    <PackageReference Include="ServiceMantle.Diagnostics" Version="0.2.0" />
+    <PackageReference Include="ServiceMantle.Web" Version="0.2.0" />
   </ItemGroup>
 
   <ItemGroup>

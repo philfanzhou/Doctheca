@@ -54,3 +54,50 @@ Main admin endpoints:
 | Identity unavailable | Login/refresh returns a controlled 502/401 without leaking internal exceptions |
 | OpenSearch write failure | Does not block the main parsing flow; logs a Warning |
 | OpenSearch query failure | Returns empty results and logs a Warning |
+
+## Service Identity, Correlation & Base Telemetry (ServiceMantle)
+
+Doctheca registers the ServiceMantle host foundation (`ServiceMantle.Web` /
+`ServiceMantle.Diagnostics` NuGet packages) through a single extension,
+`DocthecaServiceMantleExtensions.AddDocthecaServiceMantleFoundation()`, which later
+migration slices extend instead of re-registering:
+
+- **Identity fields**: `ServiceId` is the stable deployment identity `doctheca`;
+  `InstanceId` is `doctheca-<32 lowercase hex characters>` and is regenerated on every host
+  build (it changes on each restart and is not a persistent identity); `ServiceVersion`
+  resolves from the entry assembly version. These are non-sensitive deployment metadata and
+  must never be used as authentication or business identity.
+- **Correlation ID (inbound contract)**: the first pipeline middleware is
+  `UseServiceMantleCorrelationId()`. It wraps static files, the SPA fallback, authentication,
+  all admin APIs, image proxying, and exports. The request and response header name stays
+  `x-correlation-id` and the log field stays `CorrelationId`. A caller-supplied header value
+  is echoed verbatim only when the request carries exactly one value of 1–64 characters whose
+  first character is an ASCII letter or digit and whose remaining characters are ASCII
+  letters, digits, `.`, `_`, or `-`. Missing, whitespace, overlong, illegal, comma-joined, or
+  repeated values are discarded as a whole and replaced by a generated 32-character lowercase
+  hexadecimal id; the original request header is never rewritten and rejected raw input is
+  never logged. The same resolved value is published to the response header (injected via
+  `OnStarting`, so a downstream overwrite converges back to it), the `HttpContext` accessor
+  (`context.GetServiceMantleCorrelationId()`), and the request log scope, which also carries
+  the `ServiceName`/`ServiceVersion`/`InstanceId` identity fields. Exceptions and request
+  cancellation propagate untouched with the scope released.
+- **What a Correlation ID is not**: it is a log-correlation value only — not unique, not
+  unguessable, not authenticated. Callers must never use it for authorization, idempotency
+  (StructaDoc idempotency keys are separate), replay protection, or audit subject identity.
+- **Outbound**: the correlation id is not propagated on outbound `HttpClient` calls (the
+  StructaDoc and Identity integrations are unchanged). Standard OpenTelemetry W3C
+  `traceparent` headers may appear on outbound requests; downstream services must treat them
+  as standard/unknown headers. No token or API key behavior changes.
+- **Base telemetry**: ASP.NET Core and `HttpClient` tracing plus runtime metrics are
+  instrumented in-process with the ServiceMantle identity as the OpenTelemetry resource. No
+  exporter is registered in this slice, so telemetry never leaves the process; OTLP or
+  Prometheus wiring is a later migration task.
+- **No bootstrap or discovery side effects**: the foundation performs no Bootstrap file or
+  installation reads/writes, creates no database tables, and registers no Consul service
+  discovery, so it never triggers Consul Catalog write operations. Consul remains
+  configuration-KV-only for this service.
+- **Logging**: the legacy Serilog Console/Loki pipeline is retained in this slice, including
+  its global enrichers (fixed `ServiceName`/`ServiceVersion` and machine-name `InstanceId`)
+  as the fallback for non-request logs; during a request, the ServiceMantle scope supplies the
+  current identity and correlation fields. Loki stream labels are unchanged. Unifying the
+  global enrichers with the ServiceMantle identity belongs to the logging migration task.
