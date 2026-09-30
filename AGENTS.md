@@ -29,7 +29,7 @@ Doctheca 是通用的文档库与检索服务：.NET 最小 API、Vue 3 管理�
 - 领域语言见根目录 `CONTEXT.md`（Document Library：Document File / Document Parse / Parse Block / Parse Image）。
 - `src/Common`（Doctheca.Common）、`src/Ai`（Doctheca.Ai）、`src/Consul`（Doctheca.Consul）是从 Ruoyu.Study 的 `ruoyu.common` **复制**而来的类库（2026-09-26 快照），没有编译期上游同步；上游修复需人工评估是否回合。不得反向引用 `src/Host`。其中 `Doctheca.Ai` 依赖 `Doctheca.Common`。
 - 依赖方向：Host → Service → Domain → Database；Host/Domain → Common/Ai/Consul。
-- 分层：`src/Database`（EF Core 实体与仓储）、`src/Domain`（领域服务与模型）、`src/Service`（最小 API 端点、StructaDoc 客户端、OpenSearch、解析同步、LLM 分析）、`src/Host`（宿主组合、admin 认证、Consul、Serilog/Loki、wwwroot SPA）、`src/Tests`。
+- 分层：`src/Database`（EF Core 实体与仓储）、`src/Domain`（领域服务与模型）、`src/Service`（最小 API 端点、StructaDoc 客户端、OpenSearch、解析同步、LLM 分析）、`src/Host`（宿主组合、admin 认证、Consul、日志（ServiceMantle.Logging）、wwwroot SPA）、`src/Tests`。
 - **解析委托边界（ADR-0009）**：新文档原件与解析产物由 StructaDoc 主责存储，Doctheca 只保存 documentId/parseRunId 引用和本地 Blocks/Images 副本，一律经 StructaDoc 版本化 API + scoped ApiKey，不直连其数据库或对象存储。
 - 认证：管理端使用 SignaCore（或兼容 OIDC discovery/JWKS 的签发方）的 `role=admin`，HttpOnly Cookie/JWT 会话；`/admin/auth/login|refresh|logout` 匿名，其余 `/admin/*` 要求 `DocthecaAdmin` 策略。
 - 检索：OpenSearch 全文精确搜索 + block 索引；OpenSearch 写失败不阻塞解析主流程，查询失败返回空结果并记录 Warning。

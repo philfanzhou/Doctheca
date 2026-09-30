@@ -179,12 +179,12 @@ public sealed partial class ServiceMantleCorrelationTests : ServiceMantleIntegra
         var capture = new RequestScopeCapture();
         using var factory = CreateFactory(configureTestServices: services =>
         {
-            // Swap the Serilog logger factory for a plain per-factory one (see
+            // Swap the ServiceMantle Serilog logger factory for a plain per-factory one (see
             // RequestScopeCapture): the request scope state is recorded directly instead of
-            // going through the real Console/Loki pipeline. The legacy global Serilog enrichers
-            // (fixed ServiceName/ServiceVersion/MachineName InstanceId) remain in place for
-            // non-request logs in this slice; unifying them with the ServiceMantle request
-            // identity belongs to the later logging migration task.
+            // going through the real Console/Loki pipeline. Non-request identity scopes
+            // (startup, background worker) are opened explicitly through ServiceLogContext
+            // since the logging migration; actual Console/Loki delivery is asserted in
+            // ServiceMantleLoggingTests.
             services.RemoveAll<ILoggerFactory>();
             services.AddSingleton<ILoggerFactory>(
                 _ => LoggerFactory.Create(logging => logging.AddProvider(capture)));

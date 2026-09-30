@@ -48,20 +48,51 @@ Parameter validation should happen at the entry of HTTP endpoint methods, return
 - Expected NotFound cases use the Warning level
 - Never log passwords, access/refresh tokens, cookies, phone numbers or other sensitive information
 
-### Serilog + Loki Logging System
+### ServiceMantle Logging Pipeline (Console + Loki)
 
-Doctheca uses Serilog instead of the native Microsoft.Extensions.Logging, dual-writing to Console + Grafana Loki. The integration is exactly the same as in the Identity service.
+Doctheca logs through the `ServiceMantle.Logging` pipeline (Console sink + optional Grafana
+Loki remote sink), registered by `builder.AddDocthecaLogging()`
+(`src/Host/DocthecaLoggingExtensions.cs`) after the Consul configuration source is loaded.
+Every event passes the library's mandatory structured sanitizer — denied field names
+(`password`, `token`, `apikey`, `authorization`, `cookie`, `connection string`, …) are
+redacted, and exception `Message`/stack/`Data` are not emitted by the pipeline at all. This
+is a second boundary behind the caller-side masking below, not a replacement for it: free-text
+secrets inside message templates are still the caller's responsibility.
 
-Configuration entry point: `UseAgentSerilog("Doctheca")` in `Program.cs`, reading the `Serilog` configuration section in `appsettings.json`.
+Log levels are configured in code, not in `appsettings.json`: minimum level Information with
+Warning overrides for `Microsoft.AspNetCore` and `Microsoft.EntityFrameworkCore.Database.Command`.
+The legacy `Serilog` configuration section is retired; `Logging:LogLevel` in `appsettings.json`
+remains only as the framework pre-filter and does not promise to cover the library pipeline floor.
 
-The Loki address is injected uniformly through the config key `Loki:Uri`; `Program.cs` reads it at startup and overrides the `Serilog:WriteTo:1:Args:uri` config key:
+The Loki address comes exclusively from the `Loki:Uri` configuration key (environment
+variable/command line > Consul KV > `appsettings.json`):
 
 | Config key | Source | Example value | Description |
 |--------|------|--------|------|
 | `Loki:Uri` | Consul `config/ruoyu/shared.json` | http://ruoyu-loki:3100 | Recommended to be provided by the Consul shared configuration |
 | `Loki:Uri` (fallback) | `appsettings.json` | http://localhost:3100 | Fallback address when Consul is unreachable |
 
-> **Fault tolerance**: If `Loki:Uri` is not set (neither Consul nor appsettings provides it), the Loki Sink uses the fallback address `http://ruoyu-loki:3100` in `Serilog:WriteTo:1:Args:uri` from appsettings.json. When Loki is unreachable the sink retries asynchronously and does not affect service startup. `start.sh` does not pass a `LOKI_URI` environment variable; the Loki address is provided entirely by Consul.
+> **Empty value**: an empty `Loki:Uri` disables the remote sink (Console stays on); the legacy
+> fallback to a hard-coded `Serilog:WriteTo:1:Args:uri` address no longer exists — operators
+> must set `Loki:Uri` explicitly.
+>
+> **Plain HTTP**: the existing intranet HTTP Loki deployment is accepted through an explicit
+> `AllowInsecureHttp = true` in `DocthecaLoggingExtensions`. This is a deliberate acceptance
+> that log content travels in cleartext on that path, not an automatic presumption that the
+> network is trusted; use HTTPS whenever the path crosses an untrusted network.
+>
+> **Invalid values**: a malformed or credential-bearing URI (userinfo, query, or fragment)
+> fails the host start with the safe library code `loki.invalid_endpoint` without echoing the
+> configured value.
+>
+> **Fault tolerance**: when Loki is unreachable or answers 503, the sink retries/drops inside
+> its bounded in-memory queue and never blocks business requests; shutdown performs a bounded
+> flush/drain (no exactly-once delivery, no disk buffering, no flush guarantee after SIGKILL).
+> `start.sh` does not pass a `LOKI_URI` environment variable; the Loki address is provided
+> entirely by Consul.
+
+The fixed Loki stream labels stay `{service="Doctheca"}` plus the sink-owned `level` label, so
+existing Grafana queries keep working. No request/user/id value is promoted to a stream label.
 
 ### Sensitive Field Masking
 
@@ -98,4 +129,4 @@ UseServiceMantleCorrelationId()
 
 Static files and the SPA fallback remain anonymous; the admin route group requires `DocthecaAdmin`.
 
-> A Correlation ID is a log-correlation value only: it is not unique, unguessable, or authenticated, and must never be used for authorization, idempotency, replay protection, or audit subject identity. During a request, the ServiceMantle request scope supplies the current `CorrelationId`/`ServiceName`/`ServiceVersion`/`InstanceId` values to the logging pipeline; the legacy global Serilog enrichers remain as the fallback for non-request logs until the logging migration task unifies them.
+> A Correlation ID is a log-correlation value only: it is not unique, unguessable, or authenticated, and must never be used for authorization, idempotency, replay protection, or audit subject identity. During a request, the ServiceMantle request scope supplies the current `CorrelationId`/`ServiceName`/`ServiceVersion`/`InstanceId` values to the logging pipeline. Non-request logs carry identity through explicit `ServiceLogContext` scopes instead of the retired global Serilog enrichers: one scope wraps host startup diagnostics/initialization, and the StructaDoc parse worker opens one worker-lifetime scope — neither invents an HTTP CorrelationId.
