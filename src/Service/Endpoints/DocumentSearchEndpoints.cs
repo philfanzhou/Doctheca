@@ -17,7 +17,7 @@ public static class DocumentSearchEndpoints
         var group = app.MapGroup("/admin/documents")
             .RequireAuthorization(DocthecaAuthorizationPolicies.Admin);
 
-        group.MapGet("/search", Search);
+        group.MapGet("/search", Search).RequireServiceMantleSecurityResponseHeaders();
 
         return app;
     }

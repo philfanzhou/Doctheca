@@ -11,6 +11,9 @@
     <PackageReference Include="Markdig" Version="1.4.0" />
     <PackageReference Include="OpenSearch.Net" Version="2.2.0" />
     <PackageReference Include="PdfPig" Version="0.1.16" />
+    <!-- RequireServiceMantleSecurityResponseHeaders marker for the JSON admin endpoints;
+         the capability and middleware themselves are registered by the Host. -->
+    <PackageReference Include="ServiceMantle.Web" Version="0.2.0" />
   </ItemGroup>
 
   <PropertyGroup>

@@ -10,7 +10,11 @@ public static class AdminAuthEndpoints
 {
     public static WebApplication MapAdminAuthEndpoints(this WebApplication app)
     {
-        var group = app.MapGroup("/admin/auth");
+        // All four auth endpoints answer JSON, so the group carries the ServiceMantle
+        // security response-header baseline (six immutable headers, applied only while the
+        // response has not started; success, business failure, and 401/403 challenges alike).
+        var group = app.MapGroup("/admin/auth")
+            .RequireServiceMantleSecurityResponseHeaders();
 
         group.MapPost("/login", LoginAsync).AllowAnonymous();
         group.MapPost("/refresh", RefreshAsync).AllowAnonymous();
