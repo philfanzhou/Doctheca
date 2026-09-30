@@ -166,7 +166,7 @@ migration slices extend instead of re-registering:
   discovery, so it never triggers Consul Catalog write operations. Consul remains
   configuration-KV-only for this service.
 - **Logging**: Console + Grafana Loki delivery runs through the `ServiceMantle.Logging`
-  pipeline (pinned pre-release `0.2.1-rc.1`), registered by
+  pipeline (release `0.2.1`), registered by
   `DocthecaLoggingExtensions.AddDocthecaLogging()` after the Consul configuration source.
   Every event passes the library's mandatory structured sanitizer before reaching either
   sink; per-category minimum levels are Information by default with Warning overrides for
