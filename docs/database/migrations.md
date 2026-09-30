@@ -2,39 +2,57 @@
 
 ## Migration Strategy
 
-This project **does not use EF Core Code-First Migration**. Table structures are created with raw SQL by `DatabaseInitializer` at application startup (`CREATE TABLE IF NOT EXISTS`).
+The database is managed with **EF Core migrations**. The single baseline migration
+`20260930161548_InitialCreate` (see [Migrations](../../src/Database/Migrations/)) creates the four
+business tables — `document_files`, `document_parses`, `document_parse_images`,
+`document_parse_blocks` — with their columns, types, primary and foreign keys, indexes, and the
+`set_document_files_updated_at` trigger, all matching the production structure the previous raw-SQL
+initializer produced.
+
+At startup `DocthecaMigrationExecutor` ([source](../../src/Database/DocthecaMigrationExecutor.cs))
+classifies the target database and executes:
+
+| Database state at startup | Handling | Result |
+|---------------------------|----------|--------|
+| Empty (no business tables, no history; a missing catalog counts too) | Apply the baseline migration | The four tables + indexes + FKs + trigger, empty data, history = baseline |
+| Full legacy database (all four tables verify against the baseline, no history) | Safe backfills + register the baseline | Startup succeeds; schema and data unchanged |
+| Legacy database with missing nullable/defaulted columns or missing model indexes | Backfill those columns/indexes, then register the baseline | Startup succeeds; existing data preserved |
+| Unknown or conflicting structure (extra or wrong-typed columns, nullability mismatch, missing NOT NULL column without a default, constraint mismatch, partial table set, history claiming a version the schema contradicts, or unknown migration ids) | Refuse | Startup fails with the fixed error code `DOCTHECA_DB_SCHEMA_INCOMPATIBLE` and a structure-difference summary; nothing is written, nothing is auto-repaired |
+
+The registration ("stamp") of the baseline happens only after the structure verification passes,
+inside one parameterized transaction. Refused states fail startup; logs and errors carry schema
+identifiers only, never SQL statements or connection values. Back up the database before upgrading;
+reconcile refused databases manually.
+
+## Legacy Upgrade Notes
+
+- Databases created by the retired `EnsureCreated` + `ALTER TABLE` initializer are taken over
+  automatically on the first start of the new version: the structure is verified, the updated_at
+  trigger and any missing model indexes are (re-)created idempotently, and the baseline is
+  registered. Business data is preserved.
+- Rollback: redeploying the previous image keeps working against a stamped database — the old
+  initializer treats "no pending migrations + tables present" as up to date and does not modify it.
+- The retired code paths (`EnsureCreated` fallback and the handwritten `ALTER TABLE` list in
+  `DatabaseInitializer`) have been deleted; the shared `Common/Database/DatabaseInitializer` copy
+  is no longer used by this repository.
 
 ## Current Database Version
 
-All tables are defined in the `GetTableCreationSql` method of [DatabaseInitializer.cs](../../src/Database/DatabaseInitializer.cs).
+| Migration | Contents |
+|-----------|----------|
+| `20260930161548_InitialCreate` | All four tables, their indexes and foreign keys, and the `set_document_files_updated_at` trigger — the production structure as of the StructaDoc migration (ADR-0009) |
 
-## Column-Level Migrations (EnsureColumnsAsync)
-
-Executed automatically at startup via `DatabaseInitializer.EnsureColumnsAsync`, compatible with both new and existing databases:
-
-| SQL | Description |
-|-----|------|
-| `ALTER TABLE document_parses ADD COLUMN IF NOT EXISTS content_list jsonb NULL` | Add content_list (phase 2) |
-| `ALTER TABLE document_parses ADD COLUMN IF NOT EXISTS zip_path character varying(500) NULL` | Add zip_path (phase 2) |
-| `ALTER TABLE document_parses ADD COLUMN IF NOT EXISTS model_version character varying(20) NOT NULL DEFAULT 'vlm'` | Add model version column |
-| `ALTER TABLE document_parses ADD COLUMN IF NOT EXISTS content_list_v2 jsonb NULL` | Add MinerU pipeline output v2 |
-| `ALTER TABLE document_parses ADD COLUMN IF NOT EXISTS model_json jsonb NULL` | Add model inference results |
-| `ALTER TABLE document_parses ADD COLUMN IF NOT EXISTS layout_json jsonb NULL` | Add layout analysis data |
-| `ALTER TABLE document_parses DROP COLUMN IF EXISTS layout_pdf_path` | Drop old column (replaced by layout_json) |
-| `ALTER TABLE document_files ADD COLUMN IF NOT EXISTS subject character varying(50) NULL` | Add subject metadata column (DocumentMetadataAnalysis feature) |
-| `ALTER TABLE document_files ADD COLUMN IF NOT EXISTS grade character varying(20) NULL` | Add grade metadata column (DocumentMetadataAnalysis feature) |
-| `ALTER TABLE document_files ADD COLUMN IF NOT EXISTS year character varying(10) NULL` | Add year metadata column (DocumentMetadataAnalysis feature) |
-| `ALTER TABLE document_files ADD COLUMN IF NOT EXISTS structadoc_document_id uuid NULL` | StructaDoc migration (ADR-0009): remote reference for new documents |
-| `ALTER TABLE document_files ALTER COLUMN file_path DROP NOT NULL` | StructaDoc migration: originals are no longer stored in local OSS; `file_path` is for legacy records only |
-| `ALTER TABLE document_parses ADD COLUMN IF NOT EXISTS structadoc_parse_run_id uuid NULL` | StructaDoc migration: Parse Run reference; non-null means a new-pipeline record |
+Adding or changing migrations requires extending `DocthecaMigrationExecutor.KnownMigrationIds`
+(the known-version contract) together with the executor's takeover rules.
 
 ## Change Log
 
 | Date | Change | Impact |
 |------|------|------|
-| 2026-07-04 | Added document_files.subject/grade/year columns | Document metadata analysis feature, supporting manual setting and LLM auto-fill |
-| 2026-07-04 | Added document_parses.content_list_v2 / model_json / layout_json columns | Structured data output for MinerU pipeline/vlm modes |
-| 2026-07-04 | Added document_parse_blocks and document_parse_images tables | OpenSearch block-level indexing and image management |
-| 2026-07-04 | Dropped document_parses.layout_pdf_path column | Replaced by layout_json (JSONB stores the full layout data) |
-| 2026-07-04 | Added document_parses.model_version column (default 'vlm') | Supports dual model versions vlm / pipeline |
-| 2026-09-21 | Added document_files.structadoc_document_id and document_parses.structadoc_parse_run_id; file_path made nullable | StructaDoc parse pipeline migration (ADR-0009): primary ownership of originals and parse artifacts transferred to StructaDoc; legacy data kept read-only |
+| 2026-09-30 | Introduced the EF migration baseline and the verified legacy-takeover executor; retired `EnsureCreated` and the handwritten ALTER list | Schema becomes checkable (`__EFMigrationsHistory`); unknown structures now fail startup instead of being silently patched |
+| 2026-09-21 | Added document_files.structadoc_document_id and document_parses.structadoc_parse_run_id; file_path made nullable | StructaDoc parse pipeline migration (ADR-0009) — folded into the baseline |
+| 2026-07-04 | Added document_files.subject/grade/year columns | Document metadata analysis feature — folded into the baseline |
+| 2026-07-04 | Added document_parses.content_list_v2 / model_json / layout_json columns | MinerU pipeline/vlm structured output — folded into the baseline |
+| 2026-07-04 | Added document_parse_blocks and document_parse_images tables | OpenSearch block-level indexing and image management — folded into the baseline |
+| 2026-07-04 | Dropped document_parses.layout_pdf_path | Replaced by layout_json — folded into the baseline |
+| 2026-07-04 | Added document_parses.model_version column | vlm / pipeline dual model versions — folded into the baseline |

@@ -220,7 +220,7 @@ The Consul initialization script uses `cas=0` and only creates KVs that do not y
 The post-deployment smoke check should hit `http://127.0.0.1:5012/health/live` for process liveness and `http://127.0.0.1:5012/health/ready` (or its `/health` alias) for database readiness on the Doctheca target host. Note the contract change: `/health` is now a readiness alias returning `200 {"status":"ready",...}` only once the startup initializer completed and a read-only schema probe succeeded, and `503 {"status":"not_ready",...}` otherwise — it no longer returns the old always-`healthy` payload with a `timestamp`.
 
 The service automatically performs the following at startup:
-1. `DatabaseInitializer.InitializeAsync` — table creation + column migration (SQL-based, no EF Core Migration)
+1. `DocthecaMigrationExecutor` — applies the EF Core baseline migration `20260930161548_InitialCreate` to an empty database; verifies and takes over a legacy database (idempotent backfills + baseline registration); refuses an unknown or conflicting structure with the fixed error code `DOCTHECA_DB_SCHEMA_INCOMPATIBLE` (see [Migrations](../database/migrations.md))
 2. `OpenSearchIndexService.EnsureIndexAsync` — create the search index (best-effort)
 3. `IDocumentAnalysisService.InitializeAsync` — LLM initialization (if an ApiKey is configured)
 

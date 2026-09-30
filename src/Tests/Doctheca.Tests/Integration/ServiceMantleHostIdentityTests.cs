@@ -126,7 +126,7 @@ public sealed partial class ServiceMantleHostIdentityTests : ServiceMantleIntegr
             File.Exists(bootstrapStore.FilePath),
             $"The foundation must not write a Bootstrap file, but found {bootstrapStore.FilePath}.");
 
-        // DatabaseInitializer runs the Doctheca schema (EnsureCreated, snake_case naming).
+        // DocthecaMigrationExecutor migrates the Doctheca schema from the baseline (snake_case naming).
         // ServiceMantle adds no schema of its own in this slice: no
         // bootstrap/installation/management tables exist.
         var tables = ReadTableNames();

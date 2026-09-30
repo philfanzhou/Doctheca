@@ -12,6 +12,8 @@
 
 #### Database initialization approach
 
+> Historical record: this section describes the retired raw-SQL initializer. Since 2026-09-30 the schema has been managed by the EF Core migration baseline (`20260930161548_InitialCreate`) with `DocthecaMigrationExecutor` takeover rules; see [Migration History](../../database/migrations.md).
+
 This service **does not use EF Core Migration**. Database initialization is done by `DatabaseInitializer.cs` via raw SQL:
 
 - **Fresh database path** — the `CREATE TABLE IF NOT EXISTS document_files (...)` returned by `GetTableCreationSql("document_files")` already inlines the three columns `subject character varying(50) NULL` / `grade character varying(20) NULL` / `year character varying(10) NULL` (after `updated_at`, before the primary key constraint).
