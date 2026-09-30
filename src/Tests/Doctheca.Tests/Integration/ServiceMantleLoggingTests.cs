@@ -110,14 +110,15 @@ public sealed class ServiceMantleLoggingTests : ServiceMantleIntegrationTestBase
                 Assert.DoesNotContain("probe.aspnet.information", actual);
                 Assert.DoesNotContain("probe.ef.information", actual);
 
-                // Denied structured fields, the exception message/Data canaries, and the
-                // free-text assignment canary are all gone; normal fields survive.
-                Assert.DoesNotContain(LoggingProbeSearchIndex.PasswordCanary, actual);
-                Assert.DoesNotContain(LoggingProbeSearchIndex.TokenCanary, actual);
-                Assert.DoesNotContain(LoggingProbeSearchIndex.ApiKeyCanary, actual);
-                Assert.DoesNotContain(LoggingProbeSearchIndex.AuthorizationCanary, actual);
-                Assert.DoesNotContain(LoggingProbeSearchIndex.CookieCanary, actual);
-                Assert.DoesNotContain(LoggingProbeSearchIndex.ConnectionStringCanary, actual);
+                // Denied structured fields (by name fragment, values are neutral canaries),
+                // the {FreeTextSecret} field (denied "secret" name fragment), and the
+                // exception message/Data canaries are all gone; normal fields survive.
+                Assert.DoesNotContain(LoggingProbeSearchIndex.DeniedFieldCanary1, actual);
+                Assert.DoesNotContain(LoggingProbeSearchIndex.DeniedFieldCanary2, actual);
+                Assert.DoesNotContain(LoggingProbeSearchIndex.DeniedFieldCanary3, actual);
+                Assert.DoesNotContain(LoggingProbeSearchIndex.DeniedFieldCanary4, actual);
+                Assert.DoesNotContain(LoggingProbeSearchIndex.DeniedFieldCanary5, actual);
+                Assert.DoesNotContain(LoggingProbeSearchIndex.DeniedFieldCanary6, actual);
                 Assert.DoesNotContain(LoggingProbeSearchIndex.ExceptionMessageCanary, actual);
                 Assert.DoesNotContain(LoggingProbeSearchIndex.ExceptionDataCanary, actual);
                 Assert.DoesNotContain(LoggingProbeSearchIndex.FreeTextCanary, actual);
@@ -347,16 +348,20 @@ public sealed class ServiceMantleLoggingTests : ServiceMantleIntegrationTestBase
     /// <summary>
     /// Emits the probe events from inside a real request (the search endpoint resolves
     /// ISearchDomainService → ISearchIndexService during endpoint execution, i.e. inside the
-    /// correlation scope). Every canary is a synthetic value invented for this test.
+    /// correlation scope). Every canary is a synthetic, neutral value invented for this test:
+    /// the denied-field canaries deliberately carry NO secret-looking name or text, so their
+    /// absence from both sinks can only be explained by the sanitizer rejecting the structured
+    /// FIELD NAME ({Password}, {Token}, …), not by any free-text secret pattern in the value.
     /// </summary>
     private sealed class LoggingProbeSearchIndex(ILoggerFactory loggerFactory) : ISearchIndexService
     {
-        public const string PasswordCanary = "synthetic-password-canary";
-        public const string TokenCanary = "synthetic-token-canary";
-        public const string ApiKeyCanary = "synthetic-apikey-canary";
-        public const string AuthorizationCanary = "synthetic-authorization-canary";
-        public const string CookieCanary = "synthetic-cookie-canary";
-        public const string ConnectionStringCanary = "synthetic-connectionstring-canary";
+        // Neutral values fed to the six denied structured field names below.
+        public const string DeniedFieldCanary1 = "synthetic-denied-field-canary-1"; // {Password}
+        public const string DeniedFieldCanary2 = "synthetic-denied-field-canary-2"; // {Token}
+        public const string DeniedFieldCanary3 = "synthetic-denied-field-canary-3"; // {ApiKey}
+        public const string DeniedFieldCanary4 = "synthetic-denied-field-canary-4"; // {Authorization}
+        public const string DeniedFieldCanary5 = "synthetic-denied-field-canary-5"; // {Cookie}
+        public const string DeniedFieldCanary6 = "synthetic-denied-field-canary-6"; // {ConnectionString}
         public const string ExceptionMessageCanary = "synthetic-exception-message-canary";
         public const string ExceptionDataCanary = "synthetic-exception-data-canary";
         public const string FreeTextCanary = "synthetic-freetext-canary";
@@ -377,12 +382,12 @@ public sealed class ServiceMantleLoggingTests : ServiceMantleIntegrationTestBase
                 NormalFieldMarker);
             logger.LogInformation(
                 "probe.secret {Password} {Token} {ApiKey} {Authorization} {Cookie} {ConnectionString}",
-                PasswordCanary,
-                TokenCanary,
-                ApiKeyCanary,
-                AuthorizationCanary,
-                CookieCanary,
-                ConnectionStringCanary);
+                DeniedFieldCanary1,
+                DeniedFieldCanary2,
+                DeniedFieldCanary3,
+                DeniedFieldCanary4,
+                DeniedFieldCanary5,
+                DeniedFieldCanary6);
             logger.LogInformation(
                 "probe.freetext Password={FreeTextSecret}", FreeTextCanary);
             var exception = new InvalidOperationException(ExceptionMessageCanary);
