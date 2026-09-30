@@ -326,8 +326,8 @@ public sealed class ServiceMantleLoggingTests : ServiceMantleIntegrationTestBase
             Assert.DoesNotContain($"\"{removed}\"", deps);
         }
 
-        // The library pipeline is present and pinned to the explicit pre-release.
-        Assert.Contains("\"ServiceMantle.Logging/0.2.1-rc.1\"", deps);
+        // The library pipeline is present and pinned to the unified release version.
+        Assert.Contains("\"ServiceMantle.Logging/0.2.1\"", deps);
     }
 
     private static async Task<WebApplication> StartFakeLokiAsync(Func<HttpContext, Task> onPush)
