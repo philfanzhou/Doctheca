@@ -50,7 +50,9 @@ The following configuration has moved into the shared Consul KV:
   - `DocthecaService:Url` (for callers accessing Doctheca)
   - `StructaDoc:BaseUrl` (Doctheca calling the external StructaDoc parse service)
 - `config/ruoyu/serilog.json`
-  - `Serilog:MinimumLevel:*`
+  - `Serilog:MinimumLevel:*` (no longer consumed by Doctheca: the logging migration retired the
+    `Serilog` configuration section and levels are now configured in code; the shared KV entry
+    may still serve other Ruoyu services)
 
 > `Database:Name`, `OpenSearch:IndexName`, `LlmDocumentAnalysis:*` and `StructaDoc:ApiKey` are all Doctheca-private configuration and do not go into the shared KV; `StructaDoc:BaseUrl` lives in the shared KV `service-endpoints.json`.
 
@@ -142,49 +144,47 @@ Both cookies are HttpOnly and SameSite=Strict, and are not exposed to front-end 
 
 ## Logging Configuration
 
-Doctheca uses Serilog instead of the native Microsoft.Extensions.Logging, dual-writing to Console + Grafana Loki. The integration is exactly the same as in the Identity service.
+Doctheca logs through the `ServiceMantle.Logging` pipeline (Console sink + optional Grafana Loki remote sink). The wiring lives in `src/Host/DocthecaLoggingExtensions.cs` and is registered in `Program.cs` via `builder.AddDocthecaLogging()` after the Consul configuration source. Package versions are pinned deliberately: `ServiceMantle.Web`/`ServiceMantle.Diagnostics` 0.2.0 with `ServiceMantle.Logging` 0.2.1-rc.1 — the pre-release is the first Logging package carrying the bounded per-category level overrides, explicit fixed Loki stream labels, and the explicit insecure-HTTP acceptance used here (the same combination already ships in Ruoyu.Admin). Do not float it.
 
-### Serilog Configuration
+### Log Levels
 
-The service configures Serilog via `builder.Host.UseAgentSerilog("Doctheca")`. The `Logging` section in `appsettings.json` is kept only for the few runtime components that do not go through Serilog; **business log levels are governed by the Serilog configuration**.
+Levels are configured in code, not in `appsettings.json`: minimum level Information, with Warning overrides for `Microsoft.AspNetCore` and `Microsoft.EntityFrameworkCore.Database.Command`. The legacy `Serilog` configuration section is retired. The `Logging:LogLevel` section in `appsettings.json` remains only as the framework pre-filter for the few runtime components outside the library pipeline; it does not promise to cover the pipeline floor.
 
-| Config key | Default | Description |
-|--------|--------|------|
-| `Serilog:MinimumLevel:Default` | Information | Default log level |
-| `Serilog:MinimumLevel:Override:Microsoft.AspNetCore` | Warning | ASP.NET Core log level |
-| `Serilog:MinimumLevel:Override:Microsoft.EntityFrameworkCore.Database.Command` | Warning | EF Core log level |
-| `Serilog:WriteTo:0:Name` | Console | Console sink (array index 0) |
-| `Serilog:WriteTo:1:Name` | GrafanaLoki | Loki sink (array index 1) |
-| `Serilog:WriteTo:1:Args:uri` | http://ruoyu-loki:3100 | Loki address (ultimately overridden by `Loki:Uri`) |
-| `Serilog:WriteTo:1:Args:labels:0:key` | service | Loki label key |
-| `Serilog:WriteTo:1:Args:labels:0:value` | Doctheca | Loki label value (service label) |
+### Log Identity Fields
 
-### Log Enrichers
-
-Every log entry automatically carries the following fields:
+Every log entry carries identity fields from explicit `ServiceLogContext` scopes:
 
 | Field | Source | Description |
 |------|------|------|
-| ServiceName | UseAgentSerilog parameter | Fixed as `Doctheca` |
-| ServiceVersion | UseAgentSerilog parameter | Defaults to `1.0.0` |
-| InstanceId | Environment.MachineName | Instance identifier |
-| MachineName | Enrichers.Environment | Host name |
-| ThreadId | Enrichers.Thread | Thread ID |
+| ServiceName | ServiceMantle `ServiceId` | Fixed as `doctheca` (lowercase; distinct from the Loki stream label `Doctheca`) |
+| ServiceVersion | Entry assembly informational version | Resolved at startup |
+| InstanceId | Per host build | `doctheca-<32 lowercase hex characters>`, regenerated on every restart |
+| CorrelationId | Per HTTP request | Only inside the request scope (see ErrorHandling.md) |
+
+Scope lifetimes: HTTP requests use the ServiceMantle request scope; host startup diagnostics/initialization run inside one explicit startup scope; the StructaDoc parse worker opens one worker-lifetime scope. The legacy global Serilog enrichers, including `MachineName` and `ThreadId`, are retired — dashboards keyed on those fields must switch to `InstanceId`/`ServiceName`.
 
 ### Loki Address Injection
 
-The Loki address is injected uniformly into `Serilog:WriteTo:1:Args:uri` through the `Loki:Uri` configuration key:
+The Loki address comes exclusively from the `Loki:Uri` configuration key:
 
 | Source | Example value | Description |
 |------|--------|------|
 | `Loki:Uri` config key | http://ruoyu-loki:3100 | Recommended to be provided by Consul `config/ruoyu/shared.json` |
 | `Loki:Uri` (fallback) | http://localhost:3100 | Fallback address in appsettings.json |
 
-> **Fault tolerance**: If `Loki:Uri` is not set, the Loki Sink uses the fallback address in `Serilog:WriteTo:1:Args:uri` from appsettings.json. When Loki is unreachable the sink retries asynchronously and does not affect service startup. `start.sh` does not pass a `LOKI_URI` environment variable; the Loki address is provided entirely by Consul.
+> **Empty value**: an empty `Loki:Uri` disables the remote sink (Console stays on and no remote request is created). The legacy fallback to a hard-coded `Serilog:WriteTo:1:Args:uri` address is gone — operators must set `Loki:Uri` explicitly.
+>
+> **Plain HTTP**: intranet HTTP Loki endpoints are accepted through an explicit `AllowInsecureHttp = true` — a deliberate acceptance that log content travels in cleartext on that path, not an automatic presumption of network trust. Use HTTPS whenever the path crosses an untrusted network.
+>
+> **Invalid values**: a malformed or credential-bearing URI (userinfo, query, or fragment) fails the host start with the safe code `loki.invalid_endpoint` without echoing the configured value.
+>
+> **Fault tolerance**: when Loki is unreachable or answers 503, the sink retries/drops inside its bounded in-memory queue and never blocks business requests; shutdown performs a bounded flush/drain (no exactly-once delivery and no flush guarantee after SIGKILL). `start.sh` does not pass a `LOKI_URI` environment variable; the Loki address is provided entirely by Consul.
+
+The Loki stream labels stay fixed at `{service="Doctheca"}` plus the sink-owned `level` label, so existing Grafana queries and dashboards keep working.
 
 ### Startup Diagnostics
 
-At startup the service outputs the Consul pull process and a summary of the final effective configuration, including the `LokiUri` field, making it easy to check whether the Loki address was loaded from Consul correctly.
+At startup the service outputs the Consul pull process and a summary of the final effective configuration, including the `LokiUri` field, making it easy to check whether the Loki address was loaded from Consul correctly. These startup logs run inside the explicit startup identity scope.
 
 ## Database Configuration
 
@@ -217,7 +217,7 @@ Callers access Doctheca via `DocthecaService:Url` in Consul `config/ruoyu/servic
 
 The Consul initialization script uses `cas=0` and only creates KVs that do not yet exist. Modifying the initialization JSON does not overwrite existing values; during migration you must also update the live KV. If callers read this configuration only at startup, they must also be restarted after the live KV is updated.
 
-The post-deployment smoke check should hit `http://127.0.0.1:5012/health` on the Doctheca target host.
+The post-deployment smoke check should hit `http://127.0.0.1:5012/health/live` for process liveness and `http://127.0.0.1:5012/health/ready` (or its `/health` alias) for database readiness on the Doctheca target host. Note the contract change: `/health` is now a readiness alias returning `200 {"status":"ready",...}` only once the startup initializer completed and a read-only schema probe succeeded, and `503 {"status":"not_ready",...}` otherwise — it no longer returns the old always-`healthy` payload with a `timestamp`.
 
 The service automatically performs the following at startup:
 1. `DatabaseInitializer.InitializeAsync` — table creation + column migration (SQL-based, no EF Core Migration)

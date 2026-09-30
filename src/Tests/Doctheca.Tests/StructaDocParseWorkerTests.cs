@@ -3,6 +3,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Moq;
+using ServiceMantle;
+using ServiceMantle.Web.Logging;
 using Doctheca.Common.Oss;
 using Doctheca.Domain.Models;
 using Doctheca.Domain.Repositories;
@@ -249,7 +251,13 @@ public class StructaDocParseWorkerTests
         services.AddSingleton(Options.Create(_options));
         var provider = services.BuildServiceProvider();
 
-        var worker = new StructaDocParseWorker(provider, NullLogger<StructaDocParseWorker>.Instance);
+        var worker = new StructaDocParseWorker(
+            provider,
+            NullLogger<StructaDocParseWorker>.Instance,
+            new ServiceLogContext(
+                ServiceId.Parse("doctheca"),
+                InstanceId.Parse("doctheca-unit-test"),
+                "1.0.0"));
         await action(worker, provider);
     }
 }

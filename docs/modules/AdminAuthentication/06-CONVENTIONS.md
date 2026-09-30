@@ -6,7 +6,7 @@
 |------|------|
 | Browser authentication | `/admin/auth` |
 | Browser admin API | `/admin` |
-| Anonymous health check | `/health` |
+| Anonymous health probes | `/health/live`, `/health/ready`, `/health` (readiness alias) |
 
 ## Policy and configuration naming
 

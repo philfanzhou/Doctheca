@@ -12,6 +12,11 @@
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
     <PackageReference Include="OpenSearch.Net" Version="2.2.0" />
     <PackageReference Include="ServiceMantle.Diagnostics" Version="0.2.0" />
+    <!-- Pinned pre-release: 0.2.1-rc.1 is the first Logging package carrying the bounded
+         per-category MinimumLevelOverrides, explicit fixed Loki stream labels, and the
+         explicit AllowInsecureHttp acceptance this host relies on (same combination already
+         shipped in Ruoyu.Admin). Do not float this version. -->
+    <PackageReference Include="ServiceMantle.Logging" Version="0.2.1-rc.1" />
     <PackageReference Include="ServiceMantle.Web" Version="0.2.0" />
   </ItemGroup>
 

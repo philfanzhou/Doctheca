@@ -40,10 +40,31 @@ Main admin endpoints:
 ## Anonymous Entry Points
 
 - `/`, static resources, and SPA fallback
-- `/health`
+- `/health/live` (liveness), `/health/ready` and its `/health` alias (readiness)
 - `/admin/auth/login`
 - `/admin/auth/refresh`
 - `/admin/auth/logout`
+
+### Health Probes
+
+Doctheca exposes the fixed ServiceMantle health endpoints, all anonymous and always JSON
+(they are mapped ahead of the SPA fallback, so they never return `index.html`):
+
+| Endpoint | Purpose | Healthy response |
+|------|------|------|
+| `GET /health/live` | Liveness: the process is up. Never resolves the snapshot source or queries the database. | `200 {"status":"live"}` |
+| `GET /health/ready` | Readiness: the startup initializer completed **and** a read-only probe of the EF-mapped PostgreSQL tables/columns succeeded. | `200 {"status":"ready","phase":"completed","migrationStatus":"succeeded","databaseStatus":"reachable","errorCode":null}` |
+| `GET /health` | Readiness alias — **a public contract change**: it now returns the readiness projection instead of the old always-`healthy` liveness payload with a `timestamp`. | same as `/health/ready` |
+
+Readiness fails closed to `503 {"status":"not_ready",...}` with a value-free safe code when the
+initializer has not completed (`doctheca.startup_incomplete`), a mapped table/column is not
+readable (`doctheca.schema_unavailable`), the database is unreachable
+(`doctheca.database_unreachable`), or the probe times out / fails inside the library
+(`health.probe_timeout` / `health.probe_failed`). Readiness is re-sampled on every request —
+nothing is cached in the background — so a recovered database is reflected by the next call.
+Use `/health/live` for process liveness and `/health/ready` (or `/health`) for database
+readiness. Callers that parsed the old `/health` body must migrate: the `timestamp` field is
+gone and `status` is now `ready`/`not_ready` rather than `healthy`.
 
 ## Failure Semantics
 
@@ -90,7 +111,8 @@ must opt in explicitly; HTML/image/export responses must not reuse the JSON CSP.
 ## Service Identity, Correlation & Base Telemetry (ServiceMantle)
 
 Doctheca registers the ServiceMantle host foundation (`ServiceMantle.Web` /
-`ServiceMantle.Diagnostics` NuGet packages) through a single extension,
+`ServiceMantle.Diagnostics` / `ServiceMantle.Logging` NuGet packages) through a single
+extension,
 `DocthecaServiceMantleExtensions.AddDocthecaServiceMantleFoundation()`, which later
 migration slices extend instead of re-registering:
 
@@ -128,8 +150,17 @@ migration slices extend instead of re-registering:
   installation reads/writes, creates no database tables, and registers no Consul service
   discovery, so it never triggers Consul Catalog write operations. Consul remains
   configuration-KV-only for this service.
-- **Logging**: the legacy Serilog Console/Loki pipeline is retained in this slice, including
-  its global enrichers (fixed `ServiceName`/`ServiceVersion` and machine-name `InstanceId`)
-  as the fallback for non-request logs; during a request, the ServiceMantle scope supplies the
-  current identity and correlation fields. Loki stream labels are unchanged. Unifying the
-  global enrichers with the ServiceMantle identity belongs to the logging migration task.
+- **Logging**: Console + Grafana Loki delivery runs through the `ServiceMantle.Logging`
+  pipeline (pinned pre-release `0.2.1-rc.1`), registered by
+  `DocthecaLoggingExtensions.AddDocthecaLogging()` after the Consul configuration source.
+  Every event passes the library's mandatory structured sanitizer before reaching either
+  sink; per-category minimum levels are Information by default with Warning overrides for
+  `Microsoft.AspNetCore` and `Microsoft.EntityFrameworkCore.Database.Command`. Identity comes
+  from explicit `ServiceLogContext` scopes only — the request scope for HTTP requests, an
+  explicit startup scope for host diagnostics/initialization, and a worker-lifetime scope for
+  the StructaDoc parse worker (no invented HTTP CorrelationId outside a request). The legacy
+  global Serilog enrichers (including `MachineName`/`ThreadId`) and the `Serilog`
+  configuration section are retired. The fixed Loki stream label stays `service=Doctheca`
+  (plus the sink-owned `level` label), so existing Grafana queries keep working; an empty
+  `Loki:Uri` disables the remote sink while Console stays on, and plain-HTTP Loki endpoints
+  are an explicitly accepted intranet deployment contract (`AllowInsecureHttp`).
