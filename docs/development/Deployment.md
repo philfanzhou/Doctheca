@@ -251,6 +251,19 @@ dotnet run --project src/Host
 
 The Doctheca container uses the Docker default bridge network; it no longer joins `ruoyu-net` and no longer relies on Docker container names to reach Consul. At deployment time you must ensure the container can access the LAN address pointed to by `CONSUL_HTTP_ADDR`.
 
+The image includes the distribution's [Tini](https://github.com/krallin/tini) package as PID 1 and starts `dotnet Doctheca.Host.dll` as its child. Tini forwards termination signals and preserves the child's exit status; callers do not need `docker run --init`. A database startup refusal exits non-zero before HTTP begins listening. `start.sh` keeps `--restart unless-stopped`, so Docker may retry a failed start: inspect the restart count and safe diagnostic code rather than treating a restarting container as ready. An explicit `--entrypoint` override bypasses the image's process wrapper.
+
+This entrypoint change needs no configuration or database migration and keeps the port, application arguments, and HTTP contracts unchanged. Roll back by redeploying the previous image; that also restores its previous process entrypoint and failure-exit behavior. No SQL rollback is required.
+
+To verify the built image's default entrypoint (Python 3 and a local Docker daemon required):
+
+```bash
+docker build -t doctheca:startup-verify .
+python3 scripts/verify-container-startup.py doctheca:startup-verify
+```
+
+The check creates an isolated PostgreSQL 16 container/network and runtime-only synthetic credentials. Without adding `--init` or overriding the entrypoint, it checks invalid AllowCreate, missing-target default refusal, unreachable PostgreSQL, and authentication refusal for actual non-zero container exit, no HTTP listener, safe codes, no credential disclosure, and no missing-target creation. It also checks successful startup, exact health responses, a single gate invocation, and graceful SIGTERM shutdown. Containers, the network, and temporary configuration files are cleaned up. CI runs this check against the release Dockerfile image.
+
 Callers access Doctheca via `DocthecaService:Url` in Consul `config/ruoyu/service-endpoints.json`. For cross-host deployments this value must be a LAN IP and host-mapped port reachable by the callers, for example:
 
 ```json

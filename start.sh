@@ -40,6 +40,8 @@ if [ -n "$(docker ps -aq --filter "name=^/${CONTAINER_NAME}$")" ]; then
     docker rm "$CONTAINER_NAME"
 fi
 
+# The image includes Tini; startup failures propagate a non-zero container exit.
+# The restart policy still retries failures; inspect restart count and logs when diagnosing.
 docker run -d \
   --name "$CONTAINER_NAME" \
   --restart unless-stopped \
