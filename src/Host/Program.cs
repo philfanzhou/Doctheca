@@ -18,11 +18,8 @@ using Doctheca.Service.Parsing;
 using Doctheca.Service.StructaDoc;
 using Doctheca.Host;
 using Doctheca.Host.Authentication;
-using Doctheca.Host.Health;
 using Doctheca.Consul;
 using ServiceMantle;
-using ServiceMantle.Bootstrap;
-using ServiceMantle.Database.PostgreSql.Migration;
 using ServiceMantle.Health;
 using ServiceMantle.Migration;
 using ServiceMantle.Web.Http;
@@ -36,28 +33,13 @@ var builder = WebApplication.CreateBuilder(args);
 var serviceMantle = builder.Services.AddDocthecaServiceMantleFoundation();
 
 // ========== ServiceMantle health probes (live + readiness, /health alias) ==========
-// No dependency contributors are registered: readiness is exactly the startup receipt plus
-// the read-only PostgreSQL probe owned by DocthecaHealthSnapshotSource below.
+// Readiness is the shared startup receipt plus the scoped mapped-schema probe.
 serviceMantle.AddServiceMantleHealthEndpoints(options =>
 {
     options.ProbeTimeout = TimeSpan.FromSeconds(3);
 });
-builder.Services.AddSingleton<DocthecaStartupReceipt>();
-builder.Services.AddScoped<IServiceHealthSnapshotSource, DocthecaHealthSnapshotSource>();
-
-// ========== ServiceMantle database migration orchestration (issue #53) ==========
-// The PostgreSQL session advisory lock that serializes multi-instance startup: it covers the
-// orchestrator's initial inspection, the legacy takeover, the EF Core migration execution, and
-// the final inspection (never only the Migrate call). The consuming service's executor plus the
-// scoped orchestrator: each scope resolves its own executor instance; the lock/state machine
-// belongs to the shared orchestrator and is never reimplemented locally.
-serviceMantle
-    .AddMigrationLockProvider<PostgreSqlMigrationLockProvider>()
-    .AddDatabaseMigration<DocthecaMigrationExecutor>();
-// The orchestrator activates the executor through DI; this registration keeps the executor's
-// issue-#52 diagnostic logging (baseline applied / takeover / refusal reasons) on a named
-// category logger instead of silently degrading to the null logger. Without it the optional
-// ILogger constructor parameter defaults to null.
+builder.Services.AddDocthecaStartupDatabase(serviceMantle);
+// Preserve the executor's existing safe diagnostic logging.
 builder.Services.AddSingleton<ILogger>(
     serviceProvider => serviceProvider.GetRequiredService<ILoggerFactory>()
         .CreateLogger(nameof(DocthecaMigrationExecutor)));
@@ -340,77 +322,24 @@ using (serviceLogContext.BeginScope(app.Logger))
         }
     }
 
-    using (var scope = app.Services.CreateScope())
+    // Direct entry preserves the existing LLM -> database -> OpenSearch startup order.
+    // No hosted gate is registered, so this is the sole production invocation.
+    var applicationStopping = app.Lifetime.ApplicationStopping;
+    var gateOptions = DocthecaStartupDatabase.CreateOptions(builder.Configuration, connectionString);
+    var gateResult = await app.Services.GetRequiredService<StartupDatabaseGate>().RunAsync(
+        gateOptions,
+        app.Services.GetRequiredService<StartupDatabaseReceipt>(),
+        ServiceId.Parse(DocthecaServiceMantleExtensions.ServiceIdValue),
+        applicationStopping);
+    if (!gateResult.Succeeded)
     {
-        var loggerFactory = scope.ServiceProvider.GetRequiredService<ILoggerFactory>();
-        var startupReceipt = scope.ServiceProvider.GetRequiredService<DocthecaStartupReceipt>();
-        try
-        {
-            // Stage 1+2 — deployment validation and target preparation (issue #53): observe the
-            // resolved connection string for server reachability/identity; an existing database
-            // is used as-is, a verifiably missing one is created only when Database:AllowCreate
-            // explicitly permits (default: refuse with DOCTHECA_DB_CREATION_NOT_ALLOWED, zero
-            // writes), and unreachable/identity failures are refused without a creation
-            // fallback. Stage 3 — the shared migration orchestrator acquires the real
-            // PostgreSQL session advisory lock for this service id and covers the initial
-            // inspection, the verified legacy takeover, the EF Core migration execution, and the
-            // final inspection under that single authority; success is reported only after the
-            // held-lock final inspection passed, which is also the only point where the startup
-            // receipt may record success. The lock acquire budget is fixed at 30 seconds; it
-            // bounds waiting for the lock only, never the execution itself. All stages observe
-            // host shutdown through the same token.
-            var applicationStopping = app.Services
-                .GetRequiredService<IHostApplicationLifetime>()
-                .ApplicationStopping;
-            await DocthecaDatabaseTargetPreparer.PrepareAsync(
-                builder.Configuration,
-                connectionString,
-                app.Logger,
-                applicationStopping);
-
-            var migrationLogger = loggerFactory.CreateLogger("DatabaseMigration");
-            var orchestrator = scope.ServiceProvider
-                .GetRequiredService<DatabaseMigrationOrchestrator>();
-            var migrationTarget = new BootstrapDatabaseConfiguration(
-                WellKnownDatabaseProviderIds.PostgreSql,
-                serverVersion: null,
-                connectionString);
-            migrationLogger.LogInformation(
-                "Orchestrating database migration under the PostgreSQL advisory lock (30 s acquire budget)");
-            var migration = await orchestrator.OrchestrateMigrationAsync(
-                ServiceId.Parse(DocthecaServiceMantleExtensions.ServiceIdValue),
-                migrationTarget,
-                TimeSpan.FromSeconds(30),
-                applicationStopping);
-            if (!migration.Succeeded)
-            {
-                // Logs and the surfaced message carry the ServiceMantle safe error code only
-                // (migration.lock_timeout / lock_failed / inspection_failed / version_too_new /
-                // execution_failed / final_state_invalid); the process exits non-zero after the
-                // receipt recorded the failure.
-                migrationLogger.LogError(
-                    "Database migration orchestration failed: {ErrorCode}", migration.ErrorCode);
-                throw new InvalidOperationException(
-                    $"Database migration orchestration failed (error {migration.ErrorCode}): " +
-                    $"{migration.ErrorMessage}. Refusing to start; the shared orchestrator released " +
-                    "the lock before this refusal.");
-            }
-
-            migrationLogger.LogInformation(
-                "Database migration orchestration completed (executor was called: {ExecutorWasCalled})",
-                migration.ExecutorWasCalled);
-
-            // The only transition to Succeeded: the orchestration itself reported success.
-            startupReceipt.MarkSucceeded();
-        }
-        catch
-        {
-            // Any phase failure is recorded honestly before the exception stops the host (a
-            // failed production host never listens).
-            startupReceipt.MarkFailed();
-            throw;
-        }
+        app.Logger.LogError("Database startup gate failed: {ErrorCode}", gateResult.ErrorCode);
+        throw new InvalidOperationException(
+            $"Database startup gate failed (error {gateResult.ErrorCode}); refusing to start.");
     }
+    app.Logger.LogInformation(
+        "Database startup gate completed (executor was called: {ExecutorWasCalled})",
+        gateResult.ExecutorWasCalled);
 
     // Initialize search indices
     using (var initScope = app.Services.CreateScope())

@@ -66,7 +66,9 @@ IDENTITY_APP_ID=<appid> IDENTITY_APP_SECRET=<secret> ./start.sh
 
 `start.sh` reads shared configuration (PostgreSQL, OSS, OpenSearch, Loki, StructaDoc) from Consul KV; environment variables can override. See [`docs/development/Deployment.md`](docs/development/Deployment.md).
 
-The target PostgreSQL database must exist before startup: a missing database is refused by default with the fixed error `DOCTHECA_DB_CREATION_NOT_ALLOWED` (`DATABASE_ALLOW_CREATE=true` opts into automatic creation). Startup runs the EF Core migrations under a PostgreSQL advisory lock, so multiple instances starting against the same database serialize and only one executes the migration. See [`docs/database/migrations.md`](docs/database/migrations.md).
+The target PostgreSQL database must exist before startup: a missing database is refused by default with the fixed error `database_target_preparation.creation_not_allowed` (`DATABASE_ALLOW_CREATE=true` opts into automatic creation). Startup runs the EF Core migrations under a PostgreSQL advisory lock, so multiple instances starting against the same database serialize and only one executes the migration. See [`docs/database/migrations.md`](docs/database/migrations.md).
+
+Startup and readiness use the shared ServiceMantle 0.3.0 gate, receipt, and EF Core mapped-schema health source. The configuration and HTTP contracts remain unchanged. Operational alerts must replace `DOCTHECA_DB_CREATION_NOT_ALLOWED` with `database_target_preparation.creation_not_allowed` and `DOCTHECA_DB_ALLOW_CREATE_INVALID` with `database_target_preparation.invalid_target`. There is no schema/data migration in this upgrade; rollback redeploys the previous image against the same existing compatible database and restores its alert codes.
 
 ### Local .NET
 

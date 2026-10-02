@@ -145,7 +145,7 @@ Both cookies are HttpOnly and SameSite=Strict, and are not exposed to front-end 
 
 ## Logging Configuration
 
-Doctheca logs through the `ServiceMantle.Logging` pipeline (Console sink + optional Grafana Loki remote sink). The wiring lives in `src/Host/DocthecaLoggingExtensions.cs` and is registered in `Program.cs` via `builder.AddDocthecaLogging()` after the Consul configuration source. Package versions are pinned deliberately: `ServiceMantle.Web`/`ServiceMantle.Diagnostics` 0.2.0 with `ServiceMantle.Logging` 0.2.1-rc.1 — the pre-release is the first Logging package carrying the bounded per-category level overrides, explicit fixed Loki stream labels, and the explicit insecure-HTTP acceptance used here (the same combination already ships in Ruoyu.Admin). Do not float it.
+Doctheca logs through the `ServiceMantle.Logging` pipeline (Console sink + optional Grafana Loki remote sink). The wiring lives in `src/Host/DocthecaLoggingExtensions.cs` and is registered in `Program.cs` via `builder.AddDocthecaLogging()` after the Consul configuration source. All direct ServiceMantle packages (`ServiceMantle`, `.Web`, `.Diagnostics`, `.Logging`, `.Database.PostgreSql`, and `.Persistence.Relational`) are pinned to the same formal **0.3.0** release. Do not float these versions.
 
 ### Log Levels
 
@@ -202,10 +202,10 @@ After startup, if the configuration is correct, the diagnostic logs should show 
 
 | Key | Default | Values | Description |
 |-----|---------|--------|-------------|
-| `Database:AllowCreate` (env `Database__AllowCreate`) | `false` | `true` / `false` only | Whether startup may create the target database when it is verifiably missing. Any other value refuses startup with `DOCTHECA_DB_ALLOW_CREATE_INVALID`. |
+| `Database:AllowCreate` (env `Database__AllowCreate`) | `false` | `true` / `false` only | Whether startup may create the target database when it is verifiably missing. Any other value refuses startup with `database_target_preparation.invalid_target`. |
 
 - By default a missing `doctheca` database refuses startup with the fixed error code
-  `DOCTHECA_DB_CREATION_NOT_ALLOWED` and writes nothing. Implicit database creation (the old
+  `database_target_preparation.creation_not_allowed` and writes nothing. Implicit database creation (the old
   EF `Migrate` behavior) is retired.
 - Deployments that relied on implicit creation must either create the database manually before
   upgrading (`CREATE DATABASE doctheca OWNER <migration user>;`) or set
@@ -216,6 +216,19 @@ After startup, if the configuration is correct, the diagnostic logs should show 
 - Unreachable servers, authentication or permission failures, and server/database identity
   conflicts are refused with the provider's safe `database_target_preparation.*` codes — never
   answered with a creation fallback.
+
+### ServiceMantle 0.3.0 upgrade and rollback
+
+Startup now calls the shared `StartupDatabaseGate` directly once, after LLM initialization and before OpenSearch initialization; no automatic hosted gate is registered. Health uses the shared scoped `EfCoreHealthSnapshotSource<DocthecaDbContext>` in MappedSchema mode, with a 3-second probe budget. The existing HTTP routes, JSON fields, readiness error codes, and anonymous access remain unchanged. Connection-opening failures, including SQLSTATE class 28 authentication failures, still map to `doctheca.database_unreachable`.
+
+Update operational alerts for these two intentional code changes:
+
+| Previous code | Current code |
+|---|---|
+| `DOCTHECA_DB_CREATION_NOT_ALLOWED` | `database_target_preparation.creation_not_allowed` |
+| `DOCTHECA_DB_ALLOW_CREATE_INVALID` | `database_target_preparation.invalid_target` |
+
+There is no schema/data migration or new configuration switch in this package upgrade. Keep existing backups and stop the old version during upgrades. Roll back by redeploying the previous image against the same existing compatible database and reverting alert codes; no database rollback script is required. Creation and committed migration effects are not undone after a later failure or cancellation.
 
 ### Multi-instance startup semantics
 
@@ -238,6 +251,19 @@ dotnet run --project src/Host
 
 The Doctheca container uses the Docker default bridge network; it no longer joins `ruoyu-net` and no longer relies on Docker container names to reach Consul. At deployment time you must ensure the container can access the LAN address pointed to by `CONSUL_HTTP_ADDR`.
 
+The image includes the distribution's [Tini](https://github.com/krallin/tini) package as PID 1 and starts `dotnet Doctheca.Host.dll` as its child. Tini forwards termination signals and preserves the child's exit status; callers do not need `docker run --init`. A database startup refusal exits non-zero before HTTP begins listening. `start.sh` keeps `--restart unless-stopped`, so Docker may retry a failed start: inspect the restart count and safe diagnostic code rather than treating a restarting container as ready. An explicit `--entrypoint` override bypasses the image's process wrapper.
+
+This entrypoint change needs no configuration or database migration and keeps the port, application arguments, and HTTP contracts unchanged. Roll back by redeploying the previous image; that also restores its previous process entrypoint and failure-exit behavior. No SQL rollback is required.
+
+To verify the built image's default entrypoint (Python 3 and a local Docker daemon required):
+
+```bash
+docker build -t doctheca:startup-verify .
+python3 scripts/verify-container-startup.py doctheca:startup-verify
+```
+
+The check creates an isolated PostgreSQL 16 container/network and runtime-only synthetic credentials. Without adding `--init` or overriding the entrypoint, it checks invalid AllowCreate, missing-target default refusal, unreachable PostgreSQL, and authentication refusal for actual non-zero container exit, no HTTP listener, safe codes, no credential disclosure, and no missing-target creation. It also checks successful startup, exact health responses, a single gate invocation, and graceful SIGTERM shutdown. Containers, the network, and temporary configuration files are cleaned up. CI runs this check against the release Dockerfile image.
+
 Callers access Doctheca via `DocthecaService:Url` in Consul `config/ruoyu/service-endpoints.json`. For cross-host deployments this value must be a LAN IP and host-mapped port reachable by the callers, for example:
 
 ```json
@@ -253,10 +279,9 @@ The Consul initialization script uses `cas=0` and only creates KVs that do not y
 The post-deployment smoke check should hit `http://127.0.0.1:5012/health/live` for process liveness and `http://127.0.0.1:5012/health/ready` (or its `/health` alias) for database readiness on the Doctheca target host. Note the contract change: `/health` is now a readiness alias returning `200 {"status":"ready",...}` only once the startup initializer completed and a read-only schema probe succeeded, and `503 {"status":"not_ready",...}` otherwise — it no longer returns the old always-`healthy` payload with a `timestamp`.
 
 The service automatically performs the following at startup:
-1. Deployment validation and target preparation — ServiceMantle observes the resolved PostgreSQL target; a verifiably missing database is created only when `Database:AllowCreate=true` (by default startup refuses with `DOCTHECA_DB_CREATION_NOT_ALLOWED` and writes nothing); unreachable or conflicting targets are refused with safe `database_target_preparation.*` codes
-2. `DocthecaMigrationExecutor` under the ServiceMantle `DatabaseMigrationOrchestrator` — applies the EF Core baseline migration `20260930161548_InitialCreate` to an empty database under the PostgreSQL advisory lock (multi-instance starts serialize; only one instance executes); verifies and takes over a legacy database (idempotent backfills + baseline registration); refuses an unknown or conflicting structure with the fixed error code `DOCTHECA_DB_SCHEMA_INCOMPATIBLE` or the orchestrator's `migration.*` safe codes (see [Migrations](../database/migrations.md))
+1. `IDocumentAnalysisService.InitializeAsync` — LLM initialization (if an ApiKey is configured)
+2. Shared `StartupDatabaseGate` — deployment validation, explicit target preparation, and `DocthecaMigrationExecutor` under the PostgreSQL session advisory lock; the gate publishes success only after the held-lock final inspection passes (see [Migrations](../database/migrations.md))
 3. `OpenSearchIndexService.EnsureIndexAsync` — create the search index (best-effort)
-4. `IDocumentAnalysisService.InitializeAsync` — LLM initialization (if an ApiKey is configured)
 
 ## Prebuilt Images & Version Releases
 

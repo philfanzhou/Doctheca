@@ -218,7 +218,7 @@ public sealed class ServiceMantleHealthTests : ServiceMantleIntegrationTestBase
                     root.GetProperty("errorCode").GetString(),
                     new[]
                     {
-                        Doctheca.Host.Health.DocthecaHealthSnapshotSource.DatabaseUnreachableErrorCode,
+                        "doctheca.database_unreachable",
                         "health.probe_timeout",
                         "health.probe_failed"
                     });

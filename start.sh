@@ -20,7 +20,7 @@ OPENSEARCH_INDEX="doctheca-segments"
 DB_NAME="doctheca"
 
 # Optional: allow startup to create the missing target database (see docs/development/Deployment.md).
-# Empty keeps the default refusal (DOCTHECA_DB_CREATION_NOT_ALLOWED); set to true/false to override.
+# Empty keeps the default refusal (database_target_preparation.creation_not_allowed); set to true/false to override.
 DATABASE_ALLOW_CREATE="${DATABASE_ALLOW_CREATE:-}"
 
 LLM_API_KEY="${LLM_API_KEY:-}"
@@ -40,6 +40,8 @@ if [ -n "$(docker ps -aq --filter "name=^/${CONTAINER_NAME}$")" ]; then
     docker rm "$CONTAINER_NAME"
 fi
 
+# The image includes Tini; startup failures propagate a non-zero container exit.
+# The restart policy still retries failures; inspect restart count and logs when diagnosing.
 docker run -d \
   --name "$CONTAINER_NAME" \
   --restart unless-stopped \
