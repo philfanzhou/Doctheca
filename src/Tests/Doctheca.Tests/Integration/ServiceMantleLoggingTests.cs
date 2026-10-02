@@ -327,7 +327,7 @@ public sealed class ServiceMantleLoggingTests : ServiceMantleIntegrationTestBase
         }
 
         // The library pipeline is present and pinned to the unified release version.
-        Assert.Contains("\"ServiceMantle.Logging/0.2.1\"", deps);
+        Assert.Contains("\"ServiceMantle.Logging/0.3.0\"", deps);
     }
 
     private static async Task<WebApplication> StartFakeLokiAsync(Func<HttpContext, Task> onPush)

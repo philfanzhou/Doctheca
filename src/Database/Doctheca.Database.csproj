@@ -12,9 +12,9 @@
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
     <!-- Only the core ServiceMantle contract package: the executor implements
          IDatabaseMigrationExecutor for the shared DatabaseMigrationOrchestrator; the
-         PostgreSQL lock/orchestration wiring stays in the Host (same 0.2.1 release tag as
+         PostgreSQL lock/orchestration wiring stays in the Host (same 0.3.0 release tag as
          every other ServiceMantle package in this repository). -->
-    <PackageReference Include="ServiceMantle" Version="0.2.1" />
+    <PackageReference Include="ServiceMantle" Version="0.3.0" />
   </ItemGroup>
 
   <ItemGroup>

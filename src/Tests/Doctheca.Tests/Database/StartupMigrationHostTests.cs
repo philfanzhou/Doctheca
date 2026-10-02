@@ -3,6 +3,10 @@ using System.Net;
 using FluentAssertions;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using ServiceMantle.Migration;
 using Npgsql;
 using Doctheca.Host;
 using Xunit;
@@ -12,7 +16,7 @@ namespace Doctheca.Tests.Database;
 /// <summary>
 /// End-to-end startup behavior of the three-phase database initialization in the real
 /// Program.cs host (issue #53): a missing target database refuses startup by default with the
-/// fixed <c>DOCTHECA_DB_CREATION_NOT_ALLOWED</c> code and zero writes;
+/// fixed <c>database_target_preparation.creation_not_allowed</c> code and zero writes;
 /// <c>Database:AllowCreate=true</c> creates the missing database and the migration orchestration
 /// then applies the baseline and publishes readiness as
 /// <c>migrationStatus=succeeded</c>; an existing database starts straight into orchestration; a
@@ -43,15 +47,11 @@ public sealed class StartupMigrationHostTests
         using var factory = CreateHostFactory(missing);
 
         // The refusal surfaces while the host is being built; the exact wrapper around the
-        // startup exception is host infrastructure, so the assertion walks the exception chain
-        // for the preparation exception and its safe error code.
+        // startup exception is host infrastructure, so the assertion checks the fixed gate message and safe error code.
         var exception = Record.Exception(() => factory.CreateClient());
 
         exception.Should().NotBeNull();
-        var preparationException = FindPreparationException(exception!);
-        preparationException.Should().NotBeNull();
-        preparationException!.ErrorCode.Should()
-            .Be(DocthecaDatabaseTargetPreparer.CreationNotAllowedErrorCode);
+        exception!.ToString().Should().Contain("database_target_preparation.creation_not_allowed");
         exception!.ToString().Should().NotContain(_fixture.PasswordCanary);
 
         // Zero writes: the missing catalog was not created and nothing else was touched.
@@ -123,13 +123,55 @@ public sealed class StartupMigrationHostTests
         var exception = Record.Exception(() => factory.CreateClient());
 
         exception.Should().NotBeNull();
-        var preparationException = FindPreparationException(exception!);
-        preparationException.Should().NotBeNull();
-        preparationException!.ErrorCode.Should()
-            .Be(DocthecaDatabaseTargetPreparer.InvalidConfigurationErrorCode);
+        exception!.ToString().Should().Contain("database_target_preparation.invalid_target");
         exception!.ToString().Should().NotContain(_fixture.PasswordCanary);
 
         (await DatabaseExistsAsync(missing)).Should().BeFalse();
+    }
+
+    [Theory]
+    [InlineData("PostgreSql:Port", "1")]
+    [InlineData("PostgreSql:Password", "fictitious-wrong-password")]
+    public async Task Host_Startup_ConnectionOrAuthenticationFailure_RefusesBeforeListening(string key, string value)
+    {
+        var missing = NewDatabaseName();
+        using var factory = CreateHostFactory(missing, ("Database:AllowCreate", "true"), (key, value));
+        var exception = Record.Exception(() => factory.CreateClient());
+        exception.Should().NotBeNull();
+        exception!.ToString().Should().Contain("Database startup gate failed")
+            .And.Contain("database_target_preparation.")
+            .And.NotContain(_fixture.PasswordCanary);
+        if (key == "PostgreSql:Password") exception.ToString().Should().NotContain(value);
+        (await DatabaseExistsAsync(missing)).Should().BeFalse();
+    }
+
+    [Theory]
+    [InlineData(true, "migration.execution_failed")]
+    [InlineData(false, "migration.final_state_invalid")]
+    public async Task Host_Startup_MigrationOrFinalInspectionFailure_RefusesBeforeListening(bool executionFailure, string expected)
+    {
+        var database = await _fixture.CreateDatabaseAsync();
+        try
+        {
+            using var factory = CreateHostFactory(database).WithWebHostBuilder(builder =>
+                builder.ConfigureTestServices(services =>
+                {
+                    services.RemoveAll<IDatabaseMigrationExecutor>();
+                    services.AddScoped<IDatabaseMigrationExecutor>(_ => new RefusingExecutor(executionFailure, _fixture.PasswordCanary));
+                }));
+            var exception = Record.Exception(() => factory.CreateClient());
+            exception.Should().NotBeNull();
+            exception!.ToString().Should().Contain(expected).And.NotContain(_fixture.PasswordCanary);
+        }
+        finally { await _fixture.DropDatabaseAsync(database); }
+    }
+
+    private sealed class RefusingExecutor(bool executionFailure, string canary) : IDatabaseMigrationExecutor
+    {
+        public ValueTask<MigrationObservationState> InspectAsync(CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(MigrationObservationState.Empty);
+        public ValueTask ExecuteAsync(CancellationToken cancellationToken = default) => executionFailure
+            ? ValueTask.FromException(new InvalidOperationException(canary)) : ValueTask.CompletedTask;
     }
 
     // ---------- helpers ----------
@@ -180,20 +222,6 @@ public sealed class StartupMigrationHostTests
                 builder.UseSetting(key, value);
             }
         });
-    }
-
-    private static DocthecaDatabaseTargetPreparationException? FindPreparationException(
-        Exception exception)
-    {
-        for (Exception? current = exception; current is not null; current = current.InnerException)
-        {
-            if (current is DocthecaDatabaseTargetPreparationException preparationException)
-            {
-                return preparationException;
-            }
-        }
-
-        return null;
     }
 
     private async Task<bool> DatabaseExistsAsync(string database)

@@ -18,16 +18,18 @@ classifies the target database and executes. The executor implements ServiceMant
 database serialize — only one executes the migration, the others wait for the lock, re-read
 `CurrentVersionCompatible`, and skip.
 
-Startup sequence (three phases, all observed through the host's shutdown token):
+The host uses the formal ServiceMantle **0.3.0** `StartupDatabaseGate` direct entry once, after LLM initialization and before OpenSearch initialization. Its shared `StartupDatabaseReceipt` is the sole process-local startup observation. The scoped shared `EfCoreHealthSnapshotSource<DocthecaDbContext>` runs zero-row mapped-schema probes only after that receipt succeeds; the HTTP response contract and 3-second budget remain unchanged.
 
-1. **Deployment validation** — the ServiceMantle PostgreSQL provider observes the resolved
-   connection string (server reachability, identity, product). Unreachable servers, authentication
-   or permission failures, and identity conflicts refuse startup with the provider's safe
-   `database_target_preparation.*` codes; they are never reinterpreted as a missing database.
+Startup sequence (all observed through the host's shutdown token):
+
+1. **Deployment validation** — the library validates the consumer's PostgreSQL capability
+   declaration for fixed MultiInstance mode without database I/O. Target observation then
+   verifies reachability and identity through the shared PostgreSQL provider; authentication,
+   permission, or identity failures never fall back to creation.
 2. **Target preparation** — a verifiably missing database is created only when
    `Database:AllowCreate` (environment form `Database__AllowCreate`) is explicitly `true`. By
    default a missing database refuses startup with the fixed error code
-   `DOCTHECA_DB_CREATION_NOT_ALLOWED` and writes nothing — neither the catalog nor any table.
+   `database_target_preparation.creation_not_allowed` and writes nothing — neither the catalog nor any table.
    Creation uses a maintenance connection string that is a copy of the target connection string
    with only the database changed to `postgres` (no additional credentials), a fixed 30-second
    budget, and a post-creation re-observation that must report the target connectable.
@@ -78,10 +80,16 @@ rollback and no synthesized success.
   creating the `doctheca` database must either create it manually before upgrading or set
   `Database__AllowCreate=true` (the migration account then needs CREATEDB and access to the
   `postgres` maintenance database). By default a missing database now refuses startup with
-  `DOCTHECA_DB_CREATION_NOT_ALLOWED` instead of being created implicitly.
+  `database_target_preparation.creation_not_allowed` instead of being created implicitly.
 - **Multi-instance upgrade**: the advisory lock serializes concurrent starts of the new version.
   During an upgrade window, stop the old (lock-free) version first — do not mix old and new
   versions against the same database.
+
+## ServiceMantle 0.3.0 Compatibility
+
+All direct ServiceMantle package references use formal 0.3.0. There is no schema or business-data migration in this upgrade. Missing targets now refuse with `database_target_preparation.creation_not_allowed` (previously `DOCTHECA_DB_CREATION_NOT_ALLOWED`); invalid `Database:AllowCreate` values now refuse with `database_target_preparation.invalid_target` (previously `DOCTHECA_DB_ALLOW_CREATE_INVALID`), before any database I/O and without echoing the value. Update alerts accordingly. All other startup failures retain shared allow-listed codes.
+
+The executor, migration history, takeover/backfill rules, and PostgreSQL session advisory lock remain unchanged. Roll back by deploying the previous image and package versions against the same existing compatible database and restoring old alert codes. No rollback SQL is needed. An already created database or committed migration remains after later failure/cancellation. A cancelled gate can leave its shared receipt Running while the process exits; it never reports success.
 
 ## Current Database Version
 
@@ -96,6 +104,7 @@ Adding or changing migrations requires extending `DocthecaMigrationExecutor.Know
 
 | Date | Change | Impact |
 |------|------|------|
+| 2026-10-02 | Adopted formal ServiceMantle 0.3.0 shared direct startup gate, receipt, and EF Core health snapshot source; removed local duplicate algorithms | Only the two operational refusal codes above change; no schema/data/configuration/HTTP changes; old images can roll back against the same compatible existing database |
 | 2026-09-30 | Startup migration delegated to ServiceMantle: deployment validation, explicit `Database:AllowCreate` target preparation (default refuse), and advisory-lock orchestration of multi-instance startup | Missing databases no longer get created implicitly (`DOCTHECA_DB_CREATION_NOT_ALLOWED` by default); concurrent instances serialize on one advisory lock and only one executes the migration |
 | 2026-09-30 | Introduced the EF migration baseline and the verified legacy-takeover executor; retired `EnsureCreated` and the handwritten ALTER list | Schema becomes checkable (`__EFMigrationsHistory`); unknown structures now fail startup instead of being silently patched |
 | 2026-09-21 | Added document_files.structadoc_document_id and document_parses.structadoc_parse_run_id; file_path made nullable | StructaDoc parse pipeline migration (ADR-0009) — folded into the baseline |
