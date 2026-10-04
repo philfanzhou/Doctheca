@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, nextTick, onUnmounted } from 'vue'
+import { ref, watch, onBeforeUnmount } from 'vue'
 import { Icon } from '../utils/icons'
 
 const props = defineProps<{
@@ -12,43 +12,51 @@ const emit = defineEmits<{
   (e: 'close'): void
 }>()
 
-const overlay = ref<HTMLElement | null>(null)
 const drawer = ref<HTMLElement | null>(null)
+let locked = false
+let previousOverflow = ''
+let opener: HTMLElement | null = null
+
+function release() {
+  if (!locked) return
+  if (drawer.value?.contains(document.activeElement) && opener?.isConnected) {
+    opener.focus({ preventScroll: true })
+  }
+  document.body.style.overflow = previousOverflow
+  locked = false
+  opener = null
+}
 
 watch(
   () => props.open,
-  (v) => {
-    if (v) {
+  (open) => {
+    if (open && !locked) {
+      previousOverflow = document.body.style.overflow
+      opener = document.activeElement instanceof HTMLElement ? document.activeElement : null
       document.body.style.overflow = 'hidden'
-      nextTick(() => {
-        overlay.value?.classList.add('open')
-        drawer.value?.classList.add('open')
-      })
-    } else {
-      overlay.value?.classList.remove('open')
-      drawer.value?.classList.remove('open')
-      document.body.style.overflow = ''
+      locked = true
+    } else if (!open) {
+      release()
     }
-  }
+  },
+  { immediate: true }
 )
 
-onUnmounted(() => {
-  document.body.style.overflow = ''
-})
+onBeforeUnmount(release)
 
 function onEsc(e: KeyboardEvent) {
   if (e.key === 'Escape' && props.open) emit('close')
 }
 if (typeof window !== 'undefined') {
   window.addEventListener('keydown', onEsc)
-  onUnmounted(() => window.removeEventListener('keydown', onEsc))
+  onBeforeUnmount(() => window.removeEventListener('keydown', onEsc))
 }
 </script>
 
 <template>
   <Teleport to="body">
-    <div class="overlay" ref="overlay" @click="emit('close')"></div>
-    <div class="drawer" ref="drawer">
+    <div class="overlay drawer-overlay" :class="{ open: props.open }" :inert="!props.open" @click="emit('close')"></div>
+    <div class="drawer" :class="{ open: props.open }" :inert="!props.open" :aria-hidden="!props.open" ref="drawer">
       <div class="drawer-head" v-if="$slots.head || props.title">
         <slot name="head">
           <div class="feed-ico" style="background: var(--primary-soft); color: var(--primary)">
@@ -59,7 +67,7 @@ if (typeof window !== 'undefined') {
             <div class="drawer-sub" v-if="props.subtitle">{{ props.subtitle }}</div>
           </div>
         </slot>
-        <button class="icon-btn" @click="emit('close')">
+        <button class="icon-btn" aria-label="关闭" @click="emit('close')">
           <Icon name="x" />
         </button>
       </div>
