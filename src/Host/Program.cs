@@ -141,7 +141,9 @@ builder.Services.AddRuoyuJwtBearer(
 {
     options.AddPolicy(DocthecaAuthorizationPolicies.Admin, policy =>
     {
-        policy.AddAuthenticationSchemes(JwtBearerDefaults.AuthenticationScheme);
+        // The AdminSession scheme joins the policy unconditionally; with AdminOidc:Enabled=false
+        // no session cookie exists, so authentication and challenge behave exactly as before.
+        policy.AddAuthenticationSchemes(JwtBearerDefaults.AuthenticationScheme, AdminOidcConstants.SessionScheme);
         policy.RequireAuthenticatedUser();
         policy.RequireAssertion(context =>
             context.User.Identities.Any(identity => identity.IsAuthenticated)
@@ -150,6 +152,11 @@ builder.Services.AddRuoyuJwtBearer(
                 && string.Equals(claim.Value, "admin", StringComparison.OrdinalIgnoreCase)));
     });
 });
+
+// SignaCore hosted login (issue #47, first slice): authorization-code callback plus opaque
+// server-side session cookies. Enabled=false by default leaves every existing route and the
+// legacy password flow byte-for-byte unchanged; the three new endpoints answer a fixed 503.
+builder.Services.AddDocthecaAdminOidc(builder.Configuration, builder.Environment);
 
 var fallbackConnectionString = builder.Configuration.GetConnectionString("Default");
 var connectionString = SharedPostgreSqlConnectionStringFactory.BuildOrFallback(builder.Configuration, fallbackConnectionString)
@@ -390,9 +397,16 @@ app.UseDefaultFiles();
 app.UseStaticFiles();
 
 app.UseAuthentication();
+
+// Cookie-session boundary for the protected admin API (hosted login): expired sessions get the
+// fixed re-authentication result before any endpoint runs, and non-safe methods must carry the
+// CSRF credential. Bearer callers and the disabled configuration bypass the boundary entirely.
+app.UseMiddleware<AdminOidcSessionMiddleware>();
+
 app.UseAuthorization();
 
 app.MapAdminAuthEndpoints();
+app.MapAdminOidcEndpoints();
 
 // Web Admin API endpoints
 app.MapDocumentFileEndpoints();
