@@ -47,8 +47,7 @@ public static class AdminOidcRegistration
             options.Cookie.SecurePolicy = settings.InsecureLoopback ? CookieSecurePolicy.SameAsRequest : CookieSecurePolicy.Always;
         });
         // The session cookie is registered unconditionally so the authorization policy keeps a
-        // stable scheme list; with the feature disabled no cookie exists, so authentication
-        // behaves exactly as before.
+        // stable scheme list; without configuration no session can be issued.
         var authentication = services.AddAuthentication().AddCookie(AdminOidcConstants.SessionScheme, options =>
         {
             options.Cookie.Name = AdminOidcConstants.SessionCookie;
@@ -68,7 +67,7 @@ public static class AdminOidcRegistration
         });
         services.AddOptions<CookieAuthenticationOptions>(AdminOidcConstants.SessionScheme)
             .Configure<MemoryTicketStore, TimeProvider>((options, store, time) => { options.SessionStore = store; options.TimeProvider = time; });
-        if (!settings.Enabled) return services;
+        if (!settings.Available) return services;
 
         // Hosting diagnostics log raw query strings before the application middleware runs.
         services.AddLogging(logging => logging.AddFilter("Microsoft.AspNetCore.Hosting.Diagnostics", LogLevel.None));

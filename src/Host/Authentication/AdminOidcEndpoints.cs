@@ -6,8 +6,7 @@ using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 namespace Doctheca.Host.Authentication;
 
 /// <summary>
-/// The hosted-login endpoints (issue #47). While <c>AdminOidc:Enabled</c> is false each
-/// answers a fixed 503; the rest of the auth area keeps the legacy password flow untouched.
+/// The hosted-login endpoints. Missing configuration returns fixed 503 responses.
 /// All carry the ServiceMantle security response-header baseline through the shared
 /// route-group marker, including the framework-handled callback redirect.
 /// </summary>
@@ -38,7 +37,7 @@ public static class AdminOidcEndpoints
         IOptionsMonitor<OpenIdConnectOptions> oidcOptions)
     {
         var settings = context.RequestServices.GetRequiredService<AdminOidcSettings>();
-        if (!settings.Enabled)
+        if (!settings.Available)
         {
             return Disabled();
         }
@@ -87,7 +86,7 @@ public static class AdminOidcEndpoints
     private static async Task<IResult> CsrfAsync(HttpContext context, IAntiforgery antiforgery)
     {
         var settings = context.RequestServices.GetRequiredService<AdminOidcSettings>();
-        if (!settings.Enabled)
+        if (!settings.Available)
         {
             return Disabled();
         }
@@ -111,7 +110,7 @@ public static class AdminOidcEndpoints
 
     private static async Task<IResult> SessionAsync(HttpContext context, AdminOidcSettings settings)
     {
-        if (!settings.Enabled) return Disabled();
+        if (!settings.Available) return Disabled();
         var session = await context.AuthenticateAsync(AdminOidcConstants.SessionScheme);
         return session.Succeeded
             ? Results.Ok(new { success = true, data = new { authenticated = true, reason = "authenticated", username = session.Principal!.Identity!.Name, expiresAt = session.Properties!.ExpiresUtc } })

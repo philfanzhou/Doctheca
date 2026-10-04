@@ -1,39 +1,20 @@
 # 06-CONVENTIONS — Doctheca Admin Authentication Conventions
 
-## Paths
-
-| Kind | Prefix |
-|------|------|
-| Browser authentication | `/admin/auth` |
-| Browser admin API | `/admin` |
-| Anonymous health probes | `/health/live`, `/health/ready`, `/health` (readiness alias) |
-
-## Policy and configuration naming
-
 | Name | Value |
-|------|----|
-| Admin authorization policy | `DocthecaAdmin` |
-| Access Cookie | `docthecaAccessToken` |
-| Refresh Cookie | `docthecaRefreshToken` |
-| Authority configuration | `IdentityService:Authority` |
-| Issuer configuration | `IdentityService:Issuer` |
-| Audience configuration | `IdentityService:Audience` |
-| AppId deployment secret | `IdentityService:AppId` |
-| AppSecret deployment secret | `IdentityService:AppSecret` |
-| Cookie Secure configuration | `Authentication:CookieSecure` |
+| --- | --- |
+| Administrator policy | `DocthecaAdmin` |
+| Hosted authentication routes | `/admin/auth/oidc` |
+| Opaque session Cookie | `docthecaAdminSession` |
+| CSRF Cookie / header | `docthecaAdminCsrf` / `X-CSRF-TOKEN` |
+| Trust configuration | `IdentityService:Authority/Issuer/AdditionalValidIssuers/Audience/RequireHttpsMetadata/ClockSkewSeconds` |
+| Confidential credentials | `IdentityService:AppId/AppSecret` (server runtime injection) |
+| Exact application callbacks | `AdminOidc:RedirectUri/PostLogoutRedirectUri` |
 
-## Errors and logging
+`AdminOidc:Enabled`, `Authentication:CookieSecure` and `DOCTHECA_COOKIE_SECURE` are retired.
+Hosted login is always configured when required values are complete. Secure Cookies are required
+outside Development/Testing numeric loopback HTTP.
 
-- Externally facing authentication errors use concise, stable English messages.
-- 401 means no valid identity; 403 means a valid identity without the admin role.
-- Error codes use the `DOCTHECA_` prefix.
-- Never log passwords, Access Tokens, Refresh Tokens, or Cookies.
-- Identity failures log only the HTTP status, correlation ID, and a generic failure category.
-
-## Frontend
-
-- Never use localStorage/sessionStorage to store authentication material.
-- API modules must reuse the single shared Axios instance.
-- A 401 on auth endpoints does not trigger recursive refresh.
-- 403 is not retried automatically.
-- The login form must use `autocomplete="username"` and `autocomplete="current-password"`.
+Use fixed English errors and code/key-only startup diagnostics. Never log passwords, protocol
+parameters, tokens, Cookies or client secrets. Browser auth material never enters persistent
+storage. Shared Axios transports attach CSRF to every write, do not refresh or replay on 401,
+and do not retry on 403. Login uses top-level hosted navigation; there is no password form.

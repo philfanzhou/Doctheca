@@ -57,12 +57,11 @@ public sealed class ServiceMantleRouteContractTests : ServiceMantleIntegrationTe
             Assert.Equal("application/json", health.Content.Headers.ContentType?.MediaType);
             Assert.Contains("\"status\":\"ready\"", await health.Content.ReadAsStringAsync());
 
-            // The anonymous auth entries are reachable without a session: login with an empty
-            // body reaches the endpoint (400 validation), it is not gated by 401.
+            // Anonymous retired requests return 410 rather than an authentication challenge.
             using var login = await client.PostAsJsonAsync(
                 "/admin/auth/login",
                 new { username = "", password = "" });
-            Assert.Equal(HttpStatusCode.BadRequest, login.StatusCode);
+            Assert.Equal(HttpStatusCode.Gone, login.StatusCode);
         }
         finally
         {
@@ -113,20 +112,18 @@ public sealed class ServiceMantleRouteContractTests : ServiceMantleIntegrationTe
     }
 
     [Fact]
-    public async Task AdminApi_AdminAccessCookie_ReachesRealEndpoint()
+    public async Task AdminApi_LegacyAccessCookie_Returns401()
     {
         using var factory = CreateFactory();
         using var client = factory.CreateClient();
         var request = new HttpRequestMessage(HttpMethod.Get, "/admin/auth/session");
         request.Headers.Add(
             "Cookie",
-            $"{DocthecaAuthenticationConstants.AccessCookieName}={CreateToken("AdMiN")}");
+            $"docthecaAccessToken={CreateToken("AdMiN")}");
 
         using var response = await client.SendAsync(request);
 
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var body = await response.Content.ReadAsStringAsync();
-        Assert.Contains("\"success\":true", body);
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
     [Fact]

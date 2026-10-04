@@ -67,17 +67,17 @@ public class AuthorizationBoundaryTests
     }
 
     [Fact]
-    public async Task AdminApi_AdminAccessCookie_ReachesRealEndpoint()
+    public async Task AdminApi_LegacyAccessCookie_Returns401()
     {
         await using var app = await CreateAppAsync();
         var request = new HttpRequestMessage(HttpMethod.Get, "/admin/document-parses/");
         request.Headers.Add(
             "Cookie",
-            $"{DocthecaAuthenticationConstants.AccessCookieName}={CreateToken("AdMiN")}");
+            $"docthecaAccessToken={CreateToken("AdMiN")}");
 
         var response = await app.GetTestClient().SendAsync(request);
 
-        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
     [Theory]
@@ -146,18 +146,7 @@ public class AuthorizationBoundaryTests
                     ClockSkew = TimeSpan.Zero,
                     RoleClaimType = "role"
                 };
-                options.Events = new JwtBearerEvents
-                {
-                    OnMessageReceived = context =>
-                    {
-                        if (string.IsNullOrWhiteSpace(context.Token))
-                        {
-                            context.Token = context.Request.Cookies[
-                                DocthecaAuthenticationConstants.AccessCookieName];
-                        }
-                        return Task.CompletedTask;
-                    }
-                };
+
             });
         builder.Services.AddAuthorization(options =>
         {

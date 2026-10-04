@@ -5,7 +5,7 @@
 | Target | Protocol | Direction | Purpose | Security boundary |
 |------|------|------|------|----------|
 | Admin UI | HTTP same-origin | Inbound | Document management and search | Identity `role=admin` HttpOnly Cookie/JWT |
-| SignaCore | HTTP/OIDC | Outbound | Login, refresh, revocation, JWKS | Authority from Consul |
+| SignaCore | HTTP/OIDC | Outbound | Hosted sign-in, code exchange, prepared logout, JWKS | Authority from Consul |
 | PostgreSQL | TCP | Outbound | Document/parse data CRUD | Service-private database |
 | StructaDoc | HTTP | Outbound | Document upload, Parse Runs, Blocks/Markdown/Assets sync, image proxy, deletion (ADR-0009) | `Authorization: ApiKey` scoped key, BaseUrl from Consul/environment variables |
 | MinIO/SeaweedFS | S3 | Outbound | Legacy files and parse images (read-only compatibility and delete cleanup) | Shared Consul configuration |
@@ -18,8 +18,9 @@ defined independently, without reusing the administrator cookie and without rese
 
 ## Admin API
 
-Except for `/admin/auth/login`, `/admin/auth/refresh`, and `/admin/auth/logout`, all
-`/admin/*` endpoints require the `DocthecaAdmin` policy. For the full authentication contract see
+Protected business `/admin/*` routes and `/admin/auth/session` require `DocthecaAdmin`.
+The six hosted authentication entries enforce their own session/CSRF/protocol checks; old
+POST login/refresh/logout remain anonymous fixed 410 retirement handlers. For the full authentication contract see
 [AdminAuthentication](../modules/AdminAuthentication/01-FEATURE.md).
 
 Main admin endpoints:
@@ -41,9 +42,8 @@ Main admin endpoints:
 
 - `/`, static resources, and SPA fallback
 - `/health/live` (liveness), `/health/ready` and its `/health` alias (readiness)
-- `/admin/auth/login`
-- `/admin/auth/refresh`
-- `/admin/auth/logout`
+- The six `/admin/auth/oidc/*` protocol routes (session/CSRF checks remain required)
+- Old POST `/admin/auth/login`, `/refresh` and `/logout` (fixed 410)
 
 ### Health Probes
 
@@ -72,7 +72,7 @@ gone and `status` is now `ready`/`not_ready` rather than `healthy`.
 |------|------|
 | Unauthenticated admin request | 401 |
 | Authenticated but not an administrator | 403 |
-| Identity unavailable | Login/refresh returns a controlled 502/401 without leaking internal exceptions |
+| Identity unavailable | Hosted start redirects to a fixed failure; logout claims local-only revocation. Missing configuration returns fixed 503. |
 | OpenSearch write failure | Does not block the main parsing flow; logs a Warning |
 | OpenSearch query failure | Returns empty results and logs a Warning |
 
@@ -95,7 +95,7 @@ by business components.
 | `Referrer-Policy` | `no-referrer` |
 | `Content-Security-Policy` | `default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'` |
 
-The baseline applies to exactly the 13 marked JSON admin endpoints — the four
+The baseline applies to the 19 marked admin authentication/JSON endpoints — the six hosted authentication routes and four
 `/admin/auth/{login,refresh,logout,session}` entries; the six `/admin/document-files`
 list/detail/upload/parse/metadata/delete entries; the two `/admin/document-parses` list/delete
 entries; and `/admin/documents/search`. Endpoints are marked individually with
@@ -110,7 +110,7 @@ must opt in explicitly; HTML/image/export responses must not reuse the JSON CSP.
 
 ### Unhandled Error Protocol (Safe Problem Details)
 
-The same 13 marked JSON admin endpoints — the four `/admin/auth/{login,refresh,logout,session}`
+The same 19 marked admin authentication/JSON endpoints — the six hosted authentication routes and four `/admin/auth/{login,refresh,logout,session}`
 entries; the six `/admin/document-files` list/detail/upload/parse/metadata/delete entries; the
 two `/admin/document-parses` list/delete entries; and `/admin/documents/search` — are also the
 exact boundary of the ServiceMantle safe Problem Details protocol: an unhandled exception

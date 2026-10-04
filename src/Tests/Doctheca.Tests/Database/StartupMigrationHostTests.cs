@@ -216,7 +216,6 @@ public sealed class StartupMigrationHostTests
             builder.UseSetting("IdentityService:ClockSkewSeconds", "30");
             builder.UseSetting("IdentityService:AppId", "doctheca-test-app");
             builder.UseSetting("IdentityService:AppSecret", "doctheca-test-secret");
-            builder.UseSetting("Authentication:CookieSecure", "false");
             foreach (var (key, value) in extraSettings)
             {
                 builder.UseSetting(key, value);

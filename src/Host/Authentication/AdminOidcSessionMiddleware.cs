@@ -31,7 +31,7 @@ public sealed class AdminOidcSessionMiddleware(RequestDelegate next)
     public async Task InvokeAsync(HttpContext context)
     {
         var settings = context.RequestServices.GetRequiredService<AdminOidcSettings>();
-        if (settings.Enabled
+        if (settings.Available
             && context.Request.Path.StartsWithSegments("/admin")
             && !context.Request.Path.StartsWithSegments("/admin/auth")
             && context.Request.Cookies.TryGetValue(AdminOidcConstants.SessionCookie, out var cookie)

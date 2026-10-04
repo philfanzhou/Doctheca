@@ -11,9 +11,8 @@ HTTP_PORT="5012"
 CONSUL_HTTP_ADDR="${CONSUL_HTTP_ADDR:-192.168.100.10:8500}"
 CONSUL_TOKEN="${CONSUL_TOKEN:-}"
 
-DOCTHECA_COOKIE_SECURE="${DOCTHECA_COOKIE_SECURE:-false}"
-: "${IDENTITY_APP_ID:?IDENTITY_APP_ID must be the Doctheca SignaCore AppId}"
-: "${IDENTITY_APP_SECRET:?IDENTITY_APP_SECRET must be the Doctheca SignaCore AppSecret}"
+IDENTITY_APP_ID="${IDENTITY_APP_ID:-}"
+IDENTITY_APP_SECRET="${IDENTITY_APP_SECRET:-}"
 
 OPENSEARCH_INDEX="doctheca-segments"
 
@@ -52,7 +51,6 @@ docker run -d \
   -e Endpoints__Http="${HTTP_PORT}" \
   -e Database__Name="${DB_NAME}" \
   ${DATABASE_ALLOW_CREATE:+-e Database__AllowCreate="${DATABASE_ALLOW_CREATE}"} \
-  -e Authentication__CookieSecure="${DOCTHECA_COOKIE_SECURE}" \
   -e IdentityService__AppId="${IDENTITY_APP_ID}" \
   -e IdentityService__AppSecret="${IDENTITY_APP_SECRET}" \
   -e OpenSearch__IndexName="${OPENSEARCH_INDEX}" \

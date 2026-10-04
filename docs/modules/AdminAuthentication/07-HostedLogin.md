@@ -2,11 +2,11 @@
 
 Doctheca delegates administrator authentication to the SignaCore hosted page through a
 Confidential authorization-code client with S256 PKCE. Passwords never pass through this flow;
-access and ID tokens remain in server memory. The feature is **disabled by default**. While
-disabled, all six `/admin/auth/oidc` endpoints return the fixed 503 result below, and legacy
-password login, refresh, logout, token Cookies and Bearer clients retain their existing behavior.
-The administration SPA now consumes hosted login only. Enable `AdminOidc:Enabled=true`
-when deploying this frontend. Legacy backend routes remain until #50.
+access and ID tokens remain in server memory. Hosted login is the only browser authentication
+path. Complete configuration activates it automatically. Missing required values permit startup
+but all six `/admin/auth/oidc` endpoints return fixed 503; there is no password fallback.
+Old POST login/refresh/logout routes return fixed 410 JSON without body binding or provider calls.
+Old access/refresh Cookies no longer authenticate, refresh or revoke sessions.
 
 ## Shared and local responsibilities
 
@@ -28,20 +28,21 @@ the compatibility contract below. Do not weaken these guarantees to substitute a
 
 | Key | Required | Meaning |
 | --- | --- | --- |
-| `AdminOidc:Enabled` | no; default `false` | Enable the new protocol routes. |
-| `AdminOidc:RedirectUri` | when enabled | Exact callback URI ending in `/admin/auth/oidc/callback`. |
-| `AdminOidc:PostLogoutRedirectUri` | when enabled | Exact post-logout URI ending in `/admin/auth/oidc/logout/return`, on the same origin as the callback. |
-| `IdentityService:Authority` | when enabled | Trusted SignaCore issuer/base URI. |
-| `IdentityService:AppId` / `AppSecret` | when enabled | Confidential client ID and server-only secret. |
+| `AdminOidc:RedirectUri` | yes | Exact callback URI ending in `/admin/auth/oidc/callback`. |
+| `AdminOidc:PostLogoutRedirectUri` | yes | Exact post-logout URI ending in `/admin/auth/oidc/logout/return`, on the same origin as the callback. |
+| `IdentityService:Authority` | yes | Trusted SignaCore issuer/base URI. |
+| `IdentityService:AppId` / `AppSecret` | yes | Confidential client ID and server-only secret. |
 | `IdentityService:ClockSkewSeconds` | no; default 30 | Token skew, 0–300 seconds. |
 
 Both registered callback URIs must be canonical absolute HTTPS URIs, at most 500 ASCII characters,
 without query, fragment, user information or wildcard. Development/Testing alone allow numeric
-loopback HTTP (`127.0.0.1` or `[::1]`); `localhost` is rejected. Missing or invalid enabled
-configuration fails startup with the key name only. Inject credentials through environment
+loopback HTTP (`127.0.0.1` or `[::1]`); `localhost` is rejected. Missing required configuration logs `DOCTHECA_OIDC_NOT_CONFIGURED` with missing key names only
+and returns 503 on every hosted route without pending state, tickets or provider calls. Complete
+nonempty invalid URI/skew configuration fails startup with the key name only. Restart after
+restoring configuration. Missing Bearer trust safely refuses header credentials with 401. Inject credentials through environment
 variables or Consul KV. Configuration objects hide their values when formatted.
 
-Before enabling, register SignaCore in this order:
+Before rollout, register SignaCore in this order:
 
 1. Create a **Confidential** application and protect the one-time client secret server-side.
 2. Set **PerApplication** audience (`aud = appId`). Migrate downstream access-token validators
@@ -61,10 +62,10 @@ token and JWKS endpoints and has no standard `end_session_endpoint`.
 ## Browser contract
 
 Every new route carries the ServiceMantle security response-header baseline, including callback
-redirects. Disabled requests return
-`503 {"success":false,"message":"Hosted sign-in is not enabled."}`.
+redirects. Unconfigured requests return
+`503 {"success":false,"message":"Hosted sign-in is not configured."}`.
 
-| Route | Enabled result |
+| Route | Configured result |
 | --- | --- |
 | `GET /admin/auth/oidc/start?returnUrl=...` | 302 to the trusted authorization endpoint with code, S256 PKCE, `openid profile`, state and nonce. Missing/empty return URL defaults to `/`. Invalid, duplicate or unsupported input returns a fixed 400 before creating pending state. Discovery failure redirects to `/?authError=identityUnavailable`. |
 | `GET /admin/auth/oidc/callback` | Consumes pending once, checks browser correlation, callback issuer, nonce and both tokens, then signs in only for the validated access-token `role=admin`. Success redirects to the validated station-local return path. Failure redirects to `/?authError=signInFailed`, non-admin to `/?authError=notAdmin`, cancellation to `/?authError=cancelled`; protocol input is never echoed. |
@@ -108,8 +109,7 @@ include both the `docthecaAdminCsrf` Cookie and `X-CSRF-TOKEN` from `data.reques
 Missing/invalid credentials return fixed 403. A Bearer request remains on the existing path,
 even alongside an active or expired session Cookie, only after the Authorization credential
 actually validates; it cannot borrow the Cookie's administrator role. A forged header cannot
-bypass the Cookie CSRF check. Hosted logout always uses its session CSRF boundary. The legacy
-`docthecaAccessToken` Cookie remains distinct during migration.
+bypass the Cookie CSRF check. Hosted logout always uses its session CSRF boundary. Old `docthecaAccessToken` and `docthecaRefreshToken` Cookies are ignored.
 
 Pending transactions and logout returns expire after five minutes. Each in-memory store has
 capacity 4096 and a one-minute sweep. Logout return state is bound to a separate HttpOnly,
@@ -131,15 +131,14 @@ write or port change (5012). **Only one process/instance is supported**; restart
 invalidates every in-process session/pending/return. SignaCore outages can prevent login or
 upstream logout. Already issued access tokens may remain valid until expiry after logout.
 
-Deploy the API and current SPA together with `AdminOidc:Enabled=true`.
-Complete exact application registrations and credential injection before rollout.
-This completed backend requires the new post-logout configuration whenever enabled. A deployment
-using the earlier login-only PR build must add it before upgrading. Roll back by restoring the previous matching API/SPA image and its configuration, including
-`AdminOidc:Enabled=false` for the old password frontend; users must authenticate again. Turning
-the switch off with the current SPA leaves hosted login unavailable. #50 will separately retire
-the old password/token-Cookie flow and its rollback boundary.
+Deploy the API and current SPA together. Complete exact application registrations and credential
+injection before rollout. `AdminOidc:Enabled` no longer controls availability, even if an old
+configuration still sets it to false. `Authentication:CookieSecure` and its startup variable are
+retired; hosted Cookie security follows the validated callback/environment contract.
 
-Related: [legacy authentication](./01-FEATURE.md).
+See [Breaking changes, upgrade and rollback](../../development/HostedLoginUpgrade.md). Rollback
+requires the previous matching API/SPA image and its runtime configuration, restores that image's
+old password/token-Cookie contracts and requires reauthentication. No SQL is required.
 
 ## Administration SPA
 

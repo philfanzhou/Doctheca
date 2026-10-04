@@ -1,23 +1,20 @@
 # KeyFlows — Key Business Flows
 
-## 0. Identity Administrator Login and Cookie Session
+## 0. Hosted Administrator Login and Server Session
 
-```text
-Admin Browser        Doctheca                 Identity
-     │ POST /admin/auth/login                       │
-     ├────────────────►│                            │
-     │                 │ POST /api/auth/token       │
-     │                 ├───────────────────────────►│
-     │                 │ access + refresh token     │
-     │                 │◄───────────────────────────┤
-     │                 │ OIDC/JWKS validation + role=admin│
-     │ HttpOnly Cookie │                            │
-     │◄────────────────┤                            │
-     │ GET/POST /admin/* (Cookie sent automatically)│
-     ├────────────────►│                            │
-```
+1. The browser opens `/admin/auth/oidc/start` with a validated station-local return URL.
+2. Doctheca redirects to the trusted SignaCore hosted page with S256 PKCE, state and nonce.
+3. The callback consumes pending state once; code exchange stays server-side. Both tokens are
+   verified and strictly bound; the validated access-token administrator role authorizes sign-in.
+4. The browser receives only an opaque HttpOnly server-session Cookie and returns to its local
+   route. Cookie-authenticated writes include identity-bound CSRF credentials.
+5. Expiry requires explicit reauthentication without refresh or write replay. Logout revokes
+   the local ticket first, then prepares provider logout and validates its navigation result.
 
-When the Access Token expires, the browser calls `/admin/auth/refresh`; Doctheca uses the HttpOnly Refresh Cookie to obtain and validate a new token pair from Identity. On logout, the Refresh Token is revoked best-effort and cookies are cleared.
+Old POST login/refresh/logout return 410 without body binding or provider calls. Old token
+Cookies are ignored; header Bearer callers retain their strict validation path. Missing required
+hosted configuration permits startup and returns fixed 503 on hosted routes. See
+[Hosted Login](../modules/AdminAuthentication/07-HostedLogin.md).
 
 ---
 

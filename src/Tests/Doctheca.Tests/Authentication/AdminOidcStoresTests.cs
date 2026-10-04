@@ -121,7 +121,7 @@ public sealed class AdminOidcStoresTests
     [Theory]
     [InlineData("", "IdentityService:AppId")]
     [InlineData("fake-app", "IdentityService:AppSecret")]
-    public void EnabledMissingCredentialsFailsWithKeyNameOnly(string appId, string expectedKey)
+    public void MissingCredentialsAreUnavailableWithKeyNamesOnly(string appId, string expectedKey)
     {
         var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
         {
@@ -129,7 +129,9 @@ public sealed class AdminOidcStoresTests
             ["IdentityService:Authority"] = "https://identity.example.test", ["IdentityService:AppId"] = appId, ["IdentityService:AppSecret"] = appId == "" ? "fake-secret" : ""
         }).Build();
         var env = new Microsoft.Extensions.Hosting.Internal.HostingEnvironment { EnvironmentName = "Production" };
-        Assert.Equal(expectedKey, Assert.Throws<InvalidOperationException>(() => AdminOidcSettings.Read(config, env)).Message);
+        var settings = AdminOidcSettings.Read(config, env);
+        Assert.False(settings.Available);
+        Assert.Contains(expectedKey, settings.MissingKeys);
     }
 
     [Fact]
@@ -137,7 +139,7 @@ public sealed class AdminOidcStoresTests
     {
         var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>()).Build();
         var settings = AdminOidcSettings.Read(config, new Microsoft.Extensions.Hosting.Internal.HostingEnvironment { EnvironmentName = "Production" });
-        Assert.False(settings.Enabled);
+        Assert.False(settings.Available);
         Assert.Equal("AdminOidcSettings", settings.ToString());
     }
 
@@ -201,7 +203,7 @@ public sealed class AdminOidcStoresTests
     }
 
     [Theory]
-    [InlineData("")][InlineData("https://external.example/admin/auth/oidc/logout/return")]
+    [InlineData("https://external.example/admin/auth/oidc/logout/return")]
     [InlineData("https://admin.example.test/wrong")][InlineData("https://admin.example.test/admin/auth/oidc/logout/return?state=x")]
     public void PostLogoutRegistrationIsRequiredExactAndSameOrigin(string postLogout)
     {
@@ -213,6 +215,20 @@ public sealed class AdminOidcStoresTests
         }).Build();
         var environment = new Microsoft.Extensions.Hosting.Internal.HostingEnvironment { EnvironmentName = "Production" };
         Assert.Equal("AdminOidc:PostLogoutRedirectUri", Assert.Throws<InvalidOperationException>(() => AdminOidcSettings.Read(config, environment)).Message);
+    }
+
+    [Theory]
+    [InlineData("-1")][InlineData("301")][InlineData("fictitious-skew-canary")]
+    public void CompleteInvalidSkewFailsWithKeyOnly(string skew)
+    {
+        var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> {
+            ["AdminOidc:RedirectUri"] = "https://admin.example.test/admin/auth/oidc/callback",
+            ["AdminOidc:PostLogoutRedirectUri"] = "https://admin.example.test/admin/auth/oidc/logout/return",
+            ["IdentityService:Authority"] = "https://identity.example.test", ["IdentityService:AppId"] = "fake-app",
+            ["IdentityService:AppSecret"] = "fictitious-secret-canary", ["IdentityService:ClockSkewSeconds"] = skew
+        }).Build();
+        var environment = new Microsoft.Extensions.Hosting.Internal.HostingEnvironment { EnvironmentName = "Production" };
+        Assert.Equal("IdentityService:ClockSkewSeconds", Assert.Throws<InvalidOperationException>(() => AdminOidcSettings.Read(config, environment)).Message);
     }
 
     private static AuthenticationTicket Ticket() => new(

@@ -4,7 +4,6 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
-using Microsoft.Net.Http.Headers;
 
 namespace Doctheca.Common.Authentication;
 
@@ -66,24 +65,7 @@ public static class RuoyuJwtBearerExtensions
                     nameClaimType: consumerOptions.NameClaimType,
                     roleClaimType: consumerOptions.RoleClaimType);
 
-                if (!string.IsNullOrWhiteSpace(consumerOptions.AccessTokenCookieName))
-                {
-                    var cookieName = consumerOptions.AccessTokenCookieName;
-                    options.Events = new JwtBearerEvents
-                    {
-                        OnMessageReceived = context =>
-                        {
-                            var hasAuthorizationHeader = context.Request.Headers
-                                .ContainsKey(HeaderNames.Authorization);
-                            if (!hasAuthorizationHeader && string.IsNullOrWhiteSpace(context.Token))
-                            {
-                                context.Token = context.Request.Cookies[cookieName];
-                            }
 
-                            return Task.CompletedTask;
-                        }
-                    };
-                }
             });
 
         services.AddAuthorization(options =>

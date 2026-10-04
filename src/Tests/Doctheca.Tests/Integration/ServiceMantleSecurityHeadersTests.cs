@@ -138,12 +138,11 @@ public sealed class ServiceMantleSecurityHeadersTests : ServiceMantleIntegration
         });
         using var client = factory.CreateClient();
 
-        // login with an empty body reaches the endpoint and fails validation (400) — the
-        // challenge/error still carries the baseline.
+        // Retirement responses retain the security baseline.
         using (var login = await client.PostAsJsonAsync(
                    "/admin/auth/login", new { username = "", password = "" }))
         {
-            Assert.Equal(HttpStatusCode.BadRequest, login.StatusCode);
+            Assert.Equal(HttpStatusCode.Gone, login.StatusCode);
             AssertBaseline(login);
         }
 
