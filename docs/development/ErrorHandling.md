@@ -98,7 +98,8 @@ What is deliberately NOT covered (existing behavior preserved):
   copy) and must not blindly retry an operation that may have completed.
 
 Rollback: remove the `UseWhen` branch and the conditional-mapping registration from
-`Program.cs` and pin `ServiceMantle.Web` back to `0.2.0` in both the Host and Service projects;
+`Program.cs` and pin `ServiceMantle.Web` back to `0.2.0` in both the Host and Service projects
+(the current baseline is the unified `0.2.1` release);
 the other ServiceMantle slices (logging, health probes, security headers) keep working.
 
 ## Parameter Validation

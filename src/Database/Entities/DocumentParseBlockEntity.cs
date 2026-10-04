@@ -41,7 +41,7 @@ public class DocumentParseBlockEntity
     [Column("created_at")]
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 
-    // [Gen-2] minerU block-level structured columns (added via DatabaseInitializer ALTER TABLE)
+    // [Gen-2] minerU block-level structured columns (part of the migration baseline)
     [Column("sub_type")]
     [MaxLength(50)]
     public string? SubType { get; set; }

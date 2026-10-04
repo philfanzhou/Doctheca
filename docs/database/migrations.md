@@ -2,39 +2,114 @@
 
 ## Migration Strategy
 
-This project **does not use EF Core Code-First Migration**. Table structures are created with raw SQL by `DatabaseInitializer` at application startup (`CREATE TABLE IF NOT EXISTS`).
+The database is managed with **EF Core migrations**. The single baseline migration
+`20260930161548_InitialCreate` (see [Migrations](../../src/Database/Migrations/)) creates the four
+business tables — `document_files`, `document_parses`, `document_parse_images`,
+`document_parse_blocks` — with their columns, types, primary and foreign keys, indexes, and the
+`set_document_files_updated_at` trigger, all matching the production structure the previous raw-SQL
+initializer produced.
+
+At startup `DocthecaMigrationExecutor` ([source](../../src/Database/DocthecaMigrationExecutor.cs))
+classifies the target database and executes. The executor implements ServiceMantle's
+`IDatabaseMigrationExecutor`: its internal states map onto the shared observation states
+(`LegacyTakeoverRequired` → `PendingMigration`, the rest one-to-one), and the shared
+`DatabaseMigrationOrchestrator` runs the whole sequence under a PostgreSQL session advisory lock
+(session-keyed by the `doctheca` service id) so multiple instances starting against the same
+database serialize — only one executes the migration, the others wait for the lock, re-read
+`CurrentVersionCompatible`, and skip.
+
+The host uses the formal ServiceMantle **0.3.0** `StartupDatabaseGate` direct entry once, after LLM initialization and before OpenSearch initialization. Its shared `StartupDatabaseReceipt` is the sole process-local startup observation. The scoped shared `EfCoreHealthSnapshotSource<DocthecaDbContext>` runs zero-row mapped-schema probes only after that receipt succeeds; the HTTP response contract and 3-second budget remain unchanged.
+
+Startup sequence (all observed through the host's shutdown token):
+
+1. **Deployment validation** — the library validates the consumer's PostgreSQL capability
+   declaration for fixed MultiInstance mode without database I/O. Target observation then
+   verifies reachability and identity through the shared PostgreSQL provider; authentication,
+   permission, or identity failures never fall back to creation.
+2. **Target preparation** — a verifiably missing database is created only when
+   `Database:AllowCreate` (environment form `Database__AllowCreate`) is explicitly `true`. By
+   default a missing database refuses startup with the fixed error code
+   `database_target_preparation.creation_not_allowed` and writes nothing — neither the catalog nor any table.
+   Creation uses a maintenance connection string that is a copy of the target connection string
+   with only the database changed to `postgres` (no additional credentials), a fixed 30-second
+   budget, and a post-creation re-observation that must report the target connectable.
+3. **Migration orchestration** — acquire the advisory lock (fixed 30-second acquire budget), run
+   the executor's read-only inspection, execute when required, and re-inspect under the lock; the
+   final inspection must report `CurrentVersionCompatible` before success is published.
+
+| Database state at startup | Handling | Result |
+|---------------------------|----------|--------|
+| Empty (no business tables, no history; a missing catalog counts too) | Apply the baseline migration | The four tables + indexes + FKs + trigger, empty data, history = baseline |
+| Full legacy database (all four tables verify against the baseline, no history) | Safe backfills + register the baseline | Startup succeeds; schema and data unchanged |
+| Legacy database with missing nullable/defaulted columns or missing model indexes | Backfill those columns/indexes, then register the baseline | Startup succeeds; existing data preserved |
+| Unknown or conflicting structure (extra or wrong-typed columns, nullability mismatch, missing NOT NULL column without a default, constraint mismatch, partial table set, history claiming a version the schema contradicts, or unknown migration ids) | Refuse | Startup fails with the fixed error code `DOCTHECA_DB_SCHEMA_INCOMPATIBLE` (executor level) or the orchestrator's `migration.inspection_failed` / `migration.version_too_new` / `migration.final_state_invalid` safe codes; nothing is written, nothing is auto-repaired |
+
+The registration ("stamp") of the baseline happens only after the structure verification passes,
+inside one parameterized transaction. Refused states fail startup; logs and errors carry safe
+error codes and schema identifiers only, never SQL statements, connection values, or driver
+details. Back up the database before upgrading; reconcile refused databases manually.
+
+### Orchestration failure codes
+
+| Code | Meaning |
+|------|---------|
+| `migration.lock_timeout` | The advisory lock could not be acquired within the fixed 30-second budget (another instance holds it) |
+| `migration.lock_failed` | The advisory lease was lost while held |
+| `migration.inspection_failed` | The target structure could not be classified |
+| `migration.version_too_new` | The history contains migration ids this application does not know |
+| `migration.execution_failed` | The executor threw while executing |
+| `migration.final_state_invalid` | The post-execution inspection did not report `CurrentVersionCompatible` |
+
+All of them exit the process with a non-zero code; the advisory lock is always released before the
+refusal. Cancellation (host shutdown) stops before new phases begin; already committed DDL/history
+stays as a truthful pending state that the next start re-reads under the lock — there is no
+rollback and no synthesized success.
+
+## Legacy Upgrade Notes
+
+- Databases created by the retired `EnsureCreated` + `ALTER TABLE` initializer are taken over
+  automatically on the first start of the new version: the structure is verified, the updated_at
+  trigger and any missing model indexes are (re-)created idempotently, and the baseline is
+  registered. Business data is preserved.
+- Rollback: redeploying the previous image keeps working against a stamped database — the old
+  initializer treats "no pending migrations + tables present" as up to date and does not modify it.
+- The retired code paths (`EnsureCreated` fallback and the handwritten `ALTER TABLE` list in
+  `DatabaseInitializer`) have been deleted; the shared `Common/Database/DatabaseInitializer` copy
+  is no longer used by this repository.
+- **Missing-database upgrade step**: deployments that relied on EF Core `Migrate` implicitly
+  creating the `doctheca` database must either create it manually before upgrading or set
+  `Database__AllowCreate=true` (the migration account then needs CREATEDB and access to the
+  `postgres` maintenance database). By default a missing database now refuses startup with
+  `database_target_preparation.creation_not_allowed` instead of being created implicitly.
+- **Multi-instance upgrade**: the advisory lock serializes concurrent starts of the new version.
+  During an upgrade window, stop the old (lock-free) version first — do not mix old and new
+  versions against the same database.
+
+## ServiceMantle 0.3.0 Compatibility
+
+All direct ServiceMantle package references use formal 0.3.0. There is no schema or business-data migration in this upgrade. Missing targets now refuse with `database_target_preparation.creation_not_allowed` (previously `DOCTHECA_DB_CREATION_NOT_ALLOWED`); invalid `Database:AllowCreate` values now refuse with `database_target_preparation.invalid_target` (previously `DOCTHECA_DB_ALLOW_CREATE_INVALID`), before any database I/O and without echoing the value. Update alerts accordingly. All other startup failures retain shared allow-listed codes.
+
+The executor, migration history, takeover/backfill rules, and PostgreSQL session advisory lock remain unchanged. Roll back by deploying the previous image and package versions against the same existing compatible database and restoring old alert codes. No rollback SQL is needed. An already created database or committed migration remains after later failure/cancellation. A cancelled gate can leave its shared receipt Running while the process exits; it never reports success.
 
 ## Current Database Version
 
-All tables are defined in the `GetTableCreationSql` method of [DatabaseInitializer.cs](../../src/Database/DatabaseInitializer.cs).
+| Migration | Contents |
+|-----------|----------|
+| `20260930161548_InitialCreate` | All four tables, their indexes and foreign keys, and the `set_document_files_updated_at` trigger — the production structure as of the StructaDoc migration (ADR-0009) |
 
-## Column-Level Migrations (EnsureColumnsAsync)
-
-Executed automatically at startup via `DatabaseInitializer.EnsureColumnsAsync`, compatible with both new and existing databases:
-
-| SQL | Description |
-|-----|------|
-| `ALTER TABLE document_parses ADD COLUMN IF NOT EXISTS content_list jsonb NULL` | Add content_list (phase 2) |
-| `ALTER TABLE document_parses ADD COLUMN IF NOT EXISTS zip_path character varying(500) NULL` | Add zip_path (phase 2) |
-| `ALTER TABLE document_parses ADD COLUMN IF NOT EXISTS model_version character varying(20) NOT NULL DEFAULT 'vlm'` | Add model version column |
-| `ALTER TABLE document_parses ADD COLUMN IF NOT EXISTS content_list_v2 jsonb NULL` | Add MinerU pipeline output v2 |
-| `ALTER TABLE document_parses ADD COLUMN IF NOT EXISTS model_json jsonb NULL` | Add model inference results |
-| `ALTER TABLE document_parses ADD COLUMN IF NOT EXISTS layout_json jsonb NULL` | Add layout analysis data |
-| `ALTER TABLE document_parses DROP COLUMN IF EXISTS layout_pdf_path` | Drop old column (replaced by layout_json) |
-| `ALTER TABLE document_files ADD COLUMN IF NOT EXISTS subject character varying(50) NULL` | Add subject metadata column (DocumentMetadataAnalysis feature) |
-| `ALTER TABLE document_files ADD COLUMN IF NOT EXISTS grade character varying(20) NULL` | Add grade metadata column (DocumentMetadataAnalysis feature) |
-| `ALTER TABLE document_files ADD COLUMN IF NOT EXISTS year character varying(10) NULL` | Add year metadata column (DocumentMetadataAnalysis feature) |
-| `ALTER TABLE document_files ADD COLUMN IF NOT EXISTS structadoc_document_id uuid NULL` | StructaDoc migration (ADR-0009): remote reference for new documents |
-| `ALTER TABLE document_files ALTER COLUMN file_path DROP NOT NULL` | StructaDoc migration: originals are no longer stored in local OSS; `file_path` is for legacy records only |
-| `ALTER TABLE document_parses ADD COLUMN IF NOT EXISTS structadoc_parse_run_id uuid NULL` | StructaDoc migration: Parse Run reference; non-null means a new-pipeline record |
+Adding or changing migrations requires extending `DocthecaMigrationExecutor.KnownMigrationIds`
+(the known-version contract) together with the executor's takeover rules.
 
 ## Change Log
 
 | Date | Change | Impact |
 |------|------|------|
-| 2026-07-04 | Added document_files.subject/grade/year columns | Document metadata analysis feature, supporting manual setting and LLM auto-fill |
-| 2026-07-04 | Added document_parses.content_list_v2 / model_json / layout_json columns | Structured data output for MinerU pipeline/vlm modes |
-| 2026-07-04 | Added document_parse_blocks and document_parse_images tables | OpenSearch block-level indexing and image management |
-| 2026-07-04 | Dropped document_parses.layout_pdf_path column | Replaced by layout_json (JSONB stores the full layout data) |
-| 2026-07-04 | Added document_parses.model_version column (default 'vlm') | Supports dual model versions vlm / pipeline |
-| 2026-09-21 | Added document_files.structadoc_document_id and document_parses.structadoc_parse_run_id; file_path made nullable | StructaDoc parse pipeline migration (ADR-0009): primary ownership of originals and parse artifacts transferred to StructaDoc; legacy data kept read-only |
+| 2026-10-02 | Adopted formal ServiceMantle 0.3.0 shared direct startup gate, receipt, and EF Core health snapshot source; removed local duplicate algorithms | Only the two operational refusal codes above change; no schema/data/configuration/HTTP changes; old images can roll back against the same compatible existing database |
+| 2026-09-30 | Startup migration delegated to ServiceMantle: deployment validation, explicit `Database:AllowCreate` target preparation (default refuse), and advisory-lock orchestration of multi-instance startup | Missing databases no longer get created implicitly (`DOCTHECA_DB_CREATION_NOT_ALLOWED` by default); concurrent instances serialize on one advisory lock and only one executes the migration |
+| 2026-09-30 | Introduced the EF migration baseline and the verified legacy-takeover executor; retired `EnsureCreated` and the handwritten ALTER list | Schema becomes checkable (`__EFMigrationsHistory`); unknown structures now fail startup instead of being silently patched |
+| 2026-09-21 | Added document_files.structadoc_document_id and document_parses.structadoc_parse_run_id; file_path made nullable | StructaDoc parse pipeline migration (ADR-0009) — folded into the baseline |
+| 2026-07-04 | Added document_files.subject/grade/year columns | Document metadata analysis feature — folded into the baseline |
+| 2026-07-04 | Added document_parses.content_list_v2 / model_json / layout_json columns | MinerU pipeline/vlm structured output — folded into the baseline |
+| 2026-07-04 | Added document_parse_blocks and document_parse_images tables | OpenSearch block-level indexing and image management — folded into the baseline |
+| 2026-07-04 | Dropped document_parses.layout_pdf_path | Replaced by layout_json — folded into the baseline |
+| 2026-07-04 | Added document_parses.model_version column | vlm / pipeline dual model versions — folded into the baseline |

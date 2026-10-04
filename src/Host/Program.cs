@@ -18,9 +18,10 @@ using Doctheca.Service.Parsing;
 using Doctheca.Service.StructaDoc;
 using Doctheca.Host;
 using Doctheca.Host.Authentication;
-using Doctheca.Host.Health;
 using Doctheca.Consul;
+using ServiceMantle;
 using ServiceMantle.Health;
+using ServiceMantle.Migration;
 using ServiceMantle.Web.Http;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -32,14 +33,16 @@ var builder = WebApplication.CreateBuilder(args);
 var serviceMantle = builder.Services.AddDocthecaServiceMantleFoundation();
 
 // ========== ServiceMantle health probes (live + readiness, /health alias) ==========
-// No dependency contributors are registered: readiness is exactly the startup receipt plus
-// the read-only PostgreSQL probe owned by DocthecaHealthSnapshotSource below.
+// Readiness is the shared startup receipt plus the scoped mapped-schema probe.
 serviceMantle.AddServiceMantleHealthEndpoints(options =>
 {
     options.ProbeTimeout = TimeSpan.FromSeconds(3);
 });
-builder.Services.AddSingleton<DocthecaStartupReceipt>();
-builder.Services.AddScoped<IServiceHealthSnapshotSource, DocthecaHealthSnapshotSource>();
+builder.Services.AddDocthecaStartupDatabase(serviceMantle);
+// Preserve the executor's existing safe diagnostic logging.
+builder.Services.AddSingleton<ILogger>(
+    serviceProvider => serviceProvider.GetRequiredService<ILoggerFactory>()
+        .CreateLogger(nameof(DocthecaMigrationExecutor)));
 
 // ========== ServiceMantle security response headers (marked JSON admin endpoints) ==========
 // Immutable six-header baseline (Cache-Control/Pragma/X-Content-Type-Options/X-Frame-Options/
@@ -326,17 +329,24 @@ using (serviceLogContext.BeginScope(app.Logger))
         }
     }
 
-    using (var scope = app.Services.CreateScope())
+    // Direct entry preserves the existing LLM -> database -> OpenSearch startup order.
+    // No hosted gate is registered, so this is the sole production invocation.
+    var applicationStopping = app.Lifetime.ApplicationStopping;
+    var gateOptions = DocthecaStartupDatabase.CreateOptions(builder.Configuration, connectionString);
+    var gateResult = await app.Services.GetRequiredService<StartupDatabaseGate>().RunAsync(
+        gateOptions,
+        app.Services.GetRequiredService<StartupDatabaseReceipt>(),
+        ServiceId.Parse(DocthecaServiceMantleExtensions.ServiceIdValue),
+        applicationStopping);
+    if (!gateResult.Succeeded)
     {
-        var dbContext = scope.ServiceProvider.GetRequiredService<DocthecaDbContext>();
-        var loggerFactory = scope.ServiceProvider.GetRequiredService<ILoggerFactory>();
-        await DatabaseInitializer.InitializeAsync(dbContext, loggerFactory);
-        // One-way process-local receipt: only a successful initializer return may publish
-        // migrationStatus=Succeeded later, and only together with a passing read-only schema
-        // probe (the initializer swallows some ALTER failures, so this alone is not proof).
-        scope.ServiceProvider.GetRequiredService<DocthecaStartupReceipt>()
-            .MarkInitializationCompleted();
+        app.Logger.LogError("Database startup gate failed: {ErrorCode}", gateResult.ErrorCode);
+        throw new InvalidOperationException(
+            $"Database startup gate failed (error {gateResult.ErrorCode}); refusing to start.");
     }
+    app.Logger.LogInformation(
+        "Database startup gate completed (executor was called: {ExecutorWasCalled})",
+        gateResult.ExecutorWasCalled);
 
     // Initialize search indices
     using (var initScope = app.Services.CreateScope())

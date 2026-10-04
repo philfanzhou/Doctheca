@@ -33,6 +33,12 @@ RUN dotnet publish "src/Host/Doctheca.Host.csproj" -c Release -o /app/publish /p
 # ========== Stage 3: Runtime ==========
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS final
 
+# Keep dotnet as a child so fatal signals terminate it normally, and preserve its
+# exit status. The default image must not require callers to add docker --init.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends tini \
+    && rm -rf /var/lib/apt/lists/*
+
 # No LibreOffice dependency: document parsing and Office-to-PDF conversion are
 # delegated to the external StructaDoc service (ADR-0009).
 # See docs/modules/DocumentParse/03-DESIGN.md for details.
@@ -43,4 +49,4 @@ COPY --from=backend-build /app/publish .
 EXPOSE 5012
 ENV Endpoints__Http=5012
 
-ENTRYPOINT ["dotnet", "Doctheca.Host.dll"]
+ENTRYPOINT ["/usr/bin/tini", "--", "dotnet", "Doctheca.Host.dll"]

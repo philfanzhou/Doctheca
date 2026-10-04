@@ -12,17 +12,19 @@
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.12" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
     <PackageReference Include="OpenSearch.Net" Version="2.2.0" />
-    <PackageReference Include="ServiceMantle.Diagnostics" Version="0.2.0" />
-    <!-- Pinned pre-release: 0.2.1-rc.1 is the first Logging package carrying the bounded
-         per-category MinimumLevelOverrides, explicit fixed Loki stream labels, and the
-         explicit AllowInsecureHttp acceptance this host relies on (same combination already
-         shipped in Ruoyu.Admin). Do not float this version. -->
-    <PackageReference Include="ServiceMantle.Logging" Version="0.2.1-rc.1" />
-    <!-- Pinned pre-release: 0.2.1-rc.1 is the first Web package carrying the safe Problem
-         Details middleware and AddConditionalExceptionMapping this host relies on (0.2.0
-         has neither). Must stay in lockstep with the Service layer's direct ServiceMantle.Web
-         reference so the same assembly is never double-pinned. Do not float this version. -->
-    <PackageReference Include="ServiceMantle.Web" Version="0.2.1-rc.1" />
+    <PackageReference Include="ServiceMantle.Diagnostics" Version="0.3.0" />
+    <!-- PostgreSQL migration capabilities for the startup orchestration (issue #53): the
+         session advisory lock provider (PostgreSqlMigrationLockProvider) and the target
+         preparation provider (PostgreSqlDatabaseTargetPreparationProvider). Same 0.3.0
+         release tag as every other ServiceMantle package in this host. -->
+    <PackageReference Include="ServiceMantle.Database.PostgreSql" Version="0.3.0" />
+    <PackageReference Include="ServiceMantle.Persistence.Relational" Version="0.3.0" />
+    <!-- All ServiceMantle packages share the formal 0.3.0 release, including the shared
+         startup gate, receipt, health source, and existing logging / HTTP capabilities. -->
+    <PackageReference Include="ServiceMantle.Logging" Version="0.3.0" />
+    <!-- Must stay in lockstep with the Service layer's direct ServiceMantle.Web reference so
+         the same assembly is never double-pinned. -->
+    <PackageReference Include="ServiceMantle.Web" Version="0.3.0" />
   </ItemGroup>
 
   <ItemGroup>

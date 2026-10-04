@@ -24,8 +24,8 @@ namespace Doctheca.Tests.Integration;
 
 /// <summary>
 /// One shared PostgreSQL container for the ServiceMantle integration collection. The real host
-/// startup path runs <c>DatabaseInitializer</c> (no migrations, <c>EnsureCreated</c> on first
-/// connect), so the tests exercise the actual EF/Npgsql stack instead of an in-memory fake.
+/// startup path runs <c>DocthecaMigrationExecutor</c> (EF migrations from the InitialCreate
+/// baseline), so the tests exercise the actual EF/Npgsql stack instead of an in-memory fake.
 /// </summary>
 /// <remarks>
 /// Every value the container hands out is a synthetic, per-run credential: the password is a
@@ -94,7 +94,7 @@ public sealed class PostgreSqlFixture : IAsyncLifetime
 
 /// <summary>
 /// All container-backed tests live in this single collection: xunit runs collections in
-/// parallel, and grouping them keeps concurrent hosts from racing the first <c>EnsureCreated</c>.
+/// parallel, and grouping them keeps concurrent hosts from racing the first migration run.
 /// The rest of the suite can still be run without Docker via
 /// <c>dotnet test --filter "FullyQualifiedName!~Doctheca.Tests.Integration"</c>.
 /// </summary>
@@ -159,7 +159,7 @@ public abstract class ServiceMantleIntegrationTestBase
 
     /// <summary>
     /// Builds a factory around the real Program.cs entry point. Accessing <see cref="WebApplicationFactory{TEntryPoint}.Services"/>
-    /// or creating a client runs the full host startup, including <c>DatabaseInitializer</c>.
+    /// or creating a client runs the full host startup, including <c>DocthecaMigrationExecutor</c>.
     /// All overrides go through <c>UseSetting</c>: with the minimal-hosting replay used by
     /// WebApplicationFactory, settings registered this way take precedence over the appsettings
     /// sources. External clients (OpenSearch, StructaDoc, OSS, Identity) are replaced by test

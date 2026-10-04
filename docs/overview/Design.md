@@ -16,7 +16,7 @@ Domain
   document and parse services, repositories, models
         │
 Database
-  EF Core repositories + SQL DatabaseInitializer
+  EF Core repositories + EF Core migrations (DocthecaMigrationExecutor)
 ```
 
 Tech stack: .NET, ASP.NET Core Minimal APIs, EF Core 10/Npgsql, Mapster, OpenSearch.Net, Vue 3.5/TypeScript/Vite/Element Plus.

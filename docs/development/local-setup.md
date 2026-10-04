@@ -30,7 +30,18 @@ The service uses **PostgreSQL** (`UseNpgsql`; the connection string comes from `
 Host=localhost;Port=5432;Database=doctheca;Username=phil
 ```
 
-The database and tables are created automatically at startup via `DatabaseInitializer.InitializeAsync` (`CREATE TABLE IF NOT EXISTS`).
+Create the `doctheca` database before the first start (`createdb doctheca`, or
+`CREATE DATABASE doctheca;` in `psql`). Startup no longer creates a missing database implicitly:
+the default behavior refuses with the fixed error code `DOCTHECA_DB_CREATION_NOT_ALLOWED`. To let
+startup create a verifiably missing target itself, set `Database:AllowCreate=true` (environment
+form `Database__AllowCreate=true`; the value must be exactly `true` or `false`).
+
+Once the database exists, startup orchestrates the EF Core migrations for you:
+`DocthecaMigrationExecutor` runs under the ServiceMantle `DatabaseMigrationOrchestrator`
+(PostgreSQL advisory lock), applies the EF Core baseline migration `20260930161548_InitialCreate`
+to an empty database, and takes over a legacy database after verifying its structure; an unknown
+structure is refused with `DOCTHECA_DB_SCHEMA_INCOMPATIBLE` (see
+[Migrations](../database/migrations.md)).
 
 ## Running the Service
 
