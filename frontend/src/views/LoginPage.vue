@@ -1,51 +1,6 @@
 <script setup lang="ts">
-import { ref } from 'vue'
-import { AxiosError } from 'axios'
 import { useAdminSession } from '../composables/useAdminSession'
-import { isProblemDetailsResponse } from '../services/error'
-
-const { login } = useAdminSession()
-const username = ref('')
-const password = ref('')
-const submitting = ref(false)
-const errorMessage = ref('')
-
-// Server-side failures (any 5xx, or a problem+json response from the ServiceMantle
-// boundary on the marked JSON admin endpoints) are service errors, not credential errors.
-function isServiceFailure(error: unknown): boolean {
-  if (!(error instanceof AxiosError)) {
-    return false
-  }
-
-  const status = error.response?.status
-  return (status !== undefined && status >= 500) || isProblemDetailsResponse(error.response)
-}
-
-async function submit(): Promise<void> {
-  if (!username.value.trim() || !password.value) {
-    errorMessage.value = '请输入用户名和密码。'
-    return
-  }
-
-  submitting.value = true
-  errorMessage.value = ''
-  try {
-    await login(username.value.trim(), password.value)
-    password.value = ''
-  } catch (error) {
-    if (error instanceof AxiosError && error.response?.status === 403) {
-      errorMessage.value = '该账户没有管理员权限。'
-    } else if (error instanceof AxiosError && error.response?.status === 502) {
-      errorMessage.value = '认证服务暂时不可用，请稍后重试。'
-    } else if (isServiceFailure(error)) {
-      errorMessage.value = '服务暂时不可用，请稍后重试。'
-    } else {
-      errorMessage.value = '用户名或密码错误。'
-    }
-  } finally {
-    submitting.value = false
-  }
-}
+const { login, message } = useAdminSession()
 </script>
 
 <template>
@@ -61,39 +16,12 @@ async function submit(): Promise<void> {
 
       <div class="login-heading">
         <h1 id="login-title">管理员登录</h1>
-        <p>请使用 Identity 管理员账户继续。</p>
+        <p>请使用 SignaCore 管理员账户继续。</p>
       </div>
 
-      <form class="login-form" @submit.prevent="submit">
-        <label for="username">用户名</label>
-        <el-input
-          id="username"
-          v-model="username"
-          autocomplete="username"
-          :disabled="submitting"
-          placeholder="请输入用户名"
-          size="large"
-        />
-
-        <label for="password">密码</label>
-        <el-input
-          id="password"
-          v-model="password"
-          type="password"
-          autocomplete="current-password"
-          show-password
-          :disabled="submitting"
-          placeholder="请输入密码"
-          size="large"
-        />
-
-        <p v-if="errorMessage" class="login-error" role="alert">
-          {{ errorMessage }}
-        </p>
-
-        <button class="btn login-submit" type="submit" :disabled="submitting">
-          {{ submitting ? '正在登录…' : '登录' }}
-        </button>
+      <form class="login-form" @submit.prevent="login">
+        <p v-if="message" class="login-error" role="alert">{{ message }}</p>
+        <button class="btn login-submit" type="submit">使用 SignaCore 登录</button>
       </form>
     </section>
   </main>
