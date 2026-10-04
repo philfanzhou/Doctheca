@@ -41,6 +41,8 @@ public sealed partial class AdminOidcIntegrationTests(PostgreSqlFixture database
             ["AdminOidc:RedirectUri"] = OidcTestAuthority.RedirectUri,
             ["IdentityService:Authority"] = OidcTestAuthority.Issuer,
             ["IdentityService:Issuer"] = OidcTestAuthority.Issuer,
+            // Mixed-session tests use the base fixture's separately signed Bearer token.
+            ["IdentityService:AdditionalValidIssuers:1"] = TestIssuer,
             ["IdentityService:AppId"] = OidcTestAuthority.ClientId,
             ["IdentityService:AppSecret"] = OidcTestAuthority.Secret
         });

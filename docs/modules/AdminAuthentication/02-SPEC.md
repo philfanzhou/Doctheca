@@ -19,10 +19,20 @@ access/refresh Cookies alone return 401; a valid non-admin Bearer returns 403.
 
 Bearer authentication reads only `Authorization: Bearer`. Signature, expiry, configured
 `IdentityService:Authority`, `Issuer`/`AdditionalValidIssuers`, `Audience` and `ClockSkewSeconds`
-remain validated through OIDC discovery/JWKS. `DocthecaAdmin` requires an authenticated
+remain validated. Discovery/JWKS supplies signing keys only: issuer trust is an immutable
+snapshot of the trimmed, nonempty, Ordinal-distinct `Issuer` and `AdditionalValidIssuers`.
+Token issuers must match this snapshot exactly, including case and trailing slashes. A discovery
+issuer outside it is rejected with a fixed diagnostic naming only these configuration keys. `DocthecaAdmin` requires an authenticated
 administrator (`role=admin`, case-insensitive). Missing required Bearer trust refuses credentials
 with 401; complete invalid trust still refuses startup. Legacy token Cookies are ignored.
 
 The current SPA reads only hosted session status, fetches CSRF on demand and navigates to
 SignaCore for authentication. A 401 clears UI state without refresh or request replay. A 403
 shows denial. Tokens, secrets and passwords never enter browser storage or application logs.
+
+Before upgrading, verify `IdentityService:Issuer` against actual issued tokens and list any
+intentional migration issuers in `AdditionalValidIssuers`; remove those after the migration.
+Deployments relying on automatic discovery issuer acceptance will now receive 401. Rolling
+back the image with its matching configuration restores the previous behavior and its known
+issuer trust gap. Signature-key compromise remains outside this guarantee. Hosted ID/access
+tokens retain their separate exact Authority and client-audience contract.

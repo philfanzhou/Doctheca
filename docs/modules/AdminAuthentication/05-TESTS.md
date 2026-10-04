@@ -28,3 +28,13 @@ No real credentials, traces, HAR or browser storage state are recorded.
 Build the release image and run `python3 scripts/verify-container-startup.py IMAGE` for real
 container startup/refusal, health, missing-login configuration and graceful shutdown checks,
 including protocol query canaries at Trace level in the unconfigured-login container.
+
+`ExplicitIssuerTrustTests` uses the production `AddRuoyuJwtBearer` registration and real
+JwtBearerHandler with HTTPS discovery/JWKS over an in-memory HTTP backchannel. Both the
+default BaseConfigurationManager and a non-base discovery manager accept explicit/migration
+issuers and reject discovery-only, unknown, empty, case and slash variants. Key refresh retains
+that boundary. Invalid signatures, audience and expiry remain rejected; accepted claims retain
+name/role mappings and rejected requests never execute the protected endpoint. Factory tests
+cover normalization, immutable configuration snapshots, clone/list mutation and concurrent
+independent parameter sets. Issuer failures keep token and issuer canaries out of exceptions,
+logs and HTTP 401 diagnostics. This does not generalize to all framework failure messages.
