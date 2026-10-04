@@ -91,9 +91,9 @@ function syncHash() {
 }
 
 function parseHash() {
-  const m = location.hash.match(/^#(overview|docs|results|search|detail)(?:\/([A-Za-z0-9_-]+))?/)
+  const m = location.hash.match(/^#(overview|docs|results|search|detail)(?:\/([A-Za-z0-9_-]+))?$/)
   if (m) {
-    state.value = { page: m[1], docId: m[2] || null }
+    state.value = { page: m[1], docId: m[1] === 'detail' ? m[2] || null : null }
   } else {
     state.value = { page: 'overview', docId: null }
   }

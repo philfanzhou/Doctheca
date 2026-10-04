@@ -13,7 +13,7 @@ A self-hosted **document library & full-text retrieval** service for educational
 | **DocumentExport** | Export Markdown / HTML per document file or per parse |
 | **DocumentMetadataAnalysis** | Optional LLM analysis of parsed Markdown to auto-detect subject/grade and backfill; failure never blocks parsing |
 | **DocumentSearch** | OpenSearch full-text precise search with block-level indexing and subject/grade filters |
-| **AdminAuthentication** | SignaCore (OIDC discovery/JWKS) admin login with `role=admin`, HttpOnly Cookie/JWT sessions, refresh/revoke |
+| **AdminAuthentication** | SignaCore hosted admin login with `role=admin`, server sessions, CSRF and prepared logout; legacy Bearer compatibility |
 
 ## Tech Stack
 
@@ -104,3 +104,12 @@ Contributions should follow [CONTRIBUTING.md](CONTRIBUTING.md), and vulnerabilit
 ## License
 
 MIT — see [LICENSE](LICENSE).
+
+### Hosted administration frontend
+
+The current administration SPA requires `AdminOidc:Enabled=true` and exact SignaCore callback
+and post-logout registration. Deploy API and SPA in the same image. See
+[hosted login](docs/modules/AdminAuthentication/07-HostedLogin.md).
+The backend legacy password endpoints remain pending #50; the current SPA does not call them.
+Rollback restores the previous matching image/configuration (including the old disabled switch
+for the password SPA) and requires a new login. There is no database migration or rollback SQL.
