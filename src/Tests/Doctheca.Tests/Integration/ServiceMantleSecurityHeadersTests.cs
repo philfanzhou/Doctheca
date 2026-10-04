@@ -21,7 +21,7 @@ using Xunit;
 namespace Doctheca.Tests.Integration;
 
 /// <summary>
-/// ServiceMantle security response-header baseline on the real host: exactly the 16 JSON admin
+/// ServiceMantle security response-header baseline on the real host: exactly the 19 JSON admin
 /// endpoints are marked and carry the six immutable single-value headers on success (2xx),
 /// business failure (4xx), and 401/403 challenges alike; a downstream component that pre-writes
 /// duplicate or wrong values converges back to the single baseline value because the library
@@ -46,7 +46,7 @@ public sealed class ServiceMantleSecurityHeadersTests : ServiceMantleIntegration
         ("Content-Security-Policy", CspValue),
     ];
 
-    // The exact 16 marked JSON admin endpoints (method + normalized route pattern): the
+    // The exact 19 marked JSON admin endpoints (method + normalized route pattern): the
     // legacy auth area plus the three hosted-login endpoints added by issue #47.
     private static readonly HashSet<string> ExpectedMarked = new(StringComparer.Ordinal)
     {
@@ -57,6 +57,9 @@ public sealed class ServiceMantleSecurityHeadersTests : ServiceMantleIntegration
         "GET /admin/auth/oidc/start",
         "GET /admin/auth/oidc/callback",
         "GET /admin/auth/oidc/csrf",
+        "GET /admin/auth/oidc/session",
+        "POST /admin/auth/oidc/logout",
+        "GET /admin/auth/oidc/logout/return",
         "POST /admin/document-files/upload",
         "GET /admin/document-files",
         "GET /admin/document-files/{id:guid}",
@@ -99,7 +102,7 @@ public sealed class ServiceMantleSecurityHeadersTests : ServiceMantleIntegration
         var marked = endpoints.Where(pair => pair.Marked).Select(pair => pair.Key).ToHashSet();
         var all = endpoints.Select(pair => pair.Key).ToHashSet();
 
-        // Exactly the 16 JSON admin endpoints are marked — no more, no fewer.
+        // Exactly the 19 JSON admin endpoints are marked — no more, no fewer.
         Assert.True(
             marked.SetEquals(ExpectedMarked),
             $"marked set mismatch.\n  extra: {string.Join(", ", marked.Except(ExpectedMarked))}\n" +

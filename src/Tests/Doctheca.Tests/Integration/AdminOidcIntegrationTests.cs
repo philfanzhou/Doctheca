@@ -37,7 +37,7 @@ public sealed partial class AdminOidcIntegrationTests(PostgreSqlFixture database
             configure?.Invoke(services);
         }, settings: new Dictionary<string, string?>
         {
-            ["AdminOidc:Enabled"] = "true",
+            ["AdminOidc:Enabled"] = "true", ["AdminOidc:PostLogoutRedirectUri"] = OidcTestAuthority.PostLogoutUri,
             ["AdminOidc:RedirectUri"] = OidcTestAuthority.RedirectUri,
             ["IdentityService:Authority"] = OidcTestAuthority.Issuer,
             ["IdentityService:Issuer"] = OidcTestAuthority.Issuer,
@@ -147,8 +147,8 @@ public sealed partial class AdminOidcIntegrationTests(PostgreSqlFixture database
         using var apiResponse = await client.SendAsync(apiRequest);
         Assert.Equal(HttpStatusCode.OK, apiResponse.StatusCode);
 
-        var surfaces = cookieValue + response.Headers.Location + string.Join('\n', logs.Messages);
-        foreach (var canary in new[] { OidcTestAuthority.Secret, authority.LastAccessToken!, authority.LastVerifier!, authority.LastIdToken!, code })
+        var surfaces = string.Join('\n', response.Headers) + await response.Content.ReadAsStringAsync() + response.Headers.Location + string.Join('\n', logs.Messages);
+        foreach (var canary in new[] { OidcTestAuthority.Secret, authority.LastAccessToken!, authority.LastVerifier!, authority.LastIdToken!, code, handshake.Query["state"] })
             Assert.DoesNotContain(canary, surfaces);
 
         Failed(await Callback(client, handshake, code));
@@ -173,6 +173,7 @@ public sealed partial class AdminOidcIntegrationTests(PostgreSqlFixture database
     [InlineData("unsigned")][InlineData("signature")][InlineData("kid")][InlineData("typ")][InlineData("alg")]
     [InlineData("issuer")][InlineData("aud")][InlineData("aud-array")][InlineData("aud-single-array")]
     [InlineData("sub-missing")][InlineData("sub-empty")][InlineData("sub-array")][InlineData("sub-duplicate")]
+    [InlineData("sub-number")][InlineData("iss-array")][InlineData("iss-number")][InlineData("iss-empty")][InlineData("iss-duplicate")]
     [InlineData("iat-missing")][InlineData("iat-future")][InlineData("iat-string")]
     [InlineData("exp-before-iat")][InlineData("exp-expired")][InlineData("nonce")][InlineData("nonce-missing")]
     public async Task InvalidIdTokenIsRejectedWithoutTicket(string defect)
@@ -186,6 +187,8 @@ public sealed partial class AdminOidcIntegrationTests(PostgreSqlFixture database
     }
 
     [Theory]
+    [InlineData("sub-mismatch")][InlineData("sub-missing")][InlineData("sub-empty")][InlineData("sub-number")][InlineData("sub-array")][InlineData("sub-duplicate")]
+    [InlineData("iss-array")][InlineData("iss-number")][InlineData("iss-empty")][InlineData("iss-duplicate")]
     [InlineData("access-expired")][InlineData("access-typ")][InlineData("access-aud")][InlineData("access-issuer")][InlineData("access-signature")]
     public async Task InvalidAccessTokenIsRejectedWithoutTicket(string accessDefect)
     {
@@ -337,12 +340,14 @@ public sealed partial class AdminOidcIntegrationTests(PostgreSqlFixture database
         {
             using var factory = CreateFactory(root);
             using var client = Browser(factory);
-            foreach (var path in new[] { "/admin/auth/oidc/start", AdminOidcConstants.CallbackPath, "/admin/auth/oidc/csrf" })
+            foreach (var path in new[] { "/admin/auth/oidc/start", AdminOidcConstants.CallbackPath, "/admin/auth/oidc/csrf", "/admin/auth/oidc/session", AdminOidcConstants.LogoutReturnPath })
             {
                 var response = await client.GetAsync(path);
                 Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
                 Assert.Equal("{\"success\":false,\"message\":\"Hosted sign-in is not enabled.\"}", await response.Content.ReadAsStringAsync());
             }
+            var disabledLogout = await client.PostAsync("/admin/auth/oidc/logout", null);
+            Assert.Equal(HttpStatusCode.ServiceUnavailable, disabledLogout.StatusCode);
             foreach (var path in new[] { "/", "/health/live" }) Assert.Equal(HttpStatusCode.OK, (await client.GetAsync(path)).StatusCode);
             Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync(ProtectedApiRoute)).StatusCode);
             // The legacy auth area keeps answering with its own contract (not the fixed 503):
@@ -380,7 +385,7 @@ public sealed partial class AdminOidcIntegrationTests(PostgreSqlFixture database
         using var csrfResponse = await client.SendAsync(csrfRequest);
         Assert.Equal(HttpStatusCode.OK, csrfResponse.StatusCode);
         var csrfCookie = string.Join("; ", csrfResponse.Headers.GetValues("Set-Cookie").Select(value => value.Split(';')[0]));
-        var requestToken = (await csrfResponse.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("requestToken").GetString()!;
+        var requestToken = (await csrfResponse.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("data").GetProperty("requestToken").GetString()!;
 
         // With the CSRF credential pair the boundary passes; the request then reaches route
         // matching, which answers 405 because the list endpoint has no POST handler — proof

@@ -6,9 +6,9 @@ using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 namespace Doctheca.Host.Authentication;
 
 /// <summary>
-/// The three hosted-login endpoints (issue #47). While <c>AdminOidc:Enabled</c> is false each
+/// The hosted-login endpoints (issue #47). While <c>AdminOidc:Enabled</c> is false each
 /// answers a fixed 503; the rest of the auth area keeps the legacy password flow untouched.
-/// All three carry the ServiceMantle security response-header baseline through the shared
+/// All carry the ServiceMantle security response-header baseline through the shared
 /// route-group marker, including the framework-handled callback redirect.
 /// </summary>
 public static class AdminOidcEndpoints
@@ -25,6 +25,9 @@ public static class AdminOidcEndpoints
         // 503 while disabled). While enabled the OIDC handler short-circuits it first.
         group.MapGet("/oidc/callback", Callback).AllowAnonymous();
         group.MapGet("/oidc/csrf", CsrfAsync).AllowAnonymous();
+        group.MapGet("/oidc/session", SessionAsync).AllowAnonymous();
+        group.MapPost("/oidc/logout", AdminOidcLogout.Logout).AllowAnonymous();
+        group.MapGet("/oidc/logout/return", AdminOidcLogout.Return).AllowAnonymous();
 
         return app;
     }
@@ -42,15 +45,15 @@ public static class AdminOidcEndpoints
 
         // A missing or empty returnUrl targets the SPA root; only explicitly invalid values
         // answer the fixed 400 below.
+        if (context.Request.Query.Keys.Any(key => key != "returnUrl")
+            || context.Request.Query.TryGetValue("returnUrl", out var values) && values.Count != 1
+            || !string.IsNullOrEmpty(returnUrl) && !AdminOidcSettings.IsValidReturnUrl(returnUrl))
+        {
+            return Results.Json(new { success = false, message = "The return URL must be a path inside this site." }, statusCode: 400);
+        }
         if (string.IsNullOrEmpty(returnUrl))
         {
             returnUrl = "/";
-        }
-        else if (!AdminOidcSettings.IsValidReturnUrl(returnUrl))
-        {
-            return Results.Json(
-                new { success = false, message = "The return URL must be a path inside this site." },
-                statusCode: StatusCodes.Status400BadRequest);
         }
 
         var options = oidcOptions.Get(AdminOidcConstants.OidcScheme);
@@ -103,10 +106,19 @@ public static class AdminOidcEndpoints
 
         context.User = session.Principal!;
         var tokens = antiforgery.GetAndStoreTokens(context);
-        return Results.Ok(new { success = true, requestToken = tokens.RequestToken });
+        return Results.Ok(new { success = true, data = new { requestToken = tokens.RequestToken } });
     }
 
-    private static IResult Disabled() => Results.Json(
+    private static async Task<IResult> SessionAsync(HttpContext context, AdminOidcSettings settings)
+    {
+        if (!settings.Enabled) return Disabled();
+        var session = await context.AuthenticateAsync(AdminOidcConstants.SessionScheme);
+        return session.Succeeded
+            ? Results.Ok(new { success = true, data = new { authenticated = true, reason = "authenticated", username = session.Principal!.Identity!.Name, expiresAt = session.Properties!.ExpiresUtc } })
+            : Results.Json(new { success = false, message = AdminOidcSessionMiddleware.ReauthenticationRequired, data = new { authenticated = false, reason = "reauthenticationRequired" } }, statusCode: 401);
+    }
+
+    internal static IResult Disabled() => Results.Json(
         new { success = false, message = AdminOidcSettings.DisabledError },
         statusCode: StatusCodes.Status503ServiceUnavailable);
 }

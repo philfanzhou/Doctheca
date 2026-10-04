@@ -35,6 +35,7 @@ public static class AdminOidcRegistration
         services.TryAddSingleton(TimeProvider.System);
         services.AddSingleton<CompactStateDataFormat>();
         services.AddSingleton<MemoryTicketStore>();
+        services.AddSingleton<LogoutReturnStore>();
         services.AddHostedService<OidcStoreCleanup>();
         services.AddAntiforgery(options =>
         {
@@ -57,6 +58,11 @@ public static class AdminOidcRegistration
             options.Cookie.SecurePolicy = settings.InsecureLoopback ? CookieSecurePolicy.SameAsRequest : CookieSecurePolicy.Always;
             options.ExpireTimeSpan = MemoryTicketStore.Lifetime;
             options.SlidingExpiration = false;
+            options.Events.OnValidatePrincipal = context =>
+            {
+                if (context.HttpContext.Items.ContainsKey(AdminOidcSessionMiddleware.BearerOnly)) context.RejectPrincipal();
+                return Task.CompletedTask;
+            };
             options.Events.OnRedirectToLogin = context => { context.Response.StatusCode = StatusCodes.Status401Unauthorized; return Task.CompletedTask; };
             options.Events.OnRedirectToAccessDenied = context => { context.Response.StatusCode = StatusCodes.Status403Forbidden; return Task.CompletedTask; };
         });
@@ -69,6 +75,8 @@ public static class AdminOidcRegistration
 
         authentication.AddOpenIdConnect(AdminOidcConstants.OidcScheme, options =>
         {
+            options.BackchannelHttpHandler = new HttpClientHandler { AllowAutoRedirect = false };
+            options.BackchannelTimeout = TimeSpan.FromSeconds(10);
             options.SignInScheme = AdminOidcConstants.SessionScheme;
             options.Authority = settings.Authority;
             options.ClientId = settings.ClientId;
@@ -150,6 +158,10 @@ public static class AdminOidcRegistration
                     // token: the admin policy asserts role=admin, and only a fully verified
                     // access token carrying that role may sign in.
                     var accessToken = context.TokenEndpointResponse!.AccessToken;
+                    if (!StrictIdTokenHandler.TrySubject(context.TokenEndpointResponse.IdToken, out var idIssuer, out var idSubject)
+                        || !StrictIdTokenHandler.TrySubject(accessToken, out var accessIssuer, out var accessSubject)
+                        || idIssuer != accessIssuer || idSubject != accessSubject)
+                    { context.Fail("oidc.invalid_subject_binding"); return; }
                     TokenValidationResult access;
                     try
                     {

@@ -57,6 +57,24 @@ public sealed class StrictIdTokenHandler(AdminOidcSettings settings, TimeProvide
         }
     }
 
+    // Raw JSON cardinality and types must be checked before a JWT handler can flatten claims.
+    // This only rejects malformed input; callers still verify each signature independently.
+    internal static bool TrySubject(string token, out string? issuer, out string? subject)
+    {
+        issuer = subject = null;
+        try
+        {
+            var parts = token.Split('.');
+            if (parts.Length != 3) return false;
+            using var payload = JsonDocument.Parse(WebEncoders.Base64UrlDecode(parts[1]));
+            var claims = payload.RootElement.EnumerateObject().ToArray();
+            return StringClaim(claims, "iss", out issuer) && !string.IsNullOrWhiteSpace(issuer)
+                && StringClaim(claims, "sub", out subject) && !string.IsNullOrWhiteSpace(subject);
+        }
+        catch (Exception exception) when (exception is ArgumentException or JsonException or FormatException or InvalidOperationException)
+        { return false; }
+    }
+
     private static bool StringClaim(JsonProperty[] claims, string name, out string? value)
     {
         var matches = claims.Where(p => p.Name == name).ToArray();

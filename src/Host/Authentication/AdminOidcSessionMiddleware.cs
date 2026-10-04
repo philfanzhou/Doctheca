@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.Net.Http.Headers;
 
 namespace Doctheca.Host.Authentication;
@@ -23,6 +24,7 @@ namespace Doctheca.Host.Authentication;
 /// </remarks>
 public sealed class AdminOidcSessionMiddleware(RequestDelegate next)
 {
+    internal const string BearerOnly = "doctheca.oidc.bearer_only";
     internal const string ReauthenticationRequired = "Re-authentication is required.";
     internal const string CsrfRequired = "A valid anti-forgery token is required.";
 
@@ -35,16 +37,18 @@ public sealed class AdminOidcSessionMiddleware(RequestDelegate next)
             && context.Request.Cookies.TryGetValue(AdminOidcConstants.SessionCookie, out var cookie)
             && !string.IsNullOrWhiteSpace(cookie))
         {
+            if (context.Request.Headers.TryGetValue(HeaderNames.Authorization, out var authorization)
+                && authorization.Count == 1 && authorization[0]?.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase) == true)
+            {
+                // Header presence is not authentication. Only the independently verified
+                // Bearer credential may bypass the Cookie CSRF boundary.
+                var bearer = await context.AuthenticateAsync(JwtBearerDefaults.AuthenticationScheme);
+                if (bearer.Succeeded)
+                { context.Items[BearerOnly] = true; context.User = bearer.Principal!; await next(context); return; }
+            }
             var result = await context.AuthenticateAsync(AdminOidcConstants.SessionScheme);
             if (!result.Succeeded)
             {
-                if (context.Request.Headers.ContainsKey(HeaderNames.Authorization))
-                {
-                    // A Bearer caller with a stale session cookie keeps the Bearer path.
-                    await next(context);
-                    return;
-                }
-
                 await RejectAsync(context, StatusCodes.Status401Unauthorized, ReauthenticationRequired);
                 return;
             }

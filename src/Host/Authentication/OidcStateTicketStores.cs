@@ -130,6 +130,15 @@ public sealed class MemoryTicketStore(TimeProvider time) : ITicketStore
 
     public Task RemoveAsync(string key) { lock (_gate) _tickets.Remove(key); return Task.CompletedTask; }
 
+    // Removal and snapshot acquisition are one transition. A concurrent logout/renewal
+    // cannot retain a usable ticket or initiate a second upstream preparation.
+    internal AuthenticationTicket? Revoke(string key)
+    {
+        lock (_gate)
+            return _tickets.Remove(key, out var value) && value.Deadline > time.GetUtcNow()
+                ? TicketSerializer.Default.Deserialize(value.Ticket) : null;
+    }
+
     internal void RemoveExpired() { lock (_gate) RemoveExpiredCore(); }
 
     private void RemoveExpiredCore()
@@ -142,14 +151,14 @@ public sealed class MemoryTicketStore(TimeProvider time) : ITicketStore
 /// <summary>
 /// Sweeps the bounded in-process OIDC stores once a minute so expired entries release capacity.
 /// </summary>
-public sealed class OidcStoreCleanup(CompactStateDataFormat state, MemoryTicketStore tickets, TimeProvider time) : BackgroundService
+public sealed class OidcStoreCleanup(CompactStateDataFormat state, MemoryTicketStore tickets, LogoutReturnStore logout, TimeProvider time) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         using var timer = new PeriodicTimer(TimeSpan.FromMinutes(1), time);
         try
         {
-            while (await timer.WaitForNextTickAsync(stoppingToken)) { state.RemoveExpired(); tickets.RemoveExpired(); }
+            while (await timer.WaitForNextTickAsync(stoppingToken)) { state.RemoveExpired(); tickets.RemoveExpired(); logout.RemoveExpired(); }
         }
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { }
     }

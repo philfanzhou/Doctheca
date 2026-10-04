@@ -102,7 +102,7 @@ public sealed class AdminOidcStoresTests
     {
         var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
         {
-            ["AdminOidc:Enabled"] = "true", ["AdminOidc:RedirectUri"] = redirect,
+            ["AdminOidc:Enabled"] = "true", ["AdminOidc:PostLogoutRedirectUri"] = new Uri(new Uri(redirect), AdminOidcConstants.LogoutReturnPath).AbsoluteUri, ["AdminOidc:RedirectUri"] = redirect,
             ["IdentityService:Authority"] = "https://identity.example.test/", ["IdentityService:AppId"] = "fake-app", ["IdentityService:AppSecret"] = "fake-secret"
         }).Build();
         var env = new Microsoft.Extensions.Hosting.Internal.HostingEnvironment { EnvironmentName = environment };
@@ -125,7 +125,7 @@ public sealed class AdminOidcStoresTests
     {
         var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
         {
-            ["AdminOidc:Enabled"] = "true", ["AdminOidc:RedirectUri"] = "https://admin.example.test/admin/auth/oidc/callback",
+            ["AdminOidc:Enabled"] = "true", ["AdminOidc:PostLogoutRedirectUri"] = "https://admin.example.test/admin/auth/oidc/logout/return", ["AdminOidc:RedirectUri"] = "https://admin.example.test/admin/auth/oidc/callback",
             ["IdentityService:Authority"] = "https://identity.example.test", ["IdentityService:AppId"] = appId, ["IdentityService:AppSecret"] = appId == "" ? "fake-secret" : ""
         }).Build();
         var env = new Microsoft.Extensions.Hosting.Internal.HostingEnvironment { EnvironmentName = "Production" };
@@ -162,6 +162,57 @@ public sealed class AdminOidcStoresTests
     {
         if (pad > 0) value = "/" + new string('a', pad);
         Assert.Equal(valid, AdminOidcSettings.IsValidReturnUrl(value));
+    }
+
+    [Fact]
+    public async Task RevocationReturnsOneSnapshotAndRenewCannotRestoreIt()
+    {
+        var time = new ManualOidcTime();
+        var store = new MemoryTicketStore(time);
+        var ticket = Ticket();
+        ticket.Properties.StoreTokens([new AuthenticationToken { Name = "id_token", Value = "fictitious-token-canary" }]);
+        var key = await store.StoreAsync(ticket);
+        ticket.Properties.StoreTokens([]);
+        var revoked = await Task.WhenAll(Enumerable.Range(0, 10).Select(_ => Task.Run(() => store.Revoke(key))));
+        Assert.Equal("fictitious-token-canary", Assert.Single(revoked, snapshot => snapshot is not null)!.Properties.GetTokenValue("id_token"));
+        await store.RenewAsync(key, ticket);
+        Assert.Null(await store.RetrieveAsync(key));
+    }
+
+    [Fact]
+    public void LogoutReturnStoreIsBoundedSingleUseExpiringAndBrowserBound()
+    {
+        var time = new ManualOidcTime();
+        var store = new LogoutReturnStore(time);
+        var pending = store.Create();
+        Assert.False(store.Consume(pending.State, new string('x', 43)));
+        Assert.False(store.Consume(pending.State, pending.Binding));
+        pending = store.Create();
+        Assert.True(store.Consume(pending.State, pending.Binding));
+        Assert.False(store.Consume(pending.State, pending.Binding));
+        pending = store.Create();
+        time.Advance(LogoutReturnStore.Lifetime);
+        Assert.False(store.Consume(pending.State, pending.Binding));
+        for (var n = 0; n < LogoutReturnStore.Capacity; n++) store.Create();
+        Assert.Throws<InvalidOperationException>(() => store.Create());
+        time.Advance(LogoutReturnStore.Lifetime);
+        store.RemoveExpired();
+        Assert.Equal(0, store.Count);
+    }
+
+    [Theory]
+    [InlineData("")][InlineData("https://external.example/admin/auth/oidc/logout/return")]
+    [InlineData("https://admin.example.test/wrong")][InlineData("https://admin.example.test/admin/auth/oidc/logout/return?state=x")]
+    public void PostLogoutRegistrationIsRequiredExactAndSameOrigin(string postLogout)
+    {
+        var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["AdminOidc:Enabled"] = "true", ["AdminOidc:RedirectUri"] = "https://admin.example.test/admin/auth/oidc/callback",
+            ["AdminOidc:PostLogoutRedirectUri"] = postLogout,
+            ["IdentityService:Authority"] = "https://identity.example.test", ["IdentityService:AppId"] = "fake-app", ["IdentityService:AppSecret"] = "fake-secret"
+        }).Build();
+        var environment = new Microsoft.Extensions.Hosting.Internal.HostingEnvironment { EnvironmentName = "Production" };
+        Assert.Equal("AdminOidc:PostLogoutRedirectUri", Assert.Throws<InvalidOperationException>(() => AdminOidcSettings.Read(config, environment)).Message);
     }
 
     private static AuthenticationTicket Ticket() => new(
