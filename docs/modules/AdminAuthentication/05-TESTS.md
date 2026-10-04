@@ -11,6 +11,9 @@ session revocation. Signed old access Cookies alone return 401. Each missing req
 key permits startup, returns 503 on all six routes, creates no state/ticket and logs only fixed
 code/key names. Missing Bearer trust refuses authentication; complete invalid trust is rejected.
 A complete hosted configuration remains active even when an old `Enabled=false` is present.
+At framework Trace level, callback and logout-return query canaries remain absent from logs
+with complete configuration and with each required key missing. The capture consumes the real
+host's logger filters and verifies that unrelated Trace messages still reach the capture.
 
 ```bash
 dotnet build src/Doctheca.sln --configuration Release
@@ -23,4 +26,5 @@ login, deep links, fixed provider failures, expiry/reauthentication and prepared
 No real credentials, traces, HAR or browser storage state are recorded.
 
 Build the release image and run `python3 scripts/verify-container-startup.py IMAGE` for real
-container startup/refusal, health, missing-login configuration and graceful shutdown checks.
+container startup/refusal, health, missing-login configuration and graceful shutdown checks,
+including protocol query canaries at Trace level in the unconfigured-login container.

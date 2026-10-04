@@ -67,10 +67,10 @@ public static class AdminOidcRegistration
         });
         services.AddOptions<CookieAuthenticationOptions>(AdminOidcConstants.SessionScheme)
             .Configure<MemoryTicketStore, TimeProvider>((options, store, time) => { options.SessionStore = store; options.TimeProvider = time; });
-        if (!settings.Available) return services;
-
-        // Hosting diagnostics log raw query strings before the application middleware runs.
+        // Hosting diagnostics log raw query strings before the application middleware runs,
+        // including callbacks rejected because hosted-login configuration is unavailable.
         services.AddLogging(logging => logging.AddFilter("Microsoft.AspNetCore.Hosting.Diagnostics", LogLevel.None));
+        if (!settings.Available) return services;
 
         authentication.AddOpenIdConnect(AdminOidcConstants.OidcScheme, options =>
         {

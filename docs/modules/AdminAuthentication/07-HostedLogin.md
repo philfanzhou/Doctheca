@@ -120,8 +120,8 @@ restore a removed ticket. A stale session Cookie copy returns 401 after revocati
 Tokens, client secrets and PKCE verifiers stay in memory/backchannel only. Code/state occur only
 in the required trusted authorization/callback or logout-return protocol, never business
 navigation, JSON errors or logs. Framework OIDC protocol logging is suppressed through the
-safe handler; hosting diagnostics are disabled while this feature is enabled because they log
-raw callback query strings before application middleware can redact them. Failure results
+safe handler; hosting diagnostics are disabled even when required login configuration is missing
+because they log raw callback query strings before application middleware can redact them. Failure results
 never include upstream payloads or exception details.
 
 ## Deployment, upgrade and rollback

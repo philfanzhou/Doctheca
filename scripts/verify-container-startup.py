@@ -59,7 +59,8 @@ def main(image, rollback_image=None):
     wrong_password = "synthetic-wrong-" + secrets.token_hex(20)
     invalid = "synthetic-invalid-" + secrets.token_hex(20)
     app_secret = "synthetic-app-" + secrets.token_hex(20)
-    canaries = (password, wrong_password, invalid, app_secret)
+    protocol_canaries = tuple("synthetic-protocol-" + secrets.token_hex(20) for _ in range(4))
+    canaries = (password, wrong_password, invalid, app_secret, *protocol_canaries)
     containers = []
     network_created = False
     with tempfile.TemporaryDirectory(prefix=prefix) as temporary:
@@ -181,7 +182,8 @@ def main(image, rollback_image=None):
             name = prefix + "-unconfigured-login"
             run(name, image, settings | {"Database__Name": "startup_existing",
                 "IdentityService__Authority": "", "IdentityService__Issuer": "", "IdentityService__Audience": "",
-                "IdentityService__AppId": "", "IdentityService__AppSecret": ""},
+                "IdentityService__AppId": "", "IdentityService__AppSecret": "",
+                "Logging__LogLevel__Microsoft.AspNetCore": "Trace"},
                 "-p", "127.0.0.1::5012")
             port = json.loads(docker("inspect", "--format", "{{json .NetworkSettings.Ports}}", name))["5012/tcp"][0]["HostPort"]
             deadline = time.monotonic() + 45
@@ -214,6 +216,11 @@ def main(image, rollback_image=None):
                 request_status("/admin/auth/oidc/" + path, 503,
                     '{"success":false,"message":"Hosted sign-in is not configured."}',
                     b"" if path == "logout" else None)
+            protocol_query = "?" + "&".join(f"{key}={value}" for key, value in zip(
+                ("code", "state", "error", "error_description"), protocol_canaries))
+            for path in ("callback", "logout/return"):
+                request_status("/admin/auth/oidc/" + path + protocol_query, 503,
+                    '{"success":false,"message":"Hosted sign-in is not configured."}')
             for path in ("login", "refresh", "logout"):
                 request_status("/admin/auth/" + path, 410,
                     '{"success":false,"message":"Password authentication has been retired. Use hosted sign-in."}', b"{invalid")
@@ -221,7 +228,7 @@ def main(image, rollback_image=None):
             require("DOCTHECA_OIDC_NOT_CONFIGURED" in check_logs(name), "Missing-login fixed diagnostic missing")
             docker("kill", "--signal", "TERM", name)
             require(wait_exit(name) == 0, "Missing-login shutdown failed")
-            print("PASS missing login: startup/health/SPA, six OIDC 503, retired POST 410, auth 401", flush=True)
+            print("PASS missing login: startup/health/SPA, six OIDC 503, retired POST 410, auth 401, no protocol query disclosure at Trace", flush=True)
 
             if rollback_image:
                 def fingerprint():

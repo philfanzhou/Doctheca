@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Xunit;
 
 namespace Doctheca.Tests.Integration;
@@ -41,6 +42,60 @@ public sealed partial class AdminOidcIntegrationTests
         probe.Headers.Add("Cookie", session + "; docthecaAccessToken=invalid; docthecaRefreshToken=invalid");
         Assert.Equal(HttpStatusCode.OK, (await client.SendAsync(probe)).StatusCode);
         Assert.Equal(1, factory.Services.GetRequiredService<MemoryTicketStore>().Count);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("IdentityService:Authority")][InlineData("IdentityService:AppId")]
+    [InlineData("IdentityService:AppSecret")][InlineData("AdminOidc:RedirectUri")]
+    [InlineData("AdminOidc:PostLogoutRedirectUri")]
+    public async Task ProtocolQueriesNeverEnterTraceLogsWithCompleteOrMissingHostedConfiguration(string? missing)
+    {
+        using var authority = new OidcTestAuthority();
+        var logs = new OidcLogCapture();
+        var settings = new Dictionary<string, string?> {
+            ["AdminOidc:RedirectUri"] = OidcTestAuthority.RedirectUri,
+            ["AdminOidc:PostLogoutRedirectUri"] = OidcTestAuthority.PostLogoutUri,
+            ["IdentityService:Authority"] = OidcTestAuthority.Issuer,
+            ["IdentityService:AppId"] = OidcTestAuthority.ClientId,
+            ["IdentityService:AppSecret"] = OidcTestAuthority.Secret,
+            ["Logging:LogLevel:Microsoft.AspNetCore"] = "Trace" };
+        if (missing is not null) settings[missing] = "";
+        using var factory = CreateFactory(settings: settings, configureTestServices: services => {
+            services.Configure<OpenIdConnectOptions>(AdminOidcConstants.OidcScheme, options => options.Backchannel = new HttpClient(authority, false));
+            // Consume the real host's filters: a standalone factory bypasses the production
+            // category protection and cannot verify its registration on unavailable paths.
+            services.RemoveAll<ILoggerFactory>();
+            services.AddSingleton<ILoggerFactory>(provider => new LoggerFactory([logs], provider.GetRequiredService<IOptionsMonitor<LoggerFilterOptions>>()));
+        });
+        using var client = Browser(factory);
+        var logger = factory.Services.GetRequiredService<ILoggerFactory>().CreateLogger("Microsoft.AspNetCore.ProtocolRegression");
+        Assert.True(logger.IsEnabled(LogLevel.Trace));
+        logger.LogTrace("Protocol regression trace capture is active.");
+        Assert.Contains("Protocol regression trace capture is active.", logs.Messages);
+
+        var canaries = new[] { "fictitious-protocol-code-canary", "fictitious-protocol-state-canary",
+            "fictitious-protocol-error-canary", "fictitious-protocol-description-canary" };
+        var query = "?code=" + canaries[0] + "&state=" + canaries[1]
+            + "&error=" + canaries[2] + "&error_description=" + canaries[3];
+        foreach (var path in new[] { AdminOidcConstants.CallbackPath, AdminOidcConstants.LogoutReturnPath })
+        {
+            using var response = await client.GetAsync(path + query);
+            Assert.Equal(missing is null ? HttpStatusCode.Redirect : HttpStatusCode.ServiceUnavailable, response.StatusCode);
+            if (missing is not null)
+            {
+                Assert.Equal("{\"success\":false,\"message\":\"Hosted sign-in is not configured.\"}", await response.Content.ReadAsStringAsync());
+                Assert.False(response.Headers.Contains("Set-Cookie"));
+            }
+        }
+        Assert.False(logs.Messages.Any(message => canaries.Any(message.Contains)), "Protocol query values appeared in host logs.");
+        Assert.False(logs.Messages.Any(message => message.Contains(OidcTestAuthority.Secret)), "Client credentials appeared in host logs.");
+        Assert.False(authority.DiscoveryEntered.Task.IsCompleted);
+        Assert.Equal(0, authority.Redeems);
+        Assert.Empty(authority.LogoutForms);
+        Assert.Equal(0, factory.Services.GetRequiredService<CompactStateDataFormat>().Count);
+        Assert.Equal(0, factory.Services.GetRequiredService<MemoryTicketStore>().Count);
+        Assert.Equal(0, factory.Services.GetRequiredService<LogoutReturnStore>().Count);
     }
 
     [Theory]
