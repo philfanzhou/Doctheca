@@ -16,7 +16,7 @@ using Xunit;
 namespace Doctheca.Tests.Integration;
 
 [Collection(ServiceMantleIntegrationCollection.Name)]
-public sealed class AdminHostedFrontendTests(PostgreSqlFixture database) : ServiceMantleIntegrationTestBase(database)
+public sealed partial class AdminHostedFrontendTests(PostgreSqlFixture database) : ServiceMantleIntegrationTestBase(database)
 {
     private static readonly Lazy<Task<string>> Spa = new(BuildSpa);
 
