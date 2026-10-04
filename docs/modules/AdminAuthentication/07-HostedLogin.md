@@ -5,7 +5,8 @@ Confidential authorization-code client with S256 PKCE. Passwords never pass thro
 access and ID tokens remain in server memory. The feature is **disabled by default**. While
 disabled, all six `/admin/auth/oidc` endpoints return the fixed 503 result below, and legacy
 password login, refresh, logout, token Cookies and Bearer clients retain their existing behavior.
-The frontend switch and legacy-path removal are separate changes (#49 and #50).
+The administration SPA now consumes hosted login only. Enable `AdminOidc:Enabled=true`
+when deploying this frontend. Legacy backend routes remain until #50.
 
 ## Shared and local responsibilities
 
@@ -83,7 +84,7 @@ same-origin canonical `/oauth2/logout?logout_handle=<43 base64url characters>` U
 origins, user information, fragments, alternate paths, extra or duplicate query fields and
 malformed handles are rejected. The backchannel does not follow redirects.
 
-Return URLs accept station-local absolute paths, including SPA hash routes such as `/#/documents`.
+Return URLs accept station-local absolute paths, including SPA hash routes such as `/#docs`.
 External origins, encoded alternate origins, backslashes, control characters, dot segments and
 `/admin/auth` paths are rejected. Login code/state never enter the SPA or business return URL.
 
@@ -130,12 +131,39 @@ write or port change (5012). **Only one process/instance is supported**; restart
 invalidates every in-process session/pending/return. SignaCore outages can prevent login or
 upstream logout. Already issued access tokens may remain valid until expiry after logout.
 
-Deploy this backend with the switch disabled to preserve the existing frontend contract.
-Complete exact application registrations and credential injection before enabling for tests.
+Deploy the API and current SPA together with `AdminOidc:Enabled=true`.
+Complete exact application registrations and credential injection before rollout.
 This completed backend requires the new post-logout configuration whenever enabled. A deployment
-using the earlier login-only PR build must add it before upgrading. Roll back this stage by
-setting `AdminOidc:Enabled=false` or restoring the previous matching image/configuration; users
-must authenticate again. #49 will coordinate frontend consumption and enablement; #50 will
-separately retire the old password/token-Cookie flow and its rollback boundary.
+using the earlier login-only PR build must add it before upgrading. Roll back by restoring the previous matching API/SPA image and its configuration, including
+`AdminOidc:Enabled=false` for the old password frontend; users must authenticate again. Turning
+the switch off with the current SPA leaves hosted login unavailable. #50 will separately retire
+the old password/token-Cookie flow and its rollback boundary.
 
 Related: [legacy authentication](./01-FEATURE.md).
+
+## Administration SPA
+
+The login card provides one top-level SignaCore navigation. It reconstructs return URLs only
+from exact `#overview`, `#docs`, `#results`, `#search`, or `#detail/<id>` routes; detail IDs
+contain only ASCII letters, digits, underscores and hyphens. Arbitrary search/path/protocol
+parameters are never forwarded. The SPA maps single fixed `authError`/`authResult` values to
+local messages and removes those parameters from browser history. It does not read protocol
+code/state or read/store tokens or secrets.
+
+Session restoration calls only `/admin/auth/oidc/session`. CSRF is retrieved on demand and kept
+in memory; all writes, including multipart upload and logout, carry `X-CSRF-TOKEN`.
+Initialization and CSRF requests each share one in-flight operation. Generation checks prevent
+late responses from restoring revoked UI or authorizing writes after expiry. A 401 clears the
+session and requests explicit reauthentication; a 403 displays denial without navigating,
+refreshing credentials, or replaying the request. Network failure never implies authentication.
+Logout is single-flight, clears displayed session data, and navigates to a server-validated
+logout URL. A local-only response warns that the SignaCore session may remain active; a failed
+request displays a fixed failure without claiming server revocation.
+
+Run `cd frontend && npm test` for transport-timing/state tests and `npm run test:e2e` for real
+Chromium tests against the compiled SPA, Kestrel, PostgreSQL 16 and the fake SignaCore public
+pages/backchannel. The latter also runs in the full .NET suite and builds the current SPA.
+Install the matching browser after building the test project with
+`pwsh src/Tests/Doctheca.Tests/bin/Release/net10.0/playwright.ps1 install chromium`
+(`--with-deps` on Linux). No browser or Playwright package is included in the runtime image.
+Test contexts are isolated and do not record trace/HAR/storage state or protocol values.

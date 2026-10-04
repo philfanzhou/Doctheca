@@ -19,6 +19,7 @@ internal sealed class OidcTestAuthority : HttpMessageHandler
     internal const string Secret = "fictitious-oidc-secret-canary";
     internal const string PostLogoutUri = "https://admin.example.test/admin/auth/oidc/logout/return";
     internal const string RedirectUri = "https://admin.example.test/admin/auth/oidc/callback";
+    internal string AuthorityIssuer { get; set; } = Issuer;
     private readonly RSA _rsa = RSA.Create(2048);
     private readonly ConcurrentDictionary<string, (string Nonce, string Challenge, string Defect, string AccessDefect)> _codes = [];
     internal readonly ConcurrentQueue<Dictionary<string, string>> LogoutForms = [];
@@ -58,12 +59,12 @@ internal sealed class OidcTestAuthority : HttpMessageHandler
             if (DiscoveryDefect == "timeout") throw new TaskCanceledException("fake.timeout");
             return Json(JsonSerializer.Serialize(new
             {
-                issuer = DiscoveryDefect == "issuer" ? Issuer + "/wrong" : Issuer,
-                authorization_endpoint = Issuer + "/authorize", token_endpoint = Issuer + "/token", jwks_uri = Issuer + "/keys",
+                issuer = DiscoveryDefect == "issuer" ? AuthorityIssuer + "/wrong" : AuthorityIssuer,
+                authorization_endpoint = AuthorityIssuer + "/authorize", token_endpoint = AuthorityIssuer + "/token", jwks_uri = AuthorityIssuer + "/keys",
                 response_types_supported = new[] { "code" }, subject_types_supported = new[] { "public" },
                 id_token_signing_alg_values_supported = new[] { "RS256" }, scopes_supported = new[] { "openid", "profile" },
                 code_challenge_methods_supported = new[] { "S256" },
-                pushed_authorization_request_endpoint = Issuer + "/must-not-use-par"
+                pushed_authorization_request_endpoint = AuthorityIssuer + "/must-not-use-par"
             }));
         }
         if (request.RequestUri.AbsolutePath == "/keys")
@@ -129,7 +130,7 @@ internal sealed class OidcTestAuthority : HttpMessageHandler
         var header = JsonSerializer.Serialize(new { alg = "RS256", typ = defect == "access-typ" ? "JWT" : "at+jwt", kid = "test-kid" });
         var payload = new Dictionary<string, object?>
         {
-            ["iss"] = defect == "access-issuer" ? "https://wrong.example.test" : Issuer,
+            ["iss"] = defect == "access-issuer" ? "https://wrong.example.test" : AuthorityIssuer,
             ["aud"] = defect == "access-aud" ? "wrong-audience" : ClientId,
             ["sub"] = "fake-subject", ["iat"] = now, ["exp"] = now + 900,
             ["unique_name"] = "fake-name"
@@ -148,7 +149,7 @@ internal sealed class OidcTestAuthority : HttpMessageHandler
         if (defect == "iss-empty") payload["iss"] = "";
         var raw = JsonSerializer.Serialize(payload);
         if (defect == "sub-duplicate") raw = raw.TrimEnd('}') + ",\"sub\":\"fake-subject\"}";
-        if (defect == "iss-duplicate") raw = raw.TrimEnd('}') + ",\"iss\":\"" + Issuer + "\"}";
+        if (defect == "iss-duplicate") raw = raw.TrimEnd('}') + ",\"iss\":\"" + AuthorityIssuer + "\"}";
         return Sign(header, raw, defect == "access-signature");
     }
 
@@ -159,7 +160,7 @@ internal sealed class OidcTestAuthority : HttpMessageHandler
             typ = defect == "typ" ? "at+jwt" : "JWT", kid = defect == "kid" ? "unknown-kid" : "test-kid" });
         var payload = new Dictionary<string, object?>
         {
-            ["iss"] = defect == "issuer" ? "https://wrong.example.test" : Issuer,
+            ["iss"] = defect == "issuer" ? "https://wrong.example.test" : AuthorityIssuer,
             ["aud"] = defect == "aud" ? "wrong-audience" : ClientId,
             ["sub"] = "fake-subject", ["iat"] = now, ["exp"] = now + 300,
             ["nonce"] = defect == "nonce" ? "wrong-nonce" : nonce,
@@ -182,7 +183,7 @@ internal sealed class OidcTestAuthority : HttpMessageHandler
         if (defect == "nonce-missing") payload.Remove("nonce");
         var raw = JsonSerializer.Serialize(payload);
         if (defect == "sub-duplicate") raw = raw.TrimEnd('}') + ",\"sub\":\"duplicate\"}";
-        if (defect == "iss-duplicate") raw = raw.TrimEnd('}') + ",\"iss\":\"" + Issuer + "\"}";
+        if (defect == "iss-duplicate") raw = raw.TrimEnd('}') + ",\"iss\":\"" + AuthorityIssuer + "\"}";
         return Sign(header, raw, defect == "signature", unsigned: defect == "unsigned");
     }
 

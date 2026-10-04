@@ -107,30 +107,43 @@ are provided by Consul; `appsettings.json` only keeps the local-development fall
 
 ## Admin Authentication Configuration
 
-Minimal configuration:
+Hosted administration configuration (replace example hostnames and inject credentials):
 
 ```json
 {
+  "AdminOidc": {
+    "Enabled": true,
+    "RedirectUri": "https://admin.example.test/admin/auth/oidc/callback",
+    "PostLogoutRedirectUri": "https://admin.example.test/admin/auth/oidc/logout/return"
+  },
   "IdentityService": {
-    "Authority": "http://192.168.100.10:5002",
-    "Issuer": "http://192.168.100.10:5002",
+    "Authority": "https://identity.example.test",
+    "Issuer": "https://identity.example.test",
     "Audience": "QuantumZhou.microservices",
-    "RequireHttpsMetadata": false,
+    "RequireHttpsMetadata": true,
     "AppId": "<deployment-secret>",
     "AppSecret": "<deployment-secret>"
   },
   "Authentication": {
-    "CookieSecure": false
+    "CookieSecure": true
   }
 }
 ```
 
-SignaCore's `POST /api/auth/token` requires application credentials for both the password and refresh grants. Therefore
-Doctheca uses a dedicated SignaCore App with no callback, SMS disabled and a shared audience, and sends
+The following token endpoint behavior describes the backend legacy compatibility routes pending #50.
+The current SPA uses [hosted login](../modules/AdminAuthentication/07-HostedLogin.md),
+with `AdminOidc:Enabled=true`, exact callback and post-logout registration, and these same
+server-only Confidential client credentials.
+
+SignaCore's `POST /api/auth/token` requires application credentials for both the password and refresh grants.
+Older password deployments used a SignaCore App with no callback, SMS disabled and a shared audience.
+Those compatibility requests send
 `X-Admin-AppId` / `X-Admin-AppSecret` with every token request. Bootstrap admin-role injection does not depend on the
 callback. Authority, Issuer, Audience and the metadata HTTPS requirement take Consul
-`config/ruoyu/service-endpoints.json` as the deployment source of truth; AppId/AppSecret come only from deployment secrets. The
-`192.168.100.10` above is merely the repository's fake internal-LAN example — replace it with the actual address at deployment time.
+`config/ruoyu/service-endpoints.json` as the deployment source of truth; AppId/AppSecret come only from deployment secrets.
+Hosted login instead requires a Confidential client with PerApplication audience and exact
+callback/post-logout registrations; the existing Bearer audience remains independent. Example
+hostnames above are synthetic and must be replaced for deployment.
 
 HTTPS is used by default between the browser and Doctheca, with `Authentication:CookieSecure=true`. `RequireHttpsMetadata=false` only means operations explicitly accepts HTTP Identity metadata; the HTTP issuer must also be enabled on the SignaCore side, and the code does not automatically relax just because the address is a private network, a container name, or the environment is Development.
 
@@ -328,3 +341,12 @@ docker exec ruoyu-postgres pg_dump -U postgres doctheca | gzip > backup_doctheca
 # Restore
 gunzip -c backup_doctheca_20240101_020000.sql.gz | docker exec -i ruoyu-postgres psql -U postgres -d doctheca
 ```
+
+### Hosted administration frontend
+
+The current administration SPA requires `AdminOidc:Enabled=true` and exact SignaCore callback
+and post-logout registration. Deploy API and SPA in the same image. See
+[hosted login](../modules/AdminAuthentication/07-HostedLogin.md).
+The backend legacy password endpoints remain pending #50; the current SPA does not call them.
+Rollback restores the previous matching image/configuration (including the old disabled switch
+for the password SPA) and requires a new login. There is no database migration or rollback SQL.
