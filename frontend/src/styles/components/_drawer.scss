@@ -1,3 +1,10 @@
+// Closed drawers stop interacting immediately, including during their exit transition.
+// The overlay selector belongs only to AppDrawer; AppModal keeps its own behavior.
+.drawer-overlay:not(.open),
+.drawer:not(.open) {
+  pointer-events: none;
+}
+
 .overlay {
   position: fixed;
   inset: 0;

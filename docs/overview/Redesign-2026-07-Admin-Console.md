@@ -88,6 +88,12 @@ Main (.view, 200ms blur transition)
 - SVG donut drawing: stroke-dasharray 0.9s ease, segments staggered by 0.12s
 - Card hover: translateY -2px + shadow-hover, 220ms ease
 - Drawer entrance: translateX 36→0 + opacity, 300ms ease
+- AppDrawer follows its `open` prop immediately, including initial open and rapid toggles.
+  Closed content is inert and ignores pointer events throughout fade-out. Open drawers preserve
+  the previous body overflow and opener; closing restores focus only when it was inside the
+  drawer and the opener remains connected. Closing/unmounting restores the original overflow
+  and removes the Escape listener. Close events request a parent prop update; no focus trap or
+  nested drawer stack is provided.
 - Modal entrance: scale(.96)→1 + translateY 8→0, 260ms spring
 - Toast entrance: translateX 24→0 + opacity, 300ms spring
 - View switching: .view opacity 0 + blur 6px + translateY 5px, 150ms ease (leaving) → switch → restore
