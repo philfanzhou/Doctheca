@@ -3,29 +3,19 @@ namespace Doctheca.Host.Authentication;
 /// <summary>
 /// Bound and validated configuration of the SignaCore hosted-login slice.
 /// </summary>
-/// <remarks>
-/// <para>
-/// <c>AdminOidc:Enabled</c> defaults to <c>false</c>: the new endpoints answer a fixed
-/// 503 and every other route keeps its exact legacy behavior. When enabled, the application
-/// credentials and trust anchor are reused from the existing <c>IdentityService</c> section;
-/// the exact callback and post-logout URIs are new. Failure diagnostics deliberately contain nothing but
-/// the offending configuration key.
-/// </para>
-/// <para>
-/// ToString hides every bound value so the record can never leak a secret through a log.
-/// </para>
-/// </remarks>
-public sealed record AdminOidcSettings(bool Enabled, string Authority, string ClientId, string ClientSecret,
+public sealed record AdminOidcSettings(bool Available, string Authority, string ClientId, string ClientSecret,
     string RedirectUri, bool InsecureLoopback, TimeSpan ClockSkew, string PostLogoutRedirectUri = "")
 {
-    internal const string DisabledError = "Hosted sign-in is not enabled.";
+    internal const string DisabledError = "Hosted sign-in is not configured.";
+    public IReadOnlyList<string> MissingKeys { get; init; } = [];
 
     internal static AdminOidcSettings Read(IConfiguration config, IHostEnvironment environment)
     {
-        if (!config.GetValue<bool>("AdminOidc:Enabled"))
-        {
-            return new(false, "", "", "", "", false, TimeSpan.Zero);
-        }
+        var required = new[] { "IdentityService:Authority", "IdentityService:AppId", "IdentityService:AppSecret",
+            "AdminOidc:RedirectUri", "AdminOidc:PostLogoutRedirectUri" };
+        var missing = required.Where(key => string.IsNullOrWhiteSpace(config[key])).ToArray();
+        if (missing.Length > 0)
+            return new(false, "", "", "", "", false, TimeSpan.Zero) { MissingKeys = missing };
 
         var dev = environment.IsDevelopment() || environment.IsEnvironment("Testing");
         var redirect = config["AdminOidc:RedirectUri"] ?? "";
@@ -44,7 +34,10 @@ public sealed record AdminOidcSettings(bool Enabled, string Authority, string Cl
         var secret = config["IdentityService:AppSecret"];
         if (string.IsNullOrWhiteSpace(clientId)) throw new InvalidOperationException("IdentityService:AppId");
         if (string.IsNullOrWhiteSpace(secret)) throw new InvalidOperationException("IdentityService:AppSecret");
-        var skew = config.GetValue<int?>("IdentityService:ClockSkewSeconds") ?? 30;
+        var rawSkew = config["IdentityService:ClockSkewSeconds"];
+        var skew = 30;
+        if (rawSkew is not null && !int.TryParse(rawSkew, out skew))
+            throw new InvalidOperationException("IdentityService:ClockSkewSeconds");
         if (skew is < 0 or > 300) throw new InvalidOperationException("IdentityService:ClockSkewSeconds");
         return new(true, authority, clientId, secret, redirect, redirectUri.Scheme == "http", TimeSpan.FromSeconds(skew), postLogout);
     }

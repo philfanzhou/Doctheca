@@ -252,53 +252,6 @@ public sealed class ServiceMantleProblemDetailsTests : ServiceMantleIntegrationT
         AssertBaseline(response);
     }
 
-    // ── binding failures never reach the branch: no problem responses ──
-
-    [Fact]
-    public async Task BindingFailures_OnMarkedLogin_NeverProduceProblemResponses()
-    {
-        using var factory = CreateFactory();
-        using var client = factory.CreateClient();
-
-        // Malformed JSON body: handled inside the minimal-API endpoint factory of the marked
-        // (AllowAnonymous) login endpoint, so the branch is never entered: 400 + empty body,
-        // identical before and after this slice.
-        using (var malformed = await client.PostAsync(
-                   "/admin/auth/login", new StringContent("{ not json", Encoding.UTF8, "application/json")))
-        {
-            Assert.Equal(HttpStatusCode.BadRequest, malformed.StatusCode);
-            Assert.Equal(0, (await malformed.Content.ReadAsStringAsync()).Length);
-            Assert.NotEqual("application/problem+json", malformed.Content.Headers.ContentType?.MediaType);
-            AssertBaseline(malformed);
-        }
-
-        // Content-Type mismatching the JSON binding: .NET 10 routing selects the framework's
-        // synthesized "415 HTTP Unsupported Media Type" endpoint, which carries neither the
-        // marker nor AllowAnonymous. Authenticated callers therefore get the pre-existing
-        // 415 + empty body, and anonymous callers hit the host's authorization FallbackPolicy
-        // and get the pre-existing 401 challenge. Both outcomes were verified identical on
-        // the pre-slice baseline (main @0bdb020); neither ever becomes a problem response.
-        using (var authedWrongType = await SendPostAsync(
-                   client, "/admin/auth/login",
-                   new StringContent("username=x", Encoding.UTF8, "text/plain"), "admin"))
-        {
-            Assert.Equal(HttpStatusCode.UnsupportedMediaType, authedWrongType.StatusCode);
-            Assert.Equal(0, (await authedWrongType.Content.ReadAsStringAsync()).Length);
-            Assert.NotEqual(
-                "application/problem+json", authedWrongType.Content.Headers.ContentType?.MediaType);
-        }
-
-        using (var anonWrongType = await client.PostAsync(
-                   "/admin/auth/login", new StringContent("username=x", Encoding.UTF8, "text/plain")))
-        {
-            Assert.Equal(HttpStatusCode.Unauthorized, anonWrongType.StatusCode);
-            Assert.Equal(0, (await anonWrongType.Content.ReadAsStringAsync()).Length);
-            Assert.NotEqual(
-                "application/problem+json", anonWrongType.Content.Headers.ContentType?.MediaType);
-            Assert.Equal("Bearer", string.Join(",", AllValues(anonWrongType, "WWW-Authenticate")));
-        }
-    }
-
     // ── multipart body-length limit: InvalidDataException stays a generic 500 ──
 
     [Fact]
@@ -343,44 +296,11 @@ public sealed class ServiceMantleProblemDetailsTests : ServiceMantleIntegrationT
     [Fact]
     public async Task BusinessResults_AndAuthChallenges_OnMarkedEndpoints_AreNeverWrapped()
     {
-        // First login reaches the identity double and is rejected (401 business JSON); the
-        // second reports the identity service unavailable (502 business JSON).
-        var calls = 0;
-        var identity = new Mock<IIdentityAuthenticationService>();
-        identity
-            .Setup(service => service.PasswordGrantAsync(
-                It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(() => Interlocked.Increment(ref calls) == 1
-                ? new IdentityTokenExchangeResult(IdentityExchangeStatus.Rejected)
-                : new IdentityTokenExchangeResult(IdentityExchangeStatus.Unavailable));
-
-        using var factory = CreateFactory(configureTestServices: services =>
-        {
-            services.RemoveAll<IIdentityAuthenticationService>();
-            services.AddSingleton(identity.Object);
-        });
+        using var factory = CreateFactory();
         using var client = factory.CreateClient();
-
-        // login: validation 400, rejected 401, identity-unavailable 502 — all business JSON.
-        await AssertBusinessJsonAsync(
-            await client.PostAsJsonAsync("/admin/auth/login", new { username = "", password = "" }),
-            HttpStatusCode.BadRequest, "Username and password are required.");
-        await AssertBusinessJsonAsync(
-            await client.PostAsJsonAsync(
-                "/admin/auth/login", new { username = "someone", password = "synthetic-wrong" }),
-            HttpStatusCode.Unauthorized, "Invalid username or password.");
-        await AssertBusinessJsonAsync(
-            await client.PostAsJsonAsync(
-                "/admin/auth/login", new { username = "someone", password = "synthetic-wrong" }),
-            HttpStatusCode.BadGateway, "Identity service is unavailable.");
-
-        // refresh without a cookie, logout, and the session endpoint keep their contracts.
-        await AssertBusinessJsonAsync(
-            await client.PostAsync("/admin/auth/refresh", content: null),
-            HttpStatusCode.Unauthorized, "Authentication is required.");
-        await AssertBusinessJsonAsync(
-            await client.PostAsync("/admin/auth/logout", content: null),
-            HttpStatusCode.OK, "\"success\":true");
+        foreach (var route in new[] { "login", "refresh", "logout" })
+            await AssertBusinessJsonAsync(await client.PostAsync("/admin/auth/" + route, null),
+                HttpStatusCode.Gone, "Password authentication has been retired.");
 
         // 401/403 challenges on a marked endpoint stay challenges, not problems.
         using (var anon = await client.GetAsync("/admin/auth/session"))

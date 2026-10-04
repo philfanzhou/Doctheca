@@ -22,7 +22,6 @@ The startup script `start.sh` only keeps the following kinds of parameters:
 - `OpenSearch:IndexName`
 - `LlmDocumentAnalysis:*`
 - `StructaDoc:ApiKey`
-- `Authentication:CookieSecure`
 - `IdentityService:AppId`
 - `IdentityService:AppSecret`
 
@@ -67,7 +66,6 @@ The following configuration has moved into the shared Consul KV:
 | `CONSUL_CACHE_DIR` | `./data/consul` | Consul local cache directory |
 | `USE_LOCAL_OSS` | (unset) | Set to `1` to use local file-system storage instead of S3 |
 | `OSS_LOCAL_PATH` | `data/oss` | Local file-storage directory (used only when `USE_LOCAL_OSS=1`) |
-| `DOCTHECA_COOKIE_SECURE` | `false` | Maps to `Authentication__CookieSecure`; must be set to `true` for HTTPS production deployments |
 | `IDENTITY_APP_ID` | none | Doctheca's dedicated AppId in SignaCore; mapped to `IdentityService__AppId` at startup |
 | `IDENTITY_APP_SECRET` | none | Doctheca AppSecret; injected only from deployment secrets and mapped to `IdentityService__AppSecret` at startup |
 
@@ -90,8 +88,7 @@ LLM document-analysis configuration is injected via environment variables in `st
 - The public-network reverse proxy for `/oss/` is managed by User Web Nginx; its upstream address is not generated dynamically from Consul,
   so when migrating SeaweedFS you must also modify `conf/nginx.conf` in the User Web deployment directory and restart User Web.
 
-When running the Host directly you can also use the .NET hierarchical configuration name
-`Authentication__CookieSecure`. `IdentityService:Authority/Audience/RequireHttpsMetadata`
+`IdentityService:Authority/Audience/RequireHttpsMetadata`
 are provided by Consul; `appsettings.json` only keeps the local-development fallback.
 
 ## Downstream Dependencies
@@ -103,7 +100,7 @@ are provided by Consul; `appsettings.json` only keeps the local-development fall
 | MinIO / SeaweedFS | Deployment-dependent (default 8333) | Object storage (S3-compatible; address comes from Consul `Oss:InternalEndpoint`) |
 | Consul | 8500 | Shared configuration reads and service registration |
 | Loki | 3100 | Log aggregation (configured via Consul `Loki:Uri`) |
-| SignaCore | 5002 | Admin login, token refresh/revocation, OIDC discovery/JWKS |
+| SignaCore | 5002 | Hosted admin login, prepared logout, OIDC discovery/JWKS |
 
 ## Admin Authentication Configuration
 
@@ -112,7 +109,6 @@ Hosted administration configuration (replace example hostnames and inject creden
 ```json
 {
   "AdminOidc": {
-    "Enabled": true,
     "RedirectUri": "https://admin.example.test/admin/auth/oidc/callback",
     "PostLogoutRedirectUri": "https://admin.example.test/admin/auth/oidc/logout/return"
   },
@@ -123,38 +119,26 @@ Hosted administration configuration (replace example hostnames and inject creden
     "RequireHttpsMetadata": true,
     "AppId": "<deployment-secret>",
     "AppSecret": "<deployment-secret>"
-  },
-  "Authentication": {
-    "CookieSecure": true
   }
 }
 ```
 
-The following token endpoint behavior describes the backend legacy compatibility routes pending #50.
-The current SPA uses [hosted login](../modules/AdminAuthentication/07-HostedLogin.md),
-with `AdminOidc:Enabled=true`, exact callback and post-logout registration, and these same
-server-only Confidential client credentials.
+Register a Confidential SignaCore client with PerApplication audience and exact callback and
+post-logout registrations. AppId/AppSecret remain required server-only backchannel credentials;
+existing Bearer trust/audience configuration remains independent. Inject secrets at runtime.
+The current SPA uses [hosted login](../modules/AdminAuthentication/07-HostedLogin.md).
 
-SignaCore's `POST /api/auth/token` requires application credentials for both the password and refresh grants.
-Older password deployments used a SignaCore App with no callback, SMS disabled and a shared audience.
-Those compatibility requests send
-`X-Admin-AppId` / `X-Admin-AppSecret` with every token request. Bootstrap admin-role injection does not depend on the
-callback. Authority, Issuer, Audience and the metadata HTTPS requirement take Consul
-`config/ruoyu/service-endpoints.json` as the deployment source of truth; AppId/AppSecret come only from deployment secrets.
-Hosted login instead requires a Confidential client with PerApplication audience and exact
-callback/post-logout registrations; the existing Bearer audience remains independent. Example
-hostnames above are synthetic and must be replaced for deployment.
+Hosted Cookies are Secure outside Development/Testing numeric loopback HTTP; private hostnames
+or production HTTP are not exceptions. Missing required login keys permit service startup,
+log a fixed code and missing key names, and return fixed 503 on all hosted routes. Complete
+nonempty invalid configuration still refuses startup. Missing Bearer trust rejects all credentials.
+Configuration recovery requires restart. `start.sh` no longer fails early when client credentials
+are empty, so liveness/static serving can run while operators finish registration.
 
-HTTPS is used by default between the browser and Doctheca, with `Authentication:CookieSecure=true`. `RequireHttpsMetadata=false` only means operations explicitly accepts HTTP Identity metadata; the HTTP issuer must also be enabled on the SignaCore side, and the code does not automatically relax just because the address is a private network, a container name, or the environment is Development.
-
-Cookie names and paths:
-
-| Cookie | Path | Purpose |
-|--------|------|------|
-| `docthecaAccessToken` | `/admin` | Admin API JWT |
-| `docthecaRefreshToken` | `/admin/auth` | Refresh and logout |
-
-Both cookies are HttpOnly and SameSite=Strict, and are not exposed to front-end JavaScript.
+Old POST login/refresh/logout return fixed 410 JSON without body binding or provider calls; old
+access/refresh token Cookies are ignored. `AdminOidc:Enabled`, `Authentication:CookieSecure` and
+`DOCTHECA_COOKIE_SECURE` are retired. Follow [Breaking changes and upgrade](HostedLoginUpgrade.md)
+for the matched-image rollback, which restores the old password contract without SQL.
 
 ## Logging Configuration
 
@@ -344,9 +328,6 @@ gunzip -c backup_doctheca_20240101_020000.sql.gz | docker exec -i ruoyu-postgres
 
 ### Hosted administration frontend
 
-The current administration SPA requires `AdminOidc:Enabled=true` and exact SignaCore callback
-and post-logout registration. Deploy API and SPA in the same image. See
-[hosted login](../modules/AdminAuthentication/07-HostedLogin.md).
-The backend legacy password endpoints remain pending #50; the current SPA does not call them.
-Rollback restores the previous matching image/configuration (including the old disabled switch
-for the password SPA) and requires a new login. There is no database migration or rollback SQL.
+The administration SPA uses [hosted login](../modules/AdminAuthentication/07-HostedLogin.md).
+See [Breaking changes and upgrade](HostedLoginUpgrade.md) for registration, configuration,
+retired endpoints/Cookies and the matched-image rollback contract.

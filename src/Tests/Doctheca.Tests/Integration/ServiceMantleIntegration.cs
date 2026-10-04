@@ -146,8 +146,7 @@ public abstract class ServiceMantleIntegrationTestBase
             ["IdentityService:RequireHttpsMetadata"] = "false",
             ["IdentityService:ClockSkewSeconds"] = "30",
             ["IdentityService:AppId"] = "doctheca-test-app",
-            ["IdentityService:AppSecret"] = "doctheca-test-secret",
-            ["Authentication:CookieSecure"] = "false"
+            ["IdentityService:AppSecret"] = "doctheca-test-secret"
         };
 
     protected ServiceMantleIntegrationTestBase(PostgreSqlFixture database)
@@ -204,8 +203,6 @@ public abstract class ServiceMantleIntegrationTestBase
                 services.AddSingleton(Mock.Of<IStructaDocClient>());
                 services.RemoveAll<IOssService>();
                 services.AddSingleton(Mock.Of<IOssService>());
-                services.RemoveAll<IIdentityAuthenticationService>();
-                services.AddSingleton(Mock.Of<IIdentityAuthenticationService>());
 
                 // Replace the OIDC-discovery-backed JwtBearer configuration manager with a
                 // static in-memory one carrying the synthetic signing key, so admin Bearer and

@@ -21,7 +21,7 @@ namespace Doctheca.Tests.Integration;
 /// End-to-end hosted-login tests against the real Program.cs with an in-process fake SignaCore
 /// (see <see cref="OidcTestAuthority"/>). Covers the issue #47 acceptance items: the full code
 /// flow, non-admin denial, state/iss/nonce failures, code replay, upstream unavailability,
-/// cancellation, invalid return URLs, the disabled-by-default contract, the CSRF boundary, and
+/// cancellation, invalid return URLs, the missing-configuration contract, the CSRF boundary, and
 /// the fixed re-authentication result after the access token expires.
 /// </summary>
 [Collection(ServiceMantleIntegrationCollection.Name)]
@@ -37,7 +37,7 @@ public sealed partial class AdminOidcIntegrationTests(PostgreSqlFixture database
             configure?.Invoke(services);
         }, settings: new Dictionary<string, string?>
         {
-            ["AdminOidc:Enabled"] = "true", ["AdminOidc:PostLogoutRedirectUri"] = OidcTestAuthority.PostLogoutUri,
+            ["AdminOidc:Enabled"] = "false", ["AdminOidc:PostLogoutRedirectUri"] = OidcTestAuthority.PostLogoutUri,
             ["AdminOidc:RedirectUri"] = OidcTestAuthority.RedirectUri,
             ["IdentityService:Authority"] = OidcTestAuthority.Issuer,
             ["IdentityService:Issuer"] = OidcTestAuthority.Issuer,
@@ -333,7 +333,7 @@ public sealed partial class AdminOidcIntegrationTests(PostgreSqlFixture database
     }
 
     [Fact]
-    public async Task DisabledByDefaultKeepsLegacyContractAndAnswersFixed503()
+    public async Task MissingConfigurationStartsAndAnswersFixed503()
     {
         var root = CreateTempContentRoot(true);
         try
@@ -344,15 +344,14 @@ public sealed partial class AdminOidcIntegrationTests(PostgreSqlFixture database
             {
                 var response = await client.GetAsync(path);
                 Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
-                Assert.Equal("{\"success\":false,\"message\":\"Hosted sign-in is not enabled.\"}", await response.Content.ReadAsStringAsync());
+                Assert.Equal("{\"success\":false,\"message\":\"Hosted sign-in is not configured.\"}", await response.Content.ReadAsStringAsync());
             }
             var disabledLogout = await client.PostAsync("/admin/auth/oidc/logout", null);
             Assert.Equal(HttpStatusCode.ServiceUnavailable, disabledLogout.StatusCode);
             foreach (var path in new[] { "/", "/health/live" }) Assert.Equal(HttpStatusCode.OK, (await client.GetAsync(path)).StatusCode);
             Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync(ProtectedApiRoute)).StatusCode);
-            // The legacy auth area keeps answering with its own contract (not the fixed 503):
-            // logout unconditionally succeeds and the session probe still challenges.
-            Assert.Equal(HttpStatusCode.OK, (await client.PostAsync("/admin/auth/logout", null)).StatusCode);
+            // Retired POST and read-only projection retain their separate fixed contracts.
+            Assert.Equal(HttpStatusCode.Gone, (await client.PostAsync("/admin/auth/logout", null)).StatusCode);
             Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/admin/auth/session")).StatusCode);
         }
         finally { Directory.Delete(root, true); }
@@ -408,12 +407,10 @@ public sealed partial class AdminOidcIntegrationTests(PostgreSqlFixture database
         bearer.Headers.Add("Authorization", "Bearer " + CreateToken("admin"));
         Assert.Equal(HttpStatusCode.OK, (await client.SendAsync(bearer)).StatusCode);
 
-        // Transition invariant until the password flow is retired: the legacy access-token
-        // cookie still authenticates under the JwtBearer fallback, distinct cookie names
-        // keep the two schemes from reading each other's cookie.
+        // Old browser tokens cannot establish identity even when correctly signed.
         using var legacyCookie = new HttpRequestMessage(HttpMethod.Get, ProtectedApiRoute);
         legacyCookie.Headers.Add("Cookie", "docthecaAccessToken=" + CreateToken("admin"));
-        Assert.Equal(HttpStatusCode.OK, (await client.SendAsync(legacyCookie)).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await client.SendAsync(legacyCookie)).StatusCode);
     }
 
     [Fact]

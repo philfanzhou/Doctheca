@@ -18,7 +18,7 @@ internal static class AdminOidcLogout
         IOptionsMonitor<CookieAuthenticationOptions> cookies, IOptionsMonitor<OpenIdConnectOptions> oidc,
         MemoryTicketStore tickets, LogoutReturnStore returns, AdminOidcSettings settings)
     {
-        if (!settings.Enabled) return AdminOidcEndpoints.Disabled();
+        if (!settings.Available) return AdminOidcEndpoints.Disabled();
         var session = await context.AuthenticateAsync(AdminOidcConstants.SessionScheme);
         if (session.Succeeded)
         {
@@ -101,7 +101,7 @@ internal static class AdminOidcLogout
 
     internal static IResult Return(HttpContext context, AdminOidcSettings settings, LogoutReturnStore returns)
     {
-        if (!settings.Enabled) return AdminOidcEndpoints.Disabled();
+        if (!settings.Available) return AdminOidcEndpoints.Disabled();
         var query = context.Request.Query;
         var valid = query.Count == 1 && query.TryGetValue("state", out var state) && state.Count == 1
             && returns.Consume(state[0], context.Request.Cookies[AdminOidcConstants.LogoutBindingCookie]);

@@ -1,11 +1,6 @@
 using System.Data.Common;
-using System.Security.Claims;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
-using Microsoft.IdentityModel.Protocols;
-using Microsoft.IdentityModel.Protocols.OpenIdConnect;
-using Doctheca.Common.Authentication;
 using Doctheca.Ai;
 using Doctheca.Common.Oss;
 using Doctheca.Database;
@@ -97,65 +92,9 @@ builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(optio
     options.MultipartBodyLengthLimit = 200 * 1024 * 1024;
 });
 
-builder.Services.Configure<DocthecaCookieOptions>(
-    builder.Configuration.GetSection(DocthecaCookieOptions.SectionName));
-builder.Services.AddOptions<IdentityClientCredentialsOptions>()
-    .Bind(builder.Configuration.GetSection(IdentityClientCredentialsOptions.SectionName))
-    .Validate(
-        options => !string.IsNullOrWhiteSpace(options.AppId)
-            && !string.IsNullOrWhiteSpace(options.AppSecret),
-        "IdentityService:AppId and IdentityService:AppSecret must be configured for Doctheca.")
-    .ValidateOnStart();
-builder.Services.AddHttpClient<IIdentityAuthenticationService, IdentityAuthenticationService>(
-    (serviceProvider, client) =>
-    {
-        var options = serviceProvider.GetRequiredService<IOptions<IdentityAuthenticationOptions>>().Value;
-        client.BaseAddress = new Uri(options.Authority.TrimEnd('/') + "/");
-        client.Timeout = TimeSpan.FromSeconds(30);
-    });
-builder.Services.AddSingleton<IConfigurationManager<OpenIdConnectConfiguration>>(serviceProvider =>
-{
-    var options = serviceProvider.GetRequiredService<IOptions<IdentityAuthenticationOptions>>().Value;
-    var documentRetriever = new HttpDocumentRetriever
-    {
-        RequireHttps = options.RequireHttpsMetadata
-    };
-    return new ConfigurationManager<OpenIdConnectConfiguration>(
-        $"{options.Authority.TrimEnd('/')}/.well-known/openid-configuration",
-        new OpenIdConnectConfigurationRetriever(),
-        documentRetriever);
-});
-builder.Services.AddSingleton<IIdentityTokenValidator, IdentityTokenValidator>();
-
-builder.Services.AddRuoyuJwtBearer(
-    builder.Configuration,
-    builder.Environment,
-    consumer =>
-    {
-        consumer.MapInboundClaims = false;
-        consumer.AccessTokenCookieName = DocthecaAuthenticationConstants.AccessCookieName;
-        consumer.NameClaimType = "unique_name";
-        consumer.RoleClaimType = "role";
-    },
-    options =>
-{
-    options.AddPolicy(DocthecaAuthorizationPolicies.Admin, policy =>
-    {
-        // The AdminSession scheme joins the policy unconditionally; with AdminOidc:Enabled=false
-        // no session cookie exists, so authentication and challenge behave exactly as before.
-        policy.AddAuthenticationSchemes(JwtBearerDefaults.AuthenticationScheme, AdminOidcConstants.SessionScheme);
-        policy.RequireAuthenticatedUser();
-        policy.RequireAssertion(context =>
-            context.User.Identities.Any(identity => identity.IsAuthenticated)
-            && context.User.Claims.Any(claim =>
-                claim.Type is "role" or ClaimTypes.Role
-                && string.Equals(claim.Value, "admin", StringComparison.OrdinalIgnoreCase)));
-    });
-});
-
-// SignaCore hosted login (issue #47, first slice): authorization-code callback plus opaque
-// server-side session cookies. Enabled=false by default leaves every existing route and the
-// legacy password flow byte-for-byte unchanged; the three new endpoints answer a fixed 503.
+// Missing trust never enables an alternative identity source. Full configurations retain
+// the common strict JWT validation; missing ones register a rejecting Bearer scheme.
+builder.Services.AddDocthecaAdminAuthentication(builder.Configuration, builder.Environment);
 builder.Services.AddDocthecaAdminOidc(builder.Configuration, builder.Environment);
 
 var fallbackConnectionString = builder.Configuration.GetConnectionString("Default");
@@ -246,10 +185,6 @@ builder.Services.AddScoped<ParseImageContentSource>();
 builder.Services.AddHostedService<StructaDocParseWorker>();
 
 var app = builder.Build();
-var identityTrust = app.Services
-    .GetRequiredService<IOptions<IdentityAuthenticationOptions>>()
-    .Value;
-
 // Startup diagnostics and initialization run on the main thread outside any request scope.
 // The retired global Serilog enrichers used to stamp every log line with identity; under the
 // ServiceMantle pipeline identity comes from explicit scopes, so the whole startup region
@@ -259,12 +194,9 @@ var serviceLogContext = app.Services.GetRequiredService<ServiceMantle.Web.Loggin
 using (serviceLogContext.BeginScope(app.Logger))
 {
     app.Logger.LogInformation("Doctheca Service starting");
-    app.Logger.LogInformation(
-        "Identity trust: Authority={Authority}, Issuers={Issuers}, Audience={Audience}, RequireHttpsMetadata={RequireHttpsMetadata}",
-        identityTrust.Authority,
-        string.Join(",", identityTrust.GetValidIssuers()),
-        identityTrust.Audience,
-        identityTrust.RequireHttpsMetadata);
+    var oidc = app.Services.GetRequiredService<AdminOidcSettings>();
+    if (!oidc.Available)
+        app.Logger.LogError("DOCTHECA_OIDC_NOT_CONFIGURED: {MissingKeys}", string.Join(",", oidc.MissingKeys));
     app.Logger.LogInformation("Endpoints: HTTP={HttpPort}", httpPort);
     app.Logger.LogInformation(
         "Consul startup diagnostics: Address={Address}, Token={Token}, Source={Source}, KeyCount={KeyCount}, Prefixes={Prefixes}, LastError={LastError}",
@@ -400,7 +332,7 @@ app.UseAuthentication();
 
 // Cookie-session boundary for the protected admin API (hosted login): expired sessions get the
 // fixed re-authentication result before any endpoint runs, and non-safe methods must carry the
-// CSRF credential. Bearer callers and the disabled configuration bypass the boundary entirely.
+// CSRF credential. Verified Bearer callers and unconfigured hosted login bypass the session boundary.
 app.UseMiddleware<AdminOidcSessionMiddleware>();
 
 app.UseAuthorization();

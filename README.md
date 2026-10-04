@@ -107,9 +107,10 @@ MIT — see [LICENSE](LICENSE).
 
 ### Hosted administration frontend
 
-The current administration SPA requires `AdminOidc:Enabled=true` and exact SignaCore callback
-and post-logout registration. Deploy API and SPA in the same image. See
-[hosted login](docs/modules/AdminAuthentication/07-HostedLogin.md).
-The backend legacy password endpoints remain pending #50; the current SPA does not call them.
-Rollback restores the previous matching image/configuration (including the old disabled switch
-for the password SPA) and requires a new login. There is no database migration or rollback SQL.
+The administration SPA uses SignaCore hosted login. Register exact callback/post-logout URIs
+and inject server-only Confidential client credentials; deploy API and SPA in the same image.
+See [hosted login](docs/modules/AdminAuthentication/07-HostedLogin.md) and
+[Breaking changes and upgrade](docs/development/HostedLoginUpgrade.md). Old password endpoints
+return 410 and old token Cookies are ignored. Missing login configuration permits startup with
+fixed 503 login responses. Rollback restores a matching old image and configuration, including
+its old password contract, and requires reauthentication. No database migration or rollback SQL.
