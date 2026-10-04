@@ -51,7 +51,7 @@ def wait_exit(name, forbidden_url=None):
     raise RuntimeError("Container did not exit within 45 seconds")
 
 
-def main(image):
+def main(image, rollback_image=None):
     prefix = "doctheca-startup-" + secrets.token_hex(6)
     network = prefix + "-net"
     postgres = prefix + "-pg"
@@ -178,6 +178,47 @@ def main(image):
             require(wait_exit(name) == 0, "SIGTERM did not shut down gracefully")
             check_logs(name)
             print("PASS success: exact health contracts, single gate, graceful SIGTERM", flush=True)
+            if rollback_image:
+                def fingerprint():
+                    return docker("exec", postgres, "psql", "-U", "startup_test", "-d", "startup_existing", "-tAc", """
+                        SELECT jsonb_agg(jsonb_build_array(c.relname, a.attname, format_type(a.atttypid, a.atttypmod), a.attnotnull) ORDER BY c.relname, a.attnum)
+                        FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace JOIN pg_attribute a ON a.attrelid=c.oid
+                        WHERE n.nspname='public' AND c.relkind='r' AND a.attnum>0 AND NOT a.attisdropped;
+                        SELECT "MigrationId", "ProductVersion" FROM "__EFMigrationsHistory" ORDER BY "MigrationId";
+                        SELECT count(*) FROM document_files;
+                        """)
+                before = fingerprint()
+                # This database is owned by the random test prefix. Remove only its exact
+                # verified history table to exercise legacy takeover through the shared writer.
+                docker("exec", postgres, "psql", "-U", "startup_test", "-d", "startup_existing", "-c",
+                       'DROP TABLE public."__EFMigrationsHistory"')
+                for label, selected_image in (("legacy", image), ("rollback", rollback_image)):
+                    name = prefix + "-" + label
+                    run(name, selected_image, settings | {"Database__Name": "startup_existing"},
+                        "-p", "127.0.0.1::5012")
+                    port = json.loads(docker("inspect", "--format", "{{json .NetworkSettings.Ports}}", name))["5012/tcp"][0]["HostPort"]
+                    deadline = time.monotonic() + 45
+                    while time.monotonic() < deadline:
+                        require(state(name)["Running"], label + " startup exited unexpectedly")
+                        try:
+                            if get("/health/ready") == expected:
+                                break
+                        except (OSError, urllib.error.URLError):
+                            pass
+                        time.sleep(0.25)
+                    else:
+                        raise RuntimeError(label + " image did not become ready")
+                    require(fingerprint() == before, label + " image changed schema/history/data")
+                    logs = check_logs(name)
+                    require(logs.count("Database startup gate completed") == 1,
+                            "Expected one " + label + " startup gate")
+                    if label == "legacy":
+                        require(logs.count("Legacy database taken over") == 1,
+                                "Shared baseline writer was not exercised")
+                    docker("kill", "--signal", "TERM", name)
+                    require(wait_exit(name) == 0, label + " SIGTERM did not shut down gracefully")
+                    check_logs(name)
+                    print("PASS " + label + ": same database accepted; schema/history/data unchanged", flush=True)
         finally:
             # Remove only resources created under this run's random prefix.
             for name in reversed(containers):
@@ -187,10 +228,10 @@ def main(image):
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 2:
-        sys.exit("Usage: python3 scripts/verify-container-startup.py IMAGE")
+    if len(sys.argv) not in (2, 3):
+        sys.exit("Usage: python3 scripts/verify-container-startup.py IMAGE [ROLLBACK_IMAGE]")
     try:
-        main(sys.argv[1])
+        main(sys.argv[1], sys.argv[2] if len(sys.argv) == 3 else None)
     except (RuntimeError, subprocess.TimeoutExpired) as error:
         # Do not expose subprocess arguments or environment files on failures.
         sys.exit(str(error) if isinstance(error, RuntimeError) else "Docker operation timed out")

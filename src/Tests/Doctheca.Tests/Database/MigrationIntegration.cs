@@ -26,6 +26,7 @@ public sealed class PostgreSqlMigrationFixture : IAsyncLifetime
     public PostgreSqlMigrationFixture()
     {
         _container = new PostgreSqlBuilder("postgres:16-alpine")
+            .WithCommand("-c", "shared_preload_libraries=pg_stat_statements")
             .WithDatabase("postgres")
             .WithUsername("doctheca_migrator")
             .WithPassword(PasswordCanary)
