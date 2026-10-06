@@ -6,6 +6,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Npgsql;
+using ServiceMantle.Bootstrap;
 using ServiceMantle.Health;
 using ServiceMantle.Migration;
 using Xunit;
@@ -54,6 +55,24 @@ public sealed class DatabaseTargetPreparationTests(PostgreSqlMigrationFixture fi
         receipt.ErrorCode.Should().Be(result.ErrorCode);
         if (result.ErrorCode is not null) result.ErrorCode.Should().NotContain(fixture.PasswordCanary);
         return result;
+    }
+
+    [Fact]
+    public void SharedDirectComposition_PreservesBudgetsAndRegistersNoHostedGate()
+    {
+        var target = fixture.GetConnectionString(database);
+        using var services = BuildServices(target);
+        services.GetRequiredService<ServiceMantle.Bootstrap.IDatabaseDeploymentCapabilityProvider>()
+            .Should().BeOfType<ServiceMantle.Database.PostgreSql.PostgreSqlDatabaseDeploymentCapabilityProvider>();
+        services.GetServices<Microsoft.Extensions.Hosting.IHostedService>()
+            .Should().NotContain(service => service.GetType().Name == "StartupDatabaseGateHostedService");
+        var options = DocthecaStartupDatabase.CreateOptions(Config(null), target);
+        options.DeploymentMode.Should().Be(DatabaseDeploymentMode.MultiInstance);
+        options.LockWaitBudget.Should().Be(TimeSpan.FromSeconds(30));
+        options.PreparationTimeout.Should().Be(TimeSpan.FromSeconds(30));
+        options.EnableTargetPreparation.Should().BeTrue();
+        options.AllowTargetCreation.Should().BeFalse();
+        new NpgsqlConnectionStringBuilder(options.MaintenanceConnectionString).Database.Should().Be("postgres");
     }
 
     [Fact]
