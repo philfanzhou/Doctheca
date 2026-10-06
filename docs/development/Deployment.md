@@ -142,7 +142,7 @@ for the matched-image rollback, which restores the old password contract without
 
 ## Logging Configuration
 
-Doctheca logs through the `ServiceMantle.Logging` pipeline (Console sink + optional Grafana Loki remote sink). The wiring lives in `src/Host/DocthecaLoggingExtensions.cs` and is registered in `Program.cs` via `builder.AddDocthecaLogging()` after the Consul configuration source. All direct ServiceMantle packages (`ServiceMantle`, `.Web`, `.Diagnostics`, `.Logging`, `.Database.PostgreSql`, and `.Persistence.Relational`) are pinned to the same formal **0.3.0** release. Do not float these versions.
+Doctheca logs through the `ServiceMantle.Logging` pipeline (Console sink + optional Grafana Loki remote sink). The wiring lives in `src/Host/DocthecaLoggingExtensions.cs` and is registered in `Program.cs` via `builder.AddDocthecaLogging()` after the Consul configuration source. All direct ServiceMantle packages (`ServiceMantle`, `.Web`, `.Diagnostics`, `.Logging`, `.Database.PostgreSql`, and `.Persistence.Relational`) are pinned to the same official **0.3.1-rc.1** release candidate. Do not float these versions.
 
 ### Log Levels
 
@@ -158,6 +158,8 @@ Every log entry carries identity fields from explicit `ServiceLogContext` scopes
 | ServiceVersion | Entry assembly informational version | Resolved at startup |
 | InstanceId | Per host build | `doctheca-<32 lowercase hex characters>`, regenerated on every restart |
 | CorrelationId | Per HTTP request | Only inside the request scope (see ErrorHandling.md) |
+
+The existing `StructaDoc` named HttpClient explicitly uses `AddServiceMantleCorrelationIdPropagation`: an internal call made within a request carries the middleware-resolved `x-correlation-id`. An explicit outgoing header is preserved; calls without HttpContext do not invent an ID. The pooled handler reads the current context on each send. Base URL, 300-second default timeout, and the StructaDoc ApiKey remain unchanged. Standard OIDC discovery/token backchannels, OpenAI, Consul, object storage, and OpenSearch do not opt in. Destination and redirect trust remain the caller’s responsibility. `InstanceId.CreateRandom` retains the per-host `doctheca-<Guid:N>` format and performs no persistence. This upgrade adds no configuration or data migration; rollback redeploys the previous code and matching package set.
 
 Scope lifetimes: HTTP requests use the ServiceMantle request scope; host startup diagnostics/initialization run inside one explicit startup scope; the StructaDoc parse worker opens one worker-lifetime scope. The legacy global Serilog enrichers, including `MachineName` and `ThreadId`, are retired — dashboards keyed on those fields must switch to `InstanceId`/`ServiceName`.
 

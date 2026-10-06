@@ -170,7 +170,7 @@ builder.Services.AddHttpClient("StructaDoc", client =>
         client.BaseAddress = new Uri(options.BaseUrl.TrimEnd('/') + "/");
     }
     client.Timeout = TimeSpan.FromSeconds(options.TimeoutSeconds);
-});
+}).AddServiceMantleCorrelationIdPropagation();
 builder.Services.AddSingleton<IStructaDocClient>(sp =>
 {
     var factory = sp.GetRequiredService<IHttpClientFactory>();

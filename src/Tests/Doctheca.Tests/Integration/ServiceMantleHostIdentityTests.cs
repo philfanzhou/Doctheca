@@ -44,6 +44,7 @@ public sealed partial class ServiceMantleHostIdentityTests : ServiceMantleIntegr
 
         Assert.Equal("doctheca", serviceId.Value);
         Assert.Matches(InstanceIdPattern(), instanceId.Value);
+        Assert.Equal(instanceId, factory.Services.GetRequiredService<InstanceId>());
 
         Assert.Equal(serviceId.Value, logContext.ServiceName);
         Assert.Equal(instanceId.Value, logContext.InstanceId);
