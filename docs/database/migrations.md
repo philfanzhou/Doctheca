@@ -1,5 +1,14 @@
 # Migration History
 
+The startup composition uses the official same-version ServiceMantle 0.3.1-rc.1
+PostgreSQL deployment declaration and option preset, plus the direct gate service registration.
+The gate is invoked by the existing startup code, without a second hosted gate. `Database:AllowCreate`
+still defaults to false; the multi-instance lease and both thirty-second budgets are unchanged.
+The shared single-instance identity uses a credential-free SHA-256 TCP target digest rather than
+the former local string. This service always selects multi-instance coordination, so that identity
+change does not affect its migrations. No schema, migration, configuration key or deployment change
+is required; application rollback also restores the preceding package version.
+
 ## Migration Strategy
 
 The database is managed with **EF Core migrations**. The single baseline migration
@@ -101,7 +110,7 @@ INCLUDE columns for exactly the four public business tables. `EfCoreExpectedSche
 uses the EF design-time model with extended evidence. `SchemaEvidenceComparer` performs neutral
 comparison; `EfCoreMigrationBaselineWriter` still owns the independent parameterized transaction.
 There is no local catalog query, alternate snapshot, or model-gap fallback. The executor retains
-only product policy and the metadata needed for the original safe backfill DDL.
+only product policy and the metadata needed for the original safe backfill DDL. The executor still chooses which migration to stamp and when: read-only inspection, fresh inspection immediately before execution, safe backfills, then history registration.
 
 - The explicitly public history SELECT remains a product boundary: the shared reader's history
   lookup follows search_path, while another schema's same-named table must not claim the public

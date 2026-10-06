@@ -1,7 +1,6 @@
 using System.Data;
 using Doctheca.Database;
 using Microsoft.EntityFrameworkCore;
-using Npgsql;
 using ServiceMantle;
 using ServiceMantle.Web;
 using ServiceMantle.Bootstrap;
@@ -27,12 +26,8 @@ public static class DocthecaStartupDatabase
             .AddDatabaseTargetPreparationProvider<PostgreSqlDatabaseTargetPreparationProvider>()
             .AddMigrationLockProvider<PostgreSqlMigrationLockProvider>()
             .AddDatabaseMigration<DocthecaMigrationExecutor>();
-        services.AddSingleton<IDatabaseDeploymentCapabilityProvider, DocthecaPostgreSqlDeploymentCapability>();
-        services.AddSingleton<DatabaseDeploymentCapabilityRegistry>(sp => new(
-            sp.GetServices<IDatabaseDeploymentCapabilityProvider>(),
-            sp.GetRequiredService<BootstrapDatabaseProviderRegistry>().ProviderIdResolver));
-        services.AddSingleton<StartupDatabaseReceipt>();
-        services.AddSingleton<StartupDatabaseGate>();
+        services.AddServiceMantlePostgreSqlDeploymentCapability();
+        services.AddServiceMantleStartupDatabaseGateServices();
         services.AddScoped<IServiceDatabaseProbeFailureClassifier, DocthecaPostgreSqlProbeFailureClassifier>();
         services.AddScoped<IServiceHealthSnapshotSource>(sp => new EfCoreHealthSnapshotSource<DocthecaDbContext>(
             sp.GetRequiredService<StartupDatabaseReceipt>(),
@@ -53,32 +48,9 @@ public static class DocthecaStartupDatabase
             throw new InvalidOperationException(
                 "Database:AllowCreate must be 'true' or 'false' (error database_target_preparation.invalid_target); refusing to start.");
         }
-        return new StartupDatabaseGateOptions(
+        return PostgreSqlStartupDatabaseGateOptions.Create(
             new BootstrapDatabaseConfiguration(WellKnownDatabaseProviderIds.PostgreSql, null, connectionString),
-            DatabaseDeploymentMode.MultiInstance,
-            TimeSpan.FromSeconds(30),
-            enableTargetPreparation: true,
-            allowTargetCreation: allowCreate,
-            maintenanceConnectionString: PostgreSqlMaintenanceConnection.DeriveConnectionString(connectionString),
-            preparationTimeout: TimeSpan.FromSeconds(30));
-    }
-}
-
-/// <summary>Declares PostgreSQL deployment support; the library owns validation and locking.</summary>
-internal sealed class DocthecaPostgreSqlDeploymentCapability : IDatabaseDeploymentCapabilityProvider
-{
-    public DatabaseDeploymentCapability Capability { get; } = new(
-        WellKnownDatabaseProviderIds.PostgreSql, DatabaseDeploymentSupport.SingleAndMultiInstance);
-
-    public ValueTask<string> GetCanonicalTargetIdentityAsync(
-        BootstrapDatabaseConfiguration target, CancellationToken cancellationToken)
-    {
-        cancellationToken.ThrowIfCancellationRequested();
-        var connection = new NpgsqlConnectionStringBuilder(target.ConnectionString);
-        var host = (connection.Host ?? string.Empty).ToLowerInvariant();
-        var database = connection.Database ?? string.Empty;
-        // Length delimiters avoid collisions; neither credentials nor usernames are included.
-        return ValueTask.FromResult($"{host.Length}:{host}{connection.Port}:{database.Length}:{database}");
+            allowTargetCreation: allowCreate);
     }
 }
 
