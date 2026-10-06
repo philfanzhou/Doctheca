@@ -18,7 +18,7 @@ public sealed class SchemaEvidenceBoundaryTests(PostgreSqlMigrationFixture fixtu
     public Task DisposeAsync() => fixture.DropDatabaseAsync(_database);
 
     [Fact]
-    public async Task SharedColumnsAreReadNormallyAndLocalColumnsOnlyForProvenModelGap()
+    public async Task SharedExtendedEvidenceEliminatesLocalColumnFallback()
     {
         using var context = fixture.CreateContext(_database);
         var executor = new DocthecaMigrationExecutor(context, NullLogger.Instance);
@@ -35,7 +35,7 @@ public sealed class SchemaEvidenceBoundaryTests(PostgreSqlMigrationFixture fixtu
             var localCount = await MigrationGoldenStates.ScalarAsync<long>(context,
                 "SELECT COALESCE(sum(calls), 0)::bigint FROM pg_stat_statements WHERE query LIKE 'SELECT c.relname, a.attname, format_type%'");
             Assert.Equal(1, sharedCount);
-            Assert.Equal(fallback ? 1 : 0, localCount);
+            Assert.Equal(0, localCount);
         }
     }
 

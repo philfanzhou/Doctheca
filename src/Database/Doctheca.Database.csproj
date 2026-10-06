@@ -11,9 +11,9 @@
     <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.12" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
     <!-- Neutral evidence/EF primitives are shared; product naming/backfill decisions remain local. -->
-    <PackageReference Include="ServiceMantle.Persistence.Relational" Version="0.3.0" />
-    <PackageReference Include="ServiceMantle.Database.PostgreSql" Version="0.3.0" />
-    <PackageReference Include="ServiceMantle" Version="0.3.0" />
+    <PackageReference Include="ServiceMantle.Persistence.Relational" Version="0.3.1-rc.1" />
+    <PackageReference Include="ServiceMantle.Database.PostgreSql" Version="0.3.1-rc.1" />
+    <PackageReference Include="ServiceMantle" Version="0.3.1-rc.1" />
   </ItemGroup>
 
   <ItemGroup>

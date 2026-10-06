@@ -18,7 +18,7 @@ classifies the target database and executes. The executor implements ServiceMant
 database serialize — only one executes the migration, the others wait for the lock, re-read
 `CurrentVersionCompatible`, and skip.
 
-The host uses the formal ServiceMantle **0.3.0** `StartupDatabaseGate` direct entry once, after LLM initialization and before OpenSearch initialization. Its shared `StartupDatabaseReceipt` is the sole process-local startup observation. The scoped shared `EfCoreHealthSnapshotSource<DocthecaDbContext>` runs zero-row mapped-schema probes only after that receipt succeeds; the HTTP response contract and 3-second budget remain unchanged.
+The host uses the official ServiceMantle **0.3.1-rc.1** `StartupDatabaseGate` direct entry once, after LLM initialization and before OpenSearch initialization. Its shared `StartupDatabaseReceipt` is the sole process-local startup observation. The scoped shared `EfCoreHealthSnapshotSource<DocthecaDbContext>` runs zero-row mapped-schema probes only after that receipt succeeds; the HTTP response contract and 3-second budget remain unchanged.
 
 Startup sequence (all observed through the host's shutdown token):
 
@@ -87,53 +87,47 @@ rollback and no synthesized success.
 
 ## ServiceMantle 0.3.0 Compatibility
 
-All direct ServiceMantle package references use formal 0.3.0. There is no schema or business-data migration in this upgrade. Missing targets now refuse with `database_target_preparation.creation_not_allowed` (previously `DOCTHECA_DB_CREATION_NOT_ALLOWED`); invalid `Database:AllowCreate` values now refuse with `database_target_preparation.invalid_target` (previously `DOCTHECA_DB_ALLOW_CREATE_INVALID`), before any database I/O and without echoing the value. Update alerts accordingly. All other startup failures retain shared allow-listed codes.
+ServiceMantle 0.3.0 introduced the following operational classifications; all current direct package references use the same official 0.3.1-rc.1. There is no schema or business-data migration in this upgrade. Missing targets now refuse with `database_target_preparation.creation_not_allowed` (previously `DOCTHECA_DB_CREATION_NOT_ALLOWED`); invalid `Database:AllowCreate` values now refuse with `database_target_preparation.invalid_target` (previously `DOCTHECA_DB_ALLOW_CREATE_INVALID`), before any database I/O and without echoing the value. Update alerts accordingly. All other startup failures retain shared allow-listed codes.
 
 The executor now consumes the shared schema primitives described below; classification, migration history,
 takeover/backfill rules and the PostgreSQL session advisory lock retain their original behavior. Roll back by deploying the previous image and package versions against the same existing compatible database and restoring old alert codes. No rollback SQL is needed. An already created database or committed migration remains after later failure/cancellation. A cancelled gate can leave its shared receipt Running while the process exits; it never reports success.
 
 ## Shared schema evidence and product adaptation
 
-`ServiceMantle.Database.PostgreSql` and `ServiceMantle.Persistence.Relational` are direct formal
-**0.3.0** references in the Database project, matching the rest of the repository.
-`PostgreSqlSchemaEvidenceReader` supplies ordinary actual column facts;
-`EfCoreExpectedSchemaDerivation` supplies the neutral EF expectation;
-`SchemaEvidenceComparer` performs every neutral comparison; and
-`EfCoreMigrationBaselineWriter` owns the independent, parameterized history transaction.
-The executor still chooses which migration to stamp and when: read-only inspection, fresh
-inspection immediately before execution, safe backfills, then history registration.
+`ServiceMantle.Database.PostgreSql` and `ServiceMantle.Persistence.Relational` use official
+**0.3.1-rc.1**, matching every other direct ServiceMantle reference in the repository.
+`PostgreSqlSchemaEvidenceReader` explicitly reads extended names, expression key counts and
+INCLUDE columns for exactly the four public business tables. `EfCoreExpectedSchemaDerivation`
+uses the EF design-time model with extended evidence. `SchemaEvidenceComparer` performs neutral
+comparison; `EfCoreMigrationBaselineWriter` still owns the independent parameterized transaction.
+There is no local catalog query, alternate snapshot, or model-gap fallback. The executor retains
+only product policy and the metadata needed for the original safe backfill DDL.
 
-The following local responsibilities are necessary to preserve existing decisions:
-
-- A public-table presence query and a short, explicitly public history query preserve unknown
-  migration priority, the empty/partial-table distinction, and history ownership. A same-named
-  history table in another schema cannot claim the public baseline. Shared history data is not
-  substituted for this product check.
-- Bounded public four-table PK/FK/index facts retain actual names, ordered column associations,
-  unique flags and `array_length(indkey, 1)` (including INCLUDE attributes). The shared model
-  omits names/KeyCount and its reader omits expression indexes. Expected names and backfill
-  defaults/DDL remain EF metadata; neutral expected shapes/types come from shared derivation.
-- Required objects first correlate by their real case-insensitive names. Each named shape is
-  then compared separately by the same shared comparer, so swapped index/FK names cannot be
-  rescued by a different object's matching shape. Extra indexes remain ignored, extra FKs do
-  not. Both sides normalize the default schema to public, ignore Identity, and omit referenced
-  schema from FK comparison because the original contract compared only referenced table names.
-- The ordinary path never performs the local column query. If the shared reader fails in a
-  model-construction catalog step, a scalar catalog diagnostic must prove an unrepresentable
-  shape (duplicate plain index/FK identities, empty tables or invalid neutral identifiers).
-  Only then are actual columns reread for the public four business tables, alongside their
-  bounded naming facts. The diagnostic returns only a boolean, not a second global snapshot.
-  This handles extra same-shaped indexes and unrelated duplicate shapes without widening
-  rejection. Permission/network failures or incomplete evidence remain InspectionFailed;
-  cancellation remains cancellation. No expected columns are invented as actual facts.
-- Store default values and the original safe nullable/defaulted-column and missing-index DDL,
-  updated_at trigger backfill, fixed diagnostics, cancellation and advisory lease remain
-  product responsibilities. Raw driver exception payloads are not attached to product logs.
+- The explicitly public history SELECT remains a product boundary: the shared reader's history
+  lookup follows search_path, while another schema's same-named table must not claim the public
+  baseline. Public unknown ids retain their original priority over incompatible mapped shapes.
+  Table presence now comes entirely from the shared exact-scope snapshot.
+- Required names still correlate with OrdinalIgnoreCase before individual comparisons; shared
+  names are normalized only after that pairing. Swapped required names cannot match another
+  object's shape. Extra indexes and unrelated tables remain ignored; extra foreign keys refuse.
+- Index key counts and INCLUDE evidence enter the shared comparer explicitly. Wrong required
+  expressions, INCLUDE columns, order and uniqueness still refuse; only a missing required
+  index may collect the original legacy backfill. Current history never permits that backfill.
+- Identity is normalized to None and referenced FK schema is omitted from comparison, preserving
+  the original dimensions. Stored defaults are not compared; expected default values remain
+  only for the original nullable/defaulted-column backfill. Physical column order is not a new
+  promise. Empty/partial/current/legacy/unknown-history states and the updated_at trigger DDL
+  retain their existing rules.
+- Permission/network/incomplete evidence fails closed; no expected columns are invented as
+  actual facts. Caller cancellation remains cancellation, including after connection cleanup;
+  committed DDL/history remains truthful pending state rather than being compensated or
+  reported as success. The caller still owns the advisory lease and write-before recheck;
+  the reader does not provide a cross-query consistent snapshot.
 
 | Shared fact/difference | Product decision |
 | --- | --- |
 | TargetDatabaseMissing | Empty; the Host creation gate keeps its existing AllowCreate policy. |
-| ReadFailed / incomplete local evidence | InspectionFailed, except the proved model gap above with complete bounded facts. |
+| ReadFailed / incomplete evidence | InspectionFailed; no local fallback. |
 | MissingTable | No business table/history is Empty; other missing/partial tables refuse, including current history. |
 | ExtraTable | Filtered outside the four public tables; ignored. |
 | MissingColumn | Current history refuses; legacy collects only the original nullable/defaulted safe DDL. |
@@ -157,8 +151,8 @@ instance. No rollback SQL is required; keep the existing prohibition on mixing o
 and new locking versions. The real PostgreSQL shape matrix was run against both executors,
 including naming/case, index order/unique/expression/INCLUDE, extra/unrelated duplicate shapes,
 Identity, missing columns/indexes and history priority. PostgreSQL statement statistics verify
-that ordinary column reads come from the shared reader and bounded column adaptation runs only
-for the proved gap. Cancellation/permission/writer failures and history shape have separate
+that both ordinary and duplicate-shape reads come from the shared reader, with zero local
+column adaptation queries. Cancellation/permission/writer failures and history shape have separate
 integration assertions. Run the container contract and actual old-image acceptance with:
 
 ```bash
@@ -184,6 +178,7 @@ Adding or changing migrations requires extending `DocthecaMigrationExecutor.Know
 
 | Date | Change | Impact |
 |------|------|------|
+| 2026-10-06 | Adopted extended shared exact-scope evidence; removed all local catalog adaptation and redundant evidence types | Original decisions/backfill/public history/lease retained; no schema change |
 | 2026-10-04 | Adopted shared schema reader/derivation/comparer/baseline writer with bounded PostgreSQL naming/model-gap adaptation | Original classification/backfill/history/lease preserved; no schema or configuration change; same-database rollback verified |
 | 2026-10-02 | Adopted formal ServiceMantle 0.3.0 shared direct startup gate, receipt, and EF Core health snapshot source; removed local duplicate algorithms | Only the two operational refusal codes above change; no schema/data/configuration/HTTP changes; old images can roll back against the same compatible existing database |
 | 2026-09-30 | Startup migration delegated to ServiceMantle: deployment validation, explicit `Database:AllowCreate` target preparation (default refuse), and advisory-lock orchestration of multi-instance startup | Missing databases no longer get created implicitly (`DOCTHECA_DB_CREATION_NOT_ALLOWED` by default); concurrent instances serialize on one advisory lock and only one executes the migration |
