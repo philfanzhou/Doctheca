@@ -82,8 +82,8 @@ public sealed partial class AdminHostedFrontendTests(PostgreSqlFixture database)
         var time = new ManualOidcTime();
         var factory = CreateFactory(root, services =>
         {
-            services.Configure<Microsoft.AspNetCore.Authentication.OpenIdConnect.OpenIdConnectOptions>(AdminOidcConstants.OidcScheme,
-                options => options.Backchannel = new HttpClient(authority, false));
+            services.AddHttpClient(SignaCore.Client.AspNetCore.SignaCoreHostedLoginDefaults.HttpClientName)
+                .ConfigurePrimaryHttpMessageHandler(() => authority);
             services.Replace(ServiceDescriptor.Singleton<TimeProvider>(time));
         }, new Dictionary<string, string?> {
             ["Endpoints:Http"] = appPort.ToString(), ["AdminOidc:Enabled"] = "true",
@@ -138,7 +138,7 @@ public sealed partial class AdminHostedFrontendTests(PostgreSqlFixture database)
         await h.Page.GetByRole(AriaRole.Button, new() { Name = "使用 SignaCore 登录" }).ClickAsync();
         await Assertions.Expect(h.Page.GetByRole(AriaRole.Alert)).ToContainTextAsync(expected);
         Assert.False(new Uri(h.Page.Url).Query.Contains("authError"), "Error was not removed.");
-        Assert.Equal(0, h.Factory.Services.GetRequiredService<MemoryTicketStore>().Count);
+        Assert.Equal(0, TicketCount(h.Factory));
     }
 
     [Fact]
@@ -149,8 +149,12 @@ public sealed partial class AdminHostedFrontendTests(PostgreSqlFixture database)
         await h.Page.GetByRole(AriaRole.Button, new() { Name = "使用 SignaCore 登录" }).ClickAsync();
         await h.Page.GetByRole(AriaRole.Button, new() { Name = "退出", Exact = true }).ClickAsync();
         await Assertions.Expect(h.Page.GetByRole(AriaRole.Alert)).ToContainTextAsync("本地已退出，SignaCore 会话可能仍然有效");
-        Assert.Equal(0, h.Factory.Services.GetRequiredService<MemoryTicketStore>().Count);
+        Assert.Equal(0, TicketCount(h.Factory));
     }
+
+    private static int TicketCount(WebApplicationFactory<Program> factory) =>
+        ((SignaCore.Client.AspNetCore.InMemoryTicketStore)factory.Services
+            .GetRequiredService<SignaCore.Client.AspNetCore.ITicketStore>()).Count;
 
     private sealed record BrowserHarness(string Root, string Origin, OidcTestAuthority Authority, WebApplication Provider,
         WebApplicationFactory<Program> Factory, IPlaywright Playwright, IBrowser Browser, IBrowserContext Context, IPage Page,

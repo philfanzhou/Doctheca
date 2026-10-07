@@ -1,10 +1,12 @@
 namespace Doctheca.Host.Authentication;
 
 /// <summary>
-/// Bound and validated configuration of the SignaCore hosted-login slice.
+/// Bound and validated configuration of the SignaCore hosted-login slice. The availability
+/// precheck runs before the official client package is registered: without the required keys the
+/// package is never wired and every hosted-login endpoint answers the fixed 503 result.
 /// </summary>
 public sealed record AdminOidcSettings(bool Available, string Authority, string ClientId, string ClientSecret,
-    string RedirectUri, bool InsecureLoopback, TimeSpan ClockSkew, string PostLogoutRedirectUri = "")
+    string RedirectUri, bool InsecureLoopback = false, string PostLogoutRedirectUri = "")
 {
     internal const string DisabledError = "Hosted sign-in is not configured.";
     public IReadOnlyList<string> MissingKeys { get; init; } = [];
@@ -15,7 +17,7 @@ public sealed record AdminOidcSettings(bool Available, string Authority, string 
             "AdminOidc:RedirectUri", "AdminOidc:PostLogoutRedirectUri" };
         var missing = required.Where(key => string.IsNullOrWhiteSpace(config[key])).ToArray();
         if (missing.Length > 0)
-            return new(false, "", "", "", "", false, TimeSpan.Zero) { MissingKeys = missing };
+            return new(false, "", "", "", "", false) { MissingKeys = missing };
 
         var dev = environment.IsDevelopment() || environment.IsEnvironment("Testing");
         var redirect = config["AdminOidc:RedirectUri"] ?? "";
@@ -34,12 +36,14 @@ public sealed record AdminOidcSettings(bool Available, string Authority, string 
         var secret = config["IdentityService:AppSecret"];
         if (string.IsNullOrWhiteSpace(clientId)) throw new InvalidOperationException("IdentityService:AppId");
         if (string.IsNullOrWhiteSpace(secret)) throw new InvalidOperationException("IdentityService:AppSecret");
+        // The key stays part of the startup contract: an unparseable value still fails startup,
+        // even though the package applies its own fixed 30-second token lifetime skew.
         var rawSkew = config["IdentityService:ClockSkewSeconds"];
         var skew = 30;
         if (rawSkew is not null && !int.TryParse(rawSkew, out skew))
             throw new InvalidOperationException("IdentityService:ClockSkewSeconds");
         if (skew is < 0 or > 300) throw new InvalidOperationException("IdentityService:ClockSkewSeconds");
-        return new(true, authority, clientId, secret, redirect, redirectUri.Scheme == "http", TimeSpan.FromSeconds(skew), postLogout);
+        return new(true, authority, clientId, secret, redirect, redirectUri.Scheme == "http", postLogout);
     }
 
     internal static bool IsSafeUri(string value, bool allowLoopback, out Uri? uri)
@@ -54,7 +58,8 @@ public sealed record AdminOidcSettings(bool Available, string Authority, string 
     /// Validates the <c>returnUrl</c> of the sign-in entry: only same-site absolute paths are
     /// accepted. Encoded alternate origins, backslashes, control characters, dot segments, and
     /// the auth area itself (which would loop the flow) are rejected in their raw and decoded
-    /// forms; the decoded form must stay a same-site absolute path.
+    /// forms; the decoded form must stay a same-site absolute path. The official package accepts
+    /// a weaker shape by itself, so the start guard keeps applying this exact rule.
     /// </summary>
     internal static bool IsValidReturnUrl(string? path)
     {

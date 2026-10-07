@@ -45,3 +45,31 @@ including its old login enablement/Cookie security settings when applicable. Use
 again. No migration or rollback SQL is required. Rolling back restores the old password proxy,
 refresh/revoke calls and token-Cookie contracts; disabling a removed switch in the current image
 cannot perform that rollback.
+
+## Package adoption (issue #70)
+
+The self-written OIDC protocol slice was replaced by the official `SignaCore.Client.AspNetCore`
+client (0.1.13). Routes, the session Cookie name, the CSRF header name, configuration keys and
+the admin policy's role assertion are unchanged; wire-level presentation differences are:
+
+- Token redemption and logout preparation authenticate with HTTP Basic instead of a form-carried
+  `client_secret`; the form carries no credentials either way.
+- `GET /admin/auth/oidc/csrf` answers `{"token":"..."}` instead of
+  `{"success":true,"data":{"requestToken":"..."}}`; the SPA reads `token`.
+- `POST /admin/auth/oidc/logout` redirects (302) to the verified logout URI on success and answers
+  `200 {"outcome":"local_only"}` on every failure instead of returning `logoutUrl` JSON. A missing
+  or invalid antiforgery token answers `400 {"outcome":"csrf_rejected"}` instead of 403 JSON.
+- `GET /admin/auth/oidc/logout/return` failure answers the package's fixed 400 page instead of
+  redirecting to `/?authError=logoutReturnFailed`; an otherwise valid return tolerates unknown
+  extra query members.
+- A cancelled sign-in and a gate denial share the merged `authError=notAdmin` outcome; a
+  token-endpoint transport failure now surfaces as `authError=identityUnavailable`.
+- The ID token follows standard OIDC validation semantics (multi-valued `aud` containing the
+  client id is accepted, `iat` is not demanded, the signature is verified against the published
+  JWKS), and the access token must carry `nbf` per the SignaCore contract.
+- The logout-return correlation Cookie is named after the session Cookie
+  (`docthecaAdminSession-logout-return`) instead of `docthecaLogoutBinding`.
+
+Rollback to the previous image restores the self-written slice with its old response shapes; the
+session Cookie name is unchanged but tickets are not compatible across the switch, so browsers
+re-authenticate after either direction of the change. No SQL or configuration change is required.

@@ -10,19 +10,18 @@ Old access/refresh Cookies no longer authenticate, refresh or revoke sessions.
 
 ## Shared and local responsibilities
 
-ASP.NET Core OpenID Connect owns code exchange, correlation and nonce Cookies, PKCE and signature
-validation; Cookie authentication owns the encrypted opaque reference Cookie; JwtBearer owns
-existing Bearer validation; antiforgery owns identity-bound CSRF; ServiceMantle owns security
-response headers. Doctheca owns strict token shape and issuer/subject association, access-token
-administrator authorization **before** sign-in, bounded pending/ticket/return stores, the Cookie
-write boundary, atomic local revocation, and the SignaCore prepared-logout adapter.
-
-There is one protocol implementation. `SignaCore.Client.AspNetCore 0.1.11-rc.5` is not used because
-its authorization extension receives an ID-token principal during session-status reading, after
-callback ticket creation. This cannot guarantee sign-in authorization from the validated access
-token. Reevaluate replacement when its published public API supports that decision before
-sign-in, strict dual-token association, equivalent revocation/CSRF/prepared-logout guarantees and
-the compatibility contract below. Do not weaken these guarantees to substitute a package.
+Since issue #70 the OIDC protocol runs in the official `SignaCore.Client.AspNetCore` package
+(0.1.13): it owns the authorization-code request, the hardened single-use callback, strict ID and
+access-token validation, issuer/subject correlation, the bounded server-side ticket/pending/return
+stores with their sweep, the user-neutral CSRF boundary, the local-session-first prepared logout,
+and secret-free bounded logging. Doctheca keeps a thin adaptation layer in
+`src/Host/Authentication`: the availability precheck with fixed 503 endpoints, the strict
+sign-in-entry input guard, the pre-sign-in administrator gate on the verified access-token
+principal (`AdminPreSignInAuthorizationDecision`), the fixed JSON/redirect presentation
+(`AdminLoginResponseWriter`), the cookie-session request boundary with the verified-Bearer scheme
+split (`AdminOidcSessionMiddleware`), the antiforgery cookie-name and loopback policies, and the
+backchannel timeout normalization. The admin policy's `role=admin` assertion and the existing
+JwtBearer path are unchanged.
 
 ## Configuration and application registration
 
@@ -68,22 +67,24 @@ redirects. Unconfigured requests return
 | Route | Configured result |
 | --- | --- |
 | `GET /admin/auth/oidc/start?returnUrl=...` | 302 to the trusted authorization endpoint with code, S256 PKCE, `openid profile`, state and nonce. Missing/empty return URL defaults to `/`. Invalid, duplicate or unsupported input returns a fixed 400 before creating pending state. Discovery failure redirects to `/?authError=identityUnavailable`. |
-| `GET /admin/auth/oidc/callback` | Consumes pending once, checks browser correlation, callback issuer, nonce and both tokens, then signs in only for the validated access-token `role=admin`. Success redirects to the validated station-local return path. Failure redirects to `/?authError=signInFailed`, non-admin to `/?authError=notAdmin`, cancellation to `/?authError=cancelled`; protocol input is never echoed. |
-| `GET /admin/auth/oidc/session` | 200 `{"success":true,"data":{"authenticated":true,"reason":"authenticated","username":"...","expiresAt":"..."}}` for a live session; absent/expired session is 401 `{"success":false,"message":"Re-authentication is required.","data":{"authenticated":false,"reason":"reauthenticationRequired"}}`. Username comes from the verified access token. |
-| `GET /admin/auth/oidc/csrf` | 200 `{"success":true,"data":{"requestToken":"..."}}` and HttpOnly antiforgery Cookie for a live session; otherwise fixed re-authentication 401. |
-| `POST /admin/auth/oidc/logout` | Live session requires CSRF (403 if missing/invalid, even with a Bearer header). Atomically revokes and clears local session first. A verified provider response returns 200 `{"success":true,"message":"Local session signed out.","data":{"reason":"logoutPrepared","logoutUrl":"https://<signacore-host>/oauth2/logout?logout_handle=..."}}`. All provider failures and already signed-out requests return 200 with `reason: "localSignedOut"` and `logoutUrl: null`. |
-| `GET /admin/auth/oidc/logout/return?state=...` | Browser-bound, unexpired, single-use state redirects to `/?authResult=signedOut`; invalid/missing/duplicate/expired/replayed return redirects to `/?authError=logoutReturnFailed`. It never signs in and never echoes input. |
+| `GET /admin/auth/oidc/callback` | Consumes pending once, validates the single-valued response, callback issuer, nonce and both tokens, then signs in only when the pre-sign-in gate allows the verified access-token `role=admin`. Success redirects to the validated station-local return path. Failure redirects to `/?authError=signInFailed`; a denied or cancelled sign-in and a transport failure redirect to `/?authError=notAdmin` and `/?authError=identityUnavailable` respectively; protocol input is never echoed. |
+| `GET /admin/auth/oidc/session` | 200 `{"success":true,"data":{"authenticated":true,"reason":"authenticated","username":"...","expiresAt":"..."}}` for a live session; absent/expired session is 401 `{"success":false,"message":"Re-authentication is required.","data":{"authenticated":false,"reason":"reauthenticationRequired"}}`. Username comes from the verified ID token; the expiry is read back from the server-side ticket. |
+| `GET /admin/auth/oidc/csrf` | 200 `{"token":"..."}` (the package shape) and HttpOnly antiforgery Cookie. The SPA reads the `token` member; the retired `data.requestToken` shape no longer exists. |
+| `POST /admin/auth/oidc/logout` | Requires the antiforgery credential: a missing/invalid token answers 400 `{"outcome":"csrf_rejected"}`, even with a Bearer header. Atomically revokes and clears the local session first. A verified provider response redirects (302) to the verified same-origin logout URI; every provider failure, timeout and already signed-out request answers 200 `{"outcome":"local_only"}` and never follows an unverifiable URI. |
+| `GET /admin/auth/oidc/logout/return?state=...` | Browser-bound, unexpired, single-use state redirects to `/?authResult=signedOut`; any invalid, missing, duplicate, expired or replayed return answers the package's fixed 400 HTML page. It never signs in and never echoes input. |
 
-The caller navigates only to the returned `logoutUrl`. `logoutPrepared` means preparation
-succeeded, not that SignaCore's browser session has already ended. `localSignedOut` claims only
+The logout endpoint performs a redirect instead of returning a navigation URL: the browser (or
+SPA) follows the verified logout URI after the local revocation, and `local_only` claims only
 local revocation. Upstream unavailability, timeout or request cancellation cannot resurrect the
 local session. A concurrent/repeated exit can initiate at most one provider call; requests are
-never retried, including ambiguous provider failures. The preparation form uses Confidential
-client authentication, the atomically removed server ID-token snapshot, exact post-logout URI,
-and random state. Its bounded JSON response must contain exactly one `logout_uri`: a relative or
-same-origin canonical `/oauth2/logout?logout_handle=<43 base64url characters>` URI. External
-origins, user information, fragments, alternate paths, extra or duplicate query fields and
-malformed handles are rejected. The backchannel does not follow redirects.
+never retried, including ambiguous provider failures. The preparation request uses HTTP Basic
+Confidential client authentication with the atomically removed server ID-token snapshot, the exact
+post-logout URI, and a random state. Its bounded JSON response must contain exactly one
+`logout_uri`: a relative or same-origin URI whose single query field is one 43-character base64url
+`logout_handle`. External origins, user information, fragments, extra or duplicate query fields and
+malformed handles are rejected; the authority dictates the path within its own origin. The
+backchannel uses HTTP Basic client authentication for token redemption as well, and does not
+follow redirects.
 
 Return URLs accept station-local absolute paths, including SPA hash routes such as `/#docs`.
 External origins, encoded alternate origins, backslashes, control characters, dot segments and
@@ -91,38 +92,48 @@ External origins, encoded alternate origins, backslashes, control characters, do
 
 ## Session, token and CSRF guarantees
 
-Both tokens have independently verified signatures, issuer, application audience, type and
-lifetime. ID tokens additionally require exactly one correctly typed issuer/subject, RS256,
-`typ=JWT`, `kid`, sane `iat/exp` and the pending nonce. Access tokens require RS256 and
-`typ=at+jwt`; both tokens' nonempty string `iss/sub` claims must each occur exactly once and
-match ordinally. Only verified access-token administrator role decides sign-in; an ID-token
-administrator claim cannot authorize a non-admin access token. Rejected/cancelled callbacks
-create no new ticket or session Cookie and do not renew or replace an existing session.
+The package independently verifies both tokens' signatures, issuer, application audience, type
+and lifetime, and requires the pending nonce for the ID token. Before the gate runs, the access
+token is validated strictly (RS256, published `kid` on the wire, `typ=at+jwt`, single exact
+issuer and string audience, nonempty subject, valid `exp/nbf/iat` with a 30-second skew, real
+expiry honoured even inside the skew) and both tokens' issuer/subject pairs must match; invalid
+or uncorrelated tokens fail closed without invoking the gate. Only the verified access-token
+administrator role decides sign-in; an ID-token administrator claim cannot authorize a non-admin
+access token. Denied, failing or timed-out gate decisions, cancellations and rejected callbacks
+create no new ticket or session Cookie and do not renew or replace an existing session. Standard
+OIDC validation semantics apply to the ID token (a multi-valued `aud` containing the client id is
+accepted and no `iat` claim is demanded); the sign-in session principal carries the verified
+ID-token claims.
 
-`docthecaAdminSession` is HttpOnly, Secure and SameSite=Lax; it contains an encrypted opaque
-ticket reference, never a token. Its absolute expiry is capped by the verified access-token
-expiry and the eight-hour store limit. Expired/unknown Cookie requests to protected `/admin/*`
-return fixed re-authentication 401. There is no automatic refresh or write replay.
+`docthecaAdminSession` is HttpOnly, Secure and SameSite=Lax; it contains the raw opaque key of
+the server-side ticket, never a token. The ticket keeps both tokens server-side and expires no
+later than the verified access-token expiry. Expired/unknown Cookie requests to protected
+`/admin/*` return fixed re-authentication 401. There is no automatic refresh or write replay.
 
 For non-safe Cookie requests to protected admin routes (outside the legacy `/admin/auth` area),
-include both the `docthecaAdminCsrf` Cookie and `X-CSRF-TOKEN` from `data.requestToken`.
-Missing/invalid credentials return fixed 403. A Bearer request remains on the existing path,
-even alongside an active or expired session Cookie, only after the Authorization credential
-actually validates; it cannot borrow the Cookie's administrator role. A forged header cannot
-bypass the Cookie CSRF check. Hosted logout always uses its session CSRF boundary. Old `docthecaAccessToken` and `docthecaRefreshToken` Cookies are ignored.
+include both the `docthecaAdminCsrf` Cookie and `X-CSRF-TOKEN` from the csrf endpoint's `token`.
+Missing/invalid credentials return fixed 403. The package issues and validates antiforgery pairs
+user-neutrally — bound to the per-browser Cookie alone — so a pair works before or after sign-in.
+A Bearer request remains on the existing path, even alongside an active or expired session
+Cookie, only after the Authorization credential actually validates; it cannot borrow the Cookie's
+administrator role. A forged header cannot bypass the Cookie CSRF check. Hosted logout always
+uses its session CSRF boundary. Old `docthecaAccessToken` and `docthecaRefreshToken` Cookies are
+ignored.
 
-Pending transactions and logout returns expire after five minutes. Each in-memory store has
-capacity 4096 and a one-minute sweep. Logout return state is bound to a separate HttpOnly,
-Secure, SameSite=Lax Cookie scoped to the return path. Session snapshots are serialized;
-revocation removes and acquires the snapshot in one locked operation, and renewal cannot
-restore a removed ticket. A stale session Cookie copy returns 401 after revocation.
+Pending sign-ins and logout returns expire after five minutes. The in-memory ticket store holds
+at most 4096 sessions (capacity-bounded, refusing rather than evicting) and all stores are swept
+periodically. Logout return state is bound to a separate HttpOnly, Secure, SameSite=Lax Cookie
+(named after the session Cookie) scoped to the logout paths. Revocation removes the ticket in one
+locked operation and at most one preparation per session is possible; a stale session Cookie copy
+returns 401 after revocation.
 
-Tokens, client secrets and PKCE verifiers stay in memory/backchannel only. Code/state occur only
-in the required trusted authorization/callback or logout-return protocol, never business
-navigation, JSON errors or logs. Framework OIDC protocol logging is suppressed through the
-safe handler; hosting diagnostics are disabled even when required login configuration is missing
-because they log raw callback query strings before application middleware can redact them. Failure results
-never include upstream payloads or exception details.
+Tokens, client secrets and PKCE verifiers stay in memory/backchannel only; the package's back
+channel is cookie-free, never follows redirects, and is excluded from HttpClient instrumentation.
+Code/state occur only in the required trusted authorization/callback or logout-return protocol,
+never business navigation, JSON errors or logs. The package's operation log is a closed
+operation/outcome vocabulary; hosting diagnostics are disabled even when required login
+configuration is missing because they log raw callback query strings before application
+middleware can redact them. Failure results never include upstream payloads or exception details.
 
 ## Deployment, upgrade and rollback
 
@@ -155,9 +166,11 @@ Initialization and CSRF requests each share one in-flight operation. Generation 
 late responses from restoring revoked UI or authorizing writes after expiry. A 401 clears the
 session and requests explicit reauthentication; a 403 displays denial without navigating,
 refreshing credentials, or replaying the request. Network failure never implies authentication.
-Logout is single-flight, clears displayed session data, and navigates to a server-validated
-logout URL. A local-only response warns that the SignaCore session may remain active; a failed
-request displays a fixed failure without claiming server revocation.
+Logout is single-flight, clears displayed session data, and follows the redirect semantics: a
+prepared sign-out leaves this origin for SignaCore's verified logout URI, so the SPA lands on the
+fixed `/?authResult=signedOut` result after the chain. A local-only response warns that the
+SignaCore session may remain active; a rejected request displays a fixed failure without claiming
+server revocation. A cancelled sign-in and a denied one share the merged notAdmin message.
 
 Run `cd frontend && npm test` for transport-timing/state tests and `npm run test:e2e` for real
 Chromium tests against the compiled SPA, Kestrel, PostgreSQL 16 and the fake SignaCore public
