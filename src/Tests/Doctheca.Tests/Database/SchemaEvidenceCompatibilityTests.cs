@@ -98,6 +98,20 @@ public sealed class SchemaEvidenceCompatibilityTests(PostgreSqlMigrationFixture 
     }
 
     [Fact]
+    public async Task UnknownPublicHistoryPrecedesUnrepresentableMappedTable()
+    {
+        using var context = fixture.CreateContext(_database);
+        var executor = new DocthecaMigrationExecutor(context, NullLogger.Instance);
+        await executor.ExecuteAsync();
+        await MigrationGoldenStates.ExecuteRawAsync(context,
+            "INSERT INTO \"__EFMigrationsHistory\" VALUES ('future-version', '1'); " +
+            "DROP TABLE document_parse_blocks; CREATE TABLE document_parse_blocks()");
+        Assert.Equal(DocthecaMigrationExecutor.DatabaseState.VersionTooNew, await executor.InspectAsync());
+        await Assert.ThrowsAsync<InvalidOperationException>(() => executor.ExecuteAsync());
+        Assert.Equal(2, (await MigrationGoldenStates.ReadAppliedHistoryAsync(context)).Count);
+    }
+
+    [Fact]
     public async Task OtherSchemaHistoryDoesNotClaimPublicCurrentVersion()
     {
         using (var seed = fixture.CreateContext(_database))
