@@ -30,7 +30,7 @@ async function setup(fn, href = 'http://127.0.0.1/#docs') {
     const calls = []
     clients.authHttpClient.defaults.adapter = async config => {
       calls.push(config)
-      return response(config, config.url.endsWith('/csrf') ? { requestToken: 'synthetic-csrf' } : config.url.endsWith('/logout') ? { reason: 'localSignedOut', logoutUrl: null } : live)
+      return config.url.endsWith('/csrf') ? csrfResponse(config) : config.url.endsWith('/logout') ? logoutResponse(config, 'local_only') : response(config, live)
     }
     const documentApi = await import(pathToFileURL(join(root, 'services/documentApi.js')))
     const parseApi = await import(pathToFileURL(join(root, 'services/parseApi.js')))
@@ -38,6 +38,10 @@ async function setup(fn, href = 'http://127.0.0.1/#docs') {
   } finally { await rm(root, { recursive: true, force: true }) }
 }
 const response = (config, data) => ({ config, data: { success: true, data }, status: 200, headers: {}, statusText: 'OK' })
+// The hosted-login client's endpoint shapes (issue #70): csrf answers {"token": ...} directly
+// and the logout answers the package's fixed outcome bodies.
+const csrfResponse = config => ({ config, data: { token: 'synthetic-csrf' }, status: 200, headers: {}, statusText: 'OK' })
+const logoutResponse = (config, outcome) => ({ config, data: { outcome }, status: 200, headers: {}, statusText: 'OK' })
 const rejection = (config, status) => Promise.reject(new AxiosError('fixed failure', undefined, config, undefined, { config, status, data: {}, headers: {}, statusText: '' }))
 
 test('initialization and CSRF deduplicate; all write methods include CSRF', () => setup(async h => {
@@ -64,7 +68,7 @@ test('401 never refreshes or replays; late initialization cannot revive a revoke
 test('late CSRF cannot authorize a write after expiry; CSRF failure sends no write', () => setup(async h => {
   await h.state.initialize()
   const pending = deferred()
-  h.authHttpClient.defaults.adapter = config => pending.promise.then(() => response(config, { requestToken: 'synthetic-csrf' }))
+  h.authHttpClient.defaults.adapter = config => pending.promise.then(() => csrfResponse(config))
   let writes = 0
   h.httpClient.defaults.adapter = config => { if (config.method === 'get') return rejection(config, 401); writes++; return response(config, {}) }
   const write = h.httpClient.post('/admin/write')
@@ -83,10 +87,21 @@ test('403 does not redirect/retry; concurrent logout sends one CSRF-protected PO
   assert.equal(exits.length, 1); assert.equal(exits[0].headers.get('X-CSRF-TOKEN'), 'synthetic-csrf')
   assert.equal(h.state.status.value, 'anonymous'); assert.match(h.state.message.value, /本地已退出/)
 }))
-test('logout network failure clears UI without claiming revocation', () => setup(async h => {
+test('rejected logout keeps the failure message; response-less logout lands signed-out', () => setup(async h => {
   await h.state.initialize()
-  h.authHttpClient.defaults.adapter = async config => { if (config.url.endsWith('/csrf')) return response(config, { requestToken: 'synthetic-csrf' }); throw new Error('offline') }
-  await h.state.logout(); assert.equal(h.state.session.value, null); assert.match(h.state.message.value, /退出失败/)
+  h.authHttpClient.defaults.adapter = async config => {
+    if (config.url.endsWith('/csrf')) return csrfResponse(config)
+    return Promise.reject(new AxiosError('rejected', undefined, config, undefined, { config, status: 400, data: { outcome: 'csrf_rejected' }, headers: {}, statusText: '' }))
+  }
+  await h.state.logout(); assert.match(h.state.message.value, /退出失败/); assert.equal(h.navigations.length, 0)
+  // A response-less failure after the POST is indistinguishable from the prepared redirect
+  // chain leaving this origin (issue #70 D4): the UI lands on the fixed signed-out result.
+  h.authHttpClient.defaults.adapter = async config => {
+    if (config.url.endsWith('/csrf')) return csrfResponse(config)
+    throw new Error('offline')
+  }
+  h.state.message.value = ''
+  await h.state.logout(); assert.equal(h.state.session.value, null); assert.deepEqual(h.navigations, ['/?authResult=signedOut'])
 }))
 test('return URL is an exact whitelist and double click navigates once', () => setup(async h => {
   for (const hash of ['#search/other', '#docs/abc', '#detail/id/extra', '#detail/a?code=x', '#unknown', '#detail/%2f']) assert.equal(h.adminReturnUrl(hash), '/')
@@ -96,9 +111,9 @@ test('return URL is an exact whitelist and double click navigates once', () => s
 }))
 test('only fixed single auth result is displayed and removed', () => setup(async h => {
   h.authHttpClient.defaults.adapter = config => rejection(config, 401)
-  await h.state.initialize(); assert.match(h.state.message.value, /已取消登录/)
+  await h.state.initialize(); assert.match(h.state.message.value, /已取消登录或该账户没有管理员权限/)
   assert.equal(new URL(location.href).search, '')
-}, 'http://127.0.0.1/?authError=cancelled#docs'))
+}, 'http://127.0.0.1/?authError=notAdmin#docs'))
 test('duplicate or unknown result never echoes external text', () => setup(async h => {
   h.authHttpClient.defaults.adapter = config => rejection(config, 401)
   await h.state.initialize(); assert.doesNotMatch(h.state.message.value, /external/)
