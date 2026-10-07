@@ -23,7 +23,7 @@ namespace Doctheca.Tests.Hosting;
 /// converges to the resolved single value; exceptions and cancellation propagate untouched with
 /// the request scope released; the rejected raw input is never logged; the original request
 /// headers are never rewritten; the HttpContext accessor, the log scope, and the response
-/// header always point at the same value; and the outbound HttpClient does not propagate the
+/// header always point at the same value; and this unselected raw HttpClient does not propagate the
 /// correlation id (W3C trace propagation is a separate protocol and out of scope).
 /// </summary>
 public sealed partial class CorrelationPipelineSemanticsTests : IAsyncLifetime

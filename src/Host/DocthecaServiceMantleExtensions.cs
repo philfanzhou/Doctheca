@@ -49,7 +49,7 @@ public static class DocthecaServiceMantleExtensions
         return services
             .AddServiceMantle(
                 ServiceId.Parse(ServiceIdValue),
-                InstanceId.Parse($"{ServiceIdValue}-{Guid.NewGuid():N}"))
+                InstanceId.CreateRandom(ServiceId.Parse(ServiceIdValue)))
             .AddOpenTelemetryInstrumentation();
     }
 }
