@@ -23,6 +23,7 @@ internal sealed class OidcTestAuthority : HttpMessageHandler
     private readonly RSA _rsa = RSA.Create(2048);
     private readonly ConcurrentDictionary<string, (string Nonce, string Challenge, string Defect, string AccessDefect)> _codes = [];
     internal readonly ConcurrentQueue<Dictionary<string, string>> LogoutForms = [];
+    internal readonly ConcurrentQueue<string?> LogoutAuthorizationHeaders = [];
     internal string? LogoutFailure { get; set; }
     internal string? LogoutUrl { get; set; }
     internal bool HoldLogout { get; set; }
@@ -77,6 +78,7 @@ internal sealed class OidcTestAuthority : HttpMessageHandler
         {
             var logoutForm = QueryHelpers.ParseQuery(await request.Content!.ReadAsStringAsync(cancellationToken)).ToDictionary(p => p.Key, p => p.Value.ToString());
             LogoutForms.Enqueue(logoutForm);
+            LogoutAuthorizationHeaders.Enqueue(request.Headers.Authorization?.ToString());
             LogoutEntered.TrySetResult();
             if (HoldLogout) await LogoutRelease.Task.WaitAsync(cancellationToken);
             if (LogoutFailure == "500") return new(HttpStatusCode.InternalServerError);
@@ -123,7 +125,8 @@ internal sealed class OidcTestAuthority : HttpMessageHandler
     }
 
     // The access token is a real signed JWT (typ at+jwt, aud = the application id) because the
-    // host fully validates it and asserts role=admin before signing a session in.
+    // official client fully validates it — RS256, kid, exp/nbf/iat, and correlation — and then
+    // asserts role=admin through the pre-sign-in gate before a session is written.
     private string MintAccessToken(string defect)
     {
         var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
@@ -132,13 +135,15 @@ internal sealed class OidcTestAuthority : HttpMessageHandler
         {
             ["iss"] = defect == "access-issuer" ? "https://wrong.example.test" : AuthorityIssuer,
             ["aud"] = defect == "access-aud" ? "wrong-audience" : ClientId,
-            ["sub"] = "fake-subject", ["iat"] = now, ["exp"] = now + 900,
+            ["sub"] = "fake-subject", ["iat"] = now, ["nbf"] = now, ["exp"] = now + 900,
             ["unique_name"] = "fake-name"
         };
         payload["role"] = defect == "user" ? "user" : "admin";
         if (defect == "user") payload["role"] = "user";
         if (defect == "none") payload.Remove("role");
-        if (defect == "access-expired") { payload["iat"] = now - 900; payload["exp"] = now - 60; }
+        if (defect == "access-expired") { payload["iat"] = now - 900; payload["nbf"] = now - 900; payload["exp"] = now - 60; }
+        if (defect == "access-nbf-future") payload["nbf"] = now + 120;
+        if (defect == "nbf-missing") payload.Remove("nbf");
         if (defect == "sub-mismatch") payload["sub"] = "different-subject";
         if (defect == "sub-missing") payload.Remove("sub");
         if (defect == "sub-empty") payload["sub"] = "";

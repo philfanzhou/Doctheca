@@ -13,7 +13,7 @@ A self-hosted **document library & full-text retrieval** service for educational
 | **DocumentExport** | Export Markdown / HTML per document file or per parse |
 | **DocumentMetadataAnalysis** | Optional LLM analysis of parsed Markdown to auto-detect subject/grade and backfill; failure never blocks parsing |
 | **DocumentSearch** | OpenSearch full-text precise search with block-level indexing and subject/grade filters |
-| **AdminAuthentication** | SignaCore hosted admin login with `role=admin`, server sessions, CSRF and prepared logout; legacy Bearer compatibility |
+| **AdminAuthentication** | SignaCore hosted admin login via the official `SignaCore.Client.AspNetCore` client: `role=admin` pre-sign-in gate, server sessions, CSRF and prepared logout; legacy Bearer compatibility |
 
 ## Tech Stack
 
@@ -107,8 +107,10 @@ MIT — see [LICENSE](LICENSE).
 
 ### Hosted administration frontend
 
-The administration SPA uses SignaCore hosted login. Register exact callback/post-logout URIs
-and inject server-only Confidential client credentials; deploy API and SPA in the same image.
+The administration SPA uses SignaCore hosted login, driven by the official
+`SignaCore.Client.AspNetCore` package with a thin host adaptation layer. Register exact
+callback/post-logout URIs and inject server-only Confidential client credentials; deploy API and
+SPA in the same image.
 See [hosted login](docs/modules/AdminAuthentication/07-HostedLogin.md) and
 [Breaking changes and upgrade](docs/development/HostedLoginUpgrade.md). Old password endpoints
 return 410 and old token Cookies are ignored. Missing login configuration permits startup with

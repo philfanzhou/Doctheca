@@ -1,11 +1,11 @@
 using System.Net;
 using System.Text;
 using Doctheca.Host.Authentication;
-using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using SignaCore.Client.AspNetCore;
 using Xunit;
 
 namespace Doctheca.Tests.Integration;
@@ -41,7 +41,7 @@ public sealed partial class AdminOidcIntegrationTests
         using var probe = new HttpRequestMessage(HttpMethod.Get, "/admin/auth/session");
         probe.Headers.Add("Cookie", session + "; docthecaAccessToken=invalid; docthecaRefreshToken=invalid");
         Assert.Equal(HttpStatusCode.OK, (await client.SendAsync(probe)).StatusCode);
-        Assert.Equal(1, factory.Services.GetRequiredService<MemoryTicketStore>().Count);
+        Assert.Equal(1, Tickets(factory).Count);
     }
 
     [Theory]
@@ -62,7 +62,8 @@ public sealed partial class AdminOidcIntegrationTests
             ["Logging:LogLevel:Microsoft.AspNetCore"] = "Trace" };
         if (missing is not null) settings[missing] = "";
         using var factory = CreateFactory(settings: settings, configureTestServices: services => {
-            services.Configure<OpenIdConnectOptions>(AdminOidcConstants.OidcScheme, options => options.Backchannel = new HttpClient(authority, false));
+            services.AddHttpClient(SignaCoreHostedLoginDefaults.HttpClientName)
+                .ConfigurePrimaryHttpMessageHandler(() => authority);
             // Consume the real host's filters: a standalone factory bypasses the production
             // category protection and cannot verify its registration on unavailable paths.
             services.RemoveAll<ILoggerFactory>();
@@ -78,11 +79,17 @@ public sealed partial class AdminOidcIntegrationTests
             "fictitious-protocol-error-canary", "fictitious-protocol-description-canary" };
         var query = "?code=" + canaries[0] + "&state=" + canaries[1]
             + "&error=" + canaries[2] + "&error_description=" + canaries[3];
-        foreach (var path in new[] { AdminOidcConstants.CallbackPath, AdminOidcConstants.LogoutReturnPath })
+        // With the hosted login unavailable every entrypoint keeps the fixed 503 contract; with
+        // it complete the canary query never produces a sign-in: the callback fails closed and
+        // the logout return answers the package's fixed 400 page (issue #70).
+        using var callbackResponse = await client.GetAsync(AdminOidcConstants.CallbackPath + query);
+        Assert.Equal(missing is null ? HttpStatusCode.Redirect : HttpStatusCode.ServiceUnavailable, callbackResponse.StatusCode);
+        using var returnResponse = await client.GetAsync(AdminOidcConstants.LogoutReturnPath + query);
+        Assert.Equal(missing is not null ? HttpStatusCode.ServiceUnavailable
+            : HttpStatusCode.BadRequest, returnResponse.StatusCode);
+        if (missing is not null)
         {
-            using var response = await client.GetAsync(path + query);
-            Assert.Equal(missing is null ? HttpStatusCode.Redirect : HttpStatusCode.ServiceUnavailable, response.StatusCode);
-            if (missing is not null)
+            foreach (var response in new[] { callbackResponse, returnResponse })
             {
                 Assert.Equal("{\"success\":false,\"message\":\"Hosted sign-in is not configured.\"}", await response.Content.ReadAsStringAsync());
                 Assert.False(response.Headers.Contains("Set-Cookie"));
@@ -93,9 +100,11 @@ public sealed partial class AdminOidcIntegrationTests
         Assert.False(authority.DiscoveryEntered.Task.IsCompleted);
         Assert.Equal(0, authority.Redeems);
         Assert.Empty(authority.LogoutForms);
-        Assert.Equal(0, factory.Services.GetRequiredService<CompactStateDataFormat>().Count);
-        Assert.Equal(0, factory.Services.GetRequiredService<MemoryTicketStore>().Count);
-        Assert.Equal(0, factory.Services.GetRequiredService<LogoutReturnStore>().Count);
+        if (missing is null)
+        {
+            // The package is registered with a complete configuration: no protocol object exists.
+            Assert.Equal(0, Tickets(factory).Count);
+        }
     }
 
     [Theory]
@@ -112,7 +121,8 @@ public sealed partial class AdminOidcIntegrationTests
             ["IdentityService:Authority"] = OidcTestAuthority.Issuer, ["IdentityService:AppId"] = OidcTestAuthority.ClientId,
             ["IdentityService:AppSecret"] = OidcTestAuthority.Secret, [missing] = "" };
         using var factory = CreateFactory(settings: settings, configureTestServices: services => {
-            services.Configure<OpenIdConnectOptions>(AdminOidcConstants.OidcScheme, options => options.Backchannel = new HttpClient(authority, false));
+            services.AddHttpClient(SignaCoreHostedLoginDefaults.HttpClientName)
+                .ConfigurePrimaryHttpMessageHandler(() => authority);
             services.RemoveAll<ILoggerFactory>();
             services.AddSingleton<ILoggerFactory>(new LoggerFactory([logs]));
         });
@@ -129,8 +139,6 @@ public sealed partial class AdminOidcIntegrationTests
         Assert.False(authority.DiscoveryEntered.Task.IsCompleted);
         Assert.Equal(0, authority.Redeems);
         Assert.Empty(authority.LogoutForms);
-        Assert.Equal(0, factory.Services.GetRequiredService<CompactStateDataFormat>().Count);
-        Assert.Equal(0, factory.Services.GetRequiredService<MemoryTicketStore>().Count);
         Assert.Contains(logs.Messages, value => value.Contains("DOCTHECA_OIDC_NOT_CONFIGURED") && value.Contains(missing));
         Assert.DoesNotContain(logs.Messages, value => value.Contains(OidcTestAuthority.Secret));
     }

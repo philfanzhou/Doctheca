@@ -45,10 +45,10 @@ function readAuthResult(): void {
   const url = new URL(location.href)
   const errors = url.searchParams.getAll('authError')
   const results = url.searchParams.getAll('authResult')
+  // Hosted login merges a cancelled sign-in and a denied one into the same outcome (issue #70).
   const messages: Record<string, string> = {
-    cancelled: '已取消登录，请重试。', notAdmin: '该账户没有管理员权限。',
+    notAdmin: '已取消登录或该账户没有管理员权限。',
     signInFailed: '登录失败，请重试。', identityUnavailable: '认证服务暂时不可用，请稍后重试。',
-    logoutReturnFailed: '退出回跳失败，请重新登录。',
   }
   if (errors.length === 1 && results.length === 0) message.value = messages[errors[0]!] ?? ''
   else if (results.length === 1 && results[0] === 'signedOut' && errors.length === 0) message.value = '已退出登录。'
@@ -96,9 +96,15 @@ async function logout(): Promise<void> {
   csrfPromise = null
   logoutPromise = (async () => {
     try {
-      const result = await logoutRequest()
-      clearSession('本地已退出，SignaCore 会话可能仍然有效。')
-      if (result.logoutUrl) location.assign(result.logoutUrl)
+      const outcome = await logoutRequest()
+      if (outcome === 'localOnly') {
+        clearSession('本地已退出，SignaCore 会话可能仍然有效。')
+        return
+      }
+      // The prepared sign-out completed upstream; land on the fixed signed-out result path so
+      // the app reloads into its signed-out state (issue #70 D4).
+      clearSession('')
+      location.assign('/?authResult=signedOut')
     } catch {
       clearSession('退出失败，请重新认证。')
     }

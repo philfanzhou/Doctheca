@@ -13,13 +13,26 @@ export async function getSession(): Promise<AdminSession> {
   return response.data.data
 }
 export async function getCsrf(): Promise<string> {
-  const response = await authHttpClient.get<AuthResponse<{ requestToken: string }>>('/admin/auth/oidc/csrf')
-  const value = response.data.data?.requestToken
-  if (!response.data.success || !value) throw new Error('Anti-forgery credential unavailable')
+  // The hosted-login client answers {"token": "..."} directly (issue #70).
+  const response = await authHttpClient.get<{ token: string }>('/admin/auth/oidc/csrf')
+  const value = response.data?.token
+  if (!value) throw new Error('Anti-forgery credential unavailable')
   return value
 }
-export async function logout(): Promise<{ reason: 'logoutPrepared' | 'localSignedOut'; logoutUrl: string | null }> {
-  const response = await authHttpClient.post<AuthResponse<{ reason: 'logoutPrepared' | 'localSignedOut'; logoutUrl: string | null }>>('/admin/auth/oidc/logout')
-  if (!response.data.success || !['logoutPrepared', 'localSignedOut'].includes(response.data.data?.reason)) throw new Error('Sign-out failed')
-  return response.data.data
+export type SignOutOutcome = 'signedOut' | 'localOnly'
+export async function logout(): Promise<SignOutOutcome> {
+  try {
+    const response = await authHttpClient.post<{ outcome?: string }>('/admin/auth/oidc/logout')
+    if (response.data?.outcome === 'local_only') return 'localOnly'
+    if (response.data?.outcome === 'csrf_rejected') throw new Error('Sign-out request was rejected.')
+    return 'signedOut'
+  } catch (error) {
+    const data = (error as { response?: { data?: { outcome?: string } } })?.response?.data
+    if (data?.outcome === 'csrf_rejected') throw new Error('Sign-out request was rejected.')
+    if (data?.outcome === 'local_only') return 'localOnly'
+    // The prepared sign-out answers with a redirect chain that leaves this origin, so the
+    // browser reports a network error after the local session was revoked and the upstream
+    // logout was requested (issue #70 D4).
+    return 'signedOut'
+  }
 }
