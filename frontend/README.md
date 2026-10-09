@@ -55,7 +55,7 @@ npm run preview
    - 输入框使用 `width: 100%` 适配容器
    - 下拉菜单避免超出视口
 
-### 测试矩阵
+### Responsive testing requirements
 
 | 分局率 | 测试重点 |
 |--------|---------|

@@ -34,7 +34,7 @@ const {
     <div class="page-head">
       <div>
         <div class="page-title">文档管理</div>
-        <div class="page-sub">原始教材文件的上传与解析任务调度</div>
+        <div class="page-sub">上传原始文档并启动解析</div>
       </div>
     </div>
 

@@ -26,7 +26,7 @@ const expanded = ref(false)
 const detailCells = computed(() => [
   { label: 'BM25 相关度 (V1 Score)', value: props.row.score.toFixed(4), hint: 'OpenSearch _score，越大越相关' },
   {
-    label: '矿工 U 置信度 (mineruScore)',
+    label: 'MinerU 解析置信度 (mineruScore)',
     value: props.row.mineruScore !== undefined && props.row.mineruScore !== null ? props.row.mineruScore.toFixed(4) : '-',
     hint: 'VLM 后端解析置信度，0-1 区间',
   },
