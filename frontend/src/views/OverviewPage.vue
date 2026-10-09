@@ -111,7 +111,7 @@ onMounted(load)
     <div class="page-head">
       <div>
         <div class="page-title">文档库概览</div>
-        <div class="page-sub">教材文档解析管线与检索索引状态</div>
+        <div class="page-sub">文档解析和检索索引状态</div>
       </div>
       <div class="page-actions">
         <button class="btn" @click="navigate?.('docs')">
@@ -129,7 +129,7 @@ onMounted(load)
       <div class="card hoverable stat-card">
         <div class="stat-label"><span v-html="iconHtml('clock')"></span>解析中</div>
         <div class="stat-num" :data-count="stats.parsing">0</div>
-        <div class="stat-foot">含 pending 任务</div>
+        <div class="stat-foot">包含等待解析的任务</div>
       </div>
       <div class="card hoverable stat-card">
         <div class="stat-label"><span v-html="iconHtml('check')"></span>已解析</div>
@@ -168,7 +168,7 @@ onMounted(load)
       <div class="card">
         <div class="card-head">
           <div>
-            <div class="card-title">解析吞吐</div>
+            <div class="card-title">解析完成数量</div>
             <div class="card-sub">近 30 天完成的解析任务数</div>
           </div>
         </div>
@@ -180,7 +180,7 @@ onMounted(load)
       <div class="card-head">
         <div>
           <div class="card-title">最近上传</div>
-          <div class="card-sub">最新进入管线的文档</div>
+          <div class="card-sub">最近上传的文档</div>
         </div>
         <button class="btn btn-ghost btn-sm" @click="navigate?.('docs')">全部文档</button>
       </div>

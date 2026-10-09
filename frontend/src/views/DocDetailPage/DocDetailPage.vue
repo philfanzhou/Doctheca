@@ -49,7 +49,7 @@ const {
       <div class="card-head">
         <div>
           <div class="card-title">解析记录详情</div>
-          <div class="card-sub">每条记录的产物预览与导出</div>
+          <div class="card-sub">预览和导出每次解析的结果</div>
         </div>
       </div>
 

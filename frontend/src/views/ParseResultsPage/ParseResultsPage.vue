@@ -27,7 +27,7 @@ const {
     <div class="page-head">
       <div>
         <div class="page-title">解析结果</div>
-        <div class="page-sub">查看所有文档的解析记录与产物</div>
+        <div class="page-sub">查看所有文档的解析记录和结果</div>
       </div>
       <div class="page-actions">
         <button class="btn btn-ghost btn-sm" @click="loadParseList">
