@@ -14,20 +14,20 @@
     <!-- Official SignaCore hosted-login client (issue #70): owns the OIDC code flow, the
          server-side session tickets, the CSRF boundary, and the prepared logout. The host keeps
          only the thin adaptation layer in src/Host/Authentication. -->
-    <PackageReference Include="SignaCore.Client.AspNetCore" Version="0.1.13" />
-    <PackageReference Include="ServiceMantle.Diagnostics" Version="0.3.1-rc.1" />
+    <PackageReference Include="SignaCore.Client.AspNetCore" Version="0.1.16" />
+    <PackageReference Include="ServiceMantle.Diagnostics" Version="0.3.3" />
     <!-- PostgreSQL migration capabilities for the startup orchestration (issue #53): the
          session advisory lock provider (PostgreSqlMigrationLockProvider) and the target
          preparation provider (PostgreSqlDatabaseTargetPreparationProvider). Same 0.3.1-rc.1
          package version as every other ServiceMantle package in this host. -->
-    <PackageReference Include="ServiceMantle.Database.PostgreSql" Version="0.3.1-rc.1" />
-    <PackageReference Include="ServiceMantle.Persistence.Relational" Version="0.3.1-rc.1" />
+    <PackageReference Include="ServiceMantle.Database.PostgreSql" Version="0.3.3" />
+    <PackageReference Include="ServiceMantle.Persistence.Relational" Version="0.3.3" />
     <!-- All ServiceMantle packages share the official 0.3.1-rc.1 candidate, including the shared
          startup gate, receipt, health source, and existing logging / HTTP capabilities. -->
-    <PackageReference Include="ServiceMantle.Logging" Version="0.3.1-rc.1" />
+    <PackageReference Include="ServiceMantle.Logging" Version="0.3.3" />
     <!-- Must stay in lockstep with the Service layer's direct ServiceMantle.Web reference so
          the same assembly is never double-pinned. -->
-    <PackageReference Include="ServiceMantle.Web" Version="0.3.1-rc.1" />
+    <PackageReference Include="ServiceMantle.Web" Version="0.3.3" />
   </ItemGroup>
 
   <ItemGroup>
