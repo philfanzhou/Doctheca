@@ -13,6 +13,7 @@ export interface SearchFilters {
   parseId: string
   documentFileId: string
   hasImage: boolean
+  structureNodeId: string
 }
 
 export function useSearch() {
@@ -36,6 +37,7 @@ export function useSearch() {
     parseId: '',
     documentFileId: '',
     hasImage: false,
+    structureNodeId: '',
   })
 
   const hasMinerUFilter = computed(() => {
@@ -47,7 +49,8 @@ export function useSearch() {
       filters.value.textFormat ||
       filters.value.parseId ||
       filters.value.documentFileId ||
-      filters.value.hasImage
+      filters.value.hasImage ||
+      filters.value.structureNodeId
     )
   })
 
@@ -67,7 +70,8 @@ export function useSearch() {
         filters.value.textFormat || undefined,
         filters.value.parseId || undefined,
         filters.value.documentFileId || undefined,
-        filters.value.hasImage || undefined
+        filters.value.hasImage || undefined,
+        filters.value.structureNodeId || undefined
       )
       searchResults.value = response.results
       searchTotalCount.value = response.totalCount
@@ -99,6 +103,7 @@ export function useSearch() {
       parseId: '',
       documentFileId: '',
       hasImage: false,
+      structureNodeId: '',
     }
   }
 

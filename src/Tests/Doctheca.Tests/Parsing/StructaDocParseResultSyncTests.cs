@@ -103,6 +103,8 @@ public class StructaDocParseResultSyncTests
         first.TextContent.Should().Be("Body text");
         first.PageId.Should().Be(2); // 1-based page 3 → 0-based legacy convention
         first.SortIndex.Should().Be(0);
+        // The global StructaDoc order is stored as-is (issue #89); sort_index stays per page.
+        first.Sequence.Should().Be(0);
         first.TextLevel.Should().Be(-1);
 
         var second = inserted[1];
@@ -111,6 +113,7 @@ public class StructaDocParseResultSyncTests
         second.TextLevel.Should().Be(2);
         second.TextFormat.Should().Be("plain");
         second.SortIndex.Should().Be(1);
+        second.Sequence.Should().Be(1);
         second.MineruScore.Should().Be(0.87);
         // 0-1 normalized box scaled to the local 0-1000 convention.
         second.BboxX0.Should().BeApproximately(100f, 0.01f);
@@ -119,6 +122,8 @@ public class StructaDocParseResultSyncTests
 
         var third = inserted[2];
         third.PageId.Should().Be(0); // null page → single virtual page 0
+        third.Sequence.Should().Be(2);
+        third.SortIndex.Should().Be(0);
         third.ImageId.Should().NotBeNull();
         third.BlockType.Should().Be("image");
     }

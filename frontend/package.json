@@ -7,7 +7,7 @@
     "build": "vue-tsc -b && vite build",
     "preview": "vite preview",
     "test:e2e": "dotnet test ../src/Tests/Doctheca.Tests/Doctheca.Tests.csproj --configuration Release --filter FullyQualifiedName~AdminHostedFrontendTests",
-    "test": "node --test tests/admin-session.mjs"
+    "test": "node --test tests/admin-session.mjs tests/structure-tree.mjs"
   },
   "dependencies": {
     "@element-plus/icons-vue": "^2.3.1",

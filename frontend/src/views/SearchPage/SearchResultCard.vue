@@ -53,6 +53,7 @@ const detailCells = computed(() => [
     </div>
 
     <div class="result-doc">{{ props.row.documentName }}</div>
+    <div v-if="props.row.structurePath" class="td-sub result-structure">{{ props.row.structurePath }}</div>
     <div class="result-snippet" v-html="highlightText(props.row.associatedText, props.query)"></div>
 
     <div v-if="props.row.caption" class="td-sub" style="margin-top: 8px">

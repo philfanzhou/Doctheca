@@ -855,6 +855,9 @@ public sealed class ServiceMantleProblemDetailsTests : ServiceMantleIntegrationT
         public Task<bool> AttachStructaDocDocumentAsync(Guid id, Guid structaDocDocumentId) =>
             Task.FromResult(false);
 
+        public Task<bool> SetStructureDefinitionAsync(Guid id, Guid? structureDefinitionId) =>
+            Task.FromResult(false);
+
         public Task<bool> DeleteAsync(Guid id) => Task.FromResult(false);
     }
 

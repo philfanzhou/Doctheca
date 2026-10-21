@@ -1,5 +1,8 @@
 <script setup lang="ts">
+import { ref } from 'vue'
 import { iconHtml } from '../../utils/icons'
+import { useToast } from '../../composables/useToast'
+import { getApiMessage, reindexAllParses } from '../../services/structureApi'
 import StatusStrip from '../../components/StatusStrip.vue'
 import ParseResultsTable from './ParseResultsTable.vue'
 import { useParseResults } from './useParseResults'
@@ -20,6 +23,23 @@ const {
   handleDeleteParse,
   selectStrip,
 } = useParseResults()
+
+const { success: toastSuccess, error: toastError } = useToast()
+const reindexing = ref(false)
+
+// Repairs the search index (for example after an index mapping upgrade) for every parsed parse.
+async function handleReindexAll() {
+  reindexing.value = true
+  try {
+    const { data } = await reindexAllParses()
+    if (data.failed > 0) toastError(`已重建 ${data.indexed}/${data.total} 个解析的检索索引，${data.failed} 个失败`)
+    else toastSuccess(`已重建 ${data.total} 个解析的检索索引`)
+  } catch (e) {
+    toastError(getApiMessage(e, '重建检索索引失败'))
+  } finally {
+    reindexing.value = false
+  }
+}
 </script>
 
 <template>
@@ -30,6 +50,9 @@ const {
         <div class="page-sub">查看所有文档的解析记录和结果</div>
       </div>
       <div class="page-actions">
+        <button class="btn btn-ghost btn-sm" :disabled="reindexing" @click="handleReindexAll">
+          <span v-html="iconHtml('search')"></span>重建检索索引
+        </button>
         <button class="btn btn-ghost btn-sm" @click="loadParseList">
           <span v-html="iconHtml('refresh')"></span>刷新
         </button>

@@ -408,13 +408,13 @@ public sealed class ServiceMantleLoggingTests : ServiceMantleIntegrationTestBase
 
         public Task EnsureIndexAsync() => Task.CompletedTask;
 
-        public Task IndexParseBlocksAsync(
+        public Task<bool> IndexParseBlocksAsync(
             Guid parseId,
             Guid documentFileId,
             string fileName,
             string? subject,
             string? grade,
-            string? year) => Task.CompletedTask;
+            string? year) => Task.FromResult(true);
 
         public Task DeleteParseIndexAsync(Guid parseId) => Task.CompletedTask;
 

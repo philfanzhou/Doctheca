@@ -9,6 +9,7 @@ This table stores the **structured block rows** of parse artifacts. Legacy data 
 - Query by type (`WHERE block_type='equation'`)
 - Full-text search (`text_content` GIN index)
 - Fetch in page order (`ORDER BY page_id, sort_index`)
+- Fetch in global reading order (`ORDER BY sequence`, issue #89), which structure node ranges refer to
 
 ## Field Inventory
 
@@ -17,7 +18,8 @@ This table stores the **structured block rows** of parse artifacts. Legacy data 
 | `id` | `UUID` | PRIMARY KEY | | Block unique identifier |
 | `parse_id` | `UUID` | NOT NULL, FK → `document_parses(id)` ON DELETE CASCADE | | Associated parse |
 | `page_id` | `INT` | NOT NULL | | Owning page (0-indexed) |
-| `sort_index` | `INT` | NOT NULL | | Reading order within the page |
+| `sort_index` | `INT` | NOT NULL | | Reading order within the page (a per-page counter) |
+| `sequence` | `INT` | NULL, UNIQUE with `parse_id` | | Global 0-based reading order within the parse (StructaDoc `sequence`). Nullable so the previous image keeps working; every row is numbered by the migration and by every sync |
 | `block_type` | `VARCHAR(20)` | NOT NULL | | Type (common legacy values: `text` / `image` / `equation` / `code` / `table` / `list`; new records use StructaDoc canonical types: `title` / `text` / `list` / `table` / `formula` / `image` / `code` / `header` / `footer` / `footnote` / `unknown`; actual values are determined by the parse artifacts, and consumers must tolerate new values) |
 | `text_content` | `TEXT` | NULL | | Text/HTML/LaTeX (block body) |
 | `image_id` | `UUID` | NULL, FK → `document_parse_images(id)` ON DELETE SET NULL | | Only set when `block_type='image'` |
@@ -41,6 +43,7 @@ This table stores the **structured block rows** of parse artifacts. Legacy data 
 | `IX_document_parse_blocks_parse_id_page_id_sort_index` | `(parse_id, page_id, sort_index)` | Read in page order |
 | `IX_document_parse_blocks_block_type` | `block_type` | Filter by type |
 | `IX_document_parse_blocks_image_id` | `image_id` | Query by image association |
+| `IX_document_parse_blocks_parse_id_sequence` | `(parse_id, sequence)` UNIQUE | Global reading order; NULLs never collide |
 
 ## Key Design Points
 
@@ -64,6 +67,7 @@ Delete-then-insert INSERT INTO document_parse_blocks
      parse_id       = current parse ID
      page_id        = block.pageNumber - 1 (null → 0)
      sort_index     = incrementing index within the page
+     sequence       = block.sequence (global reading order)
      block_type     = block.type
      text_content   = block.content
      block_data     = normalized JSON of the block
@@ -82,3 +86,4 @@ Delete-then-insert INSERT INTO document_parse_blocks
 
 - Has a one-to-one relationship with `document_parse_images` when `block_type='image'`, but it is not a hard DB foreign-key constraint (soft reference via `image_id`)
 - Deleting a `document_parse` automatically deletes this table's rows via CASCADE
+- **`sequence` backfill** (migration `20261021094612_AddDocumentStructure`): a parse whose rows all carry a distinct non-negative integer `block_data.sequence` keeps those values; every other parse (legacy MinerU rows, missing or duplicated values) is numbered `0..n-1` by `(page_id, sort_index, id)`. No other column changes.

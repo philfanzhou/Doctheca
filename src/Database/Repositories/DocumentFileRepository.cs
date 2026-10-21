@@ -87,6 +87,18 @@ public class DocumentFileRepository : IDocumentFileRepository
         return true;
     }
 
+    public async Task<bool> SetStructureDefinitionAsync(Guid id, Guid? structureDefinitionId)
+    {
+        var entity = await _context.DocumentFiles.FindAsync(id);
+        if (entity == null) return false;
+
+        entity.StructureDefinitionId = structureDefinitionId;
+        entity.UpdatedAt = DateTimeOffset.UtcNow;
+
+        await _context.SaveChangesAsync();
+        return true;
+    }
+
     public async Task<bool> DeleteAsync(Guid id)
     {
         var entity = await _context.DocumentFiles.FindAsync(id);
@@ -107,6 +119,7 @@ public class DocumentFileRepository : IDocumentFileRepository
         Subject = model.Subject,
         Grade = model.Grade,
         Year = model.Year,
+        StructureDefinitionId = model.StructureDefinitionId,
         CreatedAt = model.CreatedAt,
         UpdatedAt = model.UpdatedAt,
     };
@@ -122,6 +135,7 @@ public class DocumentFileRepository : IDocumentFileRepository
         Subject = entity.Subject,
         Grade = entity.Grade,
         Year = entity.Year,
+        StructureDefinitionId = entity.StructureDefinitionId,
         CreatedAt = entity.CreatedAt,
         UpdatedAt = entity.UpdatedAt,
     };

@@ -432,4 +432,25 @@ public class OpenSearchResponseParserTests
         results[0].Bbox![2].Should().Be(0f);  // x1 missing → 0
         results[0].Bbox![3].Should().Be(600.0f);
     }
+
+    // ==================== ParseSearchResponse — Structure path (issue #89) ====================
+
+    [Fact]
+    public void ParseSearchResponse_ReadsStructurePath_AndLeavesItNullWhenAbsent()
+    {
+        var responseJson = @"{
+            ""hits"": {
+                ""total"": { ""value"": 2 },
+                ""hits"": [
+                    { ""_score"": 2.0, ""_source"": { ""text"": ""a"", ""block_id"": ""b1"", ""structure_path"": ""Unit 3 > Section B"" }, ""sort"": [2.0, ""b1""] },
+                    { ""_score"": 1.0, ""_source"": { ""text"": ""b"", ""block_id"": ""b2"" }, ""sort"": [1.0, ""b2""] }
+                ]
+            }
+        }";
+
+        var (results, _, _) = OpenSearchResponseParser.ParseSearchResponse(responseJson, phrase: false, pageSize: 10);
+
+        results[0].StructurePath.Should().Be("Unit 3 > Section B");
+        results[1].StructurePath.Should().BeNull();
+    }
 }

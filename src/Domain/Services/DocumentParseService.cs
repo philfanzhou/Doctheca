@@ -87,6 +87,11 @@ public class DocumentParseService : IDocumentParseService
         return await _parseRepository.GetByStatusAsync(DocumentParseStatus.Pending);
     }
 
+    public async Task<List<DocumentParseModel>> GetByStatusAsync(string status)
+    {
+        return await _parseRepository.GetByStatusAsync(status);
+    }
+
     public async Task<List<DocumentParseModel>> GetActiveJobsAsync()
     {
         return await _parseRepository.GetByStatusesAsync([DocumentParseStatus.Pending, DocumentParseStatus.Parsing]);

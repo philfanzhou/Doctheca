@@ -52,12 +52,42 @@ public class DocumentParseBlockRepository : IDocumentParseBlockRepository
             .ToListAsync();
     }
 
+    public async Task<List<DocumentParseBlockModel>> GetPageBySequenceAsync(
+        Guid parseId, int? afterSequence, int limit, int? fromSequence = null, int? toSequence = null)
+    {
+        var query = _context.DocumentParseBlocks
+            .AsNoTracking()
+            .Where(b => b.ParseId == parseId && b.Sequence != null);
+        if (afterSequence.HasValue)
+            query = query.Where(b => b.Sequence > afterSequence.Value);
+        if (fromSequence.HasValue)
+            query = query.Where(b => b.Sequence >= fromSequence.Value);
+        if (toSequence.HasValue)
+            query = query.Where(b => b.Sequence <= toSequence.Value);
+
+        return await query
+            .OrderBy(b => b.Sequence)
+            .Take(limit)
+            .Select(b => MapToModel(b))
+            .ToListAsync();
+    }
+
+    public async Task<HashSet<int>> GetSequencesAsync(Guid parseId)
+    {
+        var sequences = await _context.DocumentParseBlocks
+            .Where(b => b.ParseId == parseId && b.Sequence != null)
+            .Select(b => b.Sequence!.Value)
+            .ToListAsync();
+        return [.. sequences];
+    }
+
     private static DocumentParseBlockEntity MapToEntity(DocumentParseBlockModel model) => new()
     {
         Id = model.Id,
         ParseId = model.ParseId,
         PageId = model.PageId,
         SortIndex = model.SortIndex,
+        Sequence = model.Sequence,
         BlockType = model.BlockType,
         TextContent = model.TextContent,
         ImageId = model.ImageId,
@@ -81,6 +111,7 @@ public class DocumentParseBlockRepository : IDocumentParseBlockRepository
         ParseId = entity.ParseId,
         PageId = entity.PageId,
         SortIndex = entity.SortIndex,
+        Sequence = entity.Sequence,
         BlockType = entity.BlockType,
         TextContent = entity.TextContent,
         ImageId = entity.ImageId,

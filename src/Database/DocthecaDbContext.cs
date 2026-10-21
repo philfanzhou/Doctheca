@@ -13,6 +13,9 @@ public class DocthecaDbContext : DbContext
     public DbSet<DocumentParseEntity> DocumentParses { get; set; } = null!;
     public DbSet<DocumentParseImageEntity> DocumentParseImages { get; set; } = null!;
     public DbSet<DocumentParseBlockEntity> DocumentParseBlocks { get; set; } = null!;
+    public DbSet<StructureDefinitionEntity> StructureDefinitions { get; set; } = null!;
+    public DbSet<StructureLevelEntity> StructureLevels { get; set; } = null!;
+    public DbSet<DocumentStructureNodeEntity> DocumentStructureNodes { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -27,6 +30,13 @@ public class DocthecaDbContext : DbContext
 
             // Trigger to auto-update updated_at on row modification
             entity.ToTable(tb => tb.HasTrigger("set_document_files_updated_at"));
+
+            entity.HasIndex(e => e.StructureDefinitionId);
+            // Deleting a definition that no marked node uses clears the documents' choice.
+            entity.HasOne<StructureDefinitionEntity>()
+                .WithMany()
+                .HasForeignKey(e => e.StructureDefinitionId)
+                .OnDelete(DeleteBehavior.SetNull);
         });
 
         modelBuilder.Entity<DocumentParseEntity>(entity =>
@@ -61,6 +71,8 @@ public class DocthecaDbContext : DbContext
             entity.HasIndex(e => new { e.ParseId, e.PageId, e.SortIndex });
             entity.HasIndex(e => e.BlockType);
             entity.HasIndex(e => e.ImageId);
+            // Global reading order; NULLs (not yet numbered) never collide.
+            entity.HasIndex(e => new { e.ParseId, e.Sequence }).IsUnique();
 
             entity.Property(e => e.BlockData).HasColumnType("jsonb");
 
@@ -73,6 +85,49 @@ public class DocthecaDbContext : DbContext
                 .WithMany()
                 .HasForeignKey(e => e.ImageId)
                 .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        modelBuilder.Entity<StructureDefinitionEntity>(entity =>
+        {
+            entity.HasMany(e => e.Levels)
+                .WithOne(e => e.Definition)
+                .HasForeignKey(e => e.DefinitionId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<StructureLevelEntity>(entity =>
+        {
+            entity.HasIndex(e => e.DefinitionId);
+            entity.HasIndex(e => e.ParentLevelId);
+
+            // A level with child levels is removed only after its children (service rule).
+            entity.HasOne(e => e.ParentLevel)
+                .WithMany()
+                .HasForeignKey(e => e.ParentLevelId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<DocumentStructureNodeEntity>(entity =>
+        {
+            entity.HasIndex(e => e.ParseId);
+            entity.HasIndex(e => e.LevelId);
+            entity.HasIndex(e => e.ParentId);
+
+            entity.HasOne(e => e.Parse)
+                .WithMany()
+                .HasForeignKey(e => e.ParseId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // Levels used by marked nodes cannot be deleted (the API answers 409 first).
+            entity.HasOne(e => e.Level)
+                .WithMany()
+                .HasForeignKey(e => e.LevelId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(e => e.Parent)
+                .WithMany()
+                .HasForeignKey(e => e.ParentId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
     }
 }

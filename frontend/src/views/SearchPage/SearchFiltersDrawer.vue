@@ -118,6 +118,15 @@ function updateField<K extends keyof SearchFilters>(key: K, value: SearchFilters
         />
       </div>
       <div class="filter-field">
+        <label class="filter-label">结构节点 ID (structureNodeId)</label>
+        <el-input
+          :model-value="props.filters.structureNodeId"
+          placeholder="Guid（包含其全部子节点）"
+          clearable
+          @update:model-value="updateField('structureNodeId', $event)"
+        />
+      </div>
+      <div class="filter-field">
         <label class="filter-label">仅含图片块 (hasImage)</label>
         <el-switch
           :model-value="props.filters.hasImage"

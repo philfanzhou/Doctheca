@@ -268,4 +268,30 @@ public class OpenSearchQueryBuilderTests
         json.Should().Contain("\"document_file_id\"");
         json.Should().Contain("\"has_image\"");
     }
+
+    // ==================== Structure node filter (issue #89) ====================
+
+    [Fact]
+    public void BuildSearchBody_WithStructureNodeId_AddsTermOnStructureNodeIds()
+    {
+        var nodeId = Guid.NewGuid();
+        var body = OpenSearchQueryBuilder.BuildSearchBody(
+            "test", phrase: false, new SearchFilterModel { StructureNodeId = nodeId }, pageSize: 10, pageToken: null);
+
+        var json = JsonSerializer.Serialize(body);
+        json.Should().Contain("\"structure_node_ids\":{\"value\":\"" + nodeId + "\"}");
+        json.Should().Contain("\"filter\"");
+    }
+
+    [Fact]
+    public void BuildSearchBody_WithoutStructureNodeId_IsUnchanged()
+    {
+        var withoutFilter = JsonSerializer.Serialize(OpenSearchQueryBuilder.BuildSearchBody(
+            "test", phrase: false, filter: null, pageSize: 10, pageToken: null));
+        var withEmptyFilter = JsonSerializer.Serialize(OpenSearchQueryBuilder.BuildSearchBody(
+            "test", phrase: false, new SearchFilterModel(), pageSize: 10, pageToken: null));
+
+        withoutFilter.Should().NotContain("structure_node_ids");
+        withEmptyFilter.Should().Be(withoutFilter);
+    }
 }

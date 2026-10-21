@@ -12,8 +12,10 @@ public interface ISearchIndexService
     /// <summary>
     /// Index all blocks of a parse to OpenSearch. Called after MinerU parse completes.
     /// Idempotent: re-indexing overwrites existing documents (same _id = block_{blockId}).
+    /// Each document also carries the block's hand-marked structure (structure_node_ids, structure_path).
+    /// Returns false when OpenSearch rejected the write (logged as a warning, never thrown for HTTP failures).
     /// </summary>
-    Task IndexParseBlocksAsync(Guid parseId, Guid documentFileId, string fileName, string? subject, string? grade, string? year);
+    Task<bool> IndexParseBlocksAsync(Guid parseId, Guid documentFileId, string fileName, string? subject, string? grade, string? year);
 
     /// <summary>
     /// Delete all OpenSearch documents for a parse. Called when parse result is deleted.

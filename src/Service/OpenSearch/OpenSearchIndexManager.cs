@@ -9,10 +9,12 @@ internal sealed class OpenSearchIndexManager
 {
     /// <summary>
     /// Current index mapping version. Increment when BuildIndexBody mapping changes.
-    /// v1 = initial V1 search; v2 = minerU Gen-2 fields (x0/y0/x1/y1/score/has_image/sub_type/text_level/text_format/caption/_meta.block_data).
-    /// On startup, if the existing index has a missing or lower mapping_version, the index is deleted and recreated.
+    /// v1 = initial V1 search; v2 = minerU Gen-2 fields (x0/y0/x1/y1/score/has_image/sub_type/text_level/text_format/caption/_meta.block_data);
+    /// v3 = hand-marked document structure (structure_node_ids/structure_path, issue #89).
+    /// On startup, if the existing index has a missing or lower mapping_version, the index is deleted and recreated;
+    /// parses are then re-indexed through POST /admin/search-index/reindex.
     /// </summary>
-    internal const int CurrentMappingVersion = 2;
+    internal const int CurrentMappingVersion = 3;
 
     private readonly OpenSearchLowLevelClient _client;
     private readonly string _indexName;
@@ -111,6 +113,10 @@ internal sealed class OpenSearchIndexManager
                             keyword = new { type = "keyword", ignore_above = 256 }
                         }
                     },
+                    // [v3] hand-marked structure: the block's node and all its ancestors, and the
+                    // readable path of node names; absent when no node contains the block.
+                    structure_node_ids = new { type = "keyword" },
+                    structure_path = new { type = "keyword", ignore_above = 1024 },
                     _meta = new
                     {
                         type = "object",

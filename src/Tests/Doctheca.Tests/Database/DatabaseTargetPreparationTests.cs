@@ -104,7 +104,7 @@ public sealed class DatabaseTargetPreparationTests(PostgreSqlMigrationFixture fi
             // The migrated tables belong to this synthetic login and are removed by fixture cleanup.
         }
         using var context = fixture.CreateContext(database);
-        (await MigrationGoldenStates.ReadAppliedHistoryAsync(context)).Should().Equal(MigrationGoldenStates.InitialId);
+        (await MigrationGoldenStates.ReadAppliedHistoryAsync(context)).Should().Equal(MigrationGoldenStates.AllIds);
     }
 
     [Theory]
@@ -135,7 +135,7 @@ public sealed class DatabaseTargetPreparationTests(PostgreSqlMigrationFixture fi
             first.Succeeded.Should().BeTrue();
             first.ExecutorWasCalled.Should().BeTrue();
             using var context = fixture.CreateContext(missing);
-            (await MigrationGoldenStates.ReadAppliedHistoryAsync(context)).Should().Equal(MigrationGoldenStates.InitialId);
+            (await MigrationGoldenStates.ReadAppliedHistoryAsync(context)).Should().Equal(MigrationGoldenStates.AllIds);
             var second = await RunAsync(fixture.GetConnectionString(missing), value);
             second.Succeeded.Should().BeTrue();
             second.ExecutorWasCalled.Should().BeFalse();

@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Logging;
 using Doctheca.Domain.Repositories;
 using Doctheca.Domain.Services;
+using Doctheca.Domain.Services.Structure;
 using Doctheca.Service.Endpoints.Models;
 
 namespace Doctheca.Service;
@@ -22,6 +23,7 @@ internal static class DocumentFileMetadataEndpoint
         Guid id,
         HttpRequest request,
         IDocumentFileService fileService,
+        IDocumentStructureService structureService,
         ISearchIndexService searchIndexService,
         [FromServices] ILoggerFactory loggerFactory)
     {
@@ -41,6 +43,28 @@ internal static class DocumentFileMetadataEndpoint
         if (body == null)
         {
             return Results.BadRequest(new { success = false, message = "Request body is required" });
+        }
+
+        // The structure definition is validated and applied first, so a rejected choice leaves
+        // every other metadata field untouched.
+        if (body.StructureDefinitionId != null)
+        {
+            Guid? definitionId = null;
+            if (body.StructureDefinitionId.Length > 0)
+            {
+                if (!Guid.TryParse(body.StructureDefinitionId, out var parsed))
+                {
+                    return StructureHttpResults.Invalid(
+                        [new StructureFieldError("structureDefinitionId", "must be a structure definition id or an empty string")]);
+                }
+                definitionId = parsed;
+            }
+
+            var assigned = await structureService.SetDocumentDefinitionAsync(id, definitionId);
+            if (assigned.Status != StructureResultStatus.Ok)
+            {
+                return StructureHttpResults.From(assigned, _ => new { });
+            }
         }
 
         var updated = await fileService.UpdateMetadataAsync(id, body.Subject, body.Grade, body.Year);
@@ -69,6 +93,7 @@ internal static class DocumentFileMetadataEndpoint
                 subject = updated.Subject,
                 grade = updated.Grade,
                 year = updated.Year,
+                structureDefinitionId = updated.StructureDefinitionId?.ToString(),
                 updatedAt = updated.UpdatedAt
             }
         });

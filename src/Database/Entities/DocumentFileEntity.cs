@@ -42,6 +42,10 @@ public class DocumentFileEntity
     [MaxLength(10)]
     public string? Year { get; set; }
 
+    /// <summary>The structure definition an administrator chose for this document (nullable).</summary>
+    [Column("structure_definition_id")]
+    public Guid? StructureDefinitionId { get; set; }
+
     [Column("created_at")]
     [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
     public DateTimeOffset CreatedAt { get; set; }

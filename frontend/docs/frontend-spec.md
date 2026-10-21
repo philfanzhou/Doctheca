@@ -62,9 +62,9 @@ The Doctheca admin console logs in with the SignaCore bootstrap administrator ac
 └────────────────────────────────────────────┘
 ```
 
-- **Routing**: hash routing (`#overview` / `#docs` / `#detail/:id` / `#results` / `#search`), parsed by `App.vue`; vue-router is not introduced
+- **Routing**: hash routing (`#overview` / `#docs` / `#detail/:id` / `#results` / `#search` / `#structures` / `#structure/:parseId`), parsed by `App.vue`; vue-router is not introduced
 - **View-switch transition**: on switch the `#view` container gets a `.leaving` class that triggers a 150ms blur + translate transition, then the content is swapped when it ends
-- **Nav items**: Overview, Doc Management, Parse Results, Search Test (4 items); in the `detail` state the sidebar highlights "Doc Management"
+- **Nav items**: Overview, Doc Management, Parse Results, Search Test, Structure Definitions (5 items); in the `detail` and `structure` states the sidebar highlights "Doc Management"
 - **Sidebar indicator**: `Sidebar.vue` has a built-in `.nav-indicator` slider that follows the active switch with a 0.22s spring translateY
 - **Mobile**: when `window.innerWidth < 900`, the Topbar shows a hamburger button and the sidebar turns into a drawer
 - **provide/inject**: the three functions `navigate` / `openDocDetail` / `backToDocs` are provided to descendant views
@@ -128,6 +128,24 @@ The Doctheca admin console logs in with the SignaCore bootstrap administrator ac
 - **Business logic preserved**: `client.searchTest(query, phrase, 20, undefined, ...8 minerU parameters)`, with the same call order as the original ParseResultsPage
 - **Keyword highlighting**: `highlightText(text, query)` wraps hits in `<mark>`; matched text is rendered via `v-html` and safely escaped with `escapeHtml`
 - **Directory structure**: logic extracted into `views/SearchPage/useSearch.ts` + `searchFormatters.ts`; subcomponents are `SearchBar.vue` / `SearchFiltersDrawer.vue` / `SearchResultCard.vue`
+- **Structure filter** (issue #89): the drawer also accepts `structureNodeId`; result cards show `structurePath` under the document name when present
+
+### 4.7 StructureDefinitionsPage (Structure Definitions, issue #89)
+
+- **Route**: `#structures` (sidebar item 结构定义)
+- **Data source**: `services/structureApi.ts` (`listStructureDefinitions / createStructureDefinition / updateStructureDefinition / deleteStructureDefinition`)
+- **Page structure**: definition list (levels shown as an indented hierarchy) + editor card (name, level rows with name / parent select / move up / move down / delete, hierarchy preview); level ids are generated client-side with `crypto.getRandomValues` so new levels can reference each other as parents
+- **Errors**: 400 field errors are shown under the matching row; 409 on delete explains that marked nodes use the definition
+
+### 4.8 StructureEditorPage (Structure Marking, issue #89)
+
+- **Route**: `#structure/:parseId`, reached from the 结构标注 button of a parsed parse record; the sidebar highlights 文档管理
+- **Data source**: `getParseStructure(parseId)` + `getAllParseBlocks(parseId)` (pages of 1000 by `afterSequence`), `saveParseStructure`, `reindexParse`
+- **Layout**: sticky structure-tree panel (level badge, range link that scrolls to the node, editable name, 选中范围 / 用选区更新 / delete) + continuous block list with a sticky selection bar
+- **Selection**: click = start, shift-click = end, mouse drag = range, Esc = clear; the level select only offers the levels allowed at that position (`utils/structureTree.ts`); the name is pre-filled from the first selected block
+- **Rendering**: headings by `heading-N` subtype, images through the parse image proxy (`loading="lazy"`), tables through `utils/blockContent.ts` (inert `DOMParser`, text-only cells — table HTML is never inserted via `v-html`)
+- **Save**: sends the whole tree (siblings ordered by start); 400 field paths are mapped back to node names; unsaved changes show a 未保存 badge and guard page unload
+- **Directory structure**: `views/StructureEditorPage/StructureEditorPage.vue`, pure logic in `utils/structureTree.ts` (tested by `tests/structure-tree.mjs`)
 
 ## 5. Style Standards
 

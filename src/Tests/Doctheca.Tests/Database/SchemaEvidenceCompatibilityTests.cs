@@ -78,8 +78,10 @@ public sealed class SchemaEvidenceCompatibilityTests(PostgreSqlMigrationFixture 
         {
             await executor.ExecuteAsync();
             Assert.Equal(DocthecaMigrationExecutor.DatabaseState.CurrentVersionCompatible, await executor.InspectAsync());
-            Assert.Equal(new[] { MigrationGoldenStates.InitialId }, await MigrationGoldenStates.ReadAppliedHistoryAsync(context));
-            if (!backfill) Assert.Equal(beforeColumns, await MigrationGoldenStates.ReadColumnShapeAsync(context));
+            Assert.Equal(MigrationGoldenStates.AllIds, await MigrationGoldenStates.ReadAppliedHistoryAsync(context));
+            if (!backfill) Assert.Equal(beforeColumns, current
+                ? await MigrationGoldenStates.ReadColumnShapeAsync(context)
+                : MigrationGoldenStates.ExcludingStructureMigration(await MigrationGoldenStates.ReadColumnShapeAsync(context)));
         }
         // Inspect and refusal do not synthesize or mutate history.
         Assert.Equal(current || !reject, await MigrationGoldenStates.ScalarAsync<bool>(context, "SELECT to_regclass('public.\"__EFMigrationsHistory\"') IS NOT NULL"));
@@ -94,7 +96,7 @@ public sealed class SchemaEvidenceCompatibilityTests(PostgreSqlMigrationFixture 
         await MigrationGoldenStates.ExecuteRawAsync(context, "INSERT INTO \"__EFMigrationsHistory\" VALUES ('future-version', '1'); CREATE TABLE unrelated(value text); CREATE INDEX a ON unrelated(value); CREATE INDEX b ON unrelated(value)");
         Assert.Equal(DocthecaMigrationExecutor.DatabaseState.VersionTooNew, await executor.InspectAsync());
         await Assert.ThrowsAsync<InvalidOperationException>(() => executor.ExecuteAsync());
-        Assert.Equal(2, (await MigrationGoldenStates.ReadAppliedHistoryAsync(context)).Count);
+        Assert.Equal(DocthecaMigrationExecutor.KnownMigrationIds.Count + 1, (await MigrationGoldenStates.ReadAppliedHistoryAsync(context)).Count);
     }
 
     [Fact]
@@ -108,7 +110,7 @@ public sealed class SchemaEvidenceCompatibilityTests(PostgreSqlMigrationFixture 
             "DROP TABLE document_parse_blocks; CREATE TABLE document_parse_blocks()");
         Assert.Equal(DocthecaMigrationExecutor.DatabaseState.VersionTooNew, await executor.InspectAsync());
         await Assert.ThrowsAsync<InvalidOperationException>(() => executor.ExecuteAsync());
-        Assert.Equal(2, (await MigrationGoldenStates.ReadAppliedHistoryAsync(context)).Count);
+        Assert.Equal(DocthecaMigrationExecutor.KnownMigrationIds.Count + 1, (await MigrationGoldenStates.ReadAppliedHistoryAsync(context)).Count);
     }
 
     [Fact]

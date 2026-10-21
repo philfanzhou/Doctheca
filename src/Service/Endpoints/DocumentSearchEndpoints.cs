@@ -41,7 +41,8 @@ public static class DocumentSearchEndpoints
         [FromQuery] string? textFormat = null,
         [FromQuery] Guid? parseId = null,
         [FromQuery] Guid? documentFileId = null,
-        [FromQuery] bool? hasImage = null)
+        [FromQuery] bool? hasImage = null,
+        [FromQuery] Guid? structureNodeId = null)
     {
         var logger = loggerFactory.CreateLogger(nameof(DocumentSearchEndpoints));
 
@@ -59,7 +60,7 @@ public static class DocumentSearchEndpoints
             || !string.IsNullOrWhiteSpace(year) || !string.IsNullOrWhiteSpace(documentTitle);
         var hasMinerUFilter = !string.IsNullOrWhiteSpace(blockType) || !string.IsNullOrWhiteSpace(blockSubType)
             || pageNumber.HasValue || textLevel.HasValue || !string.IsNullOrWhiteSpace(textFormat)
-            || parseId.HasValue || documentFileId.HasValue || hasImage.HasValue;
+            || parseId.HasValue || documentFileId.HasValue || hasImage.HasValue || structureNodeId.HasValue;
 
         if (hasV1Filter || hasMinerUFilter)
         {
@@ -77,7 +78,8 @@ public static class DocumentSearchEndpoints
                 TextFormat = textFormat,
                 ParseId = parseId,
                 DocumentFileId = documentFileId,
-                HasImage = hasImage
+                HasImage = hasImage,
+                StructureNodeId = structureNodeId
             };
         }
 
@@ -109,7 +111,9 @@ public static class DocumentSearchEndpoints
                 subType = r.SubType,
                 textLevel = r.TextLevel,
                 textFormat = r.TextFormat,
-                caption = r.Caption
+                caption = r.Caption,
+                // Hand-marked structure path (null when the block lies outside every marked node)
+                structurePath = r.StructurePath
             }),
             totalCount,
             nextPageToken = nextToken ?? string.Empty

@@ -14,7 +14,9 @@ export async function searchTest(
   textFormat?: string,
   parseId?: string,
   documentFileId?: string,
-  hasImage?: boolean
+  hasImage?: boolean,
+  // Hand-marked structure node: matches the node and all its descendants
+  structureNodeId?: string
 ): Promise<{ results: SearchResult[]; totalCount: number; nextPageToken: string }> {
   const params: Record<string, unknown> = { query, phrase, pageSize }
   if (pageToken) params.pageToken = pageToken
@@ -27,6 +29,7 @@ export async function searchTest(
   if (parseId) params.parseId = parseId
   if (documentFileId) params.documentFileId = documentFileId
   if (hasImage !== undefined && hasImage !== null) params.hasImage = hasImage
+  if (structureNodeId) params.structureNodeId = structureNodeId
   const response = await httpClient.get('/admin/documents/search', { params })
   return response.data
 }
