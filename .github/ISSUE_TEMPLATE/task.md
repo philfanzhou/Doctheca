@@ -1,46 +1,46 @@
 ---
-name: 任务
-about: 一个可独立合并的改动。
+name: Task
+about: A change that can be merged on its own.
 title: ''
 labels: 'type: task'
 assignees: ''
 ---
 
 <!--
-正文和标题用中文。标题建议使用：[模块] 简明动作。
+Write the title and body in English. Suggested title format: [Module] Concise action.
 -->
 
-## 背景与目标
+## Background and goal
 
-描述现象、触发条件和影响。有复现步骤、失败输出、受影响的端点、配置或部署方式就写上。
+Describe the symptom, what triggers it, and its impact. Include reproduction steps, failing output, and the affected endpoints, configuration, or deployment setup when you have them.
 
-相关代码/文档：`src/...`、`frontend/...`、`docs/...`
+Related code/docs: `src/...`, `frontend/...`, `docs/...`
 
-## 必须保持的接口和行为
+## Interfaces and behavior that must not change
 
-- 写清 HTTP 路由、请求/响应 JSON、错误码、JWT claims 与授权规则、数据库表、migration、对象存储路径、配置/Consul 键或部署中必须固定的部分。
-- 若修复需要覆盖多条路径，说明各条处理路径都必须满足的要求，以及应在哪个共同调用的函数或模块中修复。
+- State the HTTP routes, request/response JSON, error codes, JWT claims and authorization rules, database tables, migrations, object storage paths, configuration/Consul keys, or deployment details that must stay fixed.
+- If the fix has to cover several code paths, state what every path must satisfy and which shared function or module the fix belongs in.
 
-## 范围
+## Scope
 
-- 要改什么。
-- **明确排除什么**：尤其是“不改变现有 API 兼容性”“不修改表名”“不重构 X”“不暴露 secret”等限制。
+- What to change.
+- **What is explicitly excluded**, especially constraints such as "do not break existing API compatibility", "do not rename tables", "do not refactor X", or "do not expose secrets".
 
-## 验收标准
+## Acceptance criteria
 
-- 可逐条验证的成功结果。
-- 适用的失败、安全、认证授权、migration 和并发结果；不适用时写明“不适用”及理由。
-- 涉及 API、数据库或配置时，写清兼容性和回滚结果。
+- Successful outcomes that can be checked one by one.
+- Applicable failure, security, authentication/authorization, migration, and concurrency outcomes; when one does not apply, write "Not applicable" and why.
+- When the API, database, or configuration is involved, state the compatibility and rollback outcome.
 
-## 文档与兼容性影响
+## Documentation and compatibility impact
 
-说明是否影响 API、JSON、JWT/授权、数据库/migration、对象存储、配置、管理端、容器、部署或英文文档；没有影响时写“无”。
+State whether the change affects the API, JSON, JWT/authorization, database/migrations, object storage, configuration, the admin console, containers, deployment, or English documentation; write "None" when nothing is affected.
 
-## 依赖
+## Dependencies
 
-- GitHub 原生 Blocked by：#NNN，或“无”
-- GitHub 原生 Blocks：#NNN，或“无”
+- GitHub native Blocked by: #NNN, or "None"
+- GitHub native Blocks: #NNN, or "None"
 
-## 交付约束
+## Delivery constraints
 
-- 公开行为或用法变化时同步英文 README、docs、API 文档和迁移说明。
+- When public behavior or usage changes, update the English README, docs, API documentation, and migration notes in the same change.
