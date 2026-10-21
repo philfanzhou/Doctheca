@@ -534,6 +534,9 @@ Defined in `DocumentSearchEndpoints.cs` (extending the V1 file, no new files). A
 | `parseId` | Guid? | `null` | Narrow to a specific parse |
 | `documentFileId` | Guid? | `null` | Narrow to a specific document |
 | `hasImage` | bool? | `null` | Select blocks with `img_path` (maps to index field `has_image`) |
+| `structureNodeId` | Guid? | `null` | Hand-marked structure node (issue #89): the node and its whole subtree (maps to index field `structure_node_ids`); see [DocumentStructure](../DocumentStructure.md) |
+
+Each result also carries `structurePath` (readable node path such as `"Unit 3 > Section B"`, null when the block lies outside every marked node; index field `structure_path`, mapping version 3).
 
 **Validation rules**:
 - Original V1 validation (empty/too-long query → 400) is **retained**.
@@ -586,6 +589,7 @@ Defined in `DocumentSearchEndpoints.cs` (extending the V1 file, no new files). A
 | `parseId` non-empty | `term: { parse_id: { value } }` |
 | `documentFileId` non-empty | `term: { document_file_id: { value } }` |
 | `hasImage` non-empty | `term: { has_image: { value } }` |
+| `structureNodeId` non-empty | `term: { structure_node_ids: { value } }` (ancestors are indexed with every block, so a node matches its subtree) |
 
 - Multiple conditions combine as `bool { must: [...], filter: [... }` (keyword goes to `must`, minerU exact terms go to `filter`; V1 without keyword has no minerU filters and follows the V1 path).
 - Sorting: `_score desc` (with keyword) → `block_id asc` (stable pagination); without keyword, `sort_index asc`.

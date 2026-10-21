@@ -242,6 +242,15 @@ not mix old and new versions against the same database. The readiness `migration
 follows the same orchestration result (`succeeded` only after the held-lock final inspection
 passed).
 
+### Document structure upgrade (issue #89)
+
+The first start of the image containing migration `20261021094612_AddDocumentStructure` migrates the
+database in place (new nullable columns, three new tables, `sequence` backfilled for every block)
+and recreates the OpenSearch index for mapping version 3. Afterwards, call
+`POST /admin/search-index/reindex` once (or click 重建检索索引 on the parse results page) to restore
+search. Rolling back to the previous image requires the documented down script first; see
+[Migrations — Document Structure Upgrade](../database/migrations.md#document-structure-upgrade-issue-89).
+
 ## Startup Command
 
 ```bash

@@ -23,6 +23,7 @@ The `document_files` table stores file metadata for the document parsing flow; p
 | `subject` | `VARCHAR(50)` | NULL | | Subject metadata (English/Chinese/Math/Physics/Chemistry/Biology/Other; stored values are the Chinese literals defined in `DocthecaConstants`). Can be set manually via `PUT /admin/document-files/{id}/metadata`, or auto-filled by an LLM for missing fields after parsing completes (best-effort). See the [DocumentMetadataAnalysis module](../../modules/DocumentMetadataAnalysis/01-FEATURE.md) |
 | `grade` | `VARCHAR(20)` | NULL | | Grade metadata (K/G1-G12). Same source as `subject` |
 | `year` | `VARCHAR(10)` | NULL | | Year metadata (4 digits, e.g. 2024). Same source as `subject` |
+| `structure_definition_id` | `UUID` | NULL, FK → `structure_definitions(id)` ON DELETE SET NULL | | The [structure definition](structure_definitions.md) an administrator chose for the document (issue #89). Set through the `structureDefinitionId` field of `PUT /admin/document-files/{id}/metadata`; changing it while any parse of the document has marked nodes answers 409 |
 
 ## Indexes
 
@@ -30,6 +31,7 @@ The `document_files` table stores file metadata for the document parsing flow; p
 |--------|-----|------|
 | `PK_document_files` | `id` | Primary key |
 | `IX_document_files_file_name` | `file_name` | Query by file name |
+| `IX_document_files_structure_definition_id` | `structure_definition_id` | Documents using a definition |
 
 ## Foreign Keys
 
