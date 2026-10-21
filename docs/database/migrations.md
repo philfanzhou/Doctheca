@@ -171,9 +171,10 @@ python3 scripts/verify-container-startup.py doctheca:current doctheca:previous
 
 With the optional second image, the script works in its own isolated test database migrated by
 the current image: it applies the documented down script of the newest migration, starts the
-previous image (schema, history and business-row counts must stay exactly the same), then removes
-only the verified history table and starts the current image again, which must take the baseline
-over through the shared stamp and migrate it forward with business rows unchanged. Synthetic credentials
+previous image (schema, history and business-row counts must stay exactly the same), then applies
+the earlier down script back to the baseline, removes only the verified history table and starts the
+current image again, which must take the baseline over through the shared stamp and migrate it
+forward with business rows unchanged. Synthetic credentials
 remain in temporary mode-0600 environment files and are checked for disclosure without printing.
 
 ## Current Database Version
@@ -182,6 +183,7 @@ remain in temporary mode-0600 environment files and are checked for disclosure w
 |-----------|----------|
 | `20260930161548_InitialCreate` | All four tables, their indexes and foreign keys, and the `set_document_files_updated_at` trigger — the production structure as of the StructaDoc migration (ADR-0009) |
 | `20261021094612_AddDocumentStructure` | Nullable `document_parse_blocks.sequence` (backfilled) with the unique index `(parse_id, sequence)`; nullable `document_files.structure_definition_id`; the `structure_definitions`, `structure_levels`, and `document_structure_nodes` tables (issue #89) |
+| `20261021153535_AddStructureAudio` | The `document_structure_audio` table with its indexes and the cascade foreign key to `document_parses` (issue #90); no existing table changes |
 
 Adding or changing migrations requires extending `DocthecaMigrationExecutor.KnownMigrationIds`
 (the known-version contract) and `TablesAfterMigration` together with the executor's takeover
@@ -222,10 +224,34 @@ against the migrated database as is. To roll back:
 4. re-index search from the previous image if needed (its mapping version 2 index is recreated on
    start because the stored version 3 differs).
 
+## Structure Audio Upgrade (issue #90)
+
+**Upgrade.** Starting the new image on a database at `20261021094612_AddDocumentStructure` (or
+earlier) classifies it as pending and applies `20261021153535_AddStructureAudio` under the advisory
+lock: it only creates the `document_structure_audio` table, its three indexes and its foreign key to
+`document_parses`. No existing table, column or row changes (verified by
+`AudioMigrationTests.PopulatedStructureVersion_IsMigratedInPlace_KeepingEveryRow`), and the
+OpenSearch mapping is unchanged.
+
+**Rollback.** As for issue #89, the previous image refuses a history containing a migration id it
+does not know (`migration.version_too_new`), so it does not start against the migrated database as
+is. The step back is a single additive table:
+
+1. stop every instance of the new image and back up the database;
+2. optionally delete each parse's audio in the console first, so the stored objects go too;
+3. run [rollback/20261021153535_AddStructureAudio.down.sql](rollback/20261021153535_AddStructureAudio.down.sql)
+   (it drops `document_structure_audio` and removes the history row; every other table is kept);
+4. start the previous image — the database is then exactly its own version (verified by
+   `AudioMigrationTests.RollbackScript_RestoresTheExactStructureVersionAndKeepsEveryOtherRow` and by
+   `scripts/verify-container-startup.py` with the previous image);
+5. remove leftover objects under the `audio/` prefix of the `Oss` bucket with the storage's own
+   tools if step 2 was skipped; the previous image never reads that prefix.
+
 ## Change Log
 
 | Date | Change | Impact |
 |------|------|------|
+| 2026-10-22 | Added migration `20261021153535_AddStructureAudio` (issue #90) | Additive table only; rollback requires the documented down script before the previous image starts |
 | 2026-10-21 | Added migration `20261021094612_AddDocumentStructure` (issue #89) and taught the executor to apply pending known migrations, verifying earlier versions against their own target model | Additive schema; `sequence` backfilled for every block; rollback requires the documented down script before the previous image starts |
 | 2026-10-06 | Adopted extended shared exact-scope evidence; removed all local catalog adaptation and redundant evidence types | Original decisions/backfill/public history/lease retained; no schema change |
 | 2026-10-04 | Adopted shared schema reader/derivation/comparer/baseline writer with bounded PostgreSQL naming/model-gap adaptation | Original classification/backfill/history/lease preserved; no schema or configuration change; same-database rollback verified |

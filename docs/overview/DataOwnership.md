@@ -24,7 +24,7 @@ The following data is managed independently by the Doctheca service; other servi
 |------|------|------|------|
 | PostgreSQL | CRUD on all tables | Full-text search, document queries | Self-hosted database |
 | StructaDoc | Upload documents, create/cancel/delete Parse Runs | Blocks/Markdown/Assets/image content | External parsing service with its own storage |
-| MinIO / SeaweedFS | Delete cleanup only | Reading legacy objects | Files and parse images from before the migration (read-only compatibility) |
+| MinIO / SeaweedFS | Delete cleanup of legacy objects; structure audio under `audio/` (issue #90) | Reading legacy objects; presigning audio playback links | Files and parse images from before the migration (read-only compatibility); structure audio owned by Doctheca |
 | OpenSearch | Create/delete indexes | Search queries | External retrieval engine |
 
 ## Dual-Write Forbidden Zones

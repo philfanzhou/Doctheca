@@ -8,7 +8,7 @@
 - A **Document File** chooses one definition (`document_files.structure_definition_id`) through the existing metadata update.
 - A **Structure Node** marks an inclusive range of block `sequence` values of one parse at one configured level; children lie inside their parent and siblings do not overlap. See [document_structure_nodes](../database/tables/document_structure_nodes.md).
 - Each block's node and its ancestors (`structure_node_ids`) and the readable path (`structure_path`, for example "Unit 3 > Section B") are indexed in OpenSearch, so search can be narrowed to a node and its whole subtree.
-- Out of scope: automatic detection, carrying nodes over to a re-parse (a re-parse is marked again), audio (#90), the internal read API (#91), and StructaDoc changes.
+- Out of scope: automatic detection, carrying nodes over to a re-parse (a re-parse is marked again), audio (#90, see [StructureAudio](StructureAudio.md)), the internal read API (#91), and StructaDoc changes.
 
 ## Global Block Order
 

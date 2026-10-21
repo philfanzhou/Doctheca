@@ -35,3 +35,11 @@ _Avoid_: Heading Level, Text Level
 **Structure Node**:
 A hand-marked part of one Document Parse: a contiguous range of Block Sequences at one Structure Level, inside its parent node, such as "Unit 1 The Changing World" or "Section A".
 _Avoid_: Chapter, Heading, Outline Item
+
+**Structure Audio**:
+An audio file imported for one Document Parse, such as an official textbook recording, optionally linked to one Structure Node of that parse.
+_Avoid_: Attachment, Media File, Track
+
+**Audio Link**:
+The association of a Structure Audio file with one Structure Node; pre-filled from the file's folder and file name and confirmed or changed by an administrator. It is correct at node level only, never at text or exercise level.
+_Avoid_: Alignment, Timestamp

@@ -11,6 +11,8 @@
 | Delete document_structure_node | CASCADE to its child nodes |
 | Delete structure_definition | Refused with 409 while marked nodes use it; otherwise CASCADE to structure_levels and SET NULL on document_files.structure_definition_id |
 | Delete structure_level | Refused with 409 while marked nodes use it (FK RESTRICT behind the service rule) |
+| Delete document_parse | CASCADE to document_structure_audio rows; the endpoint then deletes the parse's objects under `audio/{parseId}/` |
+| Structure save removing a node | Its document_structure_audio rows are unlinked (`node_id` NULL, `match_status` `node_removed`) in the same transaction; the files stay |
 
 ## Document Structure (issue #89)
 
@@ -24,3 +26,13 @@ document_files ──< document_parses ──< document_structure_nodes (parent_
 ```
 
 A node's range is a range of `document_parse_blocks.sequence` values of the same parse; it is not a foreign key.
+
+## Structure Audio (issue #90)
+
+```
+document_parses ──< document_structure_audio ╌╌ node_id ╌╌> document_structure_nodes (same parse, no FK)
+                              │
+                              └── object_key → S3 object audio/{parseId}/{audioId}{extension}
+```
+
+`node_id` is maintained by the application rather than a foreign key, because a structure save deletes and re-inserts the whole tree; see [document_structure_audio](tables/document_structure_audio.md).
