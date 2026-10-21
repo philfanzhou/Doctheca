@@ -19,4 +19,16 @@ public interface IDocumentParseBlockRepository
     /// Get blocks for a specific page of a parse.
     /// </summary>
     Task<List<DocumentParseBlockModel>> GetByParseAndPageAsync(Guid parseId, int pageId);
+
+    /// <summary>
+    /// One page of a parse's blocks in global <c>sequence</c> order: blocks with
+    /// sequence &gt; <paramref name="afterSequence"/> (all when null) and, when given, within the
+    /// inclusive [<paramref name="fromSequence"/>, <paramref name="toSequence"/>] range. Blocks
+    /// without a sequence are not returned.
+    /// </summary>
+    Task<List<DocumentParseBlockModel>> GetPageBySequenceAsync(
+        Guid parseId, int? afterSequence, int limit, int? fromSequence = null, int? toSequence = null);
+
+    /// <summary>All non-null block sequences of a parse.</summary>
+    Task<HashSet<int>> GetSequencesAsync(Guid parseId);
 }

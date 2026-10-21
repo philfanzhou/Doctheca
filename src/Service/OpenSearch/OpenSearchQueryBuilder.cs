@@ -62,6 +62,9 @@ internal static class OpenSearchQueryBuilder
                 filterClauses.Add(new { term = new { document_file_id = new { value = filter.DocumentFileId.Value.ToString() } } });
             if (filter.HasImage.HasValue)
                 filterClauses.Add(new { term = new { has_image = new { value = filter.HasImage.Value } } });
+            // Ancestors are indexed with every block, so a node matches its whole subtree.
+            if (filter.StructureNodeId.HasValue)
+                filterClauses.Add(new { term = new { structure_node_ids = new { value = filter.StructureNodeId.Value.ToString() } } });
         }
 
         object queryObj = filterClauses.Count > 0

@@ -78,6 +78,7 @@ internal static class OpenSearchResponseParser
                 var textLevel = OpenSearchJsonHelper.TryGetInt(source, "text_level");
                 var textFormat = OpenSearchJsonHelper.TryGetString(source, "text_format");
                 var caption = OpenSearchJsonHelper.TryGetString(source, "caption");
+                var structurePath = OpenSearchJsonHelper.TryGetString(source, "structure_path");
 
                 results.Add(new SearchResultModel
                 {
@@ -97,7 +98,8 @@ internal static class OpenSearchResponseParser
                     SubType = subType,
                     TextLevel = textLevel,
                     TextFormat = textFormat,
-                    Caption = caption
+                    Caption = caption,
+                    StructurePath = string.IsNullOrEmpty(structurePath) ? null : structurePath
                 });
 
                 if (hit.TryGetProperty("sort", out var sortEl))

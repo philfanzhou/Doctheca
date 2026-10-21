@@ -115,6 +115,8 @@ public sealed class StructaDocParseResultSync : IStructaDocParseResultSync
                 ParseId = parseId,
                 PageId = pageId,
                 SortIndex = currentCount,
+                // Global reading order kept as-is; sort_index stays a per-page counter.
+                Sequence = block.Sequence,
                 BlockType = Truncate(block.Type, MaxTextLength) ?? "unknown",
                 TextContent = block.Content,
                 ImageId = imageId,

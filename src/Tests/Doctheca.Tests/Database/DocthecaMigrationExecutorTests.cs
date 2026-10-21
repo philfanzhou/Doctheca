@@ -44,7 +44,7 @@ public sealed class DocthecaMigrationExecutorTests : IAsyncLifetime
         await Executor(context).ExecuteAsync();
 
         (await MigrationGoldenStates.ReadAppliedHistoryAsync(context)).Should()
-            .Equal(MigrationGoldenStates.InitialId);
+            .Equal(MigrationGoldenStates.AllIds);
         foreach (var table in DocthecaMigrationExecutor.KnownTableNames)
         {
             (await MigrationGoldenStates.CountRowsAsync(context, table)).Should().Be(0);
@@ -65,7 +65,7 @@ public sealed class DocthecaMigrationExecutorTests : IAsyncLifetime
             .Be(DocthecaMigrationExecutor.DatabaseState.CurrentVersionCompatible);
         await Executor(context).ExecuteAsync();
         (await MigrationGoldenStates.ReadAppliedHistoryAsync(context)).Should()
-            .Equal(MigrationGoldenStates.InitialId);
+            .Equal(MigrationGoldenStates.AllIds);
     }
 
     [Fact]
@@ -79,7 +79,7 @@ public sealed class DocthecaMigrationExecutorTests : IAsyncLifetime
                 .Be(DocthecaMigrationExecutor.DatabaseState.Empty);
             await Executor(context).ExecuteAsync();
             (await MigrationGoldenStates.ReadAppliedHistoryAsync(context)).Should()
-                .Equal(MigrationGoldenStates.InitialId);
+                .Equal(MigrationGoldenStates.AllIds);
         }
         finally
         {
@@ -102,11 +102,11 @@ public sealed class DocthecaMigrationExecutorTests : IAsyncLifetime
         await Executor(context).ExecuteAsync();
 
         (await MigrationGoldenStates.ReadAppliedHistoryAsync(context)).Should()
-            .Equal(MigrationGoldenStates.InitialId);
+            .Equal(MigrationGoldenStates.AllIds);
         // Column shape is byte-for-byte unchanged by the takeover; only the (identical)
-        // trigger/index backfills and the history row were written.
-        (await MigrationGoldenStates.ReadColumnShapeAsync(context)).Should().Equal(columnsBefore);
-        (await MigrationGoldenStates.ReadConstraintShapeAsync(context)).Should().Equal(constraintsBefore);
+        // trigger/index backfills, the history rows and the later migration's additions were written.
+        MigrationGoldenStates.ExcludingStructureMigration(await MigrationGoldenStates.ReadColumnShapeAsync(context)).Should().Equal(columnsBefore);
+        MigrationGoldenStates.ExcludingStructureMigration(await MigrationGoldenStates.ReadConstraintShapeAsync(context)).Should().Equal(constraintsBefore);
         await AssertBusinessRowsPreservedAsync(context);
     }
 
@@ -128,7 +128,7 @@ public sealed class DocthecaMigrationExecutorTests : IAsyncLifetime
         await Executor(context).ExecuteAsync();
 
         (await MigrationGoldenStates.ReadAppliedHistoryAsync(context)).Should()
-            .Equal(MigrationGoldenStates.InitialId);
+            .Equal(MigrationGoldenStates.AllIds);
         var shape = await MigrationGoldenStates.ReadColumnShapeAsync(context);
         shape.Should().Contain("document_files.subject:character varying(50):null");
         shape.Should().Contain("document_parses.content_list_v2:jsonb:null");
@@ -205,7 +205,7 @@ public sealed class DocthecaMigrationExecutorTests : IAsyncLifetime
             () => Executor(context).ExecuteAsync());
         failure.Message.Should().Contain(DocthecaMigrationExecutor.IncompatibleErrorCode);
         (await MigrationGoldenStates.ReadAppliedHistoryAsync(context)).Should()
-            .HaveCount(2);
+            .HaveCount(DocthecaMigrationExecutor.KnownMigrationIds.Count + 1);
     }
 
     [Fact]
@@ -215,16 +215,19 @@ public sealed class DocthecaMigrationExecutorTests : IAsyncLifetime
         var migrated = await _fixture.CreateDatabaseAsync();
         try
         {
+            // EnsureCreated renders the current model; the migrations must produce the same
+            // tables, columns, keys and indexes (added columns sit at a different position).
             using var legacyContext = _fixture.CreateContext(legacy);
-            await MigrationGoldenStates.EnsureCreatedLegacyAsync(legacyContext);
+            await legacyContext.Database.EnsureCreatedAsync();
 
             using var migratedContext = _fixture.CreateContext(migrated);
             await Executor(migratedContext).ExecuteAsync();
 
-            (await MigrationGoldenStates.ReadColumnShapeAsync(legacyContext)).Should()
-                .Equal(await MigrationGoldenStates.ReadColumnShapeAsync(migratedContext));
-            (await MigrationGoldenStates.ReadConstraintShapeAsync(legacyContext)).Should()
-                .Equal(await MigrationGoldenStates.ReadConstraintShapeAsync(migratedContext));
+            var tables = DocthecaMigrationExecutor.AllTableNames;
+            (await MigrationGoldenStates.ReadColumnShapeAsync(legacyContext, tables)).Order().Should()
+                .Equal((await MigrationGoldenStates.ReadColumnShapeAsync(migratedContext, tables)).Order());
+            (await MigrationGoldenStates.ReadConstraintShapeAsync(legacyContext, tables)).Should()
+                .Equal(await MigrationGoldenStates.ReadConstraintShapeAsync(migratedContext, tables));
         }
         finally
         {

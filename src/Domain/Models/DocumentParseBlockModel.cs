@@ -8,6 +8,8 @@ public class DocumentParseBlockModel
     public Guid ParseId { get; set; }
     public int PageId { get; set; }
     public int SortIndex { get; set; }
+    /// <summary>Global 0-based reading order within the parse (StructaDoc sequence); null when not numbered.</summary>
+    public int? Sequence { get; set; }
     public string BlockType { get; set; } = string.Empty;
     public string? TextContent { get; set; }
     public Guid? ImageId { get; set; }

@@ -32,6 +32,8 @@ export interface SearchResult {
   textLevel?: number
   textFormat?: string
   caption?: string
+  // Readable path of the hand-marked structure nodes containing the block (null when unmarked)
+  structurePath?: string | null
 }
 
 export interface DocumentFile {
@@ -49,6 +51,8 @@ export interface DocumentFileDetail {
   fileName: string
   contentType: string
   createdAt: string
+  // The runtime structure definition chosen for this document (null when none)
+  structureDefinitionId?: string | null
   parses: Array<{
     id: string
     modelVersion: string

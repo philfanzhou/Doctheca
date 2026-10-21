@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { inject } from 'vue'
 import { formatTime, getFileStatusLabel } from '../../utils/format'
 import { iconHtml } from '../../utils/icons'
 import { createDocApiClient } from '../../services/docApi'
@@ -23,6 +24,7 @@ const emit = defineEmits<{
 }>()
 
 const client = createDocApiClient()
+const navigate = inject<(page: string, id?: string | null) => void>('navigate')
 const { success: toastSuccess, error: toastError } = useToast()
 
 function statusBadgeHtml(status: string): string {
@@ -111,7 +113,10 @@ async function handleExportHtml() {
     </div>
 
     <div v-if="props.parse.status === 'parsed'" class="parse-actions">
-      <button class="btn btn-sm" @click="handleOpenMarkdown">
+      <button class="btn btn-sm" @click="navigate?.('structure', props.parse.id)">
+        <span v-html="iconHtml('book')"></span>结构标注
+      </button>
+      <button class="btn btn-ghost btn-sm" @click="handleOpenMarkdown">
         <span v-html="iconHtml('doc')"></span>Markdown
       </button>
       <button class="btn btn-ghost btn-sm" @click="handleOpenHtmlPreview">

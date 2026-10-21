@@ -41,7 +41,7 @@ const {
     />
 
     <div v-if="detail" class="grid-2r" style="margin-bottom: 16px">
-      <FileInfoCard :detail="detail" />
+      <FileInfoCard :detail="detail" @definition-changed="detail.structureDefinitionId = $event" />
       <ParseStatsCard :detail="detail" />
     </div>
 

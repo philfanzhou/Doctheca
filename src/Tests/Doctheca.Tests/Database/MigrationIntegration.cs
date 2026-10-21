@@ -1,4 +1,6 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.Extensions.Logging;
 using Npgsql;
 using Doctheca.Database;
@@ -107,6 +109,9 @@ public sealed class MigrationIntegrationCollection : ICollectionFixture<PostgreS
 internal static class MigrationGoldenStates
 {
     internal const string InitialId = DocthecaMigrationExecutor.InitialCreateMigrationId;
+
+    /// <summary>The complete known history a current database carries.</summary>
+    internal static readonly string[] AllIds = [.. DocthecaMigrationExecutor.KnownMigrationIds];
     internal const string HistoryTable = DocthecaMigrationExecutor.HistoryTableName;
 
     internal static readonly Guid FileId = Guid.Parse("a1111111-1111-4111-8111-111111111111");
@@ -132,8 +137,38 @@ internal static class MigrationGoldenStates
             EXECUTE FUNCTION set_document_files_updated_at();
         """;
 
-    internal static Task EnsureCreatedLegacyAsync(DocthecaDbContext context) =>
-        context.Database.EnsureCreatedAsync();
+    /// <summary>
+    /// The realistic legacy state: exactly the baseline structure the retired EnsureCreated
+    /// initializer produced (the four tables at <see cref="InitialId"/>) without migration
+    /// history and without the updated_at trigger. Built from the baseline migration because
+    /// EnsureCreated now renders the current model (issue #89 added tables and columns).
+    /// </summary>
+    internal static async Task EnsureCreatedLegacyAsync(DocthecaDbContext context)
+    {
+        await context.GetService<IMigrator>().MigrateAsync(InitialId);
+        await ExecuteRawAsync(context, $"""
+            DROP TABLE "{HistoryTable}";
+            DROP TRIGGER IF EXISTS set_document_files_updated_at ON document_files;
+            DROP FUNCTION IF EXISTS set_document_files_updated_at();
+            """);
+    }
+
+    /// <summary>
+    /// The column and constraint entries <see cref="DocthecaMigrationExecutor.AddDocumentStructureMigrationId"/>
+    /// adds to the four baseline tables; filtering them out compares a migrated database with its
+    /// pre-migration baseline shape.
+    /// </summary>
+    internal static readonly string[] StructureMigrationShapeEntries =
+    [
+        "document_files.structure_definition_id:",
+        "document_parse_blocks.sequence:",
+        "IX_document_files_structure_definition_id:",
+        "IX_document_parse_blocks_parse_id_sequence:",
+        "FK_document_files_structure_definitions_structure_definition_id:",
+    ];
+
+    internal static List<string> ExcludingStructureMigration(IEnumerable<string> shape) =>
+        shape.Where(entry => !StructureMigrationShapeEntries.Any(prefix => entry.StartsWith(prefix, StringComparison.Ordinal))).ToList();
 
     internal static Task ExecuteRawAsync(DocthecaDbContext context, string sql) =>
         context.Database.ExecuteSqlRawAsync(sql);
@@ -195,7 +230,7 @@ internal static class MigrationGoldenStates
     /// The column/type/nullability shape of the four business tables, read from the catalogs;
     /// used for the EnsureCreated-versus-migrated comparison and structure assertions.
     /// </summary>
-    internal static async Task<List<string>> ReadColumnShapeAsync(DocthecaDbContext context)
+    internal static async Task<List<string>> ReadColumnShapeAsync(DocthecaDbContext context, IReadOnlyList<string>? tables = null)
     {
         var connection = context.Database.GetDbConnection();
         await connection.OpenAsync();
@@ -215,7 +250,7 @@ internal static class MigrationGoldenStates
                 """;
             var parameter = command.CreateParameter();
             parameter.ParameterName = "@tables";
-            parameter.Value = DocthecaMigrationExecutor.KnownTableNames.ToArray();
+            parameter.Value = (tables ?? DocthecaMigrationExecutor.KnownTableNames).ToArray();
             command.Parameters.Add(parameter);
             await using var reader = await command.ExecuteReaderAsync();
             while (await reader.ReadAsync())
@@ -235,7 +270,7 @@ internal static class MigrationGoldenStates
     /// The constraint/index shape (primary keys, foreign keys with delete rules, non-constraint
     /// indexes) of the four business tables.
     /// </summary>
-    internal static async Task<List<string>> ReadConstraintShapeAsync(DocthecaDbContext context)
+    internal static async Task<List<string>> ReadConstraintShapeAsync(DocthecaDbContext context, IReadOnlyList<string>? tables = null)
     {
         var connection = context.Database.GetDbConnection();
         await connection.OpenAsync();
@@ -260,7 +295,7 @@ internal static class MigrationGoldenStates
                     """;
                 var parameter = constraints.CreateParameter();
                 parameter.ParameterName = "@tables";
-                parameter.Value = DocthecaMigrationExecutor.KnownTableNames.ToArray();
+                parameter.Value = (tables ?? DocthecaMigrationExecutor.KnownTableNames).ToArray();
                 constraints.Parameters.Add(parameter);
                 await using var reader = await constraints.ExecuteReaderAsync();
                 while (await reader.ReadAsync())
@@ -289,7 +324,7 @@ internal static class MigrationGoldenStates
                     """;
                 var parameter = indexes.CreateParameter();
                 parameter.ParameterName = "@tables";
-                parameter.Value = DocthecaMigrationExecutor.KnownTableNames.ToArray();
+                parameter.Value = (tables ?? DocthecaMigrationExecutor.KnownTableNames).ToArray();
                 indexes.Parameters.Add(parameter);
                 await using var reader = await indexes.ExecuteReaderAsync();
                 while (await reader.ReadAsync())

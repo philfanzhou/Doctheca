@@ -65,6 +65,10 @@ namespace Doctheca.Database.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("structadoc_document_id");
 
+                    b.Property<Guid?>("StructureDefinitionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("structure_definition_id");
+
                     b.Property<string>("Subject")
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)")
@@ -85,6 +89,8 @@ namespace Doctheca.Database.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("FileName");
+
+                    b.HasIndex("StructureDefinitionId");
 
                     b.ToTable("document_files", t =>
                         {
@@ -150,6 +156,10 @@ namespace Doctheca.Database.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("parse_id");
 
+                    b.Property<int?>("Sequence")
+                        .HasColumnType("integer")
+                        .HasColumnName("sequence");
+
                     b.Property<int>("SortIndex")
                         .HasColumnType("integer")
                         .HasColumnName("sort_index");
@@ -178,6 +188,9 @@ namespace Doctheca.Database.Migrations
                     b.HasIndex("BlockType");
 
                     b.HasIndex("ImageId");
+
+                    b.HasIndex("ParseId", "Sequence")
+                        .IsUnique();
 
                     b.HasIndex("ParseId", "PageId", "SortIndex");
 
@@ -296,6 +309,130 @@ namespace Doctheca.Database.Migrations
                     b.ToTable("document_parse_images");
                 });
 
+            modelBuilder.Entity("Doctheca.Database.Entities.DocumentStructureNodeEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<int>("EndSequence")
+                        .HasColumnType("integer")
+                        .HasColumnName("end_sequence");
+
+                    b.Property<Guid>("LevelId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("level_id");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("name");
+
+                    b.Property<Guid?>("ParentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("parent_id");
+
+                    b.Property<Guid>("ParseId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("parse_id");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer")
+                        .HasColumnName("sort_order");
+
+                    b.Property<int>("StartSequence")
+                        .HasColumnType("integer")
+                        .HasColumnName("start_sequence");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("LevelId");
+
+                    b.HasIndex("ParentId");
+
+                    b.HasIndex("ParseId");
+
+                    b.ToTable("document_structure_nodes");
+                });
+
+            modelBuilder.Entity("Doctheca.Database.Entities.StructureDefinitionEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("name");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("structure_definitions");
+                });
+
+            modelBuilder.Entity("Doctheca.Database.Entities.StructureLevelEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("DefinitionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("definition_id");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("name");
+
+                    b.Property<Guid?>("ParentLevelId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("parent_level_id");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer")
+                        .HasColumnName("sort_order");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DefinitionId");
+
+                    b.HasIndex("ParentLevelId");
+
+                    b.ToTable("structure_levels");
+                });
+
+            modelBuilder.Entity("Doctheca.Database.Entities.DocumentFileEntity", b =>
+                {
+                    b.HasOne("Doctheca.Database.Entities.StructureDefinitionEntity", null)
+                        .WithMany()
+                        .HasForeignKey("StructureDefinitionId")
+                        .OnDelete(DeleteBehavior.SetNull);
+                });
+
             modelBuilder.Entity("Doctheca.Database.Entities.DocumentParseBlockEntity", b =>
                 {
                     b.HasOne("Doctheca.Database.Entities.DocumentParseImageEntity", "Image")
@@ -334,6 +471,55 @@ namespace Doctheca.Database.Migrations
                         .IsRequired();
 
                     b.Navigation("Parse");
+                });
+
+            modelBuilder.Entity("Doctheca.Database.Entities.DocumentStructureNodeEntity", b =>
+                {
+                    b.HasOne("Doctheca.Database.Entities.StructureLevelEntity", "Level")
+                        .WithMany()
+                        .HasForeignKey("LevelId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Doctheca.Database.Entities.DocumentStructureNodeEntity", "Parent")
+                        .WithMany()
+                        .HasForeignKey("ParentId")
+                        .OnDelete(DeleteBehavior.Cascade);
+
+                    b.HasOne("Doctheca.Database.Entities.DocumentParseEntity", "Parse")
+                        .WithMany()
+                        .HasForeignKey("ParseId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Level");
+
+                    b.Navigation("Parent");
+
+                    b.Navigation("Parse");
+                });
+
+            modelBuilder.Entity("Doctheca.Database.Entities.StructureLevelEntity", b =>
+                {
+                    b.HasOne("Doctheca.Database.Entities.StructureDefinitionEntity", "Definition")
+                        .WithMany("Levels")
+                        .HasForeignKey("DefinitionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Doctheca.Database.Entities.StructureLevelEntity", "ParentLevel")
+                        .WithMany()
+                        .HasForeignKey("ParentLevelId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Definition");
+
+                    b.Navigation("ParentLevel");
+                });
+
+            modelBuilder.Entity("Doctheca.Database.Entities.StructureDefinitionEntity", b =>
+                {
+                    b.Navigation("Levels");
                 });
 #pragma warning restore 612, 618
         }

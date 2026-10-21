@@ -81,7 +81,7 @@ public sealed class SchemaEvidenceBoundaryTests(PostgreSqlMigrationFixture fixtu
         // The completed DDL is truthful pending state, not rolled back or reported stamped.
         Assert.Contains("document_files.subject:character varying(50):null", await MigrationGoldenStates.ReadColumnShapeAsync(seed));
         await new DocthecaMigrationExecutor(seed, NullLogger.Instance).ExecuteAsync();
-        Assert.Equal(new[] { MigrationGoldenStates.InitialId }, await MigrationGoldenStates.ReadAppliedHistoryAsync(seed));
+        Assert.Equal(MigrationGoldenStates.AllIds, await MigrationGoldenStates.ReadAppliedHistoryAsync(seed));
     }
 
     [Fact]
@@ -119,7 +119,7 @@ public sealed class SchemaEvidenceBoundaryTests(PostgreSqlMigrationFixture fixtu
         await MigrationGoldenStates.EnsureCreatedLegacyAsync(context);
         var executor = new DocthecaMigrationExecutor(context, NullLogger.Instance);
         await executor.ExecuteAsync(); await executor.ExecuteAsync();
-        Assert.Equal(new[] { MigrationGoldenStates.InitialId }, await MigrationGoldenStates.ReadAppliedHistoryAsync(context));
+        Assert.Equal(MigrationGoldenStates.AllIds, await MigrationGoldenStates.ReadAppliedHistoryAsync(context));
         Assert.Equal("MigrationId:character varying(150):true,ProductVersion:character varying(32):true",
             await MigrationGoldenStates.ScalarAsync<string>(context, """
                 SELECT string_agg(a.attname || ':' || format_type(a.atttypid, a.atttypmod) || ':' || a.attnotnull::text, ',' ORDER BY a.attnum)
@@ -169,7 +169,7 @@ public sealed class SchemaEvidenceBoundaryTests(PostgreSqlMigrationFixture fixtu
             var failure = await Assert.ThrowsAsync<InvalidOperationException>(() => executor.ExecuteAsync());
             var surfaces = failure.Message + string.Join('\n', logs.Messages);
             Assert.DoesNotContain(password, surfaces); Assert.DoesNotContain(fixture.PasswordCanary, surfaces); Assert.DoesNotContain("Host=", surfaces);
-            Assert.Equal(new[] { MigrationGoldenStates.InitialId }, await MigrationGoldenStates.ReadAppliedHistoryAsync(seed));
+            Assert.Equal(MigrationGoldenStates.AllIds, await MigrationGoldenStates.ReadAppliedHistoryAsync(seed));
         }
         finally
         {

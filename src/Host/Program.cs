@@ -8,6 +8,7 @@ using Doctheca.Database.Repositories;
 using Doctheca.Domain.Models;
 using Doctheca.Domain.Repositories;
 using Doctheca.Domain.Services;
+using Doctheca.Domain.Services.Structure;
 using Doctheca.Service;
 using Doctheca.Service.Parsing;
 using Doctheca.Service.StructaDoc;
@@ -151,12 +152,17 @@ builder.Services.AddScoped<IDocumentFileRepository, DocumentFileRepository>();
 builder.Services.AddScoped<IDocumentParseRepository, DocumentParseRepository>();
 builder.Services.AddScoped<IDocumentParseImageRepository, DocumentParseImageRepository>();
 builder.Services.AddScoped<IDocumentParseBlockRepository, DocumentParseBlockRepository>();
+builder.Services.AddScoped<IStructureDefinitionRepository, StructureDefinitionRepository>();
+builder.Services.AddScoped<IDocumentStructureRepository, DocumentStructureRepository>();
 builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
 
 // Domain Services
 builder.Services.AddScoped<ISearchDomainService, SearchDomainService>();
 builder.Services.AddScoped<IDocumentFileService, DocumentFileService>();
 builder.Services.AddScoped<IDocumentParseService, DocumentParseService>();
+builder.Services.AddScoped<IStructureDefinitionService, StructureDefinitionService>();
+builder.Services.AddScoped<IDocumentStructureService, DocumentStructureService>();
+builder.Services.AddScoped<ParseSearchIndexer>();
 
 // StructaDoc parsing service client (ADR-0009): named HttpClient + Singleton wrapper so the
 // polling worker does not recreate the client (HttpClientFactory pools the handler).
@@ -348,6 +354,8 @@ app.MapDocumentFileEndpoints();
 app.MapDocumentParseEndpoints();
 app.MapDocumentExportEndpoints();
 app.MapDocumentSearchEndpoints();
+app.MapStructureDefinitionEndpoints();
+app.MapDocumentStructureEndpoints();
 
 // ServiceMantle fixed health endpoints: GET /health/live (liveness, never touches the
 // database), GET /health/ready and the GET /health alias (readiness projection). All three

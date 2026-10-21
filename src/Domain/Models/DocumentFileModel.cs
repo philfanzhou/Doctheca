@@ -11,6 +11,7 @@ public class DocumentFileModel
     public string? Subject { get; set; }
     public string? Grade { get; set; }
     public string? Year { get; set; }
+    public Guid? StructureDefinitionId { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset? UpdatedAt { get; set; }
 }

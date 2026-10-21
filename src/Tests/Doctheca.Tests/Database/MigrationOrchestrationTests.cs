@@ -84,7 +84,7 @@ public sealed class MigrationOrchestrationTests : IAsyncLifetime
         }
 
         (await MigrationGoldenStates.ReadAppliedHistoryAsync(verify)).Should()
-            .Equal(MigrationGoldenStates.InitialId);
+            .Equal(MigrationGoldenStates.AllIds);
     }
 
     // ---------- inspection-driven skipping and takeover ----------
@@ -126,7 +126,7 @@ public sealed class MigrationOrchestrationTests : IAsyncLifetime
         result.ExecutorWasCalled.Should().BeTrue();
 
         (await MigrationGoldenStates.ReadAppliedHistoryAsync(context)).Should()
-            .Equal(MigrationGoldenStates.InitialId);
+            .Equal(MigrationGoldenStates.AllIds);
         (await MigrationGoldenStates.CountRowsAsync(context, "document_files")).Should().Be(1);
         (await MigrationGoldenStates.CountRowsAsync(context, "document_parse_blocks")).Should().Be(1);
     }
