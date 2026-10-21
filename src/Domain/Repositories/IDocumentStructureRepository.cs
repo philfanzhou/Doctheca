@@ -10,7 +10,8 @@ public interface IDocumentStructureRepository
     /// <summary>
     /// Replaces the parse's whole node tree in one transaction that first locks the parse row, so
     /// concurrent saves of the same parse serialize and the last complete save wins. Nodes must be
-    /// ordered so every parent precedes its children. Returns false when the parse does not exist.
+    /// ordered so every parent precedes its children. Audio linked to a node that the new tree no
+    /// longer contains is unlinked in the same transaction. Returns false when the parse does not exist.
     /// </summary>
     Task<bool> ReplaceAsync(Guid parseId, IReadOnlyList<DocumentStructureNodeModel> nodes);
 

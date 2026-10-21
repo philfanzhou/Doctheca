@@ -315,6 +315,11 @@ async function reindex() {
   }
 }
 
+async function openAudio() {
+  if (dirty.value && !(await confirm('结构有未保存的修改，离开后将丢失。继续？'))) return
+  navigate?.('audio', parseId.value)
+}
+
 function back() {
   if (meta.value) navigate?.('detail', meta.value.documentFileId)
   else navigate?.('results', null)
@@ -360,6 +365,9 @@ onUnmounted(() => {
         <span v-if="dirty" class="badge amber"><span class="dot"></span>未保存</span>
         <button class="btn btn-ghost btn-sm" @click="reload">
           <span v-html="iconHtml('refresh')"></span>重新加载
+        </button>
+        <button class="btn btn-ghost btn-sm" @click="openAudio">
+          <span v-html="iconHtml('upload')"></span>官方音频
         </button>
         <button class="btn btn-ghost btn-sm" :disabled="reindexing" @click="reindex">
           <span v-html="iconHtml('search')"></span>重建索引

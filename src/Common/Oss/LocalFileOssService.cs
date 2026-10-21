@@ -191,6 +191,7 @@ public class LocalFileOssService : IOssService
         OssBucket.Mistakes => "mistakes",
         OssBucket.Questions => "questions",
         OssBucket.Documents => "documents",
+        OssBucket.Audio => "audio",
         _ => "others"
     };
 

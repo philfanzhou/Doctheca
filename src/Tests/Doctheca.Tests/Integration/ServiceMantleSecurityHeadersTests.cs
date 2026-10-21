@@ -82,6 +82,14 @@ public sealed class ServiceMantleSecurityHeadersTests : ServiceMantleIntegration
         "GET /admin/document-parses/{parseId:guid}/structure/nodes/{nodeId:guid}/blocks",
         "POST /admin/document-parses/{parseId:guid}/search-index",
         "POST /admin/search-index/reindex",
+        // Structure audio (issue #90): all JSON.
+        "GET /admin/document-parses/{parseId:guid}/audio",
+        "POST /admin/document-parses/{parseId:guid}/audio",
+        "PUT /admin/document-parses/{parseId:guid}/audio",
+        "DELETE /admin/document-parses/{parseId:guid}/audio/{audioId:guid}",
+        "GET /admin/document-parses/{parseId:guid}/audio/{audioId:guid}/playback-link",
+        "GET /admin/document-parses/{parseId:guid}/structure/nodes/{nodeId:guid}/audio",
+        "POST /admin/structure-audio/orphan-sweep",
     };
 
     // Endpoints that must exist but must NOT carry the marker (rendering contracts).

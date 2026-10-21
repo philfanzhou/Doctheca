@@ -31,6 +31,7 @@ type IconName =
   | 'doc'
   | 'warnTri'
   | 'trash'
+  | 'play'
 
 const ICON_PATHS: Record<IconName, string> = {
   grid: '<rect x="3.5" y="3.5" width="7" height="7" rx="1.8"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.8"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.8"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.8"/>',
@@ -60,6 +61,7 @@ const ICON_PATHS: Record<IconName, string> = {
   doc: '<path d="M6 3.5h7.5L18.5 9v11A1.5 1.5 0 0 1 17 21.5H6A1.5 1.5 0 0 1 4.5 20V5A1.5 1.5 0 0 1 6 3.5z"/><path d="M8.5 13h7M8.5 16.5h5"/>',
   warnTri: '<circle cx="12" cy="12" r="8.5"/><path d="M12 8v4.5M12 15.8v.2"/>',
   trash: '<path d="M4 7h16M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2M6 7l1 13a2 2 0 0 0 2 1.9h6a2 2 0 0 0 2-1.9L18 7"/>',
+  play: '<path d="M8 5.5v13l10.5-6.5z"/>',
 }
 
 function iconSvg(name: IconName): string {

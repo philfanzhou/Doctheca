@@ -62,9 +62,9 @@ The Doctheca admin console logs in with the SignaCore bootstrap administrator ac
 └────────────────────────────────────────────┘
 ```
 
-- **Routing**: hash routing (`#overview` / `#docs` / `#detail/:id` / `#results` / `#search` / `#structures` / `#structure/:parseId`), parsed by `App.vue`; vue-router is not introduced
+- **Routing**: hash routing (`#overview` / `#docs` / `#detail/:id` / `#results` / `#search` / `#structures` / `#structure/:parseId` / `#audio/:parseId`), parsed by `App.vue`; vue-router is not introduced
 - **View-switch transition**: on switch the `#view` container gets a `.leaving` class that triggers a 150ms blur + translate transition, then the content is swapped when it ends
-- **Nav items**: Overview, Doc Management, Parse Results, Search Test, Structure Definitions (5 items); in the `detail` and `structure` states the sidebar highlights "Doc Management"
+- **Nav items**: Overview, Doc Management, Parse Results, Search Test, Structure Definitions (5 items); in the `detail`, `structure` and `audio` states the sidebar highlights "Doc Management"
 - **Sidebar indicator**: `Sidebar.vue` has a built-in `.nav-indicator` slider that follows the active switch with a 0.22s spring translateY
 - **Mobile**: when `window.innerWidth < 900`, the Topbar shows a hamburger button and the sidebar turns into a drawer
 - **provide/inject**: the three functions `navigate` / `openDocDetail` / `backToDocs` are provided to descendant views
@@ -146,6 +146,15 @@ The Doctheca admin console logs in with the SignaCore bootstrap administrator ac
 - **Rendering**: headings by `heading-N` subtype, images through the parse image proxy (`loading="lazy"`), tables through `utils/blockContent.ts` (inert `DOMParser`, text-only cells — table HTML is never inserted via `v-html`)
 - **Save**: sends the whole tree (siblings ordered by start); 400 field paths are mapped back to node names; unsaved changes show a 未保存 badge and guard page unload
 - **Directory structure**: `views/StructureEditorPage/StructureEditorPage.vue`, pure logic in `utils/structureTree.ts` (tested by `tests/structure-tree.mjs`)
+
+### 4.9 StructureAudioPage (Official Audio, issue #90)
+
+- **Route**: `#audio/:parseId`, reached from the 官方音频 button of the structure marking page and of a parsed parse record; the sidebar highlights 文档管理; the sign-in return URL whitelist accepts it like `#structure/:parseId`
+- **Data source**: `services/audioApi.ts` (`listParseAudio / importParseAudio / saveParseAudio / getAudioPlaybackLink`) + `getParseStructure(parseId)` for the node choices
+- **Import**: 选择文件夹 (`webkitdirectory`) or 选择文件或 ZIP; every file is sent with its relative path in a parallel `paths` form field (browsers drop folders from multipart file names); operating system metadata is filtered before upload; per-file reasons of a refused import are listed
+- **Review**: table of file / linked node (searchable, clearable `el-select` of all nodes by path) / state badge / 试听 + 删除; filters 全部 / 待处理 / 已关联; edits stay local until 保存 (one PUT with the changed links and `removeIds`), 重新加载 discards them, leaving with unsaved edits asks first
+- **Playback**: 试听 fetches a short-lived link and plays it in a sticky `<audio>` bar; object keys never reach the page
+- **Directory structure**: `views/StructureAudioPage/StructureAudioPage.vue`, pure logic in `utils/audioLinks.ts` (tested by `tests/audio-links.mjs`), styles in `styles/pages/_audio.scss`
 
 ## 5. Style Standards
 

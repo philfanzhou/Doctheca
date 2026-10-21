@@ -64,13 +64,14 @@ public sealed class DocthecaMigrationExecutor : IDatabaseMigrationExecutor
 {
     internal const string InitialCreateMigrationId = "20260930161548_InitialCreate";
     internal const string AddDocumentStructureMigrationId = "20261021094612_AddDocumentStructure";
+    internal const string AddStructureAudioMigrationId = "20261021153535_AddStructureAudio";
     internal const string HistoryTableName = "__EFMigrationsHistory";
     internal const string IncompatibleErrorCode = "DOCTHECA_DB_SCHEMA_INCOMPATIBLE";
     internal const string UpdatedAtTriggerName = "set_document_files_updated_at";
 
     /// <summary>The ordered migration contract this executor supports.</summary>
     internal static readonly IReadOnlyList<string> KnownMigrationIds =
-        [InitialCreateMigrationId, AddDocumentStructureMigrationId];
+        [InitialCreateMigrationId, AddDocumentStructureMigrationId, AddStructureAudioMigrationId];
 
     /// <summary>The four business tables of the baseline.</summary>
     internal static readonly IReadOnlyList<string> KnownTableNames =
@@ -80,15 +81,22 @@ public sealed class DocthecaMigrationExecutor : IDatabaseMigrationExecutor
     internal static readonly IReadOnlyList<string> StructureTableNames =
         ["structure_definitions", "structure_levels", "document_structure_nodes"];
 
+    /// <summary>The table added by <see cref="AddStructureAudioMigrationId"/> (issue #90).</summary>
+    internal static readonly IReadOnlyList<string> AudioTableNames = ["document_structure_audio"];
+
+    /// <summary>The business tables after <see cref="AddDocumentStructureMigrationId"/>.</summary>
+    internal static readonly IReadOnlyList<string> StructureVersionTableNames = [.. KnownTableNames, .. StructureTableNames];
+
     /// <summary>Every business table of the current model, in migration order.</summary>
-    internal static readonly IReadOnlyList<string> AllTableNames = [.. KnownTableNames, .. StructureTableNames];
+    internal static readonly IReadOnlyList<string> AllTableNames = [.. StructureVersionTableNames, .. AudioTableNames];
 
     /// <summary>The business tables each known migration leaves in place, by migration id.</summary>
     private static readonly IReadOnlyDictionary<string, IReadOnlyList<string>> TablesAfterMigration =
         new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal)
         {
             [InitialCreateMigrationId] = KnownTableNames,
-            [AddDocumentStructureMigrationId] = AllTableNames,
+            [AddDocumentStructureMigrationId] = StructureVersionTableNames,
+            [AddStructureAudioMigrationId] = AllTableNames,
         };
 
     private const string SchemaName = "public";

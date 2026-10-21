@@ -309,6 +309,75 @@ namespace Doctheca.Database.Migrations
                     b.ToTable("document_parse_images");
                 });
 
+            modelBuilder.Entity("Doctheca.Database.Entities.DocumentStructureAudioEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("content_type");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("LinkSource")
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("link_source");
+
+                    b.Property<string>("MatchStatus")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("match_status");
+
+                    b.Property<Guid?>("NodeId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("node_id");
+
+                    b.Property<string>("ObjectKey")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("object_key");
+
+                    b.Property<Guid>("ParseId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("parse_id");
+
+                    b.Property<long>("SizeBytes")
+                        .HasColumnType("bigint")
+                        .HasColumnName("size_bytes");
+
+                    b.Property<string>("SourcePath")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("source_path");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("NodeId");
+
+                    b.HasIndex("ObjectKey")
+                        .IsUnique();
+
+                    b.HasIndex("ParseId", "SourcePath")
+                        .IsUnique();
+
+                    b.ToTable("document_structure_audio");
+                });
+
             modelBuilder.Entity("Doctheca.Database.Entities.DocumentStructureNodeEntity", b =>
                 {
                     b.Property<Guid>("Id")
@@ -463,6 +532,17 @@ namespace Doctheca.Database.Migrations
                 });
 
             modelBuilder.Entity("Doctheca.Database.Entities.DocumentParseImageEntity", b =>
+                {
+                    b.HasOne("Doctheca.Database.Entities.DocumentParseEntity", "Parse")
+                        .WithMany()
+                        .HasForeignKey("ParseId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Parse");
+                });
+
+            modelBuilder.Entity("Doctheca.Database.Entities.DocumentStructureAudioEntity", b =>
                 {
                     b.HasOne("Doctheca.Database.Entities.DocumentParseEntity", "Parse")
                         .WithMany()

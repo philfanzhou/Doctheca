@@ -14,6 +14,7 @@ public enum OssBucket
     Mistakes,     // mistakes/
     Questions,    // questions/
     Documents,    // documents/
+    Audio,        // audio/ (structure audio, issue #90)
 }
 
 public interface IOssService
@@ -332,6 +333,7 @@ public class S3OssService : IOssService
             OssBucket.Mistakes => "mistakes",
             OssBucket.Questions => "questions",
             OssBucket.Documents => "documents",
+            OssBucket.Audio => "audio",
             _ => "others"
         };
 
@@ -381,6 +383,7 @@ public class S3OssService : IOssService
             OssBucket.Mistakes => "mistakes",
             OssBucket.Questions => "questions",
             OssBucket.Documents => "documents",
+            OssBucket.Audio => "audio",
             _ => "others"
         };
 

@@ -36,6 +36,17 @@ public class DocumentStructureRepository : IDocumentStructureRepository
             .ToListAsync();
         if (locked.Count == 0) return false;
 
+        // Audio linked to a node that the new tree no longer contains is unlinked (issue #90);
+        // nodes kept by id keep their audio across the delete and re-insert below.
+        var keptIds = nodes.Select(node => node.Id).ToList();
+        await _context.DocumentStructureAudio
+            .Where(audio => audio.ParseId == parseId && audio.NodeId != null && !keptIds.Contains(audio.NodeId.Value))
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(audio => audio.NodeId, (Guid?)null)
+                .SetProperty(audio => audio.MatchStatus, AudioMatchStatus.NodeRemoved)
+                .SetProperty(audio => audio.LinkSource, (string?)null)
+                .SetProperty(audio => audio.UpdatedAt, DateTimeOffset.UtcNow));
+
         await _context.DocumentStructureNodes
             .Where(node => node.ParseId == parseId)
             .ExecuteDeleteAsync();

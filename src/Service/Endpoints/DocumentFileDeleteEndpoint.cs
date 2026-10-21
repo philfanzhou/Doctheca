@@ -11,6 +11,7 @@ using Doctheca.Common.Oss;
 using Doctheca.Domain.Models;
 using Doctheca.Domain.Repositories;
 using Doctheca.Domain.Services;
+using Doctheca.Service.Audio;
 using Doctheca.Service.StructaDoc;
 
 namespace Doctheca.Service;
@@ -29,6 +30,7 @@ internal static class DocumentFileDeleteEndpoint
         IOssService ossService,
         ISearchIndexService searchIndexService,
         IStructaDocClient structaDocClient,
+        [FromServices] StructureAudioService audioService,
         [FromServices] ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(DocumentFileDeleteEndpoint));
@@ -57,8 +59,19 @@ internal static class DocumentFileDeleteEndpoint
             }
         }
 
-        // Step 2: Delete database records (cascade: parses → blocks + images, then file)
+        // Structure audio objects of every parse (issue #90), read before the rows cascade away.
+        var audioKeys = new Dictionary<Guid, List<string>>();
+        foreach (var parse in allParses)
+        {
+            audioKeys[parse.Id] = await audioService.GetParseObjectKeysAsync(parse.Id);
+        }
+
+        // Step 2: Delete database records (cascade: parses → blocks + images + structure + audio, then file)
         await fileService.DeleteAsync(id);
+        foreach (var (parseId, keys) in audioKeys)
+        {
+            await audioService.DeleteParseObjectsAsync(parseId, keys);
+        }
 
         // Step 3: Best-effort OSS cleanup (legacy artifacts only)
         var failedPaths = new List<string>();

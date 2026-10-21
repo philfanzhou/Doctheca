@@ -89,7 +89,11 @@ public sealed class StructureMigrationTests(PostgreSqlMigrationFixture fixture) 
                 INSERT INTO structure_definitions (id, name, created_at, updated_at) VALUES ('{Guid.NewGuid()}', 'D', NOW(), NOW());
                 """);
 
-            await MigrationGoldenStates.ExecuteRawAsync(context, await File.ReadAllTextAsync(RollbackScriptPath()));
+            // Newest first: the audio migration (issue #90) is rolled back before this one.
+            await MigrationGoldenStates.ExecuteRawAsync(context, await File.ReadAllTextAsync(
+                RollbackScriptPath(DocthecaMigrationExecutor.AddStructureAudioMigrationId)));
+            await MigrationGoldenStates.ExecuteRawAsync(context, await File.ReadAllTextAsync(
+                RollbackScriptPath(DocthecaMigrationExecutor.AddDocumentStructureMigrationId)));
 
             (await MigrationGoldenStates.ReadAppliedHistoryAsync(context)).Should().Equal(MigrationGoldenStates.InitialId);
             (await MigrationGoldenStates.ReadColumnShapeAsync(context)).Should().Equal(await MigrationGoldenStates.ReadColumnShapeAsync(reference));
@@ -145,12 +149,11 @@ public sealed class StructureMigrationTests(PostgreSqlMigrationFixture fixture) 
         (await Executor(context).InspectAsync()).Should().Be(DocthecaMigrationExecutor.DatabaseState.InspectionFailed);
     }
 
-    private static string RollbackScriptPath()
+    internal static string RollbackScriptPath(string migrationId)
     {
         var root = new DirectoryInfo(AppContext.BaseDirectory);
         while (root is not null && !Directory.Exists(Path.Combine(root.FullName, "docs", "database"))) root = root.Parent;
-        return Path.Combine(root!.FullName, "docs", "database", "rollback",
-            DocthecaMigrationExecutor.AddDocumentStructureMigrationId + ".down.sql");
+        return Path.Combine(root!.FullName, "docs", "database", "rollback", migrationId + ".down.sql");
     }
 
     private static async Task SeedParsesAsync(DocthecaDbContext context)
