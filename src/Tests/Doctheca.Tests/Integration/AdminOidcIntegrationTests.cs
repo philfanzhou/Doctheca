@@ -56,7 +56,7 @@ public sealed partial class AdminOidcIntegrationTests(PostgreSqlFixture database
         BaseAddress = new Uri("https://admin.example.test"), AllowAutoRedirect = false, HandleCookies = false
     });
 
-    private sealed record Handshake(Dictionary<string, string> Query, HttpResponseMessage Response);
+    private sealed record Handshake(Dictionary<string, string> Query, HttpResponseMessage Response, string BindingCookie);
 
     private static async Task<Handshake> Start(HttpClient client, string target = "/admin/document-files")
     {
@@ -64,21 +64,52 @@ public sealed partial class AdminOidcIntegrationTests(PostgreSqlFixture database
         Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
         Assert.Equal(OidcTestAuthority.Issuer + "/authorize", response.Headers.Location!.GetLeftPart(UriPartial.Path));
         var query = QueryHelpers.ParseQuery(response.Headers.Location.Query).ToDictionary(p => p.Key, p => p.Value.ToString());
-        // The pending sign-in lives entirely server-side: the start response carries no cookie.
-        Assert.False(response.Headers.Contains("Set-Cookie"));
-        return new(query, response);
+        // The browser carries only a random per-state binding; pending protocol data stays
+        // server-side. Keep manual cookies so tests can exercise missing/wrong bindings too.
+        var cookie = Assert.Single(response.Headers.GetValues("Set-Cookie"));
+        Assert.StartsWith(AdminOidcConstants.SessionCookie + "-login-binding.", cookie);
+        Assert.Contains("httponly", cookie.ToLowerInvariant());
+        Assert.Contains("secure", cookie.ToLowerInvariant());
+        Assert.Contains("samesite=lax", cookie.ToLowerInvariant());
+        Assert.Contains("path=" + AdminOidcConstants.CallbackPath, cookie.ToLowerInvariant());
+        return new(query, response, cookie.Split(';')[0]);
     }
 
     private static Task<HttpResponseMessage> Callback(HttpClient client, Handshake handshake, string? code, string? query = null,
-        string? cookies = null, CancellationToken cancellation = default)
+        string? cookies = null, CancellationToken cancellation = default, bool includeBinding = true)
     {
         query ??= QueryHelpers.AddQueryString(AdminOidcConstants.CallbackPath, new Dictionary<string, string?>
         {
             ["code"] = code, ["state"] = handshake.Query["state"], ["iss"] = OidcTestAuthority.Issuer
         });
         var request = new HttpRequestMessage(HttpMethod.Get, query);
+        if (includeBinding) cookies = string.IsNullOrEmpty(cookies)
+            ? handshake.BindingCookie : cookies + "; " + handshake.BindingCookie;
         if (!string.IsNullOrEmpty(cookies)) request.Headers.Add("Cookie", cookies);
         return client.SendAsync(request, cancellation);
+    }
+
+    [Theory]
+    [InlineData("missing")][InlineData("wrong")][InlineData("other-state")]
+    public async Task CallbackRequiresOriginalBrowserBindingAndConsumesRejectedState(string defect)
+    {
+        using var authority = new OidcTestAuthority();
+        using var factory = OidcFactory(authority);
+        using var client = Browser(factory);
+        var handshake = await Start(client);
+        var code = authority.Code(handshake.Query);
+        var wrongBinding = defect switch
+        {
+            "wrong" => handshake.BindingCookie.Split('=')[0] + "=" + new string('x', 43),
+            "other-state" => handshake.BindingCookie.Split('=')[0] + "="
+                + (await Start(client)).BindingCookie.Split('=')[1],
+            _ => null
+        };
+        Failed(await Callback(client, handshake, code, cookies: wrongBinding, includeBinding: false));
+        // Correcting the cookie cannot revive a state consumed by the rejected callback.
+        Failed(await Callback(client, handshake, code));
+        Assert.Equal(0, authority.Redeems);
+        Assert.Equal(0, Tickets(factory).Count);
     }
 
     private static void Failed(HttpResponseMessage response, string target = AdminLoginResponseWriter.SignInFailedRedirect)
@@ -155,8 +186,16 @@ public sealed partial class AdminOidcIntegrationTests(PostgreSqlFixture database
         Assert.Equal(HttpStatusCode.OK, apiResponse.StatusCode);
 
         var surfaces = string.Join('\n', response.Headers) + await response.Content.ReadAsStringAsync() + response.Headers.Location + string.Join('\n', logs.Messages);
-        foreach (var canary in new[] { OidcTestAuthority.Secret, authority.LastAccessToken!, authority.LastVerifier!, authority.LastIdToken!, code, handshake.Query["state"] })
+        foreach (var canary in new[] { OidcTestAuthority.Secret, authority.LastAccessToken!, authority.LastVerifier!, authority.LastIdToken!, code })
             Assert.DoesNotContain(canary, surfaces);
+        // The protocol cookie name includes state; application responses, redirects and logs
+        // still must not echo it. The callback expires that cookie on the same path.
+        Assert.DoesNotContain(handshake.Query["state"],
+            string.Join('\n', response.Headers.Where(header => header.Key != "Set-Cookie"))
+            + await response.Content.ReadAsStringAsync() + string.Join('\n', logs.Messages));
+        Assert.Contains(response.Headers.GetValues("Set-Cookie"), value =>
+            value.StartsWith(handshake.BindingCookie.Split('=')[0] + "=;")
+            && value.Contains("expires=Thu, 01 Jan 1970", StringComparison.OrdinalIgnoreCase));
 
         Failed(await Callback(client, handshake, code));
         Assert.Equal(1, authority.Redeems);
@@ -181,7 +220,7 @@ public sealed partial class AdminOidcIntegrationTests(PostgreSqlFixture database
     [InlineData("issuer")][InlineData("aud")]
     [InlineData("sub-missing")][InlineData("sub-empty")][InlineData("sub-array")][InlineData("sub-duplicate")]
     [InlineData("sub-number")][InlineData("iss-array")][InlineData("iss-number")][InlineData("iss-empty")]
-    [InlineData("exp-expired")][InlineData("nonce")][InlineData("nonce-missing")]
+    [InlineData("exp-expired")][InlineData("nonce")][InlineData("nonce-missing")][InlineData("iat-future")]
     public async Task InvalidIdTokenIsRejectedWithoutTicket(string defect)
     {
         using var authority = new OidcTestAuthority();
@@ -193,7 +232,7 @@ public sealed partial class AdminOidcIntegrationTests(PostgreSqlFixture database
     }
 
     /// <summary>
-    /// Declared relaxations of the replaced slice (issue #70): the official package applies the
+    /// Retained OIDC tolerances (issue #70): the official package applies the
     /// standard OIDC validation semantics — a multi-valued <c>aud</c> containing the client id is
     /// valid, no <c>iat</c> claim is demanded, an expiry within the 30-second clock skew is not
     /// rejected by comparing it to <c>iat</c>, and the signature is verified against the whole
@@ -202,7 +241,7 @@ public sealed partial class AdminOidcIntegrationTests(PostgreSqlFixture database
     /// </summary>
     [Theory]
     [InlineData("aud-array")][InlineData("aud-single-array")]
-    [InlineData("iat-missing")][InlineData("iat-future")][InlineData("iat-string")]
+    [InlineData("iat-missing")][InlineData("iat-string")][InlineData("iat-near-future")]
     [InlineData("exp-before-iat")][InlineData("iss-duplicate")][InlineData("kid")]
     public async Task StandardOidcIdTokenToleranceSignsIn(string defect)
     {
@@ -217,10 +256,23 @@ public sealed partial class AdminOidcIntegrationTests(PostgreSqlFixture database
     }
 
     [Theory]
+    [InlineData("access-iat-near-future")][InlineData("access-nbf-near-future")]
+    public async Task AccessTokenRetainsDocumentedClockTolerance(string defect)
+    {
+        using var authority = new OidcTestAuthority();
+        using var factory = OidcFactory(authority);
+        using var client = Browser(factory);
+        var handshake = await Start(client);
+        using var response = await Callback(client, handshake, authority.Code(handshake.Query, accessDefect: defect));
+        Assert.Equal("/admin/document-files", response.Headers.Location!.OriginalString);
+        Assert.Equal(1, Tickets(factory).Count);
+    }
+
+    [Theory]
     [InlineData("sub-mismatch")][InlineData("sub-missing")][InlineData("sub-empty")][InlineData("sub-number")][InlineData("sub-array")][InlineData("sub-duplicate")]
     [InlineData("iss-array")][InlineData("iss-number")][InlineData("iss-empty")][InlineData("iss-duplicate")]
     [InlineData("access-expired")][InlineData("access-typ")][InlineData("access-aud")][InlineData("access-issuer")][InlineData("access-signature")]
-    [InlineData("access-nbf-future")][InlineData("nbf-missing")]
+    [InlineData("access-nbf-future")][InlineData("access-iat-future")][InlineData("nbf-missing")]
     public async Task InvalidAccessTokenIsRejectedWithoutTicket(string accessDefect)
     {
         using var authority = new OidcTestAuthority();
@@ -254,12 +306,11 @@ public sealed partial class AdminOidcIntegrationTests(PostgreSqlFixture database
     }
 
     /// <summary>
-    /// Declared merge (issue #70 D2): the package reports the user's cancellation and a gate
-    /// denial with the same bounded reason, so both surface as the merged notAdmin outcome. The
-    /// pending state stays single-use: the error answer consumes it before anything else.
+    /// The package separates cancellation from gate denial; the host keeps both on the
+    /// existing notAdmin result. Repeated cancellation still creates no ticket or exchange.
     /// </summary>
     [Fact]
-    public async Task CancelledAnswersMergedDeniedResultAndConsumesPendingOnce()
+    public async Task CancelledAnswersDeniedResultWithoutTicketOrExchange()
     {
         using var authority = new OidcTestAuthority();
         using var factory = OidcFactory(authority);
@@ -282,6 +333,9 @@ public sealed partial class AdminOidcIntegrationTests(PostgreSqlFixture database
     [Theory]
     [InlineData("500", AdminLoginResponseWriter.SignInFailedRedirect)]
     [InlineData("json", AdminLoginResponseWriter.SignInFailedRedirect)]
+    [InlineData("scope", AdminLoginResponseWriter.SignInFailedRedirect)]
+    [InlineData("duplicate", AdminLoginResponseWriter.SignInFailedRedirect)]
+    [InlineData("oversized", AdminLoginResponseWriter.SignInFailedRedirect)]
     [InlineData("timeout", AdminLoginResponseWriter.IdentityUnavailableRedirect)]
     public async Task BadTokenResponsePublishesNoTicketAndNeverRetriesCode(string failure, string target)
     {
@@ -294,6 +348,26 @@ public sealed partial class AdminOidcIntegrationTests(PostgreSqlFixture database
         Failed(await Callback(client, handshake, code));
         Assert.Equal(1, authority.Redeems);
         Assert.Equal(0, Tickets(factory).Count);
+    }
+
+    [Theory]
+    [InlineData(null)][InlineData("openid")][InlineData("openid profile")]
+    public async Task OptionalScopeEchoAcceptsOnlyRequestedScopes(string? scope)
+    {
+        using var authority = new OidcTestAuthority { TokenScope = scope };
+        using var factory = OidcFactory(authority);
+        using var client = Browser(factory);
+        var validation = factory.Services.GetRequiredService<IOptions<SignaCoreHostedLoginOptions>>().Value.Validation;
+        Assert.Equal(TimeSpan.FromSeconds(30), validation.ClockSkew);
+        Assert.True(validation.RejectFutureIssuedAt);
+        Assert.True(validation.RequireScopeEchoSubset);
+        Assert.True(validation.RejectDuplicateJsonMembers);
+        Assert.Equal(64 * 1024, validation.MaxTokenResponseBytes);
+        Assert.Equal(4 * 1024, validation.MaxLogoutResponseBytes);
+        var handshake = await Start(client);
+        using var response = await Callback(client, handshake, authority.Code(handshake.Query));
+        Assert.Equal("/admin/document-files", response.Headers.Location!.OriginalString);
+        Assert.Equal(1, Tickets(factory).Count);
     }
 
     [Theory]

@@ -18,8 +18,8 @@ namespace Doctheca.Host;
 /// <item>The fixed Loki stream label <c>service=Doctheca</c> is preserved so existing Grafana
 /// queries keep working; the sink-owned <c>level</c> label is kept and no request/user/id
 /// value is promoted to a stream label.</item>
-/// <item>Plain-HTTP Loki endpoints are accepted through an explicit
-/// <c>AllowInsecureHttp = true</c>: this is a deliberate acceptance of the existing
+/// <item>ServiceMantle accepts HTTP and HTTPS Loki endpoints. Keeping plain HTTP is a
+/// deliberate acceptance of the existing
 /// intranet HTTP deployment, not an automatic trust of the network. Use HTTPS whenever the
 /// path crosses an untrusted network.</item>
 /// <item>Minimum level Information with Warning overrides for <c>Microsoft.AspNetCore</c> and
@@ -76,9 +76,6 @@ public static class DocthecaLoggingExtensions
         {
             options.Enabled = !string.IsNullOrWhiteSpace(address);
             options.Endpoint = endpoint;
-            // Explicit acceptance of the existing trusted-network HTTP Loki deployment
-            // contract; ServiceMantle does not presume the network is trusted.
-            options.AllowInsecureHttp = true;
             options.Labels = new Dictionary<string, string>
             {
                 ["service"] = LokiServiceLabelValue

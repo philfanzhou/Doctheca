@@ -8,7 +8,7 @@
   <ItemGroup>
     <PackageReference Include="DocumentFormat.OpenXml" Version="3.5.1" />
     <PackageReference Include="Mapster" Version="10.0.13" />
-    <PackageReference Include="Markdig" Version="1.4.0" />
+    <PackageReference Include="Markdig" Version="1.4.1" />
     <PackageReference Include="OpenSearch.Net" Version="2.2.0" />
     <PackageReference Include="PdfPig" Version="0.1.16" />
     <!-- ServiceMantle.Web types used directly by the Service layer: ServiceLogContext for the
@@ -19,7 +19,7 @@
          references the library only for those types and never references the Host. Kept in
          lockstep with the Host's ServiceMantle.Web version (0.3.1-rc.1) so the same assembly is
          never double-pinned. -->
-    <PackageReference Include="ServiceMantle.Web" Version="0.3.1-rc.1" />
+    <PackageReference Include="ServiceMantle.Web" Version="0.3.3" />
   </ItemGroup>
 
   <PropertyGroup>

@@ -39,6 +39,10 @@ public static class AdminOidcRegistration
             options.ClientSecret = settings.ClientSecret;
             options.RedirectUri = settings.RedirectUri;
             options.Scope = "openid profile";
+            // Preserve the documented 30-second lifetime tolerance. Keep future-iat rejection
+            // enabled: it also protects the access token, whose old validator enforced it.
+            // Scope, duplicate-JSON and response-size checks keep their strict defaults too.
+            options.Validation.ClockSkew = TimeSpan.FromSeconds(30);
             options.SessionCookieName = AdminOidcConstants.SessionCookie;
             options.AntiforgeryHeaderName = AdminOidcConstants.CsrfHeader;
             options.TicketCapacity = TicketCapacity;

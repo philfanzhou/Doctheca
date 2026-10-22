@@ -11,7 +11,7 @@ Old access/refresh Cookies no longer authenticate, refresh or revoke sessions.
 ## Shared and local responsibilities
 
 Since issue #70 the OIDC protocol runs in the official `SignaCore.Client.AspNetCore` package
-(0.1.13): it owns the authorization-code request, the hardened single-use callback, strict ID and
+(0.1.18): it owns the authorization-code request, the hardened single-use callback, strict ID and
 access-token validation, issuer/subject correlation, the bounded server-side ticket/pending/return
 stores with their sweep, the user-neutral CSRF boundary, the local-session-first prepared logout,
 and secret-free bounded logging. Doctheca keeps a thin adaptation layer in
@@ -66,7 +66,7 @@ redirects. Unconfigured requests return
 
 | Route | Configured result |
 | --- | --- |
-| `GET /admin/auth/oidc/start?returnUrl=...` | 302 to the trusted authorization endpoint with code, S256 PKCE, `openid profile`, state and nonce. Missing/empty return URL defaults to `/`. Invalid, duplicate or unsupported input returns a fixed 400 before creating pending state. Discovery failure redirects to `/?authError=identityUnavailable`. |
+| `GET /admin/auth/oidc/start?returnUrl=...` | 302 to the trusted authorization endpoint with code, S256 PKCE, `openid profile`, state and nonce. A short-lived per-state HttpOnly binding Cookie is scoped to the callback path; the browser must return it. Missing/empty return URL defaults to `/`. Invalid, duplicate or unsupported input returns a fixed 400 before creating pending state. Discovery failure redirects to `/?authError=identityUnavailable`. |
 | `GET /admin/auth/oidc/callback` | Consumes pending once, validates the single-valued response, callback issuer, nonce and both tokens, then signs in only when the pre-sign-in gate allows the verified access-token `role=admin`. Success redirects to the validated station-local return path. Failure redirects to `/?authError=signInFailed`; a denied or cancelled sign-in and a transport failure redirect to `/?authError=notAdmin` and `/?authError=identityUnavailable` respectively; protocol input is never echoed. |
 | `GET /admin/auth/oidc/session` | 200 `{"success":true,"data":{"authenticated":true,"reason":"authenticated","username":"...","expiresAt":"..."}}` for a live session; absent/expired session is 401 `{"success":false,"message":"Re-authentication is required.","data":{"authenticated":false,"reason":"reauthenticationRequired"}}`. Username comes from the verified ID token; the expiry is read back from the server-side ticket. |
 | `GET /admin/auth/oidc/csrf` | 200 `{"token":"..."}` (the package shape) and HttpOnly antiforgery Cookie. The SPA reads the `token` member; the retired `data.requestToken` shape no longer exists. |
@@ -90,6 +90,12 @@ Return URLs accept station-local absolute paths, including SPA hash routes such 
 External origins, encoded alternate origins, backslashes, control characters, dot segments and
 `/admin/auth` paths are rejected. Login code/state never enter the SPA or business return URL.
 
+The login binding Cookie is Secure (except validated development loopback), SameSite=Lax and
+expires after five minutes. A missing, wrong, other-state or replayed binding fails before code
+redemption and creates no session. A callback expires its matching Cookie. Cookie names contain
+state for protocol correlation; application pages, redirects and logs never echo it. The package
+now distinguishes `UserCanceled` and `PreSignInDenied`; both retain `authError=notAdmin`.
+
 ## Session, token and CSRF guarantees
 
 The package independently verifies both tokens' signatures, issuer, application audience, type
@@ -104,6 +110,13 @@ create no new ticket or session Cookie and do not renew or replace an existing s
 OIDC validation semantics apply to the ID token (a multi-valued `aud` containing the client id is
 accepted and no `iat` claim is demanded); the sign-in session principal carries the verified
 ID-token claims.
+
+Doctheca explicitly keeps the documented 30-second clock tolerance. The package's other new
+validation defaults remain strict: `iat`, when present, cannot be more than 30 seconds in the
+future (now also for ID tokens); token-response scope must be a subset of `openid profile`
+when present; duplicate top-level response members are refused; token and prepared-logout
+responses are limited to 64 KB and 4 KB respectively. Missing ID-token `iat` remains valid.
+Keep Identity and Host clocks synchronized; no new configuration key or SQL migration is needed.
 
 `docthecaAdminSession` is HttpOnly, Secure and SameSite=Lax; it contains the raw opaque key of
 the server-side ticket, never a token. The ticket keeps both tokens server-side and expires no

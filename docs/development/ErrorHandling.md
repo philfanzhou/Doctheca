@@ -99,7 +99,7 @@ What is deliberately NOT covered (existing behavior preserved):
 
 Rollback: remove the `UseWhen` branch and the conditional-mapping registration from
 `Program.cs` and pin `ServiceMantle.Web` back to `0.2.0` in both the Host and Service projects
-(the current baseline is the unified `0.2.1` release);
+(the current baseline is the unified `0.3.3` release);
 the other ServiceMantle slices (logging, health probes, security headers) keep working.
 
 ## Parameter Validation
@@ -141,8 +141,8 @@ variable/command line > Consul KV > `appsettings.json`):
 > fallback to a hard-coded `Serilog:WriteTo:1:Args:uri` address no longer exists — operators
 > must set `Loki:Uri` explicitly.
 >
-> **Plain HTTP**: the existing intranet HTTP Loki deployment is accepted through an explicit
-> `AllowInsecureHttp = true` in `DocthecaLoggingExtensions`. This is a deliberate acceptance
+> **Plain HTTP**: ServiceMantle 0.3.3 accepts HTTP and HTTPS endpoints without a separate switch.
+> Keeping the existing intranet HTTP Loki deployment is a deliberate acceptance
 > that log content travels in cleartext on that path, not an automatic presumption that the
 > network is trusted; use HTTPS whenever the path crosses an untrusted network.
 >
