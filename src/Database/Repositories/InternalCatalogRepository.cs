@@ -1,0 +1,59 @@
+using System.Data;
+using Doctheca.Domain.Models;
+using Doctheca.Domain.Repositories;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
+
+namespace Doctheca.Database.Repositories;
+
+public sealed class InternalCatalogRepository(DbContextOptions<DocthecaDbContext> options) : IInternalCatalogRepository
+{
+    // EF query/command errors can contain raw provider details before the HTTP boundary sees
+    // them. Isolate anonymous reads from that logging; the marked endpoint's safe exception
+    // handler owns diagnostics. Existing administrative contexts retain their logging.
+    private DocthecaDbContext CreateContext() => new(new DbContextOptionsBuilder<DocthecaDbContext>(options)
+        .UseLoggerFactory(NullLoggerFactory.Instance).EnableSensitiveDataLogging(false).EnableDetailedErrors(false).Options);
+
+    public async Task<IReadOnlyList<InternalDefinition>> ReadDefinitionsAsync(
+        InternalCatalogQuery query, CancellationToken cancellationToken)
+    {
+        await using var context = CreateContext();
+        await using var transaction = await context.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead, cancellationToken);
+        var definitions = context.StructureDefinitions.AsNoTracking();
+        if (query.After is { } after) definitions = definitions.Where(item => item.Id.CompareTo(after) > 0);
+        var rows = await definitions.OrderBy(item => item.Id).Take(query.PageSize + 1)
+            .Select(item => new { item.Id, item.Name }).ToListAsync(cancellationToken);
+        var ids = rows.Select(item => item.Id).ToArray();
+        var levels = await context.StructureLevels.AsNoTracking().Where(item => ids.Contains(item.DefinitionId))
+            .OrderBy(item => item.SortOrder).ThenBy(item => item.Id)
+            .Select(item => new { item.DefinitionId, Level = new InternalLevel(item.Id, item.Name, item.ParentLevelId, item.SortOrder) })
+            .ToListAsync(cancellationToken);
+        var byDefinition = levels.ToLookup(item => item.DefinitionId, item => item.Level);
+        await transaction.CommitAsync(cancellationToken);
+        return rows.Select(item => new InternalDefinition(item.Id, item.Name, byDefinition[item.Id].ToList())).ToList();
+    }
+
+    public async Task<InternalDocumentPage> ReadDocumentsAsync(InternalCatalogQuery query, CancellationToken cancellationToken)
+    {
+        await using var context = CreateContext();
+        await using var transaction = await context.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead, cancellationToken);
+        if (query.StructureDefinitionId is { } requested &&
+            !await context.StructureDefinitions.AnyAsync(item => item.Id == requested, cancellationToken))
+            return new InternalDocumentPage(false, []);
+
+        var documents = context.DocumentFiles.AsNoTracking().Where(file => context.DocumentParses.Any(parse =>
+            parse.DocumentFileId == file.Id && parse.Status == DocumentParseStatus.Parsed &&
+            context.DocumentStructureNodes.Any(node => node.ParseId == parse.Id)));
+        if (query.After is { } after) documents = documents.Where(item => item.Id.CompareTo(after) > 0);
+        if (query.StructureDefinitionId is { } definition) documents = documents.Where(item => item.StructureDefinitionId == definition);
+        if (query.Subject is { } subject) documents = documents.Where(item => item.Subject == subject);
+        if (query.Grade is { } grade) documents = documents.Where(item => item.Grade == grade);
+        var rows = await documents.OrderBy(item => item.Id).Take(query.PageSize + 1)
+            .Select(item => new InternalDocument(item.Id, item.FileName, item.Subject, item.Grade, item.StructureDefinitionId,
+                context.StructureDefinitions.Where(definition => definition.Id == item.StructureDefinitionId)
+                    .Select(definition => definition.Name).FirstOrDefault()))
+            .ToListAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+        return new InternalDocumentPage(true, rows);
+    }
+}

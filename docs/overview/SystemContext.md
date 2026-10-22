@@ -28,10 +28,16 @@ Doctheca :5012 ─────► SignaCore :5002
 | Caller | Entry | Identity | Purpose |
 |--------|------|------|------|
 | Admin UI | `/`, `/admin/*` | Identity `role=admin` Cookie/JWT | File, parse, metadata, export, and search management |
+| Internal business services (opt-in) | `/internal/v1/structure-definitions`, `/internal/v1/documents` | Anonymous; deployer restricts network reachability | Read-only definition and marked-document catalogs |
 
-Regular Identity users have no administrator role and cannot log in or call the admin API. Currently Doctheca
-provides no dedicated HTTP interface for Quaestura; if a real caller appears later, the data
-contract and service authentication must be redesigned.
+Regular Identity users have no administrator role and cannot log in or call the admin API.
+`InternalApi:Enabled` defaults to false; missing or malformed values disable the internal API.
+Only explicit true exposes the two catalog GET routes, using downstream field allow-lists.
+All other `/internal` paths and unsupported methods return safe 404 instead of static files or
+SPA HTML. This introduces no caller authentication or document-level authorization: deployment
+must make `/internal/*` reachable only from the internal network. It grants no admin permission.
+Tree, content/image, search and audio reads remain separate follow-up work (#98–#101).
+See [Internal API](../Integration/InternalApi.md) for pagination and deployment responsibilities.
 
 ## Downstream Dependencies
 

@@ -108,10 +108,15 @@ public sealed class ServiceMantleSecurityHeadersTests : ServiceMantleIntegration
     {
     }
 
-    [Fact]
-    public void MarkedEndpoints_AreExactlyTheJsonAdminEndpoints()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void MarkedEndpoints_AreExactlyTheJsonAdminAndEnabledInternalEndpoints(bool internalEnabled)
     {
-        using var factory = CreateFactory();
+        using var factory = CreateFactory(settings: new Dictionary<string, string?>
+        {
+            ["InternalApi:Enabled"] = internalEnabled.ToString()
+        });
         var endpoints = factory.Services.GetRequiredService<EndpointDataSource>().Endpoints
             .OfType<RouteEndpoint>()
             .Select(endpoint =>
@@ -124,11 +129,18 @@ public sealed class ServiceMantleSecurityHeadersTests : ServiceMantleIntegration
         var marked = endpoints.Where(pair => pair.Marked).Select(pair => pair.Key).ToHashSet();
         var all = endpoints.Select(pair => pair.Key).ToHashSet();
 
-        // Exactly the expected JSON admin endpoints are marked.
+        var expected = new HashSet<string>(ExpectedMarked, StringComparer.Ordinal);
+        if (internalEnabled)
+        {
+            expected.Add("GET /internal/v1/structure-definitions");
+            expected.Add("GET /internal/v1/documents");
+        }
+        // Exactly the expected JSON endpoints are marked; disabled internal routes do not exist.
         Assert.True(
-            marked.SetEquals(ExpectedMarked),
-            $"marked set mismatch.\n  extra: {string.Join(", ", marked.Except(ExpectedMarked))}\n" +
-            $"  missing: {string.Join(", ", ExpectedMarked.Except(marked))}");
+            marked.SetEquals(expected),
+            $"marked set mismatch.\n  extra: {string.Join(", ", marked.Except(expected))}\n" +
+            $"  missing: {string.Join(", ", expected.Except(marked))}");
+        if (!internalEnabled) Assert.DoesNotContain(all, route => route.Contains("/internal/", StringComparison.Ordinal));
 
         // The rendering-contract endpoints exist and are unmarked.
         foreach (var unmarked in ExpectedUnmarked)
