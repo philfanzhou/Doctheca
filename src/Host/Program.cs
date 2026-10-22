@@ -1,3 +1,4 @@
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using System.Data.Common;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
@@ -155,6 +156,10 @@ builder.Services.AddScoped(sp => new StructureAudioStore(
     () => sp.GetRequiredService<IOssService>(), documentAudioStatus,
     sp.GetRequiredService<ILogger<StructureAudioStore>>(), documentAudioPlayback));
 builder.Services.AddScoped<StructureAudioService>();
+builder.Services.AddSingleton(InternalAudioSettings.Evaluate(documentAudioStatus, builder.Configuration["DocumentAudio:PlaybackLinkSeconds"]));
+builder.Services.TryAddSingleton(TimeProvider.System);
+builder.Services.AddSingleton<InternalAudioTokens>();
+builder.Services.AddSingleton<AudioScratchSpace>();
 
 // Search Index Services
 builder.Services.Configure<OpenSearchOptions>(builder.Configuration.GetSection("OpenSearch"));
@@ -194,6 +199,7 @@ builder.Services.AddScoped<IDocumentStructureAudioRepository, DocumentStructureA
 builder.Services.AddScoped<IInternalCatalogRepository, InternalCatalogRepository>();
 builder.Services.AddScoped<IInternalStructureRepository, InternalStructureRepository>();
 builder.Services.AddScoped<IInternalContentRepository, InternalStructureRepository>();
+builder.Services.AddScoped<IInternalAudioRepository, InternalStructureRepository>();
 builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
 
 // Domain Services
@@ -409,6 +415,7 @@ app.MapStructureAudioEndpoints();
 app.MapInternalCatalogEndpoints(internalApiOptions);
 app.MapInternalStructureEndpoints(internalApiOptions);
 app.MapInternalContentEndpoints(internalApiOptions);
+app.MapInternalAudioEndpoints(internalApiOptions);
 app.MapInternalSearchEndpoints(internalApiOptions);
 
 // ServiceMantle fixed health endpoints: GET /health/live (liveness, never touches the

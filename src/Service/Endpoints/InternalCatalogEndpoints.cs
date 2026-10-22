@@ -16,6 +16,10 @@ public static class InternalCatalogEndpoints
             if (context.Request.Path.StartsWithSegments("/internal", StringComparison.OrdinalIgnoreCase) &&
                 (!options.Enabled || context.GetEndpoint()?.Metadata.GetMetadata<InternalApiEndpointMetadata>() is null))
             {
+                // Reserved internal errors, including disabled audio links, must never be cached or used as referrers.
+                context.Response.Headers.CacheControl = "no-store";
+                context.Response.Headers.XContentTypeOptions = "nosniff";
+                context.Response.Headers["Referrer-Policy"] = "no-referrer";
                 await NotFound().ExecuteAsync(context);
                 return;
             }

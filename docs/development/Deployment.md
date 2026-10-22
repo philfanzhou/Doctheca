@@ -133,7 +133,7 @@ and the existing `Oss:InternalEndpoint`, `Oss:AccessKey`, `Oss:SecretKey` and `O
 `Oss:PublicBaseUrl` is not required for import or cleanup. Invalid `DocumentAudio` flags disable the audio lifecycle without stopping existing features.
 Missing S3 settings disable recovery without constructing a client; document/structure reads remain
 available, while legacy storage operations keep their existing configuration requirements.
-Diagnostics contain only key names. `DocumentAudio:MaxFileBytes` defaults to 20971520 (20 MiB), and `DocumentAudio:MaxArchiveBytes` to 209715200 (200 MiB) for uploaded file bytes and the expanded total across the entire request. Limits must be positive, file <= archive, and archive <= Int64.MaxValue - 1048576. The full multipart body allows only 1 MiB additional overhead. Imports are capped at 1000 audio files, 4000 ZIP entries, 1000-character paths and 255-character segments. Invalid settings disable audio. Request/expanded overflow returns 413; invalid batches/per-file excess return 400, with no object or row writes. `DocumentAudio:PlaybackLinkSeconds` defaults to 300 seconds and allows 60–3600. Invalid/malformed TTL or missing/invalid `Oss:PublicBaseUrl` disables playback only. Playback never falls back to the internal address. The public host must be browser-reachable (HTTPS for an HTTPS console); a path-prefix proxy must strip the prefix and preserve signed Host/query. Signing uses the standard `us-east-1` region without public endpoint discovery. Configure S3/proxy CORS for actual console origins when fetch/WebAudio is used, and allow required GET/HEAD/Range behavior. Internal object checks have a 30-second combined playback deadline. Treat the signed URL as a temporary credential: no logs, persistence, HAR/traces or analytics. Issued URLs may remain usable until expiry after deletion/replacement/disable, and expiry does not stop an already-open stream.
+Diagnostics contain only key names. `DocumentAudio:MaxFileBytes` defaults to 20971520 (20 MiB), and `DocumentAudio:MaxArchiveBytes` to 209715200 (200 MiB) for uploaded file bytes and the expanded total across the entire request. Limits must be positive, file <= archive, and archive <= Int64.MaxValue - 1048576. The full multipart body allows only 1 MiB additional overhead. Imports are capped at 1000 audio files, 4000 ZIP entries, 1000-character paths and 255-character segments. Invalid settings disable audio. Request/expanded overflow returns 413; invalid batches/per-file excess return 400, with no object or row writes. `DocumentAudio:PlaybackLinkSeconds` defaults to 300 seconds and allows 60–3600. Invalid/malformed TTL or missing/invalid `Oss:PublicBaseUrl` disables administrator playback only. Playback never falls back to the internal address. The public host must be browser-reachable (HTTPS for an HTTPS console); a path-prefix proxy must strip the prefix and preserve signed Host/query. Signing uses the standard `us-east-1` region without public endpoint discovery. Configure S3/proxy CORS for actual console origins when fetch/WebAudio is used, and allow required GET/HEAD/Range behavior. Internal object checks have a 30-second combined playback deadline. Treat the signed URL as a temporary credential: no logs, persistence, HAR/traces or analytics. Issued URLs may remain usable until expiry after deletion/replacement/disable, and expiry does not stop an already-open stream.
 
 After a parse/document deletion, object cleanup is best-effort. An administrator can call
 `POST /admin/structure-audio/orphan-sweep` to remove unreferenced `audio/` objects older than one
@@ -429,3 +429,27 @@ gunzip -c backup_doctheca_20240101_020000.sql.gz | docker exec -i ruoyu-postgres
 The administration SPA uses [hosted login](../modules/AdminAuthentication/07-HostedLogin.md).
 See [Breaking changes and upgrade](HostedLoginUpgrade.md) for registration, configuration,
 retired endpoints/Cookies and the matched-image rollback contract.
+
+### Internal audio proxy
+
+The [internal audio contract](../Integration/InternalApi.md#direct-node-audio-and-temporary-playback)
+adds opt-in anonymous node audio list/content GETs using existing settings only. Complete internal
+S3 configuration, enabled audio and valid 60–3600-second PlaybackLinkSeconds are required (default
+300). Missing/malformed public S3 URL does not disable this proxy; administrator public signing
+still requires it. LocalFile is unavailable. Restrict `/internal/*` at the network/reverse proxy;
+the switch adds no caller or document authorization.
+
+Allow bounded temporary disk capacity per active transfer up to DocumentAudio:MaxFileBytes.
+The server creates unpredictable DeleteOnClose scratch files, verifies actual length and metadata,
+and cancels the internal SDK copy after 30 seconds or caller cancellation. It rechecks committed
+membership/identity and token expiry after buffering, before serving 200/206/416 bytes. Failures
+before transfer use fixed safe errors; failures after response start abort. Expiry/revocation
+cannot retract an already-admitted stream, but the next request always rechecks.
+
+Playback links contain opaque process-local protected IDs, never S3 locations or credentials.
+Do not record complete links/tokens in access logs, proxy diagnostics, traces or analytics; the
+host suppresses raw hosting queries even without hosted admin login. A restart or a different
+process can invalidate links early; clients must re-list. There is no cross-instance token key
+sharing requirement or configuration. No database/object write, migration, package, port or
+container topology change is introduced. Disable InternalApi and restart or restore the prior
+image to remove the routes without data rollback. Existing audio backup/recovery rules remain.

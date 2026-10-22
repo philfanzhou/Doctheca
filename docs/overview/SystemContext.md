@@ -28,7 +28,7 @@ Doctheca :5012 ─────► SignaCore :5002
 | Caller | Entry | Identity | Purpose |
 |--------|------|------|------|
 | Admin UI | `/`, `/admin/*` | Identity `role=admin` Cookie/JWT | File, parse, metadata, export, and search management |
-| Internal business services (opt-in) | `/internal/v1/structure-definitions`, `/internal/v1/documents`, `/internal/v1/documents/{documentFileId}/structure`, `/internal/v1/structure-nodes/{nodeId}/content`, `/internal/v1/structure-nodes/{nodeId}/images/{imageId}/content`, `/internal/v1/search` | Anonymous; deployer restricts network reachability | Read-only definition and marked-document catalogs, current document trees, revision-checked content pages, owned image bytes and subtree search |
+| Internal business services (opt-in) | `/internal/v1/structure-definitions`, `/internal/v1/documents`, `/internal/v1/documents/{documentFileId}/structure`, `/internal/v1/structure-nodes/{nodeId}/content`, `/internal/v1/structure-nodes/{nodeId}/images/{imageId}/content`, `/internal/v1/search`, `/internal/v1/structure-nodes/{nodeId}/audio` and its expiring content links | Anonymous; deployer restricts network reachability | Read-only definition and marked-document catalogs, current document trees, revision-checked content pages, owned image bytes and subtree search |
 
 Regular Identity users have no administrator role and cannot log in or call the admin API.
 `InternalApi:Enabled` defaults to false; missing or malformed values disable the internal API.
@@ -42,7 +42,7 @@ resolves ownership in its own snapshot; SHA-256 revisions reject changed tree/bl
 between pages with 409. Owned images are proxied through StructaDoc or legacy OSS with safe
 errors and stream disposal, without storage links. Search validates current-node ownership and strict bounded
 cursors, then applies the existing indexed subtree filter; the derived index remains eventually consistent.
-Audio remains separate follow-up work (#101).
+Direct audio uses process-local expiring same-origin links (#101), internal S3 and bounded seekable scratch buffering. Membership and expiry are rechecked after buffering before admission; no storage identity is exposed. Restart invalidates links. No public S3 address is needed for this proxy; admin signing is unchanged. Provide scratch capacity and omit token-bearing URLs from application/proxy logs. A post-admission removal may race an existing stream; every new request rechecks.
 See [Internal API](../Integration/InternalApi.md) for pagination and deployment responsibilities.
 
 ## Downstream Dependencies

@@ -12,7 +12,7 @@ public sealed class AudioStorageException() : Exception("Audio storage is unavai
 /// always under <see cref="DocumentAudioOptions.ObjectPrefix"/> as
 /// <c>audio/{parseId}/{audioId}{extension}</c>. Keys are exposed only inside an authorized short-lived public playback URL.
 /// </summary>
-public sealed class StructureAudioStore
+public sealed partial class StructureAudioStore
 {
     private readonly Lazy<IOssService> _ossService;
     private readonly ILogger<StructureAudioStore> _logger;

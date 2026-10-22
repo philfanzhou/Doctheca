@@ -10,6 +10,8 @@ Only explicit true at process startup registers these anonymous routes:
 - `GET /internal/v1/structure-nodes/{nodeId}/content`
 - `GET /internal/v1/structure-nodes/{nodeId}/images/{imageId}/content`
 - `GET /internal/v1/search`
+- `GET /internal/v1/structure-nodes/{nodeId}/audio`
+- `GET /internal/v1/structure-nodes/{nodeId}/audio/{audioId}/content?token=...`
 
 There is no caller authentication or document-level authorization. The deployer must restrict
 the entire `/internal` path segment, case insensitively, to internal callers and prevent direct
@@ -18,7 +20,7 @@ Existing `/admin/*` authentication and CSRF rules are unchanged. See
 [deployment](../development/Deployment.md#internal-api).
 
 Catalogs (#97), current trees (#98), content/owned images (#99) and search (#100) are implemented.
-Audio (#101) is a separate task under [#91](https://github.com/philfanzhou/Doctheca/issues/91).
+Direct current-node audio and expiring proxy playback (#101) are implemented under [#91](https://github.com/philfanzhou/Doctheca/issues/91).
 Unimplemented paths return 404 even when the setting is enabled.
 
 ## Lists and inputs
@@ -320,3 +322,66 @@ paths and `/internal` itself; `/internalized` remains an ordinary SPA path.
 No database migration, new package, storage write or port change is introduced. Disable the
 setting and restart, or restore the previous image, to remove the API without data rollback.
 This API does not implement network isolation or guarantee a snapshot across list requests.
+
+## Direct node audio and temporary playback
+
+`GET /internal/v1/structure-nodes/{nodeId}/audio` accepts one hyphenated UUID and no query.
+Its success envelope contains exactly `data: {documentFileId,parseId,nodeId,items}`. Each item
+contains exactly `id,fileName,contentType,sizeBytes,playback`, where `fileName` is the imported
+basename and `playback` contains exactly `url,expiresAt,expiresInSeconds`. Items are ordered by
+source path ordinal, then UUID. Only audio directly associated with this current node/parse
+is included; descendants, unlinked rows and other parses are excluded. An empty node returns
+an empty list. Issuance performs no object probe and does not promise future availability.
+
+The byte route accepts node/audio UUIDs and exactly one `token`; unknown or duplicate query
+keys and malformed IDs return 400 `DOCTHECA_INTERNAL_INVALID`. Missing, empty, over-2048-character,
+noncanonical-base64url, invalid, tampered, expired, wrong-purpose or route-mismatched tokens
+return the same 404 `DOCTHECA_INTERNAL_AUDIO_NOT_FOUND` without storage access. Links are relative
+to the application's PathBase, never derived from Host, and never redirect to storage or admin.
+Treat links as opaque, short-lived playback capabilities. They contain only protected versioned
+document/parse/node/audio IDs, no storage identity or application credential. The singleton
+purpose-specific ephemeral protector is separate from the admin key ring; no token cache,
+database row or object is created. Restart invalidates old links; callers re-list after expiry
+or restart. `expiresAt` is the protector's exact expiry. Existing `DocumentAudio:PlaybackLinkSeconds`
+defaults to 300; an integer 60–3600 is valid. Malformed/out-of-range TTL disables this proxy.
+
+Proxy availability requires enabled audio with complete internal S3 configuration and valid
+limits/TTL. Missing or invalid `Oss:PublicBaseUrl` does not disable this proxy; administrator
+public S3 signing retains its independent public-address requirement. LocalFile is unsupported.
+An existing node with unavailable audio returns 503 `DOCTHECA_INTERNAL_AUDIO_UNAVAILABLE` /
+`Audio is unavailable.`; an absent/stale list node returns 404 `DOCTHECA_INTERNAL_NODE_NOT_FOUND`.
+
+Listing and each byte admission resolve the owning document's current parsed tree, node and
+direct audio membership in one read-only PostgreSQL repeatable-read transaction. No writer
+locks or state writes are made. Every request rechecks ownership; a token is not a lease.
+Before any response bytes, the store validates exact deterministic key, imported media type,
+positive stored size and configured `DocumentAudio:MaxFileBytes`. Internal S3 uses the SDK's
+asynchronous cancellation callback with a combined 30-second deadline; unsupported providers
+fail instead of falling back to legacy unbounded downloads. Bytes go into a random server-owned
+seekable DeleteOnClose scratch file, bounded by both expected and configured size. Oversized,
+short, missing, denied, unreachable, timed-out or throwing reads and scratch failures return
+the fixed audio 503, without upstream headers/messages or partial success.
+
+After buffering, expiry and current node/audio membership are re-read in a fresh snapshot,
+including the same object key/size/media identity. Committed revocation before admission is
+refused with the safe audio 404. A removal after the final admission snapshot may race an
+already-admitted stream; the next request rechecks and fails. Relinking can make a still-valid
+capability usable again. Neither revocation nor expiry retracts already-admitted/client-buffered
+bytes. This capability provides no caller authentication, document authorization, cross-process
+token sharing or uninterrupted availability.
+
+Admitted GETs support standard single byte ranges: 200 full, 206 satisfiable range, 416
+unsatisfiable range, with allow-listed type and exact length. HEAD and other unsupported methods
+retain the reserved 404. List/byte successes and errors use no-store, nosniff and no-referrer;
+reserved internal 404s carry the same headers. Cancellation propagates through DB/S3/admission/
+response copy; all streams and scratch are released. Pre-start unexpected byte failures use
+fixed 500 Problem Details. Post-start failure/disconnect aborts the connection and never appends
+JSON. Binary endpoints carry only the internal boundary marker, outside the JSON Problem Details
+branch. No proxy URL/token, decrypted payload, imported content, storage location, credential
+or provider diagnostics are logged. Hosting query diagnostics stay suppressed even without
+admin OIDC; deployer proxies/access logs must also omit token-bearing URLs. Provide scratch
+capacity for the configured bound and restrict `/internal/*` to the internal network.
+
+The additive routes require no migration, package, configuration key, port or topology change.
+Disable `InternalApi:Enabled` and restart or restore the previous image to remove them without
+data rollback. Audio import, admin preview/signing and the #90 backup/restore rules are unchanged.
