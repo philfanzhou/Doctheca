@@ -62,9 +62,12 @@ Polls `pending` + `parsing` records every 5 seconds:
 Page replacement is atomic on its own; the pre-existing image/Block/Markdown writes are not one
 transaction with it. A later failure can retain committed pages until retry, never a partial page
 set or a falsely published successful sync. The existing empty-Block behavior is unchanged.
-This slice stores labels only: Blocks/search responses, physical numbering, authentication and the
-console remain unchanged (#103/#104 own the later optional `pageLabel` projections). Old parses
-remain readable without labels and are not re-synchronized automatically. See the
+The two admin [ordered-block views](DocumentStructure.md#ordered-blocks) expose optional nullable
+`pageLabel` from these stored pages (#103), with one trusted parse/page batch per response,
+null labels on optional lookup failure and propagated request cancellation. No remote fetch or
+read-side mutation is performed. Search responses (#104), physical numbering, authentication and
+the console remain unchanged. Old parses remain readable without labels and are not
+re-synchronized automatically. See the
 [upgrade/down-script procedure](../database/migrations.md#printed-page-label-upgrade-issue-102).
 
 ## StructaDoc Client Contract Summary (IStructaDocClient)

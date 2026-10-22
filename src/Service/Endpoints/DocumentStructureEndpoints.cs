@@ -49,8 +49,10 @@ public static class DocumentStructureEndpoints
         Guid parseId,
         IDocumentParseService parseService,
         IDocumentParseBlockRepository blockRepository,
+        IDocumentParsePageRepository pageRepository,
         IOssService ossService,
         ILoggerFactory loggerFactory,
+        CancellationToken cancellationToken,
         [FromQuery] int? afterSequence = null,
         [FromQuery] int? limit = null)
     {
@@ -60,8 +62,8 @@ public static class DocumentStructureEndpoints
         return Results.Ok(new
         {
             success = true,
-            data = await ReadPageAsync(parse, parseService, blockRepository, ossService, loggerFactory,
-                afterSequence, limit, fromSequence: null, toSequence: null),
+            data = await ReadPageAsync(parse, parseService, blockRepository, pageRepository, ossService, loggerFactory,
+                afterSequence, limit, fromSequence: null, toSequence: null, cancellationToken),
         });
     }
 
@@ -70,9 +72,11 @@ public static class DocumentStructureEndpoints
         Guid nodeId,
         IDocumentParseService parseService,
         IDocumentParseBlockRepository blockRepository,
+        IDocumentParsePageRepository pageRepository,
         IDocumentStructureRepository structureRepository,
         IOssService ossService,
         ILoggerFactory loggerFactory,
+        CancellationToken cancellationToken,
         [FromQuery] int? afterSequence = null,
         [FromQuery] int? limit = null)
     {
@@ -86,8 +90,8 @@ public static class DocumentStructureEndpoints
         return Results.Ok(new
         {
             success = true,
-            data = await ReadPageAsync(parse, parseService, blockRepository, ossService, loggerFactory,
-                afterSequence, limit, node.StartSequence, node.EndSequence),
+            data = await ReadPageAsync(parse, parseService, blockRepository, pageRepository, ossService, loggerFactory,
+                afterSequence, limit, node.StartSequence, node.EndSequence, cancellationToken),
         });
     }
 
@@ -162,18 +166,40 @@ public static class DocumentStructureEndpoints
         DocumentParseModel parse,
         IDocumentParseService parseService,
         IDocumentParseBlockRepository blockRepository,
+        IDocumentParsePageRepository pageRepository,
         IOssService ossService,
         ILoggerFactory loggerFactory,
         int? afterSequence,
         int? limit,
         int? fromSequence,
-        int? toSequence)
+        int? toSequence,
+        CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var take = Math.Clamp(limit ?? DefaultBlockLimit, 1, MaxBlockLimit);
         // One extra row tells whether another page exists without a count query.
         var blocks = await blockRepository.GetPageBySequenceAsync(parse.Id, afterSequence, take + 1, fromSequence, toSequence);
         var hasMore = blocks.Count > take;
         if (hasMore) blocks.RemoveAt(blocks.Count - 1);
+
+        var pageKeys = blocks.ToDictionary(block => block.Id, block => DocumentParsePageIdentity.FromBlock(parse, block));
+        var wantedPages = pageKeys.Values.OfType<DocumentParsePageKey>().Distinct().ToArray();
+        IReadOnlyDictionary<DocumentParsePageKey, DocumentParsePageModel> pages =
+            new Dictionary<DocumentParsePageKey, DocumentParsePageModel>();
+        if (wantedPages.Length > 0)
+        {
+            try
+            {
+                pages = await pageRepository.ReadBatchAsync(wantedPages, cancellationToken);
+            }
+            catch (OperationCanceledException) { throw; }
+            catch (Exception)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                loggerFactory.CreateLogger(nameof(DocumentStructureEndpoints))
+                    .LogWarning("Optional ordered-block page labels unavailable");
+            }
+        }
 
         var imageUrls = new Dictionary<Guid, string?>();
         if (blocks.Any(block => block.ImageId != null))
@@ -186,6 +212,7 @@ public static class DocumentStructureEndpoints
             }
         }
 
+        cancellationToken.ThrowIfCancellationRequested();
         return new
         {
             items = blocks.Select(block => new
@@ -194,13 +221,14 @@ public static class DocumentStructureEndpoints
                 sequence = block.Sequence,
                 // page_id is 0-based; the reading view shows 1-based page numbers.
                 pageNumber = block.PageId + 1,
+                pageLabel = pageKeys[block.Id] is { } key ? pages.GetValueOrDefault(key)?.Label : null,
                 blockType = block.BlockType,
                 subType = block.SubType,
                 content = block.TextContent,
                 contentFormat = string.IsNullOrEmpty(block.TextFormat) ? null : block.TextFormat,
                 imageId = block.ImageId?.ToString(),
                 imageUrl = block.ImageId is { } imageId ? imageUrls.GetValueOrDefault(imageId) : null,
-            }),
+            }).ToArray(),
             nextAfterSequence = hasMore ? blocks[^1].Sequence : null,
             hasMore,
         };

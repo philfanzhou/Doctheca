@@ -55,7 +55,7 @@ Rules: name required (≤ 200), 1–50 levels, level names required (≤ 100), a
   "success": true,
   "data": {
     "items": [
-      { "id": "…", "sequence": 0, "pageNumber": 1, "blockType": "title", "subType": "heading-1",
+      { "id": "…", "sequence": 0, "pageNumber": 1, "pageLabel": "iv", "blockType": "title", "subType": "heading-1",
         "content": "Unit 1 The Changing World", "contentFormat": "plain", "imageId": null, "imageUrl": null }
     ],
     "nextAfterSequence": 199,
@@ -65,6 +65,23 @@ Rules: name required (≤ 200), 1–50 levels, level names required (≤ 100), a
 ```
 
 `pageNumber` is 1-based (`page_id + 1`). `imageUrl` is the image proxy URL for StructaDoc-backed parses (a presigned OSS URL for legacy parses). Pass `nextAfterSequence` as `afterSequence` until `hasMore` is false; pages never overlap or skip a block. 404 `DOCTHECA_PARSE_NOT_FOUND` for an unknown parse.
+
+Both this route and the node-block route below add nullable `pageLabel`, read from the locally
+synchronized [printed page data](../database/tables/document_parse_pages.md). Labels retain
+their exact Unicode, repeated or empty text and are untrusted display text, never page identities.
+An unlabeled/missing page, an older parse, or a block with unknown upstream page provenance
+returns null. In particular, an unknown page stored with the legacy `page_id=0` fallback cannot
+borrow physical page 1's label. Physical numbering, existing fields, bounds and the console's
+physical-page display remain unchanged.
+
+Only the returned blocks' trusted parse/page pairs are read, once per response after removing
+the cursor's extra row. Each batch sees one committed page set without mixing parses; reads
+never write page data or the search index and make no StructaDoc request. If that optional lookup
+fails, every label in the response is null and one fixed, content-free Warning is emitted.
+Request cancellation propagates to the page lookup and stops response publication instead of
+becoming a successful fallback. Existing block/image error behavior is unchanged. No schema,
+configuration or index migration is required; restoring the previous image removes the optional
+field and leaves stored labels intact.
 
 ### Structure tree
 
@@ -92,6 +109,6 @@ Rules: name required (≤ 200), 1–50 levels, level names required (≤ 100), a
 ## Validation
 
 - Unit: `Structure/DocumentStructureServiceTests` (every invalid save, stable ids, definition switching), `Structure/StructureDefinitionServiceTests`, `Structure/StructurePathResolverTests`, `OpenSearch/*` (filter, mapping v3, `structurePath`), `Parsing/StructaDocParseResultSyncTests` (sequence written).
-- PostgreSQL: `Database/StructureMigrationTests` (populated upgrade, rollback script, refused histories), `Integration/DocumentStructureEndpointTests` (end-to-end API, 401/403/404/409, concurrent saves).
+- PostgreSQL: `Database/StructureMigrationTests` (populated upgrade, rollback script, refused histories), `Integration/DocumentStructureEndpointTests` (end-to-end API, 401/403/404/409, concurrent saves), `Integration/DocumentStructurePageLabelTests` (both block views, exact labels and old fields, cursor bounds, legacy/missing data, optional lookup failure, cancellation and concurrent page replacement).
 - OpenSearch: `OpenSearch/OpenSearchStructureSearchTests` against a real `opensearchproject/opensearch:2.19.1` container.
 - Browser: `Integration/AdminHostedFrontendTests.StructureIsConfiguredMarkedSavedAndReloadedInTheConsole` (Playwright) and `frontend/tests/structure-tree.mjs`.
