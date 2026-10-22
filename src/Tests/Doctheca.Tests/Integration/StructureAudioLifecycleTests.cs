@@ -67,7 +67,7 @@ public sealed class StructureAudioLifecycleTests(PostgreSqlFixture database, Min
             .OfType<RouteEndpoint>().Select(endpoint => endpoint.RoutePattern.RawText).ToList();
         routes.Should().Contain(Sweep);
         routes.Should().NotContain(route => route != Sweep && route != null &&
-            (route.EndsWith("/audio") || route.Contains("playback-link") || route.Contains("/audio/{audioId")));
+            (route.Contains("playback-link") || route.Contains("/structure/nodes/{nodeId:guid}/audio")));
     }
 
     [Fact]

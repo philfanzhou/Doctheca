@@ -1,11 +1,25 @@
 namespace Doctheca.Domain.Models;
 
-/// <summary>Default-off audio object lifecycle settings (#107); import/playback are separate tasks.</summary>
+/// <summary>Default-off audio import and object lifecycle settings.</summary>
 public sealed class DocumentAudioOptions
 {
     public const string SectionName = "DocumentAudio";
     public const string ObjectPrefix = Doctheca.Common.Constants.OssPathPrefixConstants.Audio;
+    public const int MaxFilesPerImport = 1000;
+    public const int MaxArchiveEntries = 4000;
+    public const long MultipartOverheadBytes = 1024 * 1024;
     public bool Enabled { get; set; }
+    public long MaxFileBytes { get; set; } = 20L * 1024 * 1024;
+    public long MaxArchiveBytes { get; set; } = 200L * 1024 * 1024;
+
+    public string? Validate()
+    {
+        if (MaxFileBytes < 1) return "DocumentAudio:MaxFileBytes must be positive";
+        if (MaxArchiveBytes < MaxFileBytes) return "DocumentAudio:MaxArchiveBytes must be at least MaxFileBytes";
+        if (MaxArchiveBytes > long.MaxValue - MultipartOverheadBytes)
+            return "DocumentAudio:MaxArchiveBytes leaves no room for multipart overhead";
+        return null;
+    }
 }
 
 /// <summary>Whether the S3 audio lifecycle can be used; reasons contain key names only.</summary>
@@ -15,6 +29,7 @@ public sealed record DocumentAudioStorageStatus(bool Available, string? Reason)
         Func<string, string?> ossSetting)
     {
         if (!options.Enabled) return new(false, "DocumentAudio:Enabled is not true");
+        if (options.Validate() is { } invalid) return new(false, invalid);
         if (useLocalOss) return new(false, "audio objects require S3 storage (USE_LOCAL_OSS is enabled)");
         var missing = new[] { "InternalEndpoint", "AccessKey", "SecretKey", "BucketName" }
             .Where(key => string.IsNullOrWhiteSpace(ossSetting(key))).Select(key => "Oss:" + key).ToList();
