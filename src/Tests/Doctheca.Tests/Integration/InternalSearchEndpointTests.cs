@@ -234,7 +234,7 @@ public sealed class InternalSearchEndpointTests(PostgreSqlFixture database) : Se
         {
             new() { DocumentName = "book.pdf", AssociatedText = "<script>untrusted</script>", PageNumber = 0, Score = 1.25,
                 MatchType = "exact_phrase", SegmentId = "block-id", StructurePath = "Unit", BlockData = "raw-provider-canary",
-                Bbox = [1,2,3,4], MineruScore = 0.7, SubType = "admin-canary", TextLevel = 1, TextFormat = "admin-canary", Caption = "admin-canary", CreatedAt = DateTimeOffset.UtcNow }
+                Bbox = [1,2,3,4], MineruScore = 0.7, SubType = "admin-canary", TextLevel = 1, TextFormat = "admin-canary", Caption = "admin-canary", PageLabel = "admin-canary", CreatedAt = DateTimeOffset.UtcNow }
         }, 1, token));
         using var factory = Factory(services => ReplaceSearch(services, search.Object));
         using var client = factory.CreateClient();

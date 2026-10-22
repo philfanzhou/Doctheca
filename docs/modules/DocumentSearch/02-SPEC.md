@@ -252,6 +252,7 @@ Defined in `DocumentSearchEndpoints.cs`, mapped to the path `/admin/documents/se
     {
       "documentName": "lecture.pdf",
       "pageNumber": 1,
+      "pageLabel": "iv",
       "associatedText": "<em>Hello</em> world",
       "score": 1.5,
       "matchType": "stemmed",
@@ -551,6 +552,7 @@ Each result also carries `structurePath` (readable node path such as `"Unit 3 > 
     {
       "documentName": "lecture.pdf",
       "pageNumber": 1,
+      "pageLabel": "iv",
       "associatedText": "<em>As shown in the figure</em>, AB is the diameter of circle O...",
       "score": 1.5,
       "matchType": "stemmed",
@@ -575,6 +577,32 @@ Each result also carries `structurePath` (readable node path such as `"Unit 3 > 
 > Note: the success response does **not** include a `success` field; error messages are in **English**; `nextPageToken` is an empty string `""` when there are no more results. `blockData` / `bbox` / `score` / `subType` / `textLevel` / `textFormat` / `caption` are optional fields; they are not displayed when old frontends do not send them, and deserialization is unaffected.
 >
 > ⚠️ **bbox coordinate system**: the response `bbox` is 0-1000 normalized (the pipeline convention); when rendering, the frontend must restore pixel coordinates using `page_size` (from the `document_files` record via `GET /admin/document-files/{id}`). The VLM backend's 0-1 percentage coordinates are normalized uniformly to 0-1000 before indexing.
+
+#### Optional printed page labels
+
+Every admin search hit includes nullable `pageLabel`, preserving exact Unicode, repeated,
+empty-string and null labels. `pageNumber` keeps its existing **zero-based physical** meaning;
+labels are display text and do not change query matching, filters, ranking, totals or cursors.
+The internal search response retains its explicit field list and does not expose `pageLabel`.
+
+The local block UUID in `segmentId` and the hit's physical page must match a stored block.
+A read-only repeatable-read snapshot joins that block to its owning parse and page row in
+one batched query. Only a StructaDoc parse with trusted canonical page provenance can supply
+a label. Filenames, indexed raw JSON and page numbers alone cannot establish ownership.
+Malformed, deleted or stale IDs, mismatched pages, legacy parses, unknown source pages and
+missing/unlabeled page rows yield null. In particular, an unknown source page stored as
+fallback page zero cannot borrow the true first page's label.
+
+An optional relational failure preserves every hit and all old fields with labels set to
+null, and emits one fixed Warning without provider details, SQL, query text or content.
+Caller cancellation before/after search or during local lookup aborts the request instead
+of returning an optional-label success. An already-sent OpenSearch request has no caller-token
+parameter and may finish before cancellation is observed. OpenSearch failure keeps the
+existing empty-result response. No read changes stored data.
+
+No schema, configuration, package or index mapping change is required; mapping version
+remains **3**, and no rebuild/reindex is needed. Existing clients can ignore the additive
+field. Rolling back to the previous image removes the enrichment and preserves stored labels.
 
 ### 13.6 Generation 2 Query Building (extending `BuildSearchBody`, no standalone methods)
 

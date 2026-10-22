@@ -283,7 +283,9 @@ GET /admin/documents/search
       → _searchIndexService.ExactSearchAsync(...)
           → BuildSearchBody → _client.SearchAsync → ParseSearchResponse
       → on exception: LogWarning → return empty results
-  → build JSON response (results / totalCount / nextPageToken)
+  → observe request cancellation
+  → resolve optional page labels by local block UUID + indexed physical page in one read-only snapshot
+  → build JSON response (results with nullable pageLabel / totalCount / nextPageToken)
 ```
 
 ### Startup Initialization Flow (`Program.cs`)
@@ -331,27 +333,24 @@ An OpenSearch index's mapping **cannot be modified online** once created (field 
 | Invalid Base64 `pageToken` | LogDebug, start from the first page |
 | HTTP parameter validation failure | Return 400 + error code |
 
-### Search failure diagnostics (added 2026-07-10)
+### Safe search diagnostics and optional page labels
 
-When OpenSearch returns non-200, the `ExactSearchAsync` exception message must include the **response body** (OpenSearch's error JSON); otherwise the root cause of a 400/500 cannot be located from the status code alone.
+Search diagnostics use fixed messages and safe counts/status codes. Never attach the query,
+response body, indexed content, SQL/provider exception or credentials to logs or exceptions.
+The shared engine/domain degradation retains a fixed Warning and empty-result response.
 
-```csharp
-// Correct: the exception message includes the response body
-if (!response.Success || response.HttpStatusCode != 200)
-{
-    var errorBody = response.Body != null ? Encoding.UTF8.GetString(response.Body) : "(empty)";
-    throw new InvalidOperationException(
-        $"OpenSearch query failed, status code: {response.HttpStatusCode}, response: {errorBody}, query: {json}");
-}
-```
+`ISearchPageLabelRepository` accepts typed `SearchBlockPageKey` values (local block UUID plus
+zero-based indexed physical page). Its dedicated context suppresses EF provider diagnostics
+and performs a single no-tracking block/parse/page join inside a read-only repeatable-read
+transaction. The existing `DocumentParsePageIdentity.FromBlock` validates database-owned
+StructaDoc provenance and canonical physical page before a label is returned. A matching
+filename, raw indexed JSON or shared physical page never grants a label from another parse.
 
-Also log the sent query JSON at Debug level for reproducibility:
-
-```csharp
-_logger.LogDebug("OpenSearch search request: index={Index}, body={Body}", indexName, json);
-```
-
-> **Historical background**: after the 2026-07-10 deployment, all search requests were found to return empty results; the logs contained only `OpenSearch query failed, status code: 400`, making the root cause impossible to locate. The root cause was that the exception message lacked the OpenSearch response body. After the fix, the exception message includes the `response` and `query` fields, so `SearchDomainService`'s LogWarning can output complete diagnostic information.
+The admin projection adds nullable `pageLabel` after search, preserving hit order, total,
+cursor and every old field. A local failure makes all labels null with one fixed Warning;
+cancellation propagates. The existing internal hit allow-list excludes the field. This
+enrichment writes no data and adds no mapping field or version bump (version 3), migration,
+configuration or dependency. Prior-image rollback drops only the response enrichment.
 
 ## External Module Interfaces Depended On
 
