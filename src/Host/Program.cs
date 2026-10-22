@@ -11,6 +11,7 @@ using Doctheca.Domain.Services;
 using Doctheca.Domain.Services.Structure;
 using Doctheca.Service;
 using Doctheca.Service.Audio;
+using Doctheca.Service.InternalApi;
 using Doctheca.Service.Parsing;
 using Doctheca.Service.StructaDoc;
 using Doctheca.Host;
@@ -41,13 +42,13 @@ builder.Services.AddSingleton<ILogger>(
     serviceProvider => serviceProvider.GetRequiredService<ILoggerFactory>()
         .CreateLogger(nameof(DocthecaMigrationExecutor)));
 
-// ========== ServiceMantle security response headers (marked JSON admin endpoints) ==========
+// ========== ServiceMantle security response headers (marked JSON endpoints) ==========
 // Immutable six-header baseline (Cache-Control/Pragma/X-Content-Type-Options/X-Frame-Options/
 // Referrer-Policy/Content-Security-Policy) applied only to endpoints explicitly marked with
 // RequireServiceMantleSecurityResponseHeaders; no weakening options exist.
 serviceMantle.AddSecurityResponseHeaders();
 
-// ========== ServiceMantle safe Problem Details (marked JSON admin endpoints) ==========
+// ========== ServiceMantle safe Problem Details (marked JSON endpoints) ==========
 // Conditional mapping for the only exception type whose framework status must survive the
 // boundary: a BadHttpRequestException escaping a handler or the server-side body-read stage
 // keeps its status through ordered candidates (413 → 415 → unconditional 400 default declared
@@ -78,6 +79,10 @@ builder.Configuration.AddRuoyuConsulConfiguration(builder.Configuration);
 // ========== ServiceMantle logging (Console + optional Grafana Loki) ==========
 // Registered after the Consul configuration source so Loki:Uri from Consul KV is visible.
 builder.AddDocthecaLogging();
+
+// Deliberate startup-only opt-in; malformed values disable only the internal API.
+var internalApiOptions = InternalApiOptions.Read(builder.Configuration);
+builder.Services.AddSingleton(internalApiOptions);
 
 var consulOptions = RuoyuConsulOptions.Bind(builder.Configuration);
 var consulRuntimeState = RuoyuConsulRuntimeState.Instance;
@@ -184,6 +189,7 @@ builder.Services.AddScoped<IDocumentParseBlockRepository, DocumentParseBlockRepo
 builder.Services.AddScoped<IStructureDefinitionRepository, StructureDefinitionRepository>();
 builder.Services.AddScoped<IDocumentStructureRepository, DocumentStructureRepository>();
 builder.Services.AddScoped<IDocumentStructureAudioRepository, DocumentStructureAudioRepository>();
+builder.Services.AddScoped<IInternalCatalogRepository, InternalCatalogRepository>();
 builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
 
 // Domain Services
@@ -230,6 +236,8 @@ var serviceLogContext = app.Services.GetRequiredService<ServiceMantle.Web.Loggin
 using (serviceLogContext.BeginScope(app.Logger))
 {
     app.Logger.LogInformation("Doctheca Service starting");
+    if (internalApiOptions.Invalid)
+        app.Logger.LogWarning("DOCTHECA_INTERNAL_API_CONFIGURATION_INVALID: InternalApi:Enabled must be a boolean; internal API disabled");
     var oidc = app.Services.GetRequiredService<AdminOidcSettings>();
     if (!oidc.Available)
         app.Logger.LogError("DOCTHECA_OIDC_NOT_CONFIGURED: {MissingKeys}", string.Join(",", oidc.MissingKeys));
@@ -349,9 +357,12 @@ app.UseServiceMantleCorrelationId();
 // outermost middleware, and static files/SPA fallback carry no marker so their rendering
 // contracts are untouched.
 app.UseRouting();
+// Reserve every /internal path before static files and SPA handling, including unknown
+// paths and unsupported methods. Only explicitly enabled, marked endpoints may pass.
+app.UseInternalApiBoundary(internalApiOptions);
 app.UseServiceMantleSecurityResponseHeaders();
 
-// Safe Problem Details boundary for the marked JSON admin endpoints only: the UseWhen branch
+// Safe Problem Details boundary for marked JSON admin and enabled internal endpoints: the UseWhen branch
 // runs exactly for endpoints carrying the RequireServiceMantleSecurityResponseHeaders marker
 // resolved by the explicit UseRouting above, so static files, the SPA fallback, health, image
 // proxies, and HTML/ZIP exports never enter it (the library swallows exceptions once a
@@ -391,6 +402,7 @@ app.MapDocumentSearchEndpoints();
 app.MapStructureDefinitionEndpoints();
 app.MapDocumentStructureEndpoints();
 app.MapStructureAudioEndpoints();
+app.MapInternalCatalogEndpoints(internalApiOptions);
 
 // ServiceMantle fixed health endpoints: GET /health/live (liveness, never touches the
 // database), GET /health/ready and the GET /health alias (readiness projection). All three

@@ -54,7 +54,7 @@ The following configuration has moved into the shared Consul KV:
     `Serilog` configuration section and levels are now configured in code; the shared KV entry
     may still serve other Ruoyu services)
 
-> `Database:Name`, `OpenSearch:IndexName`, `LlmDocumentAnalysis:*`, `DocumentAudio:*` and `StructaDoc:ApiKey` are all Doctheca-private configuration and do not go into the shared KV; `StructaDoc:BaseUrl` lives in the shared KV `service-endpoints.json`.
+> `Database:Name`, `OpenSearch:IndexName`, `LlmDocumentAnalysis:*`, `DocumentAudio:*`, `InternalApi:*` and `StructaDoc:ApiKey` are all Doctheca-private configuration and do not go into the shared KV; `StructaDoc:BaseUrl` lives in the shared KV `service-endpoints.json`.
 
 ## Environment Variables
 
@@ -77,6 +77,27 @@ LLM document-analysis configuration is injected via environment variables in `st
 | `LLM_BASE_URL` | `https://api.siliconflow.cn/v1` | OpenAI-compatible API address |
 | `LLM_MODEL` | `Qwen/Qwen2.5-7B-Instruct` | Document-analysis model |
 | `LLM_CONTEXT_LENGTH` | `128K` | Document-analysis context length |
+
+## Internal Catalog API
+
+`InternalApi:Enabled` (`InternalApi__Enabled` in the container environment) defaults to `false`.
+Only an explicit boolean `true` at startup registers the anonymous GET routes
+`/internal/v1/structure-definitions` and `/internal/v1/documents`. Missing, false and invalid
+values fail closed without stopping the host; invalid-value diagnostics contain only a fixed
+reason and the key name. Restart after changing the setting. Inject it into the Doctheca
+container environment directly; `start.sh` does not forward arbitrary host environment variables.
+
+Before enabling, restrict **all `/internal/*` paths** on port 5012 to the internal network using
+trusted firewall/proxy routing. Block the entire case-insensitive `/internal` path segment at
+public ingress, including `/internal` itself, and prevent direct public access to the container
+port. The API has no caller authentication or per-document access control. Existing admin
+authentication, CSRF, SPA/static files and health checks keep their current behavior.
+Disabled paths, unknown internal paths and unsupported methods return fixed JSON 404, never SPA
+HTML. Only catalogs are available in this release; see [Internal API](../Integration/InternalApi.md).
+
+This is additive and creates no persisted state, schema, object-storage or port changes.
+Rollback: set `InternalApi__Enabled=false` and restart, or redeploy the previous image against
+the same database. Network restrictions remain the deployer's responsibility.
 
 ## OSS Address Configuration
 

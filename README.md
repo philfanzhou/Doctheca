@@ -16,6 +16,7 @@ A self-hosted **document library & full-text retrieval** service for educational
 | **DocumentStructure** | Runtime-configured structure definitions and levels (for example Unit → Section), hand-marked structure nodes on a continuous view of a parse, and search narrowed to a node's subtree |
 | **StructureAudio** | Bounded ZIP/folder/file import, hierarchical matching and administrator link review, metadata persistence, deletion/orphan recovery and administrator playback using fresh expiring public S3 links |
 | **AdminAuthentication** | SignaCore hosted admin login via the official `SignaCore.Client.AspNetCore` client: `role=admin` pre-sign-in gate, server sessions, CSRF and prepared logout; legacy Bearer compatibility |
+| **InternalCatalog** | Optional anonymous read-only structure definition and marked-document catalogs; disabled by default and restricted to the internal network by the deployer |
 
 ## Tech Stack
 
@@ -67,6 +68,13 @@ IDENTITY_APP_ID=<appid> IDENTITY_APP_SECRET=<secret> ./start.sh
 ```
 
 `start.sh` reads shared configuration (PostgreSQL, OSS, OpenSearch, Loki, StructaDoc) from Consul KV; environment variables can override. See [`docs/development/Deployment.md`](docs/development/Deployment.md).
+
+`InternalApi:Enabled` defaults to `false`. Explicitly enabling it exposes only two anonymous
+catalog GET routes under `/internal/v1/`; restrict `/internal/*` to trusted internal callers at
+the network/reverse proxy before enabling. It adds no caller authentication or document-level
+authorization. Unknown or disabled internal paths always return JSON 404, never the SPA.
+See the [internal API contract](docs/Integration/InternalApi.md). No schema/storage migration is
+needed; disable the setting and restart, or restore the previous image, to roll back.
 
 The target PostgreSQL database must exist before startup: a missing database is refused by default with the fixed error `database_target_preparation.creation_not_allowed` (`DATABASE_ALLOW_CREATE=true` opts into automatic creation). Startup runs the EF Core migrations under a PostgreSQL advisory lock, so multiple instances starting against the same database serialize and only one executes the migration. See [`docs/database/migrations.md`](docs/database/migrations.md).
 
