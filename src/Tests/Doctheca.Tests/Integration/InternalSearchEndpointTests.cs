@@ -175,6 +175,57 @@ public sealed class InternalSearchEndpointTests(PostgreSqlFixture database) : Se
     }
 
     [Fact]
+    public async Task MalformedUnicodeTokens_AreFixed400BeforeSearchAndValidPairsRemainUsable()
+    {
+        var search = EmptySearch();
+        var capture = new LogCapture();
+        using var factory = Factory(services =>
+        {
+            ReplaceSearch(services, search.Object);
+            CaptureLogs(services, capture);
+        });
+        using var client = factory.CreateClient();
+        capture.Messages.Clear();
+        string[] malformed =
+        [
+            """[1,"\uD800"]""", """[1,"\uDC00"]""", """[1,"\uD800x"]""",
+            """[1,"\uDC00\uD800"]""", """[1,"\uD800\uD800"]""", """[1,"cursor-canary\uD800"]"""
+        ];
+        foreach (var json in malformed)
+        {
+            var token = Token(json);
+            using var response = await client.GetAsync(Url("query-canary") + "&pageToken=" + Uri.EscapeDataString(token));
+            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+            Assert.Equal(InvalidBody, await response.Content.ReadAsStringAsync());
+            Assert.Equal("application/json", response.Content.Headers.ContentType?.MediaType);
+            Assert.True(response.Headers.Contains(CorrelationHeaderName));
+            (string Name, string Value)[] headers =
+            [
+                ("Cache-Control", "no-store"), ("Pragma", "no-cache"), ("X-Content-Type-Options", "nosniff"),
+                ("X-Frame-Options", "DENY"), ("Referrer-Policy", "no-referrer"),
+                ("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'")
+            ];
+            foreach (var header in headers) Assert.Equal(header.Value, Assert.Single(response.Headers.GetValues(header.Name)));
+            Assert.DoesNotContain(capture.Messages, log => log.Contains(token, StringComparison.Ordinal) || log.Contains(json, StringComparison.Ordinal));
+        }
+        search.Verify(item => item.ExactSearchAsync(It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<SearchFilterModel?>(), It.IsAny<int>(), It.IsAny<string?>()), Times.Never);
+        Assert.DoesNotContain(capture.Messages, log => log.Contains("canary", StringComparison.Ordinal));
+
+        // Both the input and returned continuation retain valid supplementary characters.
+        foreach (var json in new[] { """[1,"\uD800\uDC00"]""", """[1,"id\uDBFF\uDFFFtail"]""" })
+        {
+            var token = Token(json);
+            search.Setup(item => item.ExactSearchAsync("changing", false, null, 20, token))
+                .ReturnsAsync((new List<SearchResultModel>(), 0, token));
+            using var response = await client.GetAsync(Url() + "&pageToken=" + Uri.EscapeDataString(token));
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            Assert.Equal(token, body.RootElement.GetProperty("data").GetProperty("nextPageToken").GetString());
+            search.Verify(item => item.ExactSearchAsync("changing", false, null, 20, token), Times.Once);
+        }
+    }
+
+    [Fact]
     public async Task ValidInputs_ProjectOnlyAllowedFieldsAndKeepNoNodeSemantics()
     {
         var search = EmptySearch();

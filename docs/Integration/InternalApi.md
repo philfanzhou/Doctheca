@@ -243,7 +243,8 @@ selects the narrower subtree. No name, text or inferred page-range matching is u
 `pageToken` for the first page; an explicitly empty token is invalid. A token is at most
 4096 characters and is canonical padded standard base64 of the existing JSON `search_after`
 array `[finiteNumber,"blockId"]`. The array must have exactly two elements, and `blockId`
-must be a nonblank string of at most 256 characters without control characters. Malformed
+must be a nonblank string of at most 256 characters without control characters. It must
+decode to valid Unicode; isolated or incomplete surrogate escapes are invalid. Malformed
 base64, JSON, values, unknown/duplicate parameters or bounds return fixed 400 **before**
 searching; an invalid token never silently restarts internal paging. Treat returned tokens
 as opaque. URL-encode them (including `+`, `/` and `=`); keep the query, phrase and node filter

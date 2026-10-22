@@ -58,7 +58,10 @@ internal sealed record InternalSearchInput(string Query, bool Phrase, Guid? Stru
             if (root.ValueKind != JsonValueKind.Array || root.GetArrayLength() != 2) return false;
             if (root[0].ValueKind != JsonValueKind.Number || !root[0].TryGetDouble(out var score) || !double.IsFinite(score) ||
                 root[1].ValueKind != JsonValueKind.String) return false;
-            var blockId = root[1].GetString()!;
+            string blockId;
+            try { blockId = root[1].GetString()!; }
+            // JsonDocument can retain invalid surrogate escapes until string decoding.
+            catch (InvalidOperationException) { return false; }
             return !string.IsNullOrWhiteSpace(blockId) && blockId.Length <= 256 && !blockId.Any(char.IsControl);
         }
         catch (Exception exception) when (exception is FormatException or JsonException) { return false; }
