@@ -513,8 +513,8 @@ public sealed class InternalContentEndpointTests(PostgreSqlFixture database) : S
             using var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(10));
             var read = client.GetAsync(ImageUrl(seed.Node, seed.Image, revision), HttpCompletionOption.ResponseHeadersRead, cancellation.Token);
             await stream.Entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
-            if (!fail) cancellation.Cancel();
-            stream.Resume.TrySetResult();
+            if (fail) stream.Resume.TrySetResult();
+            else cancellation.Cancel();
             var error = await Record.ExceptionAsync(async () =>
             {
                 using var response = await read;
@@ -522,6 +522,7 @@ public sealed class InternalContentEndpointTests(PostgreSqlFixture database) : S
             });
             Assert.NotNull(error);
             Assert.DoesNotContain("private-canary", error.ToString());
+            if (!fail) await stream.CancellationObserved.Task.WaitAsync(TimeSpan.FromSeconds(5));
             await stream.Released.Task.WaitAsync(TimeSpan.FromSeconds(5));
             Assert.Equal(!fail, stream.Cancelled);
             Assert.DoesNotContain(capture.Messages, message => message.Contains("private-canary", StringComparison.Ordinal));
@@ -534,6 +535,7 @@ public sealed class InternalContentEndpointTests(PostgreSqlFixture database) : S
         public bool Cancelled;
         public TaskCompletionSource Entered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public TaskCompletionSource Resume { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource CancellationObserved { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public TaskCompletionSource Released { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public override async Task CopyToAsync(Stream destination, int bufferSize, CancellationToken cancellationToken)
         {
@@ -541,7 +543,7 @@ public sealed class InternalContentEndpointTests(PostgreSqlFixture database) : S
             await destination.FlushAsync(cancellationToken);
             Entered.TrySetResult();
             try { await Resume.Task.WaitAsync(cancellationToken); cancellationToken.ThrowIfCancellationRequested(); }
-            catch (OperationCanceledException) { Cancelled = true; throw; }
+            catch (OperationCanceledException) { Cancelled = true; CancellationObserved.TrySetResult(); throw; }
             if (fail) throw new IOException("private-canary/started-copy");
         }
         protected override void Dispose(bool disposing) { base.Dispose(disposing); Released.TrySetResult(); }
