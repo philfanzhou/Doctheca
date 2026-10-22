@@ -31,6 +31,7 @@ public sealed class StructaDocParseResultSync : IStructaDocParseResultSync
     private readonly IDocumentParseService _parseService;
     private readonly IDocumentParseBlockRepository _blockRepository;
     private readonly IDocumentParseImageRepository _imageRepository;
+    private readonly IDocumentParsePageRepository _pageRepository;
     private readonly ILogger<StructaDocParseResultSync> _logger;
 
     public StructaDocParseResultSync(
@@ -38,12 +39,14 @@ public sealed class StructaDocParseResultSync : IStructaDocParseResultSync
         IDocumentParseService parseService,
         IDocumentParseBlockRepository blockRepository,
         IDocumentParseImageRepository imageRepository,
+        IDocumentParsePageRepository pageRepository,
         ILogger<StructaDocParseResultSync> logger)
     {
         _client = client;
         _parseService = parseService;
         _blockRepository = blockRepository;
         _imageRepository = imageRepository;
+        _pageRepository = pageRepository;
         _logger = logger;
     }
 
@@ -52,6 +55,20 @@ public sealed class StructaDocParseResultSync : IStructaDocParseResultSync
         var assets = await _client.GetAssetsAsync(parseRunId, ct);
         var blocks = await _client.GetAllBlocksAsync(parseRunId, ct);
         var markdown = await _client.GetMarkdownAsync(parseRunId, ct);
+        var pages = await ReadOptionalPagesAsync(parse.Id, parseRunId, ct);
+        ct.ThrowIfCancellationRequested();
+        // Local replacement failure must escape; stale labels cannot accompany parsed success.
+        try
+        {
+            await _pageRepository.ReplaceAsync(parse.Id, pages, ct);
+        }
+        catch (Exception)
+        {
+            ct.ThrowIfCancellationRequested();
+            // Reuse the worker's retry boundary without exposing provider/row diagnostics.
+            throw new StructaDocException("Local page replacement failed; synchronization must retry.", 0, isTransient: true);
+        }
+        ct.ThrowIfCancellationRequested();
 
         // Replace previous sync artifacts so a retried sync does not duplicate rows.
         await _imageRepository.DeleteByParseIdAsync(parse.Id);
@@ -75,6 +92,8 @@ public sealed class StructaDocParseResultSync : IStructaDocParseResultSync
         var blockModels = MapBlocks(parse.Id, blocks, assetIdToImageId);
         await _blockRepository.AddBlocksAsync(parse.Id, blockModels);
 
+        ct.ThrowIfCancellationRequested();
+
         await _parseService.UpdateStatusAsync(
             parse.Id,
             DocumentParseStatus.Parsed,
@@ -86,6 +105,30 @@ public sealed class StructaDocParseResultSync : IStructaDocParseResultSync
             parseRunId, parse.Id, blockModels.Count, assets.Count);
 
         return markdown;
+    }
+
+    private async Task<IReadOnlyCollection<DocumentParsePageModel>> ReadOptionalPagesAsync(
+        Guid parseId, Guid parseRunId, CancellationToken ct)
+    {
+        try
+        {
+            var pages = await _client.GetPagesAsync(parseRunId, ct);
+            ct.ThrowIfCancellationRequested();
+            if (pages is null || pages.Count == 0 || pages.Any(page => page is null || page.Number <= 0)
+                || pages.Select(page => page.Number).Distinct().Count() != pages.Count)
+            {
+                _logger.LogWarning("Optional StructaDoc pages unavailable for parse {ParseId}: invalid or empty page set", parseId);
+                return [];
+            }
+            return pages.Select(page => new DocumentParsePageModel(parseId, page.Number, page.Label, page.LabelSource)).ToList();
+        }
+        catch (Exception exception)
+        {
+            ct.ThrowIfCancellationRequested();
+            _logger.LogWarning("Optional StructaDoc pages unavailable for parse {ParseId}: fetch failed ({FailureType})",
+                parseId, exception.GetType().Name);
+            return [];
+        }
     }
 
     private static List<DocumentParseBlockModel> MapBlocks(

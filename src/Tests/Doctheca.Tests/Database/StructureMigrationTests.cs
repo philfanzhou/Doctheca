@@ -89,7 +89,9 @@ public sealed class StructureMigrationTests(PostgreSqlMigrationFixture fixture) 
                 INSERT INTO structure_definitions (id, name, created_at, updated_at) VALUES ('{Guid.NewGuid()}', 'D', NOW(), NOW());
                 """);
 
-            // Newest first: the audio migration (issue #90) is rolled back before this one.
+            // Apply the documented down scripts newest first.
+            await MigrationGoldenStates.ExecuteRawAsync(context, await File.ReadAllTextAsync(
+                RollbackScriptPath(DocthecaMigrationExecutor.AddDocumentParsePagesMigrationId)));
             await MigrationGoldenStates.ExecuteRawAsync(context, await File.ReadAllTextAsync(
                 RollbackScriptPath(DocthecaMigrationExecutor.AddStructureAudioMigrationId)));
             await MigrationGoldenStates.ExecuteRawAsync(context, await File.ReadAllTextAsync(

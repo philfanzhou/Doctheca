@@ -9,7 +9,7 @@ A self-hosted **document library & full-text retrieval** service for educational
 | Module | Capability |
 |--------|-----------|
 | **DocumentManagement** | Upload (multipart), list, detail, metadata update (subject/grade/year), delete |
-| **DocumentParse** | Delegate parsing to StructaDoc (Parse Run create/poll), sync Blocks/Markdown/Assets locally, proxy parsed images (ADR-0009) |
+| **DocumentParse** | Delegate parsing to StructaDoc (Parse Run create/poll), sync Blocks/Markdown/Assets and optional printed page labels locally, proxy parsed images (ADR-0009) |
 | **DocumentExport** | Export Markdown / HTML per document file or per parse |
 | **DocumentMetadataAnalysis** | Optional LLM analysis of parsed Markdown to auto-detect subject/grade and backfill; failure never blocks parsing |
 | **DocumentSearch** | OpenSearch full-text precise search with block-level indexing and subject/grade filters |
@@ -77,6 +77,11 @@ See the [internal API contract](docs/Integration/InternalApi.md). No schema/stor
 needed; disable the setting and restart, or restore the previous image, to roll back.
 
 The target PostgreSQL database must exist before startup: a missing database is refused by default with the fixed error `database_target_preparation.creation_not_allowed` (`DATABASE_ALLOW_CREATE=true` opts into automatic creation). Startup runs the EF Core migrations under a PostgreSQL advisory lock, so multiple instances starting against the same database serialize and only one executes the migration. See [`docs/database/migrations.md`](docs/database/migrations.md).
+
+Printed page labels add the `document_parse_pages` table without changing HTTP responses or the
+physical page numbering. Existing parses remain readable without labels; no remote backfill runs.
+The previous image requires the documented page-label down script after stopping all instances
+and taking a verified backup; it cannot run directly against the newer migration history.
 
 Startup and readiness use the shared ServiceMantle 0.3.1-rc.1 gate, receipt, and EF Core mapped-schema health source. The configuration and HTTP contracts remain unchanged. The operational code transition from the earlier 0.3.0 adoption remains: alerts replace `DOCTHECA_DB_CREATION_NOT_ALLOWED` with `database_target_preparation.creation_not_allowed` and `DOCTHECA_DB_ALLOW_CREATE_INVALID` with `database_target_preparation.invalid_target`. There is no schema/data migration in this upgrade; rollback redeploys the previous image against the same existing compatible database.
 

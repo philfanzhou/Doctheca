@@ -43,7 +43,29 @@ Polls `pending` + `parsing` records every 5 seconds:
   - bbox: StructaDoc 0–1 normalized coordinates ×1000, aligned with the local 0–1000 convention; `score` = confidence;
   - `image_id`: block.assetId → local image record mapping; `block_data` = the block's normalized JSON.
 - **Markdown → `document_parses.markdown_content`**; status is set to `parsed` and `parsed_at` is recorded.
+- **Optional Pages → [`document_parse_pages`](../database/tables/document_parse_pages.md)**:
+  the bare array `{number,label,labelSource}` uses positive one-based physical numbers. Labels
+  and their sources are preserved exactly, including null, empty, repeated and Unicode text.
+  The complete set is validated before a transaction replaces all pages for this local parse.
+  Missing/empty/malformed/duplicate pages or HTTP/network/JSON/timeout failure produce one fixed,
+  content-free Warning and an empty replacement, so stale labels never count as a fresh sync.
+  This fallback still allows Blocks/Markdown to reach `parsed`. A local replacement failure
+  rolls back and uses the existing transient worker retry boundary; it cannot publish `parsed`.
+  Caller cancellation propagates (including wrapped cancellation) rather than becoming a fallback.
+  Cancellation after a page commit retains that truthful committed set without publishing success.
+- **Physical page provenance**: normalized `block_data.pageNumber` must be a positive integer,
+  agree with the stored `page_id + 1`, and belong to a StructaDoc-backed parse. Null upstream
+  pages retain the existing `page_id=0` fallback but do not qualify for page 1's printed label.
+  The typed batch read uses explicit local parse/page keys; labels are never identities.
 - **Idempotency**: old images of this parse are deleted before syncing (blocks are deleted-then-inserted by the repository), so re-running after a crash is safe.
+
+Page replacement is atomic on its own; the pre-existing image/Block/Markdown writes are not one
+transaction with it. A later failure can retain committed pages until retry, never a partial page
+set or a falsely published successful sync. The existing empty-Block behavior is unchanged.
+This slice stores labels only: Blocks/search responses, physical numbering, authentication and the
+console remain unchanged (#103/#104 own the later optional `pageLabel` projections). Old parses
+remain readable without labels and are not re-synchronized automatically. See the
+[upgrade/down-script procedure](../database/migrations.md#printed-page-label-upgrade-issue-102).
 
 ## StructaDoc Client Contract Summary (IStructaDocClient)
 
@@ -51,6 +73,9 @@ Polls `pending` + `parsing` records every 5 seconds:
 - `POST /api/v1/documents` (multipart field `file`, 201); `POST /api/v1/documents/{id}/parse-runs` (201 first time / 200 + `Idempotency-Replayed` on replay).
 - `GET /api/v1/parse-runs/{id}`: terminal states are only `succeeded` / `failed` / `cancelled`.
 - `GET .../blocks?limit=1000&afterSequence=`: must follow `nextSequence` paging until null.
+- `GET .../pages`: a bare array, not the paginated Blocks envelope; optional labels require no
+  additional scope or configuration. Error bodies and JSON details are not consumed into new
+  diagnostics. The client preserves caller cancellation and disposes every response.
 - `GET .../assets`, `.../markdown`, `.../assets/{assetId}/content` (direct byte stream, no signed URL).
 - `DELETE /api/v1/documents/{id}` (202 accepted / 404 idempotent; cancel first when a non-terminal run exists); `DELETE /api/v1/parse-runs/{id}` (terminal states only).
 - Errors: RFC 7807 problem+json (empty body for 401/403, must not be parsed); 408/429/5xx/network errors are classified as transient.
@@ -63,6 +88,6 @@ Polls `pending` + `parsing` records every 5 seconds:
 
 ## Validation
 
-- Unit tests: `src/Tests/Doctheca.Tests/` (`StructaDoc/StructaDocClientTests`, `Parsing/StructaDocParseResultSyncTests`, `Parsing/ParseImageContentSourceTests`, `StructaDocParseWorkerTests`).
+- Unit/integration tests: `src/Tests/Doctheca.Tests/` (`StructaDoc/StructaDocClientTests`, `StructaDoc/StructaDocPagesClientTests`, `Parsing/StructaDocParseResultSyncTests`, `Parsing/StructaDocPagesSyncTests`, `Parsing/DocumentParsePageIdentityTests`, `Database/DocumentParsePageRepositoryTests`, `Database/PageMigrationTests`, `Parsing/ParseImageContentSourceTests`, `StructaDocParseWorkerTests`).
 - Command: `dotnet test src/Doctheca.sln --configuration Release` (in this service's directory).
 - Before switching traffic, the `vlm` + batch endpoint combination must be validated with real documents in a real environment (ADR-0009 consequences clause).

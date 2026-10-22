@@ -6,6 +6,7 @@
 |------|---------|
 | Delete document_file | CASCADE to parses, parse_blocks, parse_images |
 | Delete document_parse | CASCADE to parse_blocks, parse_images |
+| Delete document_parse (or its document_file) | CASCADE to document_parse_pages |
 | Delete document_parse_image | SET NULL on parse_blocks' image_id |
 | Delete document_parse | CASCADE to document_structure_nodes |
 | Delete document_structure_node | CASCADE to its child nodes |
@@ -26,6 +27,9 @@ document_files ──< document_parses ──< document_structure_nodes (parent_
 ```
 
 A node's range is a range of `document_parse_blocks.sequence` values of the same parse; it is not a foreign key.
+
+`document_parses` also owns `document_parse_pages`, keyed by `(parse_id, page_number)`. A page number
+is a one-based physical page. Label text is nullable and repeatable, and cannot identify a page.
 
 ## Structure Audio (issue #90)
 
