@@ -83,7 +83,9 @@ LLM document-analysis configuration is injected via environment variables in `st
 `InternalApi:Enabled` (`InternalApi__Enabled` in the container environment) defaults to `false`.
 Only an explicit boolean `true` at startup registers the anonymous GET routes
 `/internal/v1/structure-definitions`, `/internal/v1/documents` and
-`/internal/v1/documents/{documentFileId}/structure`. Missing, false and invalid
+`/internal/v1/documents/{documentFileId}/structure`,
+`/internal/v1/structure-nodes/{nodeId}/content` and
+`/internal/v1/structure-nodes/{nodeId}/images/{imageId}/content`. Missing, false and invalid
 values fail closed without stopping the host; invalid-value diagnostics contain only a fixed
 reason and the key name. Restart after changing the setting. Inject it into the Doctheca
 container environment directly; `start.sh` does not forward arbitrary host environment variables.
@@ -94,8 +96,12 @@ public ingress, including `/internal` itself, and prevent direct public access t
 port. The API has no caller authentication or per-document access control. Existing admin
 authentication, CSRF, SPA/static files and health checks keep their current behavior.
 Disabled paths, unknown internal paths and unsupported methods return fixed JSON 404, never SPA
-HTML. Catalogs and current document trees are available in this release; see
-[Internal API](../Integration/InternalApi.md). Content/image, search and audio routes remain unavailable.
+HTML. Catalogs, current trees, revision-checked node content and owned image bytes are available; see
+[Internal API](../Integration/InternalApi.md). Search and audio routes remain unavailable.
+Image responses never redirect to storage, carry no-store/nosniff headers, and allow only the
+documented raster image media types. Do not log image bytes, upstream error text or source references;
+the StructaDoc client disables URI logging and consumes no provider error body for asset reads.
+Request cancellation releases streams; a failure after response start aborts the connection.
 
 This is additive and creates no persisted state, schema, object-storage or port changes.
 Rollback: set `InternalApi__Enabled=false` and restart, or redeploy the previous image against

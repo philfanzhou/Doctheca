@@ -6,7 +6,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Doctheca.Database.Repositories;
 
-public sealed class InternalStructureRepository(DbContextOptions<DocthecaDbContext> options) : IInternalStructureRepository
+public sealed partial class InternalStructureRepository(DbContextOptions<DocthecaDbContext> options) : IInternalStructureRepository, IInternalContentRepository
 {
     // Anonymous reads use the same safe logging boundary as the internal catalogs.
     // Keep provider messages out of EF diagnostics without changing administrative logging.
@@ -61,12 +61,19 @@ public sealed class InternalStructureRepository(DbContextOptions<DocthecaDbConte
     {
         await using var context = CreateContext();
         await using var transaction = await context.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead, cancellationToken);
-        var node = await context.DocumentStructureNodes.AsNoTracking().Where(node => node.Id == nodeId)
-            .Select(node => new InternalCurrentStructureNode(node.Parse!.DocumentFileId, node.ParseId, node.Id, node.StartSequence, node.EndSequence))
-            .SingleOrDefaultAsync(cancellationToken);
-        if (node is null || await CurrentParseAsync(context, node.DocumentFileId, cancellationToken) != node.ParseId) return null;
+        var node = await CurrentNodeAsync(context, nodeId, cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
         await transaction.CommitAsync(cancellationToken);
         return node;
+    }
+
+    private static async Task<InternalCurrentStructureNode?> CurrentNodeAsync(DocthecaDbContext context, Guid nodeId, CancellationToken cancellationToken)
+    {
+        var node = await context.DocumentStructureNodes.AsNoTracking().Where(node => node.Id == nodeId &&
+                node.Level!.DefinitionId == node.Parse!.DocumentFile!.StructureDefinitionId)
+            .Select(node => new InternalCurrentStructureNode(node.Parse!.DocumentFileId, node.ParseId, node.Id, node.StartSequence, node.EndSequence))
+            .SingleOrDefaultAsync(cancellationToken);
+        return node is not null && await CurrentParseAsync(context, node.DocumentFileId, cancellationToken) == node.ParseId ? node : null;
     }
 
     private sealed record NodeRow(Guid Id, Guid LevelId, Guid? ParentId, string Name, int SortOrder,

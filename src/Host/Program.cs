@@ -191,6 +191,7 @@ builder.Services.AddScoped<IDocumentStructureRepository, DocumentStructureReposi
 builder.Services.AddScoped<IDocumentStructureAudioRepository, DocumentStructureAudioRepository>();
 builder.Services.AddScoped<IInternalCatalogRepository, InternalCatalogRepository>();
 builder.Services.AddScoped<IInternalStructureRepository, InternalStructureRepository>();
+builder.Services.AddScoped<IInternalContentRepository, InternalStructureRepository>();
 builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
 
 // Domain Services
@@ -213,7 +214,7 @@ builder.Services.AddHttpClient("StructaDoc", client =>
         client.BaseAddress = new Uri(options.BaseUrl.TrimEnd('/') + "/");
     }
     client.Timeout = TimeSpan.FromSeconds(options.TimeoutSeconds);
-}).AddServiceMantleCorrelationIdPropagation();
+}).RemoveAllLoggers().AddServiceMantleCorrelationIdPropagation();
 builder.Services.AddSingleton<IStructaDocClient>(sp =>
 {
     var factory = sp.GetRequiredService<IHttpClientFactory>();
@@ -405,6 +406,7 @@ app.MapDocumentStructureEndpoints();
 app.MapStructureAudioEndpoints();
 app.MapInternalCatalogEndpoints(internalApiOptions);
 app.MapInternalStructureEndpoints(internalApiOptions);
+app.MapInternalContentEndpoints(internalApiOptions);
 
 // ServiceMantle fixed health endpoints: GET /health/live (liveness, never touches the
 // database), GET /health/ready and the GET /health alias (readiness projection). All three
