@@ -33,6 +33,7 @@ internal sealed class OidcTestAuthority : HttpMessageHandler
     internal readonly ConcurrentQueue<string?> AuthorizationHeaders = [];
     internal string? DiscoveryDefect { get; set; }
     internal string? TokenFailure { get; set; }
+    internal string? TokenScope { get; set; } = "openid profile";
     internal bool HoldToken { get; set; }
     internal bool HoldDiscovery { get; set; }
     internal TaskCompletionSource DiscoveryEntered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -105,8 +106,16 @@ internal sealed class OidcTestAuthority : HttpMessageHandler
             throw new InvalidOperationException("fake.pkce_mismatch");
         LastIdToken = MintIdToken(handshake.Nonce, handshake.Defect);
         LastAccessToken = MintAccessToken(handshake.AccessDefect);
-        return Json(JsonSerializer.Serialize(new { access_token = LastAccessToken, token_type = "Bearer", expires_in = 900,
-            id_token = LastIdToken, scope = "openid profile" }));
+        var members = new Dictionary<string, object?>
+        {
+            ["access_token"] = LastAccessToken, ["token_type"] = "Bearer",
+            ["expires_in"] = 900, ["id_token"] = LastIdToken
+        };
+        if (TokenScope is not null) members["scope"] = TokenFailure == "scope" ? "openid profile extra" : TokenScope;
+        var response = JsonSerializer.Serialize(members);
+        if (TokenFailure == "duplicate") response = response.TrimEnd('}') + ",\"scope\":\"openid profile\"}";
+        if (TokenFailure == "oversized") response = response.TrimEnd('}') + ",\"padding\":\"" + new string('x', 65536) + "\"}";
+        return Json(response);
     }
 
     internal SecurityKey SigningKey => new RsaSecurityKey(_rsa) { KeyId = "test-kid" };
@@ -143,6 +152,9 @@ internal sealed class OidcTestAuthority : HttpMessageHandler
         if (defect == "none") payload.Remove("role");
         if (defect == "access-expired") { payload["iat"] = now - 900; payload["nbf"] = now - 900; payload["exp"] = now - 60; }
         if (defect == "access-nbf-future") payload["nbf"] = now + 120;
+        if (defect == "access-iat-future") payload["iat"] = now + 120;
+        if (defect == "access-iat-near-future") payload["iat"] = now + 10;
+        if (defect == "access-nbf-near-future") payload["nbf"] = now + 10;
         if (defect == "nbf-missing") payload.Remove("nbf");
         if (defect == "sub-mismatch") payload["sub"] = "different-subject";
         if (defect == "sub-missing") payload.Remove("sub");
@@ -182,6 +194,7 @@ internal sealed class OidcTestAuthority : HttpMessageHandler
         if (defect == "iss-empty") payload["iss"] = "";
         if (defect == "iat-missing") payload.Remove("iat");
         if (defect == "iat-future") payload["iat"] = now + 120;
+        if (defect == "iat-near-future") payload["iat"] = now + 10;
         if (defect == "iat-string") payload["iat"] = now.ToString();
         if (defect == "exp-before-iat") payload["exp"] = now - 1;
         if (defect == "exp-expired") { payload["iat"] = now - 600; payload["exp"] = now - 120; }

@@ -128,6 +128,8 @@ public sealed class AdminOidcStoresTests
     /// </summary>
     [Theory]
     [InlineData(SignaCoreSignInReason.AccessDenied, "/?authError=notAdmin")]
+    [InlineData(SignaCoreSignInReason.UserCanceled, "/?authError=notAdmin")]
+    [InlineData(SignaCoreSignInReason.PreSignInDenied, "/?authError=notAdmin")]
     [InlineData(SignaCoreSignInReason.AuthorityUnreachable, "/?authError=identityUnavailable")]
     [InlineData(SignaCoreSignInReason.StateMismatch, "/?authError=signInFailed")]
     [InlineData(SignaCoreSignInReason.IssuerMismatch, "/?authError=signInFailed")]

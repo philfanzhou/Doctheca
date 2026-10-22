@@ -166,7 +166,7 @@ migration slices extend instead of re-registering:
   discovery, so it never triggers Consul Catalog write operations. Consul remains
   configuration-KV-only for this service.
 - **Logging**: Console + Grafana Loki delivery runs through the `ServiceMantle.Logging`
-  pipeline (release `0.2.1`), registered by
+  pipeline (release `0.3.3`), registered by
   `DocthecaLoggingExtensions.AddDocthecaLogging()` after the Consul configuration source.
   Every event passes the library's mandatory structured sanitizer before reaching either
   sink; per-category minimum levels are Information by default with Warning overrides for
@@ -178,4 +178,5 @@ migration slices extend instead of re-registering:
   configuration section are retired. The fixed Loki stream label stays `service=Doctheca`
   (plus the sink-owned `level` label), so existing Grafana queries keep working; an empty
   `Loki:Uri` disables the remote sink while Console stays on, and plain-HTTP Loki endpoints
-  are an explicitly accepted intranet deployment contract (`AllowInsecureHttp`).
+  remain an explicitly accepted intranet deployment contract; ServiceMantle 0.3.3 accepts
+  HTTP and HTTPS directly without an additional switch.

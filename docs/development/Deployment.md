@@ -142,7 +142,7 @@ for the matched-image rollback, which restores the old password contract without
 
 ## Logging Configuration
 
-Doctheca logs through the `ServiceMantle.Logging` pipeline (Console sink + optional Grafana Loki remote sink). The wiring lives in `src/Host/DocthecaLoggingExtensions.cs` and is registered in `Program.cs` via `builder.AddDocthecaLogging()` after the Consul configuration source. All direct ServiceMantle packages (`ServiceMantle`, `.Web`, `.Diagnostics`, `.Logging`, `.Database.PostgreSql`, and `.Persistence.Relational`) are pinned to the same official **0.3.1-rc.1** release candidate. Do not float these versions.
+Doctheca logs through the `ServiceMantle.Logging` pipeline (Console sink + optional Grafana Loki remote sink). The wiring lives in `src/Host/DocthecaLoggingExtensions.cs` and is registered in `Program.cs` via `builder.AddDocthecaLogging()` after the Consul configuration source. All direct ServiceMantle packages (`ServiceMantle`, `.Web`, `.Diagnostics`, `.Logging`, `.Database.PostgreSql`, and `.Persistence.Relational`) are pinned to the same official **0.3.3** release. Do not float these versions.
 
 ### Log Levels
 
@@ -174,7 +174,7 @@ The Loki address comes exclusively from the `Loki:Uri` configuration key:
 
 > **Empty value**: an empty `Loki:Uri` disables the remote sink (Console stays on and no remote request is created). The legacy fallback to a hard-coded `Serilog:WriteTo:1:Args:uri` address is gone — operators must set `Loki:Uri` explicitly.
 >
-> **Plain HTTP**: intranet HTTP Loki endpoints are accepted through an explicit `AllowInsecureHttp = true` — a deliberate acceptance that log content travels in cleartext on that path, not an automatic presumption of network trust. Use HTTPS whenever the path crosses an untrusted network.
+> **Plain HTTP**: ServiceMantle 0.3.3 accepts HTTP and HTTPS Loki endpoints without a separate switch. Keeping intranet HTTP is a deliberate acceptance that log content travels in cleartext on that path, not an automatic presumption of network trust. Use HTTPS whenever the path crosses an untrusted network.
 >
 > **Invalid values**: a malformed or credential-bearing URI (userinfo, query, or fragment) fails the host start with the safe code `loki.invalid_endpoint` without echoing the configured value.
 >

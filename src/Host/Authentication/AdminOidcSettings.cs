@@ -37,7 +37,7 @@ public sealed record AdminOidcSettings(bool Available, string Authority, string 
         if (string.IsNullOrWhiteSpace(clientId)) throw new InvalidOperationException("IdentityService:AppId");
         if (string.IsNullOrWhiteSpace(secret)) throw new InvalidOperationException("IdentityService:AppSecret");
         // The key stays part of the startup contract: an unparseable value still fails startup,
-        // even though the package applies its own fixed 30-second token lifetime skew.
+        // even though the host pins the package's token lifetime skew to 30 seconds.
         var rawSkew = config["IdentityService:ClockSkewSeconds"];
         var skew = 30;
         if (rawSkew is not null && !int.TryParse(rawSkew, out skew))

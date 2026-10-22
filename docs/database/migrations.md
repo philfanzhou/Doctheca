@@ -1,6 +1,6 @@
 # Migration History
 
-The startup composition uses the official same-version ServiceMantle 0.3.1-rc.1
+The startup composition uses the official same-version ServiceMantle 0.3.3
 PostgreSQL deployment declaration and option preset, plus the direct gate service registration.
 The gate is invoked by the existing startup code, without a second hosted gate. `Database:AllowCreate`
 still defaults to false; the multi-instance lease and both thirty-second budgets are unchanged.
@@ -27,7 +27,7 @@ classifies the target database and executes. The executor implements ServiceMant
 database serialize — only one executes the migration, the others wait for the lock, re-read
 `CurrentVersionCompatible`, and skip.
 
-The host uses the official ServiceMantle **0.3.1-rc.1** `StartupDatabaseGate` direct entry once, after LLM initialization and before OpenSearch initialization. Its shared `StartupDatabaseReceipt` is the sole process-local startup observation. The scoped shared `EfCoreHealthSnapshotSource<DocthecaDbContext>` runs zero-row mapped-schema probes only after that receipt succeeds; the HTTP response contract and 3-second budget remain unchanged.
+The host uses the official ServiceMantle **0.3.3** `StartupDatabaseGate` direct entry once, after LLM initialization and before OpenSearch initialization. Its shared `StartupDatabaseReceipt` is the sole process-local startup observation. The scoped shared `EfCoreHealthSnapshotSource<DocthecaDbContext>` runs zero-row mapped-schema probes only after that receipt succeeds; the HTTP response contract and 3-second budget remain unchanged.
 
 Startup sequence (all observed through the host's shutdown token):
 
@@ -97,7 +97,7 @@ rollback and no synthesized success.
 
 ## ServiceMantle 0.3.0 Compatibility
 
-ServiceMantle 0.3.0 introduced the following operational classifications; all current direct package references use the same official 0.3.1-rc.1. There is no schema or business-data migration in this upgrade. Missing targets now refuse with `database_target_preparation.creation_not_allowed` (previously `DOCTHECA_DB_CREATION_NOT_ALLOWED`); invalid `Database:AllowCreate` values now refuse with `database_target_preparation.invalid_target` (previously `DOCTHECA_DB_ALLOW_CREATE_INVALID`), before any database I/O and without echoing the value. Update alerts accordingly. All other startup failures retain shared allow-listed codes.
+ServiceMantle 0.3.0 introduced the following operational classifications; all current direct package references use the same official 0.3.3. There is no schema or business-data migration in this upgrade. Missing targets now refuse with `database_target_preparation.creation_not_allowed` (previously `DOCTHECA_DB_CREATION_NOT_ALLOWED`); invalid `Database:AllowCreate` values now refuse with `database_target_preparation.invalid_target` (previously `DOCTHECA_DB_ALLOW_CREATE_INVALID`), before any database I/O and without echoing the value. Update alerts accordingly. All other startup failures retain shared allow-listed codes.
 
 The executor now consumes the shared schema primitives described below; classification, migration history,
 takeover/backfill rules and the PostgreSQL session advisory lock retain their original behavior. Roll back by deploying the previous image and package versions against the same existing compatible database and restoring old alert codes. No rollback SQL is needed. An already created database or committed migration remains after later failure/cancellation. A cancelled gate can leave its shared receipt Running while the process exits; it never reports success.
@@ -105,7 +105,7 @@ takeover/backfill rules and the PostgreSQL session advisory lock retain their or
 ## Shared schema evidence and product adaptation
 
 `ServiceMantle.Database.PostgreSql` and `ServiceMantle.Persistence.Relational` use official
-**0.3.1-rc.1**, matching every other direct ServiceMantle reference in the repository.
+**0.3.3**, matching every other direct ServiceMantle reference in the repository.
 `PostgreSqlSchemaEvidenceReader` explicitly reads extended names, expression key counts and
 INCLUDE columns for exactly the four public business tables. `EfCoreExpectedSchemaDerivation`
 uses the EF design-time model with extended evidence. `SchemaEvidenceComparer` performs neutral
