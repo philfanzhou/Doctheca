@@ -145,7 +145,8 @@ public class StructaDocParseResultSyncTests
             new() { Sequence = 3, Type = "TITLE", Subtype = "malformed", Content = "legacy type" }
         ]);
         await sync.SyncAsync(CreateParse(), RunId, default);
-        inserted!.Select(row => row.TextLevel).Should().Equal(-2, 2, 3, -1);
+        Assert.NotNull(inserted);
+        inserted.Select(row => row.TextLevel).Should().Equal(-2, 2, 3, -1);
         inserted.Take(3).Select(row => row.PageId).Should().Equal(1, 1, 1);
         inserted.Take(3).Select(row => row.SortIndex).Should().Equal(0, 1, 2);
         inserted.Select(row => row.Sequence).Should().Equal(0, 1, 2, 3);
