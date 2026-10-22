@@ -41,6 +41,9 @@ keep their existing S3 configuration requirements. See
 the existing security headers and returns `{ success: true, data: { scanned, deleted, failed } }`.
 Missing identity returns 401, a non-admin returns 403, and disabled/unavailable storage returns a
 fixed safe 503 (`DOCTHECA_AUDIO_STORAGE_NOT_CONFIGURED` / `DOCTHECA_AUDIO_STORAGE_UNAVAILABLE`).
+Audio cleanup uses complete-or-fail S3 listing: a rejected or interrupted listing returns the
+unavailable error, never a successful zero-object count. Existing legacy listing callers retain
+their best-effort behavior. Provider messages and storage locations are discarded at the audio boundary.
 It never returns storage locations. It removes only unreferenced `audio/` objects older than one
 hour, preserving recent writes, referenced objects and all legacy prefixes. Database and S3 do
 not share a transaction: a successful deletion during an outage can leave objects for later recovery.
@@ -78,5 +81,6 @@ code or URL is shipped in this foundation.
 destructive down operation against PostgreSQL. `StructureAudioLifecycleTests` exercises real S3
 writes, link integrity (including concurrent tree replacement/insertion), parse/document deletion,
 orphan grace period, outage recovery, authorization and disabled/malformed configuration through
-the real host. It verifies that deferred audio routes are absent. Import's 58-path and browser
+the real host. Real S3 listing rejection is distinguished from a successful empty bucket, while
+legacy listing behavior stays unchanged. It verifies that deferred audio routes are absent. Import's 58-path and browser
 review criteria and playback expiry/browser tests belong to #108/#109 and are not claimed here.

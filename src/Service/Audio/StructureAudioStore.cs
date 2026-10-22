@@ -75,7 +75,7 @@ public sealed class StructureAudioStore
         var keys = new HashSet<string>(knownKeys, StringComparer.Ordinal);
         try
         {
-            foreach (var item in await _ossService.Value.ListObjectsAsync(ParsePrefix(parseId)))
+            foreach (var item in await _ossService.Value.ListObjectsOrThrowAsync(ParsePrefix(parseId)))
                 keys.Add(item.ObjectPath);
         }
         catch (Exception ex)
@@ -90,7 +90,7 @@ public sealed class StructureAudioStore
     {
         try
         {
-            return (await _ossService.Value.ListObjectsAsync(DocumentAudioOptions.ObjectPrefix))
+            return (await _ossService.Value.ListObjectsOrThrowAsync(DocumentAudioOptions.ObjectPrefix))
                 .Where(item => item.ObjectPath.StartsWith(DocumentAudioOptions.ObjectPrefix, StringComparison.Ordinal))
                 .ToList();
         }

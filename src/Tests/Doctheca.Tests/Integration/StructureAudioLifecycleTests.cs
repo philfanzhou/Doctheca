@@ -8,8 +8,9 @@ using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using Moq;
+using Minio.DataModel.Args;
 using Doctheca.Common.Oss;
 using Doctheca.Database;
 using Doctheca.Database.Entities;
@@ -29,22 +30,15 @@ public sealed class StructureAudioLifecycleTests(PostgreSqlFixture database, Min
     private readonly string _bucket = "audio-lifecycle-" + Guid.NewGuid().ToString("N")[..12];
 
     private WebApplicationFactory<Program> Factory(Dictionary<string, string?>? extra = null,
-        TimeProvider? time = null, bool failStorage = false)
+        TimeProvider? time = null, ILoggerProvider? logs = null)
     {
         var settings = minio.Settings(_bucket);
         foreach (var (key, value) in extra ?? []) settings[key] = value;
         return CreateFactory(settings: settings, configureTestServices: services =>
         {
             services.RemoveAll<IOssService>();
-            if (failStorage)
-            {
-                var failing = new Mock<IOssService>();
-                // A provider exception can include private data; the store must discard its message.
-                failing.Setup(store => store.DeleteAsync(It.IsAny<string>())).ThrowsAsync(new IOException("private-provider-detail"));
-                failing.Setup(store => store.ListObjectsAsync(It.IsAny<string>())).ThrowsAsync(new IOException("private-provider-detail"));
-                services.AddSingleton(failing.Object);
-            }
-            else services.AddScoped<IOssService>(sp => new S3OssService(sp.GetRequiredService<IOptions<OssOptions>>().Value));
+            services.AddScoped<IOssService>(sp => new S3OssService(sp.GetRequiredService<IOptions<OssOptions>>().Value));
+            if (logs != null) services.AddSingleton(logs);
             if (time != null)
             {
                 services.RemoveAll<StructureAudioService>();
@@ -222,13 +216,53 @@ public sealed class StructureAudioLifecycleTests(PostgreSqlFixture database, Min
     }
 
     [Fact]
+    public async Task EmptyBucketSucceeds_ButRejectedS3ListingReturnsSafe503()
+    {
+        using (var storage = minio.Client())
+            await storage.MakeBucketAsync(new MakeBucketArgs().WithBucket(_bucket));
+        using var working = Factory();
+        using var client = Admin(working);
+        var empty = await ReadData(await client.PostAsync(Sweep, null));
+        empty!["scanned"]!.GetValue<int>().Should().Be(0);
+        empty["deleted"]!.GetValue<int>().Should().Be(0);
+        empty["failed"]!.GetValue<int>().Should().Be(0);
+
+        // Real MinIO rejects these credentials; no mocked IOssService bypasses the SDK boundary.
+        var rejectedKey = "missing" + Guid.NewGuid().ToString("N");
+        var logs = new RequestScopeCapture();
+        using var denied = Factory(new() { ["Oss:AccessKey"] = rejectedKey }, logs: logs);
+        using (var scope = denied.Services.CreateScope())
+        {
+            var storage = scope.ServiceProvider.GetRequiredService<IOssService>();
+            await Assert.ThrowsAnyAsync<Exception>(() => storage.ListObjectsOrThrowAsync("audio/"));
+            // Existing consumers retain their best-effort empty-on-failure behavior.
+            (await storage.ListObjectsAsync("uploads/")).Should().BeEmpty();
+        }
+        using var deniedClient = Admin(denied);
+        var response = await deniedClient.PostAsync(Sweep, null);
+        response.StatusCode.Should().Be(HttpStatusCode.ServiceUnavailable);
+        var body = await response.Content.ReadAsStringAsync();
+        var error = JsonNode.Parse(body)!;
+        error["errorCode"]!.GetValue<string>().Should().Be(AudioErrorCodes.StorageUnavailable);
+        error["message"]!.GetValue<string>().Should().Be("Audio storage is unavailable");
+        error["data"].Should().BeNull();
+        AssertSafe(body);
+        body.Should().NotContain(rejectedKey).And.NotContain("InvalidAccessKeyId");
+        var audioLogs = string.Join('\n', logs.Logs.Where(log => log.Category.StartsWith("Doctheca.Service.Audio", StringComparison.Ordinal))
+            .Select(log => log.Message));
+        audioLogs.Should().Contain("Listing audio objects failed");
+        AssertSafe(audioLogs);
+        audioLogs.Should().NotContain(rejectedKey).And.NotContain("InvalidAccessKeyId");
+    }
+
+    [Fact]
     public async Task StorageFailureKeepsDeletionSuccessful_AndSweepRecoversAfterStorageReturns()
     {
         using var working = Factory();
         using var client = Admin(working);
         var (_, parseId, nodes) = await SeedStructureAsync(working, client);
         await StoreAsync(working, parseId, nodes[0].Id);
-        using (var failing = Factory(failStorage: true))
+        using (var failing = Factory(new() { ["Oss:AccessKey"] = "missing" + Guid.NewGuid().ToString("N") }))
         using (var failedClient = Admin(failing))
         {
             var deletion = await failedClient.DeleteAsync($"/admin/document-parses/{parseId}");
@@ -236,7 +270,9 @@ public sealed class StructureAudioLifecycleTests(PostgreSqlFixture database, Min
             AssertSafe(await deletion.Content.ReadAsStringAsync());
             var sweep = await failedClient.PostAsync(Sweep, null);
             sweep.StatusCode.Should().Be(HttpStatusCode.ServiceUnavailable);
-            AssertSafe(await sweep.Content.ReadAsStringAsync());
+            var body = await sweep.Content.ReadAsStringAsync();
+            JsonNode.Parse(body)!["errorCode"]!.GetValue<string>().Should().Be(AudioErrorCodes.StorageUnavailable);
+            AssertSafe(body);
         }
         (await RowsAsync(working, parseId)).Should().BeEmpty();
         (await minio.KeysAsync(_bucket)).Should().ContainSingle();
