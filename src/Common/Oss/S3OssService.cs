@@ -30,6 +30,9 @@ public interface IOssService
     Task<string> UploadAsync(byte[] data, string fileName, string contentType, OssBucket bucket = OssBucket.Uploads, string? folder = null);
     Task<List<string>> UploadManyAsync(IEnumerable<(Stream stream, string fileName, string contentType)> files, OssBucket bucket = OssBucket.Uploads, string? folder = null);
     Task<Stream> DownloadAsync(string objectPath);
+    /// <summary>Cancellable byte transfer; unsupported providers must not fall back to legacy unbounded buffering.</summary>
+    Task CopyToAsync(string objectPath, Stream destination, CancellationToken cancellationToken) =>
+        throw new NotSupportedException("Cancellable object transfer is not supported by this provider.");
     Task<List<Stream>> DownloadManyAsync(IEnumerable<string> objectPaths);
     Task CopyObjectAsync(string sourcePath, string destPath);
     Task<bool> ObjectExistsAsync(string objectPath);
@@ -192,6 +195,22 @@ public class S3OssService : IOssService
         await _internalClient.GetObjectAsync(getObjectArgs);
 
         return memoryStream;
+    }
+
+    public async Task CopyToAsync(string objectPath, Stream destination, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var completed = false;
+        var args = new GetObjectArgs().WithBucket(_bucketName).WithObject(objectPath)
+            .WithCallbackStream(async (source, sdkCancellation) =>
+            {
+                using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, sdkCancellation);
+                await using (source) await source.CopyToAsync(destination, linked.Token);
+                completed = true;
+            });
+        await _internalClient.GetObjectAsync(args, cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
+        if (!completed) throw new IOException("Object transfer did not complete.");
     }
 
     public async Task<List<Stream>> DownloadManyAsync(IEnumerable<string> objectPaths)

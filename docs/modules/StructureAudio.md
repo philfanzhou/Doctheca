@@ -1,6 +1,6 @@
 # Structure Audio Import, Review and Playback
 
-Administrators can import official audio for one parse, review pre-filled node links, clear or change them, and save removals atomically (#107/#108). The audio page is reached from the structure editor at `#audio/:parseId`. Administrators can preview imported audio and list a node’s direct audio through the authenticated APIs below (#109). Downstream audio access remains a separate delivery (#101).
+Administrators can import official audio for one parse, review pre-filled node links, clear or change them, and save removals atomically (#107/#108). The audio page is reached from the structure editor at `#audio/:parseId`. Administrators can preview imported audio and list a node’s direct audio through the authenticated APIs below (#109). Downstream current-node audio uses expiring same-origin proxy links (#101), described below.
 
 ## Authority and transactions
 
@@ -19,7 +19,7 @@ foreign key for that replacement model; the repository checks same-parse members
 `StructureAudioStore` alone writes/deletes `audio/` through the existing `IOssService`/`S3OssService`.
 It refuses non-audio keys. Legacy upload/image prefixes remain read-only except for existing cleanup.
 `DocumentAudio:Enabled` defaults to false. Enabling the lifecycle requires the internal S3 endpoint,
-access/secret keys and bucket; local-file storage is unsupported. A public storage URL is not required for import or cleanup. Playback additionally requires an explicitly valid `Oss:PublicBaseUrl` and `DocumentAudio:PlaybackLinkSeconds` (default 300, allowed 60–3600); invalid playback settings disable only playback, never fall back to the internal endpoint. These settings are acquired at startup; restart to apply changes. Invalid `DocumentAudio` settings only disable audio. Missing S3 settings disable recovery without
+access/secret keys and bucket; local-file storage is unsupported. A public storage URL is not required for import or cleanup. Administrator playback additionally requires an explicitly valid `Oss:PublicBaseUrl` and `DocumentAudio:PlaybackLinkSeconds` (default 300, allowed 60–3600); invalid playback settings disable only playback, never fall back to the internal endpoint. These settings are acquired at startup; restart to apply changes. Invalid `DocumentAudio` settings only disable audio. Missing S3 settings disable recovery without
 constructing a client; existing document/structure reads remain usable, and legacy storage operations
 keep their existing S3 configuration requirements. See
 [deployment](../development/Deployment.md#structure-audio-storage-issue-90).
@@ -106,7 +106,7 @@ Missing parse or disabled storage is refused before buffering uploads. Removal c
 
 ## Console workflow
 
-Choose a folder, multiple files or ZIPs, then review flagged files or all files. Change/clear links and mark removals, then save once and reload persisted results. Import merges new rows while keeping an existing unsaved draft. Reload, sidebar/back/hash navigation and logout require discard confirmation for a dirty draft; tab close uses the browser's unload confirmation. In-flight import/save prevents navigation and duplicate writes. Saving also disables node selection/clearing and removal/undo from the deletion confirmation until the request finishes; cancelling confirmation or a failed request keeps the draft editable. Paths/node names render as escaped text. Drafts stay in memory; neither payloads nor credentials are persisted in browser storage. Authentication failures never replay a write automatically. Each play click obtains a fresh link, including an unlinked imported file. The player handles missing files, expired links, storage/network and decoding failures with fixed messages. Switching, closing, reloading the list, saving, or leaving releases the media resource (pause, remove src, load); pending link requests are aborted and late responses ignored. URLs stay in component memory/DOM only. Text/exercise alignment, transcripts and downstream audio access remain excluded.
+Choose a folder, multiple files or ZIPs, then review flagged files or all files. Change/clear links and mark removals, then save once and reload persisted results. Import merges new rows while keeping an existing unsaved draft. Reload, sidebar/back/hash navigation and logout require discard confirmation for a dirty draft; tab close uses the browser's unload confirmation. In-flight import/save prevents navigation and duplicate writes. Saving also disables node selection/clearing and removal/undo from the deletion confirmation until the request finishes; cancelling confirmation or a failed request keeps the draft editable. Paths/node names render as escaped text. Drafts stay in memory; neither payloads nor credentials are persisted in browser storage. Authentication failures never replay a write automatically. Each play click obtains a fresh link, including an unlinked imported file. The player handles missing files, expired links, storage/network and decoding failures with fixed messages. Switching, closing, reloading the list, saving, or leaving releases the media resource (pause, remove src, load); pending link requests are aborted and late responses ignored. URLs stay in component memory/DOM only. Text/exercise alignment and transcripts remain excluded from the administrator UI.
 
 ## Temporary administrator playback
 
@@ -116,10 +116,33 @@ The referenced parse/audio must exist and belong together (404 otherwise); no no
 
 `expiresAt` is the UTC S3 request timestamp plus `expiresInSeconds`. The browser must be able to reach `Oss:PublicBaseUrl` with its protocol/host. HTTPS consoles need HTTPS media to avoid mixed-content blocking. A configured path-prefix reverse proxy must strip that prefix before forwarding and preserve the signed Host and query. Native cross-origin media playback and fetch/WebAudio have different CORS requirements: configure bucket/proxy rules for the actual console origins and needed GET/HEAD/Range behavior; no global API CORS change is made here.
 
-Deletion, replacement, disabling audio or changing configuration cannot immediately revoke a previously issued credential. It may remain usable until S3 expiry; deletion may also make it fail earlier. An object can disappear after Stat and normal media failures are expected. Expiry is enforced for new S3 requests, not necessarily an already-open stream or bytes already buffered in the browser. Request another link on play after expiry. There is no permanent link, media proxy, transcoding or new settings UI.
+Deletion, replacement, disabling audio or changing configuration cannot immediately revoke a previously issued credential. It may remain usable until S3 expiry; deletion may also make it fail earlier. An object can disappear after Stat and normal media failures are expected. Expiry is enforced for new S3 requests, not necessarily an already-open stream or bytes already buffered in the browser. Request another link on play after expiry. Administrator playback has no permanent link, media proxy, transcoding or new settings UI.
 
 No schema, package, port or deployment topology change is introduced. Reverting to the pre-playback image removes the routes/player while preserving the audio table; recovery to before #107 follows the verified backup/restore procedure above.
 
 ## Verification
 
 `StructureAudioMatcherTests` covers all 58 paths, folder/name conflicts at multiple depths, ambiguous labels and token boundaries. `AudioImportReaderTests` covers signatures, normalized/unsafe paths, cancellation and invalid limits. `StructureAudioEndpointTests` uses the real host, PostgreSQL and isolated MinIO to check import/review/reload, authorization, unchanged rows/objects after rejected batches, cross-archive limits, concurrent duplicates, atomic save and interrupted read/upload/database/commit outcomes. `AdminHostedFrontendTests.OfficialAudioIsImportedReviewedAndSavedInTheConsole` imports the official fixture, reviews/clears/removes links and reloads via Chromium against real PostgreSQL/S3; synthetic ID3 bytes prove import, not media decoding. It also checks dirty navigation. Existing `AudioMigrationTests` and `StructureAudioLifecycleTests` retain schema, link integrity, parse/document deletion and grace-period/outage recovery coverage. The playback endpoint tests download valid WAV bytes through real MinIO before expiry and verify 403 after the configured 60-second lifetime, direct-only lists/ownership, no-store, exact fields, configuration isolation, public-prefix signing, object rejection and cancellation. `AdminHostedFrontendTests.NodeAudioPlaysRealWaveHandlesFailuresAndReleasesResources` verifies real Chromium playback/currentTime, switching/closing/unmount/reload, fresh requests and fixed 404/503/network/expiry/media failures against PostgreSQL/S3.
+
+## Downstream audio proxy
+
+The optional [internal API](../Integration/InternalApi.md#direct-node-audio-and-temporary-playback)
+provides anonymous direct-node metadata and same-origin expiring byte links. It reuses the
+current parsed tree rule in read-only repeatable-read snapshots, independently of administrator
+preview (which may play unlinked audio). Proxy links require internal S3 and a valid existing
+TTL, but no public S3 address. They expose no key, endpoint, bucket or storage credential.
+A process-local purpose-specific protector contains IDs only; restart invalidates links early.
+
+Each byte request validates membership before bounded scratch buffering and again in a fresh
+snapshot after buffering, including expiry and exact key/type/size identity. The internal SDK
+callback is cancellable with a 30-second deadline. Random DeleteOnClose seekable scratch files
+are bounded by stored size and MaxFileBytes, and disposed on completion, failure and disconnect.
+GET supports 200/206/416; binary errors are fixed before response start and abort after start.
+No token-bearing URL enters diagnostics or persistence. Deployer access logs must omit it.
+
+A deletion/unlink before final admission refuses playback; a post-admission race may complete
+an open stream, and the next request always rechecks. Links provide neither caller authentication
+nor guaranteed availability. Callers re-list after expiry/restart. Enabling InternalApi does not
+add admin permission. No schema, object layout, package or configuration key changes are needed;
+disabling InternalApi and restarting or restoring the previous image removes the routes without
+data rollback. Existing audio import/review, admin signing and backup/restore remain unchanged.

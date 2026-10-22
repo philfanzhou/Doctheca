@@ -16,7 +16,7 @@ A self-hosted **document library & full-text retrieval** service for educational
 | **DocumentStructure** | Runtime-configured structure definitions and levels (for example Unit → Section), hand-marked structure nodes on a continuous view of a parse, and search narrowed to a node's subtree |
 | **StructureAudio** | Bounded ZIP/folder/file import, hierarchical matching and administrator link review, metadata persistence, deletion/orphan recovery and administrator playback using fresh expiring public S3 links |
 | **AdminAuthentication** | SignaCore hosted admin login via the official `SignaCore.Client.AspNetCore` client: `role=admin` pre-sign-in gate, server sessions, CSRF and prepared logout; legacy Bearer compatibility |
-| **InternalCatalog** | Optional anonymous read-only structure definition and marked-document catalogs, current document trees, node content pages, owned image bytes and subtree search; disabled by default and restricted to the internal network by the deployer |
+| **InternalCatalog** | Optional anonymous read-only structure definition and marked-document catalogs, current document trees, node content pages, owned image bytes, subtree search and expiring same-origin direct-node audio; disabled by default and restricted to the internal network by the deployer |
 
 ## Tech Stack
 
@@ -70,9 +70,10 @@ IDENTITY_APP_ID=<appid> IDENTITY_APP_SECRET=<secret> ./start.sh
 `start.sh` reads shared configuration (PostgreSQL, OSS, OpenSearch, Loki, StructaDoc) from Consul KV; environment variables can override. See [`docs/development/Deployment.md`](docs/development/Deployment.md).
 
 `InternalApi:Enabled` defaults to `false`. Explicitly enabling it exposes anonymous
-catalog, current tree, node content, owned-image and subtree-search GET routes under `/internal/v1/`; restrict `/internal/*` to trusted internal callers at
+catalog, current tree, node content, owned-image, subtree-search and direct-node audio GET routes under `/internal/v1/`; restrict `/internal/*` to trusted internal callers at
 the network/reverse proxy before enabling. It adds no caller authentication or document-level
 authorization. Unknown or disabled internal paths always return JSON 404, never the SPA.
+Audio proxy delivery needs configured internal S3 and a valid existing playback TTL, without a public S3 address. Links expire and are invalidated on restart; provide bounded scratch capacity and exclude token-bearing URLs from access logs.
 See the [internal API contract](docs/Integration/InternalApi.md). No schema/storage migration is
 needed; disable the setting and restart, or restore the previous image, to roll back.
 
