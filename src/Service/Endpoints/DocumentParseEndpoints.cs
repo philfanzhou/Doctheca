@@ -8,6 +8,7 @@ using Microsoft.Extensions.Logging;
 using Doctheca.Common.Oss;
 using Doctheca.Domain.Repositories;
 using Doctheca.Domain.Services;
+using Doctheca.Service.Audio;
 using Doctheca.Service.Parsing;
 using Doctheca.Service.StructaDoc;
 
@@ -72,6 +73,7 @@ public static class DocumentParseEndpoints
         IOssService ossService,
         ISearchIndexService searchIndexService,
         IStructaDocClient structaDocClient,
+        [FromServices] StructureAudioService audioService,
         [FromServices] ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(DocumentParseEndpoints));
@@ -112,8 +114,12 @@ public static class DocumentParseEndpoints
             }
         }
 
-        // Delete parse record (cascade deletes images and blocks from DB)
+        // Structure audio rows go with the parse; their objects are deleted after the rows (issue #90).
+        var audioKeys = await audioService.GetParseObjectKeysAsync(parseId);
+
+        // Delete parse record (cascade deletes images, blocks, structure nodes and audio rows from DB)
         await parseService.DeleteParseAsync(parseId);
+        await audioService.DeleteParseObjectsAsync(parseId, audioKeys);
 
         // Delete OpenSearch index for this parse (best-effort, does not block deletion)
         try

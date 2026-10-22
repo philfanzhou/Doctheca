@@ -38,6 +38,12 @@ public static class OssPathPrefixConstants
     public const string Homework = "homework/";
 
     /// <summary>
+    /// Structure audio imported by Doctheca administrators (issue #90). Not part of
+    /// <see cref="All"/>: it never takes part in the image lifecycle lookups.
+    /// </summary>
+    public const string Audio = "audio/";
+
+    /// <summary>
     /// All known OSS path prefixes, ordered by typical object lifecycle
     /// (uploads/ → mistakes/ or homework/). Used by image fingerprint lazy
     /// validation to cross-check object existence across prefixes when the

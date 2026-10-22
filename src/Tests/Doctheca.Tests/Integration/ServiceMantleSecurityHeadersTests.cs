@@ -82,6 +82,8 @@ public sealed class ServiceMantleSecurityHeadersTests : ServiceMantleIntegration
         "GET /admin/document-parses/{parseId:guid}/structure/nodes/{nodeId:guid}/blocks",
         "POST /admin/document-parses/{parseId:guid}/search-index",
         "POST /admin/search-index/reindex",
+        // Structure audio lifecycle (#107): counts-only JSON.
+        "POST /admin/structure-audio/orphan-sweep",
     };
 
     // Endpoints that must exist but must NOT carry the marker (rendering contracts).

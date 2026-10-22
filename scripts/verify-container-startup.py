@@ -269,26 +269,33 @@ def main(image, rollback_image=None):
                     check_logs(name)
                     return logs
 
-                # The current image migrated this database above. The documented rollback script
-                # (issue #89) must return it to exactly the previous image's baseline.
-                rollback_sql = (Path(__file__).resolve().parent.parent / "docs" / "database" / "rollback"
-                                / "20261021094612_AddDocumentStructure.down.sql").read_text()
-                psql(rollback_sql)
+                def down_script(migration_id):
+                    return (Path(__file__).resolve().parent.parent / "docs" / "database" / "rollback"
+                            / (migration_id + ".down.sql")).read_text()
+
+                # Optional destructive maintenance, separate from backup-based version recovery.
+                # This isolated test deliberately discards audio metadata, then checks that
+                # the previous image accepts the resulting structure-version database.
+                psql(down_script("20261021153535_AddStructureAudio"))
                 before = fingerprint()
-                require("20261021094612_AddDocumentStructure" not in before, "rollback left the migration history row")
+                require("20261021153535_AddStructureAudio" not in before, "rollback left the migration history row")
                 start_until_ready("rollback", rollback_image)
                 require(fingerprint() == before, "rollback image changed schema/history/data")
-                print("PASS rollback: down script applied; previous image accepted the database unchanged", flush=True)
+                print("PASS destructive down maintenance: previous image accepted the downgraded test database", flush=True)
 
-                # This database is owned by the random test prefix. Remove only its exact
-                # verified history table to exercise legacy takeover through the shared writer,
-                # followed by the forward migration of the current image.
+                # This database is owned by the random test prefix. Roll it back to the baseline
+                # with the earlier documented script and remove only its exact verified history
+                # table to exercise legacy takeover through the shared writer, followed by the
+                # forward migrations of the current image.
+                psql(down_script("20261021094612_AddDocumentStructure"))
                 psql('DROP TABLE public."__EFMigrationsHistory"')
                 logs = start_until_ready("legacy", image)
                 require(logs.count("Legacy database taken over") == 1,
                         "Shared baseline writer was not exercised")
                 after = fingerprint()
-                require("20260930161548_InitialCreate" in after and "20261021094612_AddDocumentStructure" in after,
+                require(all(migration in after for migration in (
+                            "20260930161548_InitialCreate", "20261021094612_AddDocumentStructure",
+                            "20261021153535_AddStructureAudio")),
                         "legacy takeover did not reach the current version")
                 require(after.splitlines()[-1] == before.splitlines()[-1], "legacy takeover changed business rows")
                 print("PASS legacy: baseline taken over and migrated forward; business rows unchanged", flush=True)

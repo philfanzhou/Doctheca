@@ -14,6 +14,7 @@ public enum OssBucket
     Mistakes,     // mistakes/
     Questions,    // questions/
     Documents,    // documents/
+    Audio,        // audio/ (structure audio, issue #90)
 }
 
 public interface IOssService
@@ -31,6 +32,9 @@ public interface IOssService
     Task<List<string>> GetPresignedUrlsAsync(IEnumerable<string> objectPaths, int expirySeconds = 3600);
     Task<bool> CheckConnectivityAsync();
     Task<List<OssObjectInfo>> ListObjectsAsync(string? prefix = null);
+    /// <summary>Returns a complete listing or throws; unsupported providers must not report an empty success.</summary>
+    Task<List<OssObjectInfo>> ListObjectsOrThrowAsync(string? prefix = null) =>
+        throw new NotSupportedException("Reliable object listing is not supported by this provider.");
     Task<List<OssObjectInfo>> ListObjectsWithBucketAsync(OssBucket bucket, string? prefix = null);
 }
 
@@ -293,34 +297,35 @@ public class S3OssService : IOssService
 
     public async Task<List<OssObjectInfo>> ListObjectsAsync(string? prefix = null)
     {
-        var objects = new List<OssObjectInfo>();
-
         try
         {
-            var listArgs = new ListObjectsArgs()
-                .WithBucket(_bucketName)
-                .WithPrefix(prefix)
-                .WithRecursive(true);
-
-            var items = new List<OssObjectInfo>();
-            await foreach (var item in _internalClient.ListObjectsEnumAsync(listArgs))
-            {
-                items.Add(new OssObjectInfo
-                {
-                    ObjectPath = item.Key,
-                    Size = (long)item.Size,
-                    LastModified = string.IsNullOrEmpty(item.LastModified) ? null : DateTimeOffset.TryParse(item.LastModified, out var dt) ? (DateTimeOffset?)dt : null,
-                    IsZombie = false
-                });
-            }
-
-            objects.AddRange(items);
+            return await ListObjectsOrThrowAsync(prefix);
         }
         catch
         {
-            // Ignore errors and return an empty list
+            // Preserve the existing best-effort contract for legacy callers.
+            return [];
         }
+    }
 
+    public async Task<List<OssObjectInfo>> ListObjectsOrThrowAsync(string? prefix = null)
+    {
+        var listArgs = new ListObjectsArgs()
+            .WithBucket(_bucketName)
+            .WithPrefix(prefix)
+            .WithRecursive(true);
+
+        var objects = new List<OssObjectInfo>();
+        await foreach (var item in _internalClient.ListObjectsEnumAsync(listArgs))
+        {
+            objects.Add(new OssObjectInfo
+            {
+                ObjectPath = item.Key,
+                Size = (long)item.Size,
+                LastModified = string.IsNullOrEmpty(item.LastModified) ? null : DateTimeOffset.TryParse(item.LastModified, out var dt) ? (DateTimeOffset?)dt : null,
+                IsZombie = false
+            });
+        }
         return objects;
     }
 
@@ -332,6 +337,7 @@ public class S3OssService : IOssService
             OssBucket.Mistakes => "mistakes",
             OssBucket.Questions => "questions",
             OssBucket.Documents => "documents",
+            OssBucket.Audio => "audio",
             _ => "others"
         };
 
@@ -381,6 +387,7 @@ public class S3OssService : IOssService
             OssBucket.Mistakes => "mistakes",
             OssBucket.Questions => "questions",
             OssBucket.Documents => "documents",
+            OssBucket.Audio => "audio",
             _ => "others"
         };
 

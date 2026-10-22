@@ -14,6 +14,7 @@ A self-hosted **document library & full-text retrieval** service for educational
 | **DocumentMetadataAnalysis** | Optional LLM analysis of parsed Markdown to auto-detect subject/grade and backfill; failure never blocks parsing |
 | **DocumentSearch** | OpenSearch full-text precise search with block-level indexing and subject/grade filters |
 | **DocumentStructure** | Runtime-configured structure definitions and levels (for example Unit → Section), hand-marked structure nodes on a continuous view of a parse, and search narrowed to a node's subtree |
+| **StructureAudio** | Persistence and object lifecycle foundation: audio metadata, node-link integrity, parse/document deletion and orphan recovery; import/review (#108) and playback (#109) are pending |
 | **AdminAuthentication** | SignaCore hosted admin login via the official `SignaCore.Client.AspNetCore` client: `role=admin` pre-sign-in gate, server sessions, CSRF and prepared logout; legacy Bearer compatibility |
 
 ## Tech Stack
@@ -23,7 +24,7 @@ A self-hosted **document library & full-text retrieval** service for educational
 - **Database**: PostgreSQL (EF Core 10 + Npgsql)
 - **Search**: OpenSearch
 - **Parsing**: external StructaDoc service (HTTP + scoped API key)
-- **Object storage**: S3-compatible (SeaweedFS/MinIO) — legacy objects read-compat & deletion only; new originals/artifacts are owned by StructaDoc
+- **Object storage**: S3-compatible (SeaweedFS/MinIO) — legacy objects read-compat & deletion only; new originals/artifacts are owned by StructaDoc; structure audio is written under the `audio/` prefix (optional, `DocumentAudio:Enabled`)
 - **Auth**: SignaCore or any OIDC discovery/JWKS-compatible issuer (RS256)
 - **Optional**: OpenAI-compatible LLM for metadata analysis
 
@@ -93,7 +94,7 @@ cd frontend && npm ci && npm run build
 | StructaDoc | Yes | document parsing & original/artifact storage (ADR-0009) |
 | SignaCore (OIDC) | Yes | admin authentication, JWKS |
 | OpenSearch | Yes | full-text block index & search |
-| S3 (SeaweedFS/MinIO) | Legacy | read-compat & deletion of pre-migration objects |
+| S3 (SeaweedFS/MinIO) | Legacy / optional | read-compat & deletion of pre-migration objects; structure audio under `audio/` when `DocumentAudio:Enabled` |
 | OpenAI-compatible LLM | Optional | document metadata analysis |
 
 ## Documentation

@@ -16,6 +16,7 @@ public class DocthecaDbContext : DbContext
     public DbSet<StructureDefinitionEntity> StructureDefinitions { get; set; } = null!;
     public DbSet<StructureLevelEntity> StructureLevels { get; set; } = null!;
     public DbSet<DocumentStructureNodeEntity> DocumentStructureNodes { get; set; } = null!;
+    public DbSet<DocumentStructureAudioEntity> DocumentStructureAudio { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -127,6 +128,19 @@ public class DocthecaDbContext : DbContext
             entity.HasOne(e => e.Parent)
                 .WithMany()
                 .HasForeignKey(e => e.ParentId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<DocumentStructureAudioEntity>(entity =>
+        {
+            entity.HasIndex(e => new { e.ParseId, e.SourcePath }).IsUnique();
+            entity.HasIndex(e => e.NodeId);
+            entity.HasIndex(e => e.ObjectKey).IsUnique();
+
+            // Deleting the parse deletes its rows; the stored objects are removed by the caller.
+            entity.HasOne(e => e.Parse)
+                .WithMany()
+                .HasForeignKey(e => e.ParseId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
     }

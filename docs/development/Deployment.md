@@ -54,7 +54,7 @@ The following configuration has moved into the shared Consul KV:
     `Serilog` configuration section and levels are now configured in code; the shared KV entry
     may still serve other Ruoyu services)
 
-> `Database:Name`, `OpenSearch:IndexName`, `LlmDocumentAnalysis:*` and `StructaDoc:ApiKey` are all Doctheca-private configuration and do not go into the shared KV; `StructaDoc:BaseUrl` lives in the shared KV `service-endpoints.json`.
+> `Database:Name`, `OpenSearch:IndexName`, `LlmDocumentAnalysis:*`, `DocumentAudio:*` and `StructaDoc:ApiKey` are all Doctheca-private configuration and do not go into the shared KV; `StructaDoc:BaseUrl` lives in the shared KV `service-endpoints.json`.
 
 ## Environment Variables
 
@@ -88,6 +88,27 @@ LLM document-analysis configuration is injected via environment variables in `st
 - The public-network reverse proxy for `/oss/` is managed by User Web Nginx; its upstream address is not generated dynamically from Consul,
   so when migrating SeaweedFS you must also modify `conf/nginx.conf` in the User Web deployment directory and restart User Web.
 
+## Structure Audio Storage (issue #90)
+
+The persistence and object-lifecycle foundation (#107) reserves `audio/` in the existing S3 bucket.
+Only `StructureAudioStore` can write/delete this prefix; keys are `audio/{parseId:N}/{audioId:N}{extension}`.
+Legacy uploads and parse images stay read-only. Import/review (#108) and playback (#109) are not
+available in this version; there is no audio UI or playback URL endpoint.
+
+`DocumentAudio:Enabled` (`DocumentAudio__Enabled`) defaults to `false`. Setting it to `true` enables
+the internal lifecycle and administrator recovery endpoint. It requires S3 (not `USE_LOCAL_OSS=1`)
+and the existing `Oss:InternalEndpoint`, `Oss:AccessKey`, `Oss:SecretKey` and `Oss:BucketName`.
+`Oss:PublicBaseUrl` is not required for cleanup. Invalid `DocumentAudio` flags disable the audio lifecycle without stopping existing features.
+Missing S3 settings disable recovery without constructing a client; document/structure reads remain
+available, while legacy storage operations keep their existing configuration requirements.
+Diagnostics contain only key names. No upload limits
+or playback TTL settings are introduced yet.
+
+After a parse/document deletion, object cleanup is best-effort. An administrator can call
+`POST /admin/structure-audio/orphan-sweep` to remove unreferenced `audio/` objects older than one
+hour; recent, referenced and legacy objects are preserved. A disabled/unavailable store returns a
+safe 503. See [StructureAudio](../modules/StructureAudio.md).
+
 `IdentityService:Authority/Audience/RequireHttpsMetadata`
 are provided by Consul; `appsettings.json` only keeps the local-development fallback.
 
@@ -97,7 +118,7 @@ are provided by Consul; `appsettings.json` only keeps the local-development fall
 |------|------|------|
 | PostgreSQL | 5432 | Primary database (`doctheca`) |
 | OpenSearch | 9200 | Full-text search index |
-| MinIO / SeaweedFS | Deployment-dependent (default 8333) | Object storage (S3-compatible; address comes from Consul `Oss:InternalEndpoint`) |
+| MinIO / SeaweedFS | Deployment-dependent (default 8333) | Object storage (S3-compatible; address comes from Consul `Oss:InternalEndpoint`): legacy objects read-only, structure audio under `audio/` |
 | Consul | 8500 | Shared configuration reads and service registration |
 | Loki | 3100 | Log aggregation (configured via Consul `Loki:Uri`) |
 | SignaCore | 5002 | Hosted admin login, prepared logout, OIDC discovery/JWKS |
@@ -250,6 +271,18 @@ and recreates the OpenSearch index for mapping version 3. Afterwards, call
 `POST /admin/search-index/reindex` once (or click 重建检索索引 on the parse results page) to restore
 search. Rolling back to the previous image requires the documented down script first; see
 [Migrations — Document Structure Upgrade](../database/migrations.md#document-structure-upgrade-issue-89).
+
+### Structure audio upgrade (issue #90)
+
+The first start of the image containing migration `20261021153535_AddStructureAudio` only creates the
+`document_structure_audio` table; no existing table or the OpenSearch mapping changes. It delivers
+the persistence/cleanup foundation only (#107); import/review and playback remain pending. Before
+upgrading, take and verify a consistent database backup together with the corresponding image,
+configuration and object storage recovery set. To go back, stop all instances and restore that
+pre-upgrade recovery set; post-backup writes are lost. Old images need not accept the new schema,
+and image rollback never automatically runs Down migrations. The destructive audio down script
+is a separate optional maintenance operation. See
+[Migrations — Structure Audio Upgrade](../database/migrations.md#structure-audio-upgrade-issue-90).
 
 ## Startup Command
 

@@ -10,6 +10,7 @@ using Doctheca.Domain.Repositories;
 using Doctheca.Domain.Services;
 using Doctheca.Domain.Services.Structure;
 using Doctheca.Service;
+using Doctheca.Service.Audio;
 using Doctheca.Service.Parsing;
 using Doctheca.Service.StructaDoc;
 using Doctheca.Host;
@@ -122,6 +123,32 @@ else
     });
 }
 
+// Structure audio (issue #90): stored through the Oss storage above under audio/, off unless
+// DocumentAudio:Enabled and the internal S3 connection are set. An unusable
+// configuration only disables audio; the rest of Doctheca keeps working.
+DocumentAudioOptions documentAudioOptions;
+DocumentAudioStorageStatus documentAudioStatus;
+try
+{
+    documentAudioOptions = builder.Configuration.GetSection(DocumentAudioOptions.SectionName).Get<DocumentAudioOptions>()
+        ?? new DocumentAudioOptions();
+    documentAudioStatus = DocumentAudioStorageStatus.Evaluate(
+        documentAudioOptions, useLocalOss, key => builder.Configuration[$"Oss:{key}"]);
+}
+catch (InvalidOperationException)
+{
+    // A malformed value (for example a non-boolean enablement flag) disables audio instead of startup.
+    documentAudioOptions = new DocumentAudioOptions();
+    documentAudioStatus = new DocumentAudioStorageStatus(false, "the DocumentAudio settings could not be read");
+}
+builder.Services.AddSingleton(Options.Create(documentAudioOptions));
+builder.Services.AddSingleton(documentAudioStatus);
+// Do not construct an S3 client just to report disabled/missing audio configuration.
+builder.Services.AddScoped(sp => new StructureAudioStore(
+    () => sp.GetRequiredService<IOssService>(), documentAudioStatus,
+    sp.GetRequiredService<ILogger<StructureAudioStore>>()));
+builder.Services.AddScoped<StructureAudioService>();
+
 // Search Index Services
 builder.Services.Configure<OpenSearchOptions>(builder.Configuration.GetSection("OpenSearch"));
 builder.Services.AddSingleton<ISearchIndexService, OpenSearchIndexService>();
@@ -154,6 +181,7 @@ builder.Services.AddScoped<IDocumentParseImageRepository, DocumentParseImageRepo
 builder.Services.AddScoped<IDocumentParseBlockRepository, DocumentParseBlockRepository>();
 builder.Services.AddScoped<IStructureDefinitionRepository, StructureDefinitionRepository>();
 builder.Services.AddScoped<IDocumentStructureRepository, DocumentStructureRepository>();
+builder.Services.AddScoped<IDocumentStructureAudioRepository, DocumentStructureAudioRepository>();
 builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
 
 // Domain Services
@@ -226,6 +254,10 @@ using (serviceLogContext.BeginScope(app.Logger))
         StartupDiagnosticsFormatter.SummarizeValue(builder.Configuration["Loki:Uri"]),
         StartupDiagnosticsFormatter.SummarizeValue(builder.Configuration["OpenSearch:Url"]));
     app.Logger.LogInformation("OSS: {OssType}", useLocalOss ? "local" : "S3");
+    app.Logger.LogInformation(
+        "Document audio: Available={Available}, Reason={Reason}",
+        documentAudioStatus.Available,
+        documentAudioStatus.Reason ?? "(none)");
     app.Logger.LogInformation("OpenSearch: {Url}", builder.Configuration["OpenSearch:Url"] ?? "(not configured)");
 
     var structaDocConfig = builder.Configuration.GetSection(StructaDocOptions.SectionName).Get<StructaDocOptions>()
@@ -356,6 +388,7 @@ app.MapDocumentExportEndpoints();
 app.MapDocumentSearchEndpoints();
 app.MapStructureDefinitionEndpoints();
 app.MapDocumentStructureEndpoints();
+app.MapStructureAudioEndpoints();
 
 // ServiceMantle fixed health endpoints: GET /health/live (liveness, never touches the
 // database), GET /health/ready and the GET /health alias (readiness projection). All three

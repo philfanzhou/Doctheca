@@ -8,7 +8,7 @@
 | SignaCore | HTTP/OIDC | Outbound | Hosted sign-in, code exchange, prepared logout, JWKS | Authority from Consul |
 | PostgreSQL | TCP | Outbound | Document/parse data CRUD | Service-private database |
 | StructaDoc | HTTP | Outbound | Document upload, Parse Runs, Blocks/Markdown/Assets sync, image proxy, deletion (ADR-0009) | `Authorization: ApiKey` scoped key, BaseUrl from Consul/environment variables |
-| MinIO/SeaweedFS | S3 | Outbound | Legacy files and parse images (read-only compatibility and delete cleanup) | Shared Consul configuration |
+| MinIO/SeaweedFS | S3 | Outbound | Legacy files and parse images (read-only compatibility and delete cleanup); structure audio under `audio/` (internal write/delete lifecycle; #107, playback pending #109) | Shared Consul configuration; `DocumentAudio:*` private |
 | OpenSearch | HTTP | Outbound | Block indexing and queries | Shared Consul configuration |
 | LLM (OpenAI-compatible, optional) | HTTP | Outbound | Metadata analysis | Private ApiKey |
 

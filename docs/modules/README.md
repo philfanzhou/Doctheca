@@ -8,4 +8,5 @@
 | DocumentMetadataAnalysis | [DocumentMetadataAnalysis](./DocumentMetadataAnalysis/01-FEATURE.md) |
 | DocumentSearch | [DocumentSearch](./DocumentSearch/01-FEATURE.md) |
 | DocumentStructure | [DocumentStructure](./DocumentStructure.md) |
+| StructureAudio | [StructureAudio](./StructureAudio.md) |
 | AdminAuthentication | [AdminAuthentication](./AdminAuthentication/01-FEATURE.md) |
