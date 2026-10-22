@@ -17,7 +17,7 @@ namespace Doctheca.Database.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "10.0.12")
+                .HasAnnotation("ProductVersion", "10.0.13")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
@@ -309,6 +309,32 @@ namespace Doctheca.Database.Migrations
                     b.ToTable("document_parse_images");
                 });
 
+            modelBuilder.Entity("Doctheca.Database.Entities.DocumentParsePageEntity", b =>
+                {
+                    b.Property<Guid>("ParseId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("parse_id");
+
+                    b.Property<int>("PageNumber")
+                        .HasColumnType("integer")
+                        .HasColumnName("page_number");
+
+                    b.Property<string>("Label")
+                        .HasColumnType("text")
+                        .HasColumnName("label");
+
+                    b.Property<string>("LabelSource")
+                        .HasColumnType("text")
+                        .HasColumnName("label_source");
+
+                    b.HasKey("ParseId", "PageNumber");
+
+                    b.ToTable("document_parse_pages", t =>
+                        {
+                            t.HasCheckConstraint("CK_document_parse_pages_page_number", "page_number > 0");
+                        });
+                });
+
             modelBuilder.Entity("Doctheca.Database.Entities.DocumentStructureAudioEntity", b =>
                 {
                     b.Property<Guid>("Id")
@@ -540,6 +566,15 @@ namespace Doctheca.Database.Migrations
                         .IsRequired();
 
                     b.Navigation("Parse");
+                });
+
+            modelBuilder.Entity("Doctheca.Database.Entities.DocumentParsePageEntity", b =>
+                {
+                    b.HasOne("Doctheca.Database.Entities.DocumentParseEntity", null)
+                        .WithMany()
+                        .HasForeignKey("ParseId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Doctheca.Database.Entities.DocumentStructureAudioEntity", b =>

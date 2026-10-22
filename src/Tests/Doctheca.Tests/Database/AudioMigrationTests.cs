@@ -69,6 +69,8 @@ public sealed class AudioMigrationTests(PostgreSqlMigrationFixture fixture) : IA
                         'audio/x/y.mp3', 'no_match', NULL, NOW(), NOW());
                 """);
 
+            await MigrationGoldenStates.ExecuteRawAsync(context, await File.ReadAllTextAsync(
+                StructureMigrationTests.RollbackScriptPath(DocthecaMigrationExecutor.AddDocumentParsePagesMigrationId)));
             await MigrationGoldenStates.ExecuteRawAsync(context, await File.ReadAllTextAsync(StructureMigrationTests.RollbackScriptPath(AudioId)));
 
             (await MigrationGoldenStates.ReadAppliedHistoryAsync(context)).Should().Equal(MigrationGoldenStates.InitialId, StructureId);

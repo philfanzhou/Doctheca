@@ -315,6 +315,16 @@ and image rollback never automatically runs Down migrations. The destructive aud
 is a separate optional maintenance operation. See
 [Migrations — Structure Audio Upgrade](../database/migrations.md#structure-audio-upgrade-issue-90).
 
+### Printed page label upgrade (issue #102)
+
+Migration `20261022160829_AddDocumentParsePages` adds only the parse-owned page-label table.
+Existing file/parse/Block/image/structure/audio rows, HTTP fields and OpenSearch mapping remain
+unchanged. Older parses stay readable without labels and are not backfilled from StructaDoc.
+Take a verified backup before upgrading. The previous image refuses the new history ID: stop
+every instance, back up, apply the page-label down script, then start the previous image. This
+maintenance loses labels only; standard recovery restores the matching pre-upgrade backup.
+See [Migrations — Printed Page Label Upgrade](../database/migrations.md#printed-page-label-upgrade-issue-102).
+
 ## Startup Command
 
 ```bash

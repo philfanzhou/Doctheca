@@ -185,6 +185,7 @@ remain in temporary mode-0600 environment files and are checked for disclosure w
 | `20260930161548_InitialCreate` | All four tables, their indexes and foreign keys, and the `set_document_files_updated_at` trigger — the production structure as of the StructaDoc migration (ADR-0009) |
 | `20261021094612_AddDocumentStructure` | Nullable `document_parse_blocks.sequence` (backfilled) with the unique index `(parse_id, sequence)`; nullable `document_files.structure_definition_id`; the `structure_definitions`, `structure_levels`, and `document_structure_nodes` tables (issue #89) |
 | `20261021153535_AddStructureAudio` | The `document_structure_audio` table with its indexes and the cascade foreign key to `document_parses` (issue #90); no existing table changes |
+| `20261022160829_AddDocumentParsePages` | The `document_parse_pages` table with composite physical-page key and cascade parse ownership (#102); no existing table or row changes |
 
 Adding or changing migrations requires extending `DocthecaMigrationExecutor.KnownMigrationIds`
 (the known-version contract) and `TablesAfterMigration` together with the executor's takeover
@@ -192,6 +193,9 @@ rules. An earlier version is verified against that migration's own target model 
 snapshot), never against the current model, so every known version stays upgradeable in place.
 
 ## Document Structure Upgrade (issue #89)
+
+The historical procedures below target their named migration. From a later version, apply
+later documented down scripts first, newest to oldest; never leave a gap in migration history.
 
 **Upgrade.** Starting the new image on a database at `20260930161548_InitialCreate` classifies it as
 pending (`PendingMigration` for the orchestrator) and applies `20261021094612_AddDocumentStructure`
@@ -263,10 +267,33 @@ prefix. `AudioMigrationTests.DestructiveDownScript_RestoresTheExactStructureVers
 and the optional previous-image container check verify this maintenance path, not the standard
 backup restoration or compatibility of the previous image with the upgraded schema.
 
+## Printed Page Label Upgrade (issue #102)
+
+**Upgrade.** Back up the database before deploying. Startup applies
+`20261022160829_AddDocumentParsePages` under the existing advisory lock. It creates only the
+page table, its composite primary key, positive-page constraint and cascading parse foreign key.
+Every earlier file, parse, Block, image, structure and audio row stays unchanged. The executor
+keeps separate table lists and target models for all historical versions, including the audio
+version. A later table without history, a conflicting current shape or unknown history is refused.
+Old parses have no labels and remain readable; there is no remote re-sync/backfill. HTTP fields,
+OpenSearch mapping version 3, authorization, storage, configuration and port 5012 are unchanged.
+
+**Rollback.** The previous image refuses the new history ID; changing only the image does not run
+EF `Down`. Stop every instance and take a verified backup. Then run
+[rollback/20261022160829_AddDocumentParsePages.down.sql](rollback/20261022160829_AddDocumentParsePages.down.sql)
+before starting the previous image. This deliberate maintenance drops only pages and their
+migration history row, losing all printed labels while retaining every other row and all stored
+objects. `PageMigrationTests` verifies populated upgrade, exact historical schema/history after
+the down script, unchanged earlier rows and forward migration again. Standard full recovery
+instead restores the verified pre-upgrade backup and its matching image/configuration/storage;
+post-backup writes cannot survive that restoration. Roll back any later migrations first, in
+reverse order, before applying an older down script.
+
 ## Change Log
 
 | Date | Change | Impact |
 |------|------|------|
+| 2026-10-23 | Added `20261022160829_AddDocumentParsePages` (#102) | Additive optional page labels; previous image requires backup/down-script maintenance or pre-upgrade backup restoration |
 | 2026-10-22 | Added migration `20261021153535_AddStructureAudio` (issue #90) | Additive table only; standard recovery restores the pre-upgrade backup; the separate down script discards audio metadata |
 | 2026-10-21 | Added migration `20261021094612_AddDocumentStructure` (issue #89) and taught the executor to apply pending known migrations, verifying earlier versions against their own target model | Additive schema; `sequence` backfilled for every block; rollback requires the documented down script before the previous image starts |
 | 2026-10-06 | Adopted extended shared exact-scope evidence; removed all local catalog adaptation and redundant evidence types | Original decisions/backfill/public history/lease retained; no schema change |

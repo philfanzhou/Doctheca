@@ -181,6 +181,7 @@ public class StructaDocParseResultSyncTests
             parseService.Object,
             blockRepository.Object,
             imageRepository.Object,
+            Mock.Of<IDocumentParsePageRepository>(),
             NullLogger<StructaDocParseResultSync>.Instance);
 
         return (sync, client);

@@ -23,6 +23,9 @@ public interface IStructaDocClient
     /// <summary>Fetch all blocks of a succeeded Parse Run, following the sequence cursor.</summary>
     Task<List<StructaDocBlockResponse>> GetAllBlocksAsync(Guid parseRunId, CancellationToken ct = default);
 
+    /// <summary>List optional physical pages and printed labels as a bare array.</summary>
+    Task<List<StructaDocPageResponse>> GetPagesAsync(Guid parseRunId, CancellationToken ct = default);
+
     /// <summary>List assets (extracted images and binary resources) of a Parse Run.</summary>
     Task<List<StructaDocAssetResponse>> GetAssetsAsync(Guid parseRunId, CancellationToken ct = default);
 

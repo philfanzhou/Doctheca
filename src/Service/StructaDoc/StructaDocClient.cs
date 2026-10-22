@@ -155,6 +155,44 @@ public sealed class StructaDocClient : IStructaDocClient
             200, isTransient: false, problemTitle: "blocks-pagination-limit");
     }
 
+    public async Task<List<StructaDocPageResponse>> GetPagesAsync(Guid parseRunId, CancellationToken ct = default)
+    {
+        // Headers-only completion avoids buffering error bodies. Retain the client's timeout
+        // across successful body reads as well, since HttpClient stops timing at the headers.
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        if (_httpClient.Timeout != Timeout.InfiniteTimeSpan)
+            timeout.CancelAfter(_httpClient.Timeout);
+        try
+        {
+            using var response = await SendAsync(
+                new HttpRequestMessage(HttpMethod.Get, $"api/v1/parse-runs/{parseRunId:D}/pages"),
+                "list-pages", timeout.Token, HttpCompletionOption.ResponseHeadersRead);
+            ct.ThrowIfCancellationRequested();
+            if (!response.IsSuccessStatusCode)
+            {
+                var status = (int)response.StatusCode;
+                // Optional pages never consume upstream diagnostic text into an exception or log.
+                throw new StructaDocException("StructaDoc pages request failed.", status, status is 408 or 429 || status >= 500);
+            }
+            var payload = await response.Content.ReadAsStringAsync(timeout.Token);
+            var pages = JsonSerializer.Deserialize<List<StructaDocPageResponse>>(payload, JsonOptions);
+            timeout.Token.ThrowIfCancellationRequested();
+            if (pages is null || pages.Any(page => page is null || page.Number <= 0)
+                || pages.Select(page => page.Number).Distinct().Count() != pages.Count)
+                throw new StructaDocException("StructaDoc pages returned an invalid page set.", (int)response.StatusCode, false);
+            return pages;
+        }
+        catch (JsonException)
+        {
+            ct.ThrowIfCancellationRequested();
+            throw new StructaDocException("StructaDoc pages returned invalid JSON.", 200, false);
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            throw new StructaDocException("StructaDoc pages request timed out.", 0, isTransient: true);
+        }
+    }
+
     public async Task<List<StructaDocAssetResponse>> GetAssetsAsync(Guid parseRunId, CancellationToken ct = default)
     {
         using var response = await SendAsync(

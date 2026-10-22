@@ -186,6 +186,7 @@ builder.Services.AddScoped<IDocumentFileRepository, DocumentFileRepository>();
 builder.Services.AddScoped<IDocumentParseRepository, DocumentParseRepository>();
 builder.Services.AddScoped<IDocumentParseImageRepository, DocumentParseImageRepository>();
 builder.Services.AddScoped<IDocumentParseBlockRepository, DocumentParseBlockRepository>();
+builder.Services.AddScoped<IDocumentParsePageRepository, DocumentParsePageRepository>();
 builder.Services.AddScoped<IStructureDefinitionRepository, StructureDefinitionRepository>();
 builder.Services.AddScoped<IDocumentStructureRepository, DocumentStructureRepository>();
 builder.Services.AddScoped<IDocumentStructureAudioRepository, DocumentStructureAudioRepository>();

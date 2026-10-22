@@ -13,6 +13,7 @@ public class DocthecaDbContext : DbContext
     public DbSet<DocumentParseEntity> DocumentParses { get; set; } = null!;
     public DbSet<DocumentParseImageEntity> DocumentParseImages { get; set; } = null!;
     public DbSet<DocumentParseBlockEntity> DocumentParseBlocks { get; set; } = null!;
+    public DbSet<DocumentParsePageEntity> DocumentParsePages { get; set; } = null!;
     public DbSet<StructureDefinitionEntity> StructureDefinitions { get; set; } = null!;
     public DbSet<StructureLevelEntity> StructureLevels { get; set; } = null!;
     public DbSet<DocumentStructureNodeEntity> DocumentStructureNodes { get; set; } = null!;
@@ -86,6 +87,14 @@ public class DocthecaDbContext : DbContext
                 .WithMany()
                 .HasForeignKey(e => e.ImageId)
                 .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        modelBuilder.Entity<DocumentParsePageEntity>(entity =>
+        {
+            entity.HasKey(page => new { page.ParseId, page.PageNumber });
+            entity.ToTable(table => table.HasCheckConstraint("CK_document_parse_pages_page_number", "page_number > 0"));
+            entity.HasOne<DocumentParseEntity>().WithMany().HasForeignKey(page => page.ParseId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         modelBuilder.Entity<StructureDefinitionEntity>(entity =>
