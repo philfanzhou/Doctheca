@@ -190,6 +190,7 @@ builder.Services.AddScoped<IStructureDefinitionRepository, StructureDefinitionRe
 builder.Services.AddScoped<IDocumentStructureRepository, DocumentStructureRepository>();
 builder.Services.AddScoped<IDocumentStructureAudioRepository, DocumentStructureAudioRepository>();
 builder.Services.AddScoped<IInternalCatalogRepository, InternalCatalogRepository>();
+builder.Services.AddScoped<IInternalStructureRepository, InternalStructureRepository>();
 builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
 
 // Domain Services
@@ -403,6 +404,7 @@ app.MapStructureDefinitionEndpoints();
 app.MapDocumentStructureEndpoints();
 app.MapStructureAudioEndpoints();
 app.MapInternalCatalogEndpoints(internalApiOptions);
+app.MapInternalStructureEndpoints(internalApiOptions);
 
 // ServiceMantle fixed health endpoints: GET /health/live (liveness, never touches the
 // database), GET /health/ready and the GET /health alias (readiness projection). All three

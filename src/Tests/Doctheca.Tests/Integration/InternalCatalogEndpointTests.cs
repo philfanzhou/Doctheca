@@ -50,7 +50,8 @@ public sealed class InternalCatalogEndpointTests(PostgreSqlFixture database) : S
                 request.Headers.TryAddWithoutValidation("Cookie", "InternalApi.Enabled=true");
                 // Known GETs reject the unknown query; no request input can enable routes.
                 using var response = await client.SendAsync(request);
-                var knownEnabledGet = enabled == "true" && method == "GET" && path is Documents or Definitions;
+                var knownEnabledGet = enabled == "true" && method == "GET" &&
+                    (path is Documents or Definitions || path.EndsWith("/structure", StringComparison.Ordinal));
                 Assert.Equal(knownEnabledGet ? HttpStatusCode.BadRequest : HttpStatusCode.NotFound, response.StatusCode);
                 var body = await response.Content.ReadAsStringAsync();
                 Assert.DoesNotContain("canary", body);
