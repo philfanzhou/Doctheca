@@ -24,7 +24,7 @@ public class SearchResultModel
     public double? MineruScore { get; set; }
     /// <summary>minerU sub_type: secondary classification (caption/body/footnote).</summary>
     public string? SubType { get; set; }
-    /// <summary>minerU text_level: 0=body, 1=h1...; -1 for non-heading text.</summary>
+    /// <summary>Stored level: -2 canonical level-less title, -1 other canonical text, positive numbered heading; historical 0/body is retained.</summary>
     public int? TextLevel { get; set; }
     /// <summary>minerU text_format (VLM-only): latex/markdown/none.</summary>
     public string? TextFormat { get; set; }

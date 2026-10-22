@@ -19,7 +19,7 @@ public class DocumentParseBlockModel
     // [Gen-2] minerU block-level structured fields (extracted from block_data JSON in ParseBlock)
     /// <summary>minerU sub_type: secondary classification (caption/body/footnote, e.g. image_caption, table_footnote, code, algorithm, text, ref_text).</summary>
     public string? SubType { get; set; }
-    /// <summary>minerU text_level: 0=body, 1=h1, 2=h2...; -1 when field absent (non-heading text).</summary>
+    /// <summary>Canonical sync: positive numbered heading, -2 level-less title, -1 other; historical MinerU 0/body and positive levels remain valid.</summary>
     public int TextLevel { get; set; } = -1;
     /// <summary>minerU text_format (VLM-only): latex/markdown/none; empty string for pipeline backend.</summary>
     public string TextFormat { get; set; } = string.Empty;

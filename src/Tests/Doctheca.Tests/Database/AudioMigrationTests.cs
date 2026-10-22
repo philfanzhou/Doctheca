@@ -70,6 +70,8 @@ public sealed class AudioMigrationTests(PostgreSqlMigrationFixture fixture) : IA
                 """);
 
             await MigrationGoldenStates.ExecuteRawAsync(context, await File.ReadAllTextAsync(
+                StructureMigrationTests.RollbackScriptPath(DocthecaMigrationExecutor.ClassifyLevelLessTitlesMigrationId)));
+            await MigrationGoldenStates.ExecuteRawAsync(context, await File.ReadAllTextAsync(
                 StructureMigrationTests.RollbackScriptPath(DocthecaMigrationExecutor.AddBlockFootnotesMigrationId)));
             await MigrationGoldenStates.ExecuteRawAsync(context, await File.ReadAllTextAsync(
                 StructureMigrationTests.RollbackScriptPath(DocthecaMigrationExecutor.AddDocumentParsePagesMigrationId)));

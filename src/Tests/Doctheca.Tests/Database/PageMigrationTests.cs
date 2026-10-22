@@ -47,6 +47,8 @@ public sealed class PageMigrationTests(PostgreSqlMigrationFixture fixture) : IAs
                 VALUES ({MigrationGoldenStates.ParseId}, 1, {"页一"}, {"pdf-page-labels"})
                 """);
             await MigrationGoldenStates.ExecuteRawAsync(context, await File.ReadAllTextAsync(
+                StructureMigrationTests.RollbackScriptPath(DocthecaMigrationExecutor.ClassifyLevelLessTitlesMigrationId)));
+            await MigrationGoldenStates.ExecuteRawAsync(context, await File.ReadAllTextAsync(
                 StructureMigrationTests.RollbackScriptPath(DocthecaMigrationExecutor.AddBlockFootnotesMigrationId)));
             await MigrationGoldenStates.ExecuteRawAsync(context, await File.ReadAllTextAsync(
                 StructureMigrationTests.RollbackScriptPath(DocthecaMigrationExecutor.AddDocumentParsePagesMigrationId)));

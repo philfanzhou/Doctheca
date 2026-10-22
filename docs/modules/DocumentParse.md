@@ -39,12 +39,21 @@ Polls `pending` + `parsing` records every 5 seconds:
 - **Blocks → `document_parse_blocks`** (ordered by `sequence`):
   - `page_id` = pageNumber − 1 (1-based → local 0-based; null → 0); `sort_index` increments within a page;
   - `block_type` = type (truncated to 20); `text_content` = content; `sub_type` = subtype;
-  - `text_level`: subtype `heading-N` → N, otherwise −1; `text_format` = contentFormat;
+  - `text_level`: valid positive subtype `heading-N` → N; otherwise exact lowercase type `title` → −2, every other new block → −1; `text_format` = contentFormat;
   - bbox: StructaDoc 0–1 normalized coordinates ×1000, aligned with the local 0–1000 convention; `score` = confidence;
   - `image_id`: block.assetId → local image record mapping; `block_data` = the block's normalized JSON.
   - `caption` / `footnote`: optional plain-text annotations retained exactly in typed columns and
     normalized `block_data`, including Unicode, line endings, empty/whitespace and null values.
     No trimming, truncation or HTML interpretation is performed; missing older fields remain null.
+- **Heading classification (#106)** reads the full subtype before its stored 50-character truncation.
+  The `heading-` prefix is ordinal case-insensitive; the suffix uses invariant `Int32.TryParse`
+  with `NumberStyles.Integer` and must be positive. Leading zeros, optional plus and surrounding
+  ASCII integer whitespace remain accepted. Zero, negatives, malformed and overflow suffixes do
+  not supply a level. A positive subtype remains compatible on a non-title type. Canonical type
+  matching is exact lowercase `title`; legacy type spellings are not reinterpreted. Historical
+  positive levels and non-title rows (including MinerU body `0`) are preserved by the targeted
+  data-only migration. Existing index copies require explicit reindex; no remote reparse occurs.
+  See [classification migration and rollback](../database/migrations.md#level-less-title-classification-issue-106).
 - **Markdown → `document_parses.markdown_content`**; status is set to `parsed` and `parsed_at` is recorded.
 - **Optional Pages → [`document_parse_pages`](../database/tables/document_parse_pages.md)**:
   the bare array `{number,label,labelSource}` uses positive one-based physical numbers. Labels

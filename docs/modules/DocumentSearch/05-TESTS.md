@@ -206,3 +206,18 @@ The frontend has no unit test framework (`package.json` configures neither vites
 - **Worker integration** (indexing after parse completion, LLM metadata sync): no unit tests (depends on OpenSearch HTTP + database; belongs to integration testing).
 - **Endpoint integration** (index cleanup after deleting parses/files): no unit tests.
 - **Not covered in the first Generation 2 release**: retrieval of minerU `chars`/`position`/`layout_width`/`images`/`table_html`/`angle`/`formula_latex` fields — these fields are persisted as `block_data` jsonb and viewed in the admin UI via `GET /admin/document-files/{id}`, deferred into the mapping until facet requirements are clear (see [03-DESIGN.md §Generation 2 Evolution](./03-DESIGN.md) and AC-22).
+
+## Canonical heading classification (#106)
+
+- `HeadingLevelTests` shares a stored-input corpus with real PostgreSQL migration tests: exact
+  type, prefix case, invariant positive integer, ASCII whitespace/plus/zeros, limits/overflow,
+  malformed and Unicode suffixes, and non-title positive compatibility.
+- `StructaDocParseResultSyncTests` verifies full subtype parsing before truncation and preserves
+  raw block JSON, page/order mapping; the real sync/worker test retains `-2` and parsed status on
+  index failure without content/provider diagnostics.
+- `HeadingClassificationMigrationTests` compares all retained values and the identical schema,
+  verified legacy takeover, EF/SQL down and re-forward, cancellation/failure before commit, and
+  repeated/concurrent startup under the advisory lock.
+- `OpenSearchHeadingClassificationTests` reindexes the same real PostgreSQL block ids into real
+  OpenSearch: disjoint `-2`/`-1`/`0`/positive filters, returned integers, phrase/stemmed behavior,
+  stale-before-reindex semantics, annotation-only and empty-title rules, and unchanged mapping4.

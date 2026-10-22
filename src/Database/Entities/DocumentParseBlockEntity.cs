@@ -54,6 +54,7 @@ public class DocumentParseBlockEntity
     [MaxLength(50)]
     public string? SubType { get; set; }
 
+    /// <summary>Canonical -2 level-less title, -1 other, or positive heading; legacy 0/body and positive values are retained.</summary>
     [Column("text_level")]
     public int TextLevel { get; set; } = -1;
 

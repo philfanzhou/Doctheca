@@ -393,7 +393,7 @@ public class SearchResultModel
     // C# does not allow same-named fields, so the Generation 2 field is named `MineruScore` (consistent with `block.MineruScore` in §13.9.1).
     // The HTTP response JSON field name remains `mineruScore`; the frontend reads this key.
     public string? SubType { get; set; }                    // [Generation 2] minerU secondary classification
-    public int? TextLevel { get; set; }                     // [Generation 2] 0=body text,1=h1...; null for non-heading
+    public int? TextLevel { get; set; }                     // -2=canonical level-less title, -1=other canonical text; legacy 0/body and positive headings retained
     public string? TextFormat { get; set; }                 // [Generation 2] latex/markdown/none (VLM)
     public string? Caption { get; set; }                    // [Generation 2] concatenated caption text (keyword recall)
 }
@@ -530,7 +530,7 @@ Defined in `DocumentSearchEndpoints.cs` (extending the V1 file, no new files). A
 | `blockType` | string? | `null` | Exact match on minerU `type` (maps to index field `block_type`); see the §13.3 two-layer minerU field inventory for enumerations |
 | `blockSubType` | string? | `null` | Exact match on minerU `sub_type` (distinguishes caption/body/footnote, e.g., `table_caption`, `code`, `algorithm`) |
 | `pageNumber` | int? | `null` | Exact match on minerU `page_id` (maps to index field `page_number`) |
-| `textLevel` | int? | `null` | Exact match on minerU `text_level` (`0` = body text, `1` = h1 heading...; pass `-1` for "non-heading text only") |
+| `textLevel` | int? | `null` | Exact stored integer: `-2` canonical level-less title, `-1` other canonical text, positive numbered heading; historical `0`/body remains supported |
 | `textFormat` | string? | `null` | Exact match on minerU `text_format` (`latex` / `markdown` / `none`, VLM-backend-specific) |
 | `parseId` | Guid? | `null` | Narrow to a specific parse |
 | `documentFileId` | Guid? | `null` | Narrow to a specific document |
@@ -612,7 +612,7 @@ field. Rolling back to the previous image removes the enrichment and preserves s
 | `blockType` non-empty | `term: { block_type: { value } }` (minerU `type` and V1 `block_type` share the same source) |
 | `blockSubType` non-empty | `term: { sub_type: { value } }` (minerU `sub_type`, distinguishes caption/body/footnote) |
 | `pageNumber` non-empty | `term: { page_number: { value } }` (minerU `page_id` and V1 `page_number` share the same source) |
-| `textLevel` non-empty | `term: { text_level: { value } }` (minerU `text_level`, -1 = non-heading text) |
+| `textLevel` non-empty | `term: { text_level: { value } }` (stored `text_level`: -2 canonical level-less title, -1 other canonical text, legacy 0/body and positive headings retained) |
 | `textFormat` non-empty | `term: { text_format: { value } }` (VLM-backend-specific: `latex` / `markdown` / `none`) |
 | `parseId` non-empty | `term: { parse_id: { value } }` |
 | `documentFileId` non-empty | `term: { document_file_id: { value } }` |
@@ -635,7 +635,7 @@ A minerU attachment branch is appended at the end of the V1 `ParseSearchResponse
 | `Bbox` (float[]?) | `[_source.x0, _source.y0, _source.x1, _source.y1]` (new in Generation 2) |
 | `MineruScore` (double?) | `_source.score` (new in Generation 2; the C# property is named `MineruScore` to avoid conflicting with V1's `Score` (OpenSearch `_score`); see the deviation note in §13.1.1) |
 | `SubType` (string?) | `_source.sub_type` (new in Generation 2, secondary classification such as caption/body/footnote) |
-| `TextLevel` (int?) | `_source.text_level` (new in Generation 2, heading level, -1 = non-heading text) |
+| `TextLevel` (int?) | `_source.text_level` (stored integer; -2 canonical level-less title, -1 other canonical text, legacy 0/body and positive headings retained) |
 | `TextFormat` (string?) | `_source.text_format` (new in Generation 2, `latex`/`markdown`, etc., VLM-backend-specific) |
 | `Caption` (string?) | `_source.caption` (exact optional StructaDoc caption, or a legacy derived caption) |
 
@@ -717,3 +717,17 @@ No standalone test classes; minerU assertions are added to the existing `OpenSea
 | `StructaDocParseWorker.cs` | `IndexBlocksToSearchAsync` gains minerU dimension fields (same bulk) |
 | `SearchPage.vue` (doctheca built-in frontend extension, same page) | Adds the "Advanced filters" drawer + result-row detail expansion |
 | `Program.cs` | No changes (reuses V1 DI registration) |
+
+## Canonical heading classification (#106)
+
+Current StructaDoc sync stores a positive invariant `Int32` from a case-insensitive `heading-N`
+prefix; otherwise exact lowercase `title` becomes `-2` and every other new block becomes `-1`.
+This is distinct from the historical MinerU `0`/body and positive-heading examples above, which
+remain valid stored values. Positive legacy levels survive even if subtype metadata is absent
+or truncated. `textLevel` remains an optional integer term filter and the result returns the stored
+integer unchanged. Use `-2` for newly distinguished level-less titles; `-1` no longer includes them
+after [targeted migration and reindex](../../database/migrations.md#level-less-title-classification-issue-106).
+The existing integer mapping stays at version 4. Reindex the same local block ids explicitly;
+until then the derived index can carry old values. Phrase/stemmed search, field priority, body
+matches, paging and indexability are unchanged: a title with no non-whitespace body or annotations
+still has no search hit. No remote re-sync, new route/field, configuration or auth behavior is added.

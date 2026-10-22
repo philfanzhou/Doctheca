@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Doctheca.Domain.Models;
@@ -166,7 +167,7 @@ public sealed class StructaDocParseResultSync : IStructaDocParseResultSync
                 BlockData = JsonSerializer.Serialize(block, BlockDataJsonOptions),
                 CreatedAt = DateTimeOffset.UtcNow,
                 SubType = Truncate(block.Subtype, 50),
-                TextLevel = ExtractTextLevel(block.Subtype),
+                TextLevel = ExtractTextLevel(block.Type, block.Subtype),
                 TextFormat = Truncate(block.ContentFormat, MaxTextLength) ?? string.Empty,
                 // StructaDoc bounding boxes are normalized 0-1; local convention is 0-1000.
                 BboxX0 = Scale(block.BoundingBox?.X0),
@@ -185,17 +186,18 @@ public sealed class StructaDocParseResultSync : IStructaDocParseResultSync
     private static float? Scale(double? value) =>
         value.HasValue ? (float)(value.Value * 1000f) : null;
 
-    private static int ExtractTextLevel(string? subtype)
+    internal static int ExtractTextLevel(string? type, string? subtype)
     {
-        // StructaDoc heading blocks carry subtype "heading-N"; map to the legacy text_level convention.
+        // Read the full upstream subtype before its stored 50-character truncation.
         if (!string.IsNullOrEmpty(subtype)
             && subtype.StartsWith("heading-", StringComparison.OrdinalIgnoreCase)
-            && int.TryParse(subtype.AsSpan(8), out var level))
+            && int.TryParse(subtype.AsSpan(8), NumberStyles.Integer, CultureInfo.InvariantCulture, out var level)
+            && level > 0)
         {
             return level;
         }
 
-        return -1;
+        return type == "title" ? -2 : -1;
     }
 
     private static string? Truncate(string? value, int maxLength) =>

@@ -17,7 +17,7 @@ public class SearchFilterModel
     public string? BlockSubType { get; set; }
     /// <summary>Exact match minerU page_id (maps to index field page_number).</summary>
     public int? PageNumber { get; set; }
-    /// <summary>Exact match minerU text_level (0=body, 1=h1...; -1 for non-heading text).</summary>
+    /// <summary>Exact stored integer: -2 canonical level-less title, -1 other canonical text, positive numbered heading; legacy 0/body remains supported.</summary>
     public int? TextLevel { get; set; }
     /// <summary>Exact match minerU text_format (latex/markdown/none, VLM-only).</summary>
     public string? TextFormat { get; set; }
