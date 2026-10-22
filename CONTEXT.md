@@ -41,5 +41,5 @@ An audio file imported for one Document Parse, such as an official textbook reco
 _Avoid_: Attachment, Media File, Track
 
 **Audio Link**:
-The association of a Structure Audio file with one Structure Node; pre-filled from the file's folder and file name and confirmed or changed by an administrator. It is correct at node level only, never at text or exercise level.
+The association of a Structure Audio file with one Structure Node; intended to be pre-filled from the file's folder and file name and confirmed or changed by an administrator (#108, not yet available). It is correct at node level only, never at text or exercise level.
 _Avoid_: Alignment, Timestamp

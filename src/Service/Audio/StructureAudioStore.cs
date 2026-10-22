@@ -1,5 +1,4 @@
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 using Doctheca.Common.Oss;
 using Doctheca.Domain.Models;
 
@@ -11,23 +10,19 @@ public sealed class AudioStorageException() : Exception("Audio storage is unavai
 /// <summary>
 /// Structure audio objects in the existing S3-compatible storage (<see cref="IOssService"/>),
 /// always under <see cref="DocumentAudioOptions.ObjectPrefix"/> as
-/// <c>audio/{parseId}/{audioId}{extension}</c>. Keys never leave the server; playback uses
-/// short-lived presigned links.
+/// <c>audio/{parseId}/{audioId}{extension}</c>. Keys never leave this lifecycle API; playback is a separate delivery (#109).
 /// </summary>
 public sealed class StructureAudioStore
 {
-    private readonly IOssService _ossService;
-    private readonly DocumentAudioOptions _options;
+    private readonly Lazy<IOssService> _ossService;
     private readonly ILogger<StructureAudioStore> _logger;
 
     public StructureAudioStore(
-        IOssService ossService,
-        IOptions<DocumentAudioOptions> options,
+        Func<IOssService> ossService,
         DocumentAudioStorageStatus status,
         ILogger<StructureAudioStore> logger)
     {
-        _ossService = ossService;
-        _options = options.Value;
+        _ossService = new Lazy<IOssService>(ossService);
         Status = status;
         _logger = logger;
     }
@@ -39,10 +34,11 @@ public sealed class StructureAudioStore
     /// <summary>Stores one file and returns its object key.</summary>
     public async Task<string> PutAsync(Guid parseId, Guid audioId, string extension, Stream content, string contentType)
     {
+        if (!Status.Available) throw new AudioStorageException();
         string key;
         try
         {
-            key = await _ossService.UploadAsync(content, $"{audioId:N}{extension}", contentType, OssBucket.Audio, $"{parseId:N}");
+            key = await _ossService.Value.UploadAsync(content, $"{audioId:N}{extension}", contentType, OssBucket.Audio, $"{parseId:N}");
         }
         catch (Exception ex)
         {
@@ -79,7 +75,7 @@ public sealed class StructureAudioStore
         var keys = new HashSet<string>(knownKeys, StringComparer.Ordinal);
         try
         {
-            foreach (var item in await _ossService.ListObjectsAsync(ParsePrefix(parseId)))
+            foreach (var item in await _ossService.Value.ListObjectsAsync(ParsePrefix(parseId)))
                 keys.Add(item.ObjectPath);
         }
         catch (Exception ex)
@@ -94,7 +90,7 @@ public sealed class StructureAudioStore
     {
         try
         {
-            return (await _ossService.ListObjectsAsync(DocumentAudioOptions.ObjectPrefix))
+            return (await _ossService.Value.ListObjectsAsync(DocumentAudioOptions.ObjectPrefix))
                 .Where(item => item.ObjectPath.StartsWith(DocumentAudioOptions.ObjectPrefix, StringComparison.Ordinal))
                 .ToList();
         }
@@ -105,27 +101,12 @@ public sealed class StructureAudioStore
         }
     }
 
-    /// <summary>A presigned GET link valid for <see cref="DocumentAudioOptions.PlaybackLinkSeconds"/>.</summary>
-    public async Task<(string Url, int ExpiresInSeconds)> GetPlaybackLinkAsync(string key)
-    {
-        EnsureAudioKey(key);
-        try
-        {
-            return (await _ossService.GetPresignedUrlAsync(key, _options.PlaybackLinkSeconds), _options.PlaybackLinkSeconds);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning("Signing an audio playback link failed: {ExceptionType}", ex.GetType().Name);
-            throw new AudioStorageException();
-        }
-    }
-
     private async Task<bool> DeleteAsync(string key)
     {
         EnsureAudioKey(key);
         try
         {
-            return await _ossService.DeleteAsync(key);
+            return await _ossService.Value.DeleteAsync(key);
         }
         catch (Exception ex)
         {

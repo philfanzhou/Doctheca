@@ -16,8 +16,7 @@ using Xunit;
 namespace Doctheca.Tests.Integration;
 
 [Collection(ServiceMantleIntegrationCollection.Name)]
-public sealed partial class AdminHostedFrontendTests(PostgreSqlFixture database, MinioFixture minio)
-    : ServiceMantleIntegrationTestBase(database), IClassFixture<MinioFixture>
+public sealed partial class AdminHostedFrontendTests(PostgreSqlFixture database) : ServiceMantleIntegrationTestBase(database)
 {
     private static readonly Lazy<Task<string>> Spa = new(BuildSpa);
 
@@ -45,10 +44,7 @@ public sealed partial class AdminHostedFrontendTests(PostgreSqlFixture database,
         return ((IPEndPoint)listener.LocalEndpoint).Port;
     }
 
-    private async Task<BrowserHarness> Open(
-        string scenario = "admin",
-        IReadOnlyDictionary<string, string?>? settings = null,
-        Action<Microsoft.Extensions.DependencyInjection.IServiceCollection>? configureServices = null)
+    private async Task<BrowserHarness> Open(string scenario = "admin")
     {
         var spa = await Spa.Value;
         var root = CreateTempContentRoot(false);
@@ -89,8 +85,7 @@ public sealed partial class AdminHostedFrontendTests(PostgreSqlFixture database,
             services.AddHttpClient(SignaCore.Client.AspNetCore.SignaCoreHostedLoginDefaults.HttpClientName)
                 .ConfigurePrimaryHttpMessageHandler(() => authority);
             services.Replace(ServiceDescriptor.Singleton<TimeProvider>(time));
-            configureServices?.Invoke(services);
-        }, new Dictionary<string, string?>(settings ?? new Dictionary<string, string?>()) {
+        }, new Dictionary<string, string?> {
             ["Endpoints:Http"] = appPort.ToString(), ["AdminOidc:Enabled"] = "true",
             ["AdminOidc:RedirectUri"] = origin + AdminOidcConstants.CallbackPath,
             ["AdminOidc:PostLogoutRedirectUri"] = origin + AdminOidcConstants.LogoutReturnPath,

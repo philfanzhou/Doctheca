@@ -1,13 +1,10 @@
--- Rollback of migration 20261021153535_AddStructureAudio (issue #90).
---
--- Run only after stopping every instance of the new version and taking a backup. It deletes the
--- structure audio table (every imported audio file's link is lost) and removes the migration's
--- history row, so the previous image classifies the database as its own current version again.
--- Every other table is kept unchanged.
---
--- The stored audio objects are NOT deleted by this script. Before running it, either delete every
--- parse's audio in the admin console, or remove the objects under the "audio/" prefix of the Oss
--- bucket with the storage's own tools afterwards; the previous image never reads that prefix.
+-- Optional destructive maintenance for 20261021153535_AddStructureAudio (#107 / #90).
+-- Standard version recovery restores the verified pre-upgrade database/configuration/storage
+-- backup; this script is NOT that restore and is never run automatically when images change.
+-- Stop every instance and take a verified backup before deliberately discarding all audio rows.
+-- This drops the audio table and its history row only; every other current row remains unchanged.
+-- Stored objects are NOT deleted. Account for retained backups, then use storage tools to remove
+-- only verified abandoned audio/ objects. No import/review console exists in this delivery.
 BEGIN;
 
 DROP TABLE document_structure_audio;

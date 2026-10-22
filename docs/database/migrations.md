@@ -169,7 +169,8 @@ integration assertions. Run the container contract and actual old-image acceptan
 python3 scripts/verify-container-startup.py doctheca:current doctheca:previous
 ```
 
-With the optional second image, the script works in its own isolated test database migrated by
+With the optional second image, the script verifies the separate destructive down-maintenance
+path, not backup restoration. It works in its own isolated test database migrated by
 the current image: it applies the documented down script of the newest migration, starts the
 previous image (schema, history and business-row counts must stay exactly the same), then applies
 the earlier down script back to the baseline, removes only the verified history table and starts the
@@ -233,25 +234,38 @@ lock: it only creates the `document_structure_audio` table, its three indexes an
 `AudioMigrationTests.PopulatedStructureVersion_IsMigratedInPlace_KeepingEveryRow`), and the
 OpenSearch mapping is unchanged.
 
-**Rollback.** As for issue #89, the previous image refuses a history containing a migration id it
-does not know (`migration.version_too_new`), so it does not start against the migrated database as
-is. The step back is a single additive table:
+**Standard recovery to the previous version.** Follow the current project's backup/restore model,
+like [SignaCore at 74d263bb](https://github.com/philfanzhou/SignaCore/blob/74d263bbb98b63d86bc47808b45c580936edb6e8/docs/database/migrations.md).
+The previous image is not required to understand a newer database schema; it may fail closed on
+an unknown migration ID (`migration.version_too_new`). Switching images does not run `Down`:
 
-1. stop every instance of the new image and back up the database;
-2. optionally delete each parse's audio in the console first, so the stored objects go too;
-3. run [rollback/20261021153535_AddStructureAudio.down.sql](rollback/20261021153535_AddStructureAudio.down.sql)
-   (it drops `document_structure_audio` and removes the history row; every other table is kept);
-4. start the previous image — the database is then exactly its own version (verified by
-   `AudioMigrationTests.RollbackScript_RestoresTheExactStructureVersionAndKeepsEveryOtherRow` and by
-   `scripts/verify-container-startup.py` with the previous image);
-5. remove leftover objects under the `audio/` prefix of the `Oss` bucket with the storage's own
-   tools if step 2 was skipped; the previous image never reads that prefix.
+1. **Before upgrading**, stop writers and take a consistent PostgreSQL backup. Verify that it can
+   be restored. Retain the matching image/configuration and an object-storage backup or recovery
+   set; protect configuration backups as secrets. Do not print connection strings or keys.
+2. To recover the previous version, stop **every** new-version instance, preserve the current
+   state separately if later recovery is needed, and restore the pre-upgrade database and its
+   corresponding image/configuration/storage set.
+3. Start the previous image and verify health and representative document/structure reads.
+   Writes made after the backup are lost; restoring the old database cannot retain their rows.
+   Storage restored to another point in time may leave missing or unreferenced objects, so restore
+   the matching storage set rather than guessing which objects to remove.
+
+**Optional destructive maintenance, not the standard recovery.** If an operator explicitly
+chooses to discard all audio metadata while retaining every other current row, stop all instances
+and take another verified backup, then run
+[rollback/20261021153535_AddStructureAudio.down.sql](rollback/20261021153535_AddStructureAudio.down.sql).
+It drops only `document_structure_audio` and that migration's history row. It does not restore
+backed-up data or remove stored audio objects; use storage tools to clean only verified abandoned
+`audio/` objects after accounting for retained backups. The previous image does not read the
+prefix. `AudioMigrationTests.DestructiveDownScript_RestoresTheExactStructureVersionAndKeepsEveryOtherRow`
+and the optional previous-image container check verify this maintenance path, not the standard
+backup restoration or compatibility of the previous image with the upgraded schema.
 
 ## Change Log
 
 | Date | Change | Impact |
 |------|------|------|
-| 2026-10-22 | Added migration `20261021153535_AddStructureAudio` (issue #90) | Additive table only; rollback requires the documented down script before the previous image starts |
+| 2026-10-22 | Added migration `20261021153535_AddStructureAudio` (issue #90) | Additive table only; standard recovery restores the pre-upgrade backup; the separate down script discards audio metadata |
 | 2026-10-21 | Added migration `20261021094612_AddDocumentStructure` (issue #89) and taught the executor to apply pending known migrations, verifying earlier versions against their own target model | Additive schema; `sequence` backfilled for every block; rollback requires the documented down script before the previous image starts |
 | 2026-10-06 | Adopted extended shared exact-scope evidence; removed all local catalog adaptation and redundant evidence types | Original decisions/backfill/public history/lease retained; no schema change |
 | 2026-10-04 | Adopted shared schema reader/derivation/comparer/baseline writer with bounded PostgreSQL naming/model-gap adaptation | Original classification/backfill/history/lease preserved; no schema or configuration change; same-database rollback verified |

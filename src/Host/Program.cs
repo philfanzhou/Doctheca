@@ -124,7 +124,7 @@ else
 }
 
 // Structure audio (issue #90): stored through the Oss storage above under audio/, off unless
-// DocumentAudio:Enabled and every Oss value a signed public link needs are set. An unusable
+// DocumentAudio:Enabled and the internal S3 connection are set. An unusable
 // configuration only disables audio; the rest of Doctheca keeps working.
 DocumentAudioOptions documentAudioOptions;
 DocumentAudioStorageStatus documentAudioStatus;
@@ -137,13 +137,16 @@ try
 }
 catch (InvalidOperationException)
 {
-    // A malformed value (for example a non-numeric limit) disables audio instead of startup.
+    // A malformed value (for example a non-boolean enablement flag) disables audio instead of startup.
     documentAudioOptions = new DocumentAudioOptions();
     documentAudioStatus = new DocumentAudioStorageStatus(false, "the DocumentAudio settings could not be read");
 }
 builder.Services.AddSingleton(Options.Create(documentAudioOptions));
 builder.Services.AddSingleton(documentAudioStatus);
-builder.Services.AddScoped<StructureAudioStore>();
+// Do not construct an S3 client just to report disabled/missing audio configuration.
+builder.Services.AddScoped(sp => new StructureAudioStore(
+    () => sp.GetRequiredService<IOssService>(), documentAudioStatus,
+    sp.GetRequiredService<ILogger<StructureAudioStore>>()));
 builder.Services.AddScoped<StructureAudioService>();
 
 // Search Index Services

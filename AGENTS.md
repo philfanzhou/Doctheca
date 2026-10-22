@@ -36,7 +36,7 @@ Doctheca 是通用的文档库与检索服务：.NET 最小 API、Vue 3 管理�
 - 认证：管理端使用 SignaCore（或兼容 OIDC discovery/JWKS 的签发方）的 `role=admin`，HttpOnly Cookie/JWT 会话；`/admin/auth/login|refresh|logout` 匿名，其余 `/admin/*` 要求 `DocthecaAdmin` 策略。
 - 检索：OpenSearch 全文精确搜索 + block 索引；OpenSearch 写失败不阻塞解析主流程，查询失败返回空结果并记录 Warning。
 - 存量兼容：SeaweedFS/MinIO/LocalFile 中迁移前的上传对象与解析图片仅用于只读兼容与删除清理，不再写入新数据。
-- 结构音频（#90）是唯一的新写入：经 `IOssService`/`S3OssService` 写入现有 bucket 的 `audio/` 前缀（`OssPathPrefixConstants.Audio`，对象 key 为 `audio/{parseId}/{audioId}{扩展名}`），只由 `StructureAudioStore` 读写删除，且仅在 `DocumentAudio:Enabled` 与完整 `Oss` 配置下可用（LocalFile 不可用）。对象 key、bucket、endpoint 与凭据不得出现在任何响应或日志中，播放只用短期预签名链接。
+- 结构音频底座（#107，功能父项 #90）是唯一允许的新写入：经 `IOssService`/`S3OssService` 写入现有 bucket 的 `audio/` 前缀（`OssPathPrefixConstants.Audio`，对象 key 为 `audio/{parseId:N}/{audioId:N}{扩展名}`），只由 `StructureAudioStore` 读写删除，且仅在 `DocumentAudio:Enabled` 与内部 S3 配置完整时可用（LocalFile 不可用）。本阶段只提供持久化与对象清理，不提供导入、复核或播放接口/页面（分别见 #108/#109）。对象 key、bucket、endpoint 与凭据不进入生命周期接口响应或日志。后续播放按 #109 参考 Lexarbor：仅短期签名 URL 可含公共地址、bucket/object 路径和 access key 标识，不返回独立存储字段、内部 endpoint 或 secret，不记录 URL。
 - 数据库为 PostgreSQL（默认库名 `doctheca`）。API 监听端口 5012（`Program.cs` 的 `Endpoints__Http`）；改端口属部署要求变更，须同步 `start.sh`、`Dockerfile` 与部署文档。
 
 ## 验证

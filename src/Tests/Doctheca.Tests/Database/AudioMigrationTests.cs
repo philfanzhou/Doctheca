@@ -12,7 +12,7 @@ namespace Doctheca.Tests.Database;
 /// The third known migration (issue #90) against real PostgreSQL: a populated database at the
 /// structure version is classified as pending and migrated in place without changing any row; a
 /// structure-version history with the audio table already present is refused; the documented
-/// rollback script returns the database to exactly the structure version the previous image verifies.
+/// optional destructive down script returns the database to exactly the structure version the previous image verifies.
 /// </summary>
 [Collection(MigrationIntegrationCollection.Name)]
 public sealed class AudioMigrationTests(PostgreSqlMigrationFixture fixture) : IAsyncLifetime
@@ -49,7 +49,7 @@ public sealed class AudioMigrationTests(PostgreSqlMigrationFixture fixture) : IA
     }
 
     [Fact]
-    public async Task RollbackScript_RestoresTheExactStructureVersionAndKeepsEveryOtherRow()
+    public async Task DestructiveDownScript_RestoresTheExactStructureVersionAndKeepsEveryOtherRow()
     {
         var reference = await fixture.CreateDatabaseAsync();
         try

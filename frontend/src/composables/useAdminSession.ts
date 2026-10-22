@@ -80,7 +80,7 @@ async function initialize(): Promise<void> {
 }
 export function adminReturnUrl(hash: string): string {
   if (/^#(overview|docs|results|search|structures)$/.test(hash)) return '/' + hash
-  if (/^#(detail|structure|audio)(?:\/[A-Za-z0-9_-]+)?$/.test(hash)) return '/' + hash
+  if (/^#(detail|structure)(?:\/[A-Za-z0-9_-]+)?$/.test(hash)) return '/' + hash
   return '/'
 }
 function login(): void {

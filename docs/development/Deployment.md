@@ -90,20 +90,24 @@ LLM document-analysis configuration is injected via environment variables in `st
 
 ## Structure Audio Storage (issue #90)
 
-Structure audio is the only new data Doctheca writes to the object storage. It uses the existing `Oss` connection and bucket under the dedicated prefix `audio/` (keys `audio/{parseId}/{audioId}{extension}`); legacy upload objects and parse images stay read-only. It is off by default:
+The persistence and object-lifecycle foundation (#107) reserves `audio/` in the existing S3 bucket.
+Only `StructureAudioStore` can write/delete this prefix; keys are `audio/{parseId:N}/{audioId:N}{extension}`.
+Legacy uploads and parse images stay read-only. Import/review (#108) and playback (#109) are not
+available in this version; there is no audio UI or playback URL endpoint.
 
-| Key (environment form) | Default | Description |
-|------|------|------|
-| `DocumentAudio:Enabled` (`DocumentAudio__Enabled`) | `false` | Set to `true` to enable importing and playing structure audio |
-| `DocumentAudio:MaxFileBytes` | `20971520` (20 MiB) | Largest accepted audio file |
-| `DocumentAudio:MaxArchiveBytes` | `209715200` (200 MiB) | Largest import request and largest uncompressed audio of one import |
-| `DocumentAudio:PlaybackLinkSeconds` | `300` | Playback link lifetime, 60–3600 seconds |
+`DocumentAudio:Enabled` (`DocumentAudio__Enabled`) defaults to `false`. Setting it to `true` enables
+the internal lifecycle and administrator recovery endpoint. It requires S3 (not `USE_LOCAL_OSS=1`)
+and the existing `Oss:InternalEndpoint`, `Oss:AccessKey`, `Oss:SecretKey` and `Oss:BucketName`.
+`Oss:PublicBaseUrl` is not required for cleanup. Invalid `DocumentAudio` flags disable the audio lifecycle without stopping existing features.
+Missing S3 settings disable recovery without constructing a client; document/structure reads remain
+available, while legacy storage operations keep their existing configuration requirements.
+Diagnostics contain only key names. No upload limits
+or playback TTL settings are introduced yet.
 
-- Audio needs S3 storage (not `USE_LOCAL_OSS=1`) and all of `Oss:InternalEndpoint`, `Oss:AccessKey`, `Oss:SecretKey`, `Oss:BucketName` and `Oss:PublicBaseUrl`. Otherwise startup logs `Document audio: Available=False, Reason=…` (key names only), audio import and playback answer `503 DOCTHECA_AUDIO_STORAGE_NOT_CONFIGURED`, and everything else keeps working.
-- Playback links are presigned against `Oss:PublicBaseUrl`, so browsers must reach that address (in production the `/oss/` reverse proxy); the `audio/` prefix needs no proxy change. Nothing else about the storage is ever returned to clients.
-- Uploads are bounded per request by `MaxArchiveBytes` plus 1 MiB of multipart overhead; a reverse proxy in front of Doctheca must allow request bodies of that size on `POST /admin/document-parses/{id}/audio`.
-- If an object deletion fails after a file, parse or document was deleted, run `POST /admin/structure-audio/orphan-sweep` (admin) to remove unreferenced audio objects older than one hour.
-- Details: [StructureAudio](../modules/StructureAudio.md).
+After a parse/document deletion, object cleanup is best-effort. An administrator can call
+`POST /admin/structure-audio/orphan-sweep` to remove unreferenced `audio/` objects older than one
+hour; recent, referenced and legacy objects are preserved. A disabled/unavailable store returns a
+safe 503. See [StructureAudio](../modules/StructureAudio.md).
 
 `IdentityService:Authority/Audience/RequireHttpsMetadata`
 are provided by Consul; `appsettings.json` only keeps the local-development fallback.
@@ -271,9 +275,13 @@ search. Rolling back to the previous image requires the documented down script f
 ### Structure audio upgrade (issue #90)
 
 The first start of the image containing migration `20261021153535_AddStructureAudio` only creates the
-`document_structure_audio` table; no existing table or the OpenSearch mapping changes. Enable audio
-with `DocumentAudio__Enabled=true` (see [Structure Audio Storage](#structure-audio-storage-issue-90)).
-Rolling back to the previous image requires the documented down script first; see
+`document_structure_audio` table; no existing table or the OpenSearch mapping changes. It delivers
+the persistence/cleanup foundation only (#107); import/review and playback remain pending. Before
+upgrading, take and verify a consistent database backup together with the corresponding image,
+configuration and object storage recovery set. To go back, stop all instances and restore that
+pre-upgrade recovery set; post-backup writes are lost. Old images need not accept the new schema,
+and image rollback never automatically runs Down migrations. The destructive audio down script
+is a separate optional maintenance operation. See
 [Migrations — Structure Audio Upgrade](../database/migrations.md#structure-audio-upgrade-issue-90).
 
 ## Startup Command

@@ -273,15 +273,15 @@ def main(image, rollback_image=None):
                     return (Path(__file__).resolve().parent.parent / "docs" / "database" / "rollback"
                             / (migration_id + ".down.sql")).read_text()
 
-                # The current image migrated this database above. The documented rollback script of
-                # the newest migration (issue #90) must return it to exactly the previous image's
-                # version (issue #89).
+                # Optional destructive maintenance, separate from backup-based version recovery.
+                # This isolated test deliberately discards audio metadata, then checks that
+                # the previous image accepts the resulting structure-version database.
                 psql(down_script("20261021153535_AddStructureAudio"))
                 before = fingerprint()
                 require("20261021153535_AddStructureAudio" not in before, "rollback left the migration history row")
                 start_until_ready("rollback", rollback_image)
                 require(fingerprint() == before, "rollback image changed schema/history/data")
-                print("PASS rollback: down script applied; previous image accepted the database unchanged", flush=True)
+                print("PASS destructive down maintenance: previous image accepted the downgraded test database", flush=True)
 
                 # This database is owned by the random test prefix. Roll it back to the baseline
                 # with the earlier documented script and remove only its exact verified history

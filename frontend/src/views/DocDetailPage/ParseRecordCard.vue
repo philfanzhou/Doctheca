@@ -116,9 +116,6 @@ async function handleExportHtml() {
       <button class="btn btn-sm" @click="navigate?.('structure', props.parse.id)">
         <span v-html="iconHtml('book')"></span>结构标注
       </button>
-      <button class="btn btn-ghost btn-sm" @click="navigate?.('audio', props.parse.id)">
-        <span v-html="iconHtml('upload')"></span>官方音频
-      </button>
       <button class="btn btn-ghost btn-sm" @click="handleOpenMarkdown">
         <span v-html="iconHtml('doc')"></span>Markdown
       </button>

@@ -4,7 +4,7 @@
 
 ## Design Purpose
 
-A **Structure Audio** file is an audio file imported for one [Document Parse](document_parses.md), such as an official textbook recording, optionally linked to one of that parse's [structure nodes](document_structure_nodes.md). The bytes live in the S3-compatible object storage under the `audio/` prefix; this table holds the reference and the link. See the module page [StructureAudio](../../modules/StructureAudio.md).
+A **Structure Audio** file is an audio file imported for one [Document Parse](document_parses.md), such as an official textbook recording, optionally linked to one of that parse's [structure nodes](document_structure_nodes.md). The persistence foundation (#107) is available; importing and reviewing audio (#108) and playback (#109) remain pending. The bytes live in the S3-compatible object storage under the `audio/` prefix; this table holds the reference and the link. See the module page [StructureAudio](../../modules/StructureAudio.md).
 
 ## Field Inventory
 
@@ -33,6 +33,6 @@ A **Structure Audio** file is an audio file imported for one [Document Parse](do
 
 ## Special Notes
 
-- **No foreign key on `node_id`.** A structure save replaces the parse's whole node tree (delete and re-insert, keeping the ids it is sent), which an `ON DELETE` rule would see as removing every node. Instead the tree save (`DocumentStructureRepository.ReplaceAsync`) unlinks, in the same transaction, the audio of nodes the new tree no longer contains (`node_id` NULL, `match_status` `node_removed`, `link_source` NULL). Imports and link saves take the same `document_parses` row lock and check that every linked node exists.
+- **No foreign key on `node_id`.** A structure save replaces the parse's whole node tree (delete and re-insert, keeping the ids it is sent), which an `ON DELETE` rule would see as removing every node. Instead the tree save (`DocumentStructureRepository.ReplaceAsync`) unlinks, in the same transaction, the audio of nodes the new tree no longer contains (`node_id` NULL, `match_status` `node_removed`, `link_source` NULL). Internal repository insert/link writes take the same `document_parses` row lock and check that every linked node exists.
 - Deleting a parse (or its document) deletes its rows through CASCADE; the endpoints delete the stored objects after the rows (see the module page).
-- Object keys contain no file name, so `source_path` never reaches the storage.
+- Object keys contain no file name, so `source_path` never reaches the storage. Match-status and link-source metadata are reserved for the later import/review delivery; the current API does not calculate matches.
