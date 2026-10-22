@@ -7,8 +7,16 @@ Existing test files (actually present in code):
 - `src/Tests/Doctheca.Tests/OpenSearch/OpenSearchResponseParserTests.cs`
 - `src/Tests/Doctheca.Tests/OpenSearchIndexServiceTests.cs`
 - `src/Tests/Doctheca.Tests/SearchDomainServiceTests.cs`
+- `src/Tests/Doctheca.Tests/Integration/DocumentSearchPageLabelTests.cs`
+- `src/Tests/Doctheca.Tests/Integration/InternalSearchEndpointTests.cs`
 
-> Note: `DocumentSearchEndpointsTests.cs` does not exist (mislisted in old docs). HTTP endpoints have no dedicated unit tests.
+The admin label tests use the real host, PostgreSQL and OpenSearch to compare every old
+field, order, filter, total and cursor against the engine result while resolving Unicode,
+repeated, empty, missing and unknown-page labels. They also cover stale/malformed block
+identity, deleted parses, one batched read-only snapshot, failure diagnostics, cancellation,
+concurrent parse replacement, unchanged authorization/validation and mapping version 3.
+The internal response test supplies an administrative `PageLabel` value and verifies that
+the existing explicit field list still excludes it. Docker is required for these tests.
 
 ## How to Run
 

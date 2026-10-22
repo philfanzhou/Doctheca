@@ -5,6 +5,8 @@ public class SearchResultModel
     // V1 fields (unchanged — zero regression)
     public string DocumentName { get; set; } = string.Empty;
     public int PageNumber { get; set; }
+    /// <summary>Optional printed label resolved from trusted local block/page ownership, never an index key.</summary>
+    public string? PageLabel { get; set; }
     public string AssociatedText { get; set; } = string.Empty;
     public double Score { get; set; }
     public string MatchType { get; set; } = string.Empty;

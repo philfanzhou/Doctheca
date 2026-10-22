@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using Doctheca.Domain.Models;
+using Doctheca.Domain.Repositories;
 using Doctheca.Domain.Services;
 
 namespace Doctheca.Service;
@@ -24,6 +25,8 @@ public static class DocumentSearchEndpoints
 
     private static async Task<IResult> Search(
         ISearchDomainService searchService,
+        ISearchPageLabelRepository pageLabels,
+        CancellationToken cancellationToken,
         [FromServices] ILoggerFactory loggerFactory,
         [FromQuery] string query,
         [FromQuery] bool phrase = false,
@@ -83,20 +86,41 @@ public static class DocumentSearchEndpoints
             };
         }
 
-        logger.LogInformation("Search request: query={Query}, phrase={Phrase}, pageSize={PageSize}, hasMinerUFilter={HasMinerUFilter}",
-            query, phrase, pageSize, hasMinerUFilter);
+        logger.LogInformation("Search request: phrase={Phrase}, pageSize={PageSize}, hasMinerUFilter={HasMinerUFilter}",
+            phrase, pageSize, hasMinerUFilter);
 
+        cancellationToken.ThrowIfCancellationRequested();
         var (results, totalCount, nextToken) = await searchService.ExactSearchAsync(
             query, phrase, filter, pageSize, pageToken);
+        cancellationToken.ThrowIfCancellationRequested();
 
-        logger.LogInformation("Search completed: query={Query}, results={Count}, total={Total}", query, results.Count, totalCount);
+        var identities = results.Select(hit => Guid.TryParse(hit.SegmentId, out var blockId) && blockId != Guid.Empty
+            ? (SearchBlockPageKey?)new(blockId, hit.PageNumber) : null).ToArray();
+        var wanted = identities.Where(key => key.HasValue).Select(key => key!.Value).Distinct().ToArray();
+        IReadOnlyDictionary<SearchBlockPageKey, string?> labels = new Dictionary<SearchBlockPageKey, string?>();
+        if (wanted.Length > 0)
+        {
+            try { labels = await pageLabels.ReadBatchAsync(wanted, cancellationToken); }
+            catch (OperationCanceledException) { throw; }
+            catch (Exception)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                logger.LogWarning("Optional search page labels unavailable");
+            }
+        }
+        cancellationToken.ThrowIfCancellationRequested();
+        for (var i = 0; i < results.Count; i++)
+            results[i].PageLabel = identities[i] is { } key && labels.TryGetValue(key, out var label) ? label : null;
 
-        return Results.Ok(new
+        logger.LogInformation("Search completed: results={Count}, total={Total}", results.Count, totalCount);
+
+        var response = new
         {
             results = results.Select(r => new
             {
                 documentName = r.DocumentName,
                 pageNumber = r.PageNumber,
+                pageLabel = r.PageLabel,
                 associatedText = r.AssociatedText,
                 score = r.Score,
                 matchType = r.MatchType,
@@ -114,9 +138,11 @@ public static class DocumentSearchEndpoints
                 caption = r.Caption,
                 // Hand-marked structure path (null when the block lies outside every marked node)
                 structurePath = r.StructurePath
-            }),
+            }).ToList(),
             totalCount,
             nextPageToken = nextToken ?? string.Empty
-        });
+        };
+        cancellationToken.ThrowIfCancellationRequested();
+        return Results.Ok(response);
     }
 }
