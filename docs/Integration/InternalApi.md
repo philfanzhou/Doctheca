@@ -9,6 +9,7 @@ Only explicit true at process startup registers these anonymous routes:
 - `GET /internal/v1/documents/{documentFileId}/structure`
 - `GET /internal/v1/structure-nodes/{nodeId}/content`
 - `GET /internal/v1/structure-nodes/{nodeId}/images/{imageId}/content`
+- `GET /internal/v1/search`
 
 There is no caller authentication or document-level authorization. The deployer must restrict
 the entire `/internal` path segment, case insensitively, to internal callers and prevent direct
@@ -16,8 +17,8 @@ public access to port 5012. Request parameters, Cookies and Bearer tokens cannot
 Existing `/admin/*` authentication and CSRF rules are unchanged. See
 [deployment](../development/Deployment.md#internal-api).
 
-Catalogs (#97), current trees (#98) and content/owned images (#99) are implemented.
-Search (#100) and audio (#101) are separate tasks under [#91](https://github.com/philfanzhou/Doctheca/issues/91).
+Catalogs (#97), current trees (#98), content/owned images (#99) and search (#100) are implemented.
+Audio (#101) is a separate task under [#91](https://github.com/philfanzhou/Doctheca/issues/91).
 Unimplemented paths return 404 even when the setting is enabled.
 
 ## Lists and inputs
@@ -223,12 +224,84 @@ Error bodies and diagnostics contain no provider text, source paths, endpoints o
 Existing admin image status/authentication and range behavior remain unchanged except safer
 shared source diagnostics and stream ownership.
 
+## Exact search and subtree filters
+
+`GET /internal/v1/search?query=&structureNodeId=&phrase=&pageSize=&pageToken=`
+uses the existing full-text search service. `query` is required, trimmed, nonempty and at most
+200 characters after trimming. `phrase` defaults to `false` and accepts only `true` or `false`
+(case insensitive, without whitespace). False uses the existing English stemming analyzer;
+true uses the existing exact phrase analyzer. No filter preserves the existing unfiltered
+search semantics. `structureNodeId` is optional and must be a canonical hyphenated UUID.
+It must resolve to a node in its document's current structured parse, with a level in the
+document's selected definition, before the search engine is called. Missing, stale or
+incompatible nodes return the fixed resource 404. PostgreSQL resolves ownership in one
+repeatable-read snapshot; the search filter combines that parse ID and the node ID. Ancestor
+IDs indexed on each Block include descendants, so a Unit includes its Sections and a Section
+selects the narrower subtree. No name, text or inferred page-range matching is used.
+
+`pageSize` defaults to 20 and accepts ASCII decimal integers from 1 through 100. Omit
+`pageToken` for the first page; an explicitly empty token is invalid. A token is at most
+4096 characters and is canonical padded standard base64 of the existing JSON `search_after`
+array `[finiteNumber,"blockId"]`. The array must have exactly two elements, and `blockId`
+must be a nonblank string of at most 256 characters without control characters. It must
+decode to valid Unicode; isolated or incomplete surrogate escapes are invalid. Malformed
+base64, JSON, values, unknown/duplicate parameters or bounds return fixed 400 **before**
+searching; an invalid token never silently restarts internal paging. Treat returned tokens
+as opaque. URL-encode them (including `+`, `/` and `=`); keep the query, phrase and node filter
+unchanged while traversing. The existing admin endpoint retains its token fallback behavior.
+
+```json
+{
+  "success": true,
+  "data": {
+    "results": [
+      {
+        "documentName": "Textbook.pdf",
+        "pageNumber": 0,
+        "associatedText": "The <em>changing</em> world",
+        "score": 1.25,
+        "matchType": "stemmed",
+        "segmentId": "00000000-0000-0000-0000-000000000006",
+        "startOffset": 0,
+        "endOffset": 0,
+        "structurePath": "Unit 3 > Section B"
+      }
+    ],
+    "totalCount": 1,
+    "nextPageToken": null
+  }
+}
+```
+
+These are the complete hit fields. `pageNumber` preserves the existing **zero-based** search
+convention, unlike the one-based physical page numbers on tree/content routes. Offsets retain
+the existing `0` sentinel (unspecified); `matchType` is `stemmed` or `exact_phrase`.
+`structurePath` is nullable. Highlight tags and all document text are untrusted data, not safe
+HTML. Administrative timestamps, raw `blockData`, provider JSON, geometry, extraction metadata,
+parse/upload/storage fields and credentials are omitted.
+
+Results sort by score descending and Block ID ascending; stable data/ranking yields each hit
+once across cursor pages. A full final page may provide a token followed by an empty terminal
+page. The existing engine total count semantics are retained. There is no cross-request search
+snapshot or query/filter identity embedded in the token. The derived index is eventually
+consistent: a concurrent tree change, block synchronization or reindex can alter later pages
+and can temporarily leave stale membership/path data. Relational ownership checking does not
+pin the index; reindex is the recovery for stale indexed data. No ranking/index rewrite or
+stronger concurrent-search guarantee is introduced.
+
+An engine or response-read failure returns 200 with empty results, total 0 and a null token,
+and records a fixed Warning without query text, request JSON, upstream body or raw exception.
+The endpoint observes request cancellation before/after awaited reads, and PostgreSQL reads
+receive the cancellation token. Cancellation propagates rather than becoming an empty success.
+The existing search interface has no cancellation parameter: an already-sent OpenSearch read
+can finish after the caller disconnects. No database, index or object-storage writes occur.
+
 ## Errors, confidentiality and rollback
 
 | Condition | Status | Fixed error code |
 | --- | --- | --- |
 | Disabled, unknown internal path or unsupported method | 404 | `DOCTHECA_INTERNAL_NOT_FOUND` |
-| Invalid identifier/list/filter/cursor input | 400 | `DOCTHECA_INTERNAL_INVALID` |
+| Invalid identifier/list/filter/search/cursor input | 400 | `DOCTHECA_INTERNAL_INVALID` |
 | Unknown requested definition | 404 | `DOCTHECA_INTERNAL_DEFINITION_NOT_FOUND` |
 | Unknown document | 404 | `DOCTHECA_INTERNAL_DOCUMENT_NOT_FOUND` |
 | Document exists without a qualifying marked parsed tree | 404 | `DOCTHECA_INTERNAL_STRUCTURE_NOT_FOUND` |

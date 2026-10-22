@@ -27,9 +27,9 @@ public class SearchDomainService : ISearchDomainService
         {
             return await _searchIndexService.ExactSearchAsync(query, phrase, filter, pageSize, pageToken);
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            _logger.LogWarning(ex, "OpenSearch query failed for query '{Query}', returning empty results", query);
+            _logger.LogWarning("OpenSearch query failed; returning empty results");
             return (Results: [], TotalCount: 0, NextToken: null);
         }
     }
