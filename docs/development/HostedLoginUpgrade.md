@@ -49,7 +49,7 @@ cannot perform that rollback.
 ## Package adoption (issue #70)
 
 The self-written OIDC protocol slice was replaced by the official `SignaCore.Client.AspNetCore`
-client (0.1.13). Routes, the session Cookie name, the CSRF header name, configuration keys and
+client (currently 0.1.18). Routes, the session Cookie name, the CSRF header name, configuration keys and
 the admin policy's role assertion are unchanged; wire-level presentation differences are:
 
 - Token redemption and logout preparation authenticate with HTTP Basic instead of a form-carried
@@ -73,3 +73,22 @@ the admin policy's role assertion are unchanged; wire-level presentation differe
 Rollback to the previous image restores the self-written slice with its old response shapes; the
 session Cookie name is unchanged but tickets are not compatible across the switch, so browsers
 re-authenticate after either direction of the change. No SQL or configuration change is required.
+
+
+## Grouped dependency upgrade (SignaCore 0.1.18)
+
+The login start now issues a per-state HttpOnly, Secure, SameSite=Lax browser-binding Cookie
+for the callback path with a five-minute expiry. The callback requires it before redeeming the
+code and expires it; missing, wrong or replayed bindings do not create a session. Browsers must
+allow that Cookie. There is no configuration or SQL migration.
+
+The host retains its documented 30-second clock tolerance while keeping the package's other
+strict validation defaults. ID tokens with an `iat` over 30 seconds in the future are now
+rejected, matching the existing access-token rule; an absent ID-token `iat` is still accepted.
+Keep the Identity and Host clocks synchronized. Token scope echoes must stay within the
+requested scopes; repeated JSON members and responses above 64 KB (token) or 4 KB (logout)
+are rejected. The new `UserCanceled` and `PreSignInDenied` reasons both retain the existing
+`authError=notAdmin` browser result.
+
+Rollback uses the previous complete API/SPA image; in-process sessions require sign-in again.
+Persisted business data and configuration keys are unchanged by this dependency upgrade.

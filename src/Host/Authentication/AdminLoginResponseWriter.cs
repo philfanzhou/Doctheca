@@ -11,8 +11,8 @@ namespace Doctheca.Host.Authentication;
 /// endpoint keeps its <c>success</c>/<c>data</c> envelope.
 /// </summary>
 /// <remarks>
-/// Reason mapping: <see cref="SignaCoreSignInReason.AccessDenied"/> covers both the user's
-/// cancellation and a gate denial (the package does not separate them), so both surface as
+/// Reason mapping: <see cref="SignaCoreSignInReason.UserCanceled"/> and
+/// <see cref="SignaCoreSignInReason.PreSignInDenied"/> both surface as
 /// <c>authError=notAdmin</c>; discovery and token-endpoint transport failures surface as
 /// <c>authError=identityUnavailable</c>; every other protocol failure surfaces as
 /// <c>authError=signInFailed</c>. No other failure detail ever reaches the browser.
@@ -91,7 +91,8 @@ public sealed class AdminLoginResponseWriter : ISignaCoreHostedLoginResponseWrit
 
     internal static string RedirectTarget(SignaCoreSignInReason reason) => reason switch
     {
-        SignaCoreSignInReason.AccessDenied => DeniedRedirect,
+        SignaCoreSignInReason.AccessDenied or SignaCoreSignInReason.UserCanceled
+            or SignaCoreSignInReason.PreSignInDenied => DeniedRedirect,
         SignaCoreSignInReason.AuthorityUnreachable => IdentityUnavailableRedirect,
         _ => SignInFailedRedirect,
     };

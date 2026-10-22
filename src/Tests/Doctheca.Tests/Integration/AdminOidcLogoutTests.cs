@@ -207,8 +207,10 @@ public sealed partial class AdminOidcIntegrationTests
         Assert.Equal(1, Tickets(factory).Count);
         var surfaces = await response.Content.ReadAsStringAsync() + string.Join('\n', response.Headers) + response.Headers.Location
             + await status.Content.ReadAsStringAsync() + string.Join('\n', logs.Messages);
-        foreach (var canary in new[] { OidcTestAuthority.Secret, authority.LastAccessToken!, authority.LastIdToken!, authority.LastVerifier!, code, handshake.Query["state"] })
+        foreach (var canary in new[] { OidcTestAuthority.Secret, authority.LastAccessToken!, authority.LastIdToken!, authority.LastVerifier!, code })
             Assert.DoesNotContain(canary, surfaces);
+        Assert.DoesNotContain(handshake.Query["state"], string.Join('\n', response.Headers.Where(header => header.Key != "Set-Cookie"))
+            + await response.Content.ReadAsStringAsync() + await status.Content.ReadAsStringAsync() + string.Join('\n', logs.Messages));
     }
 
     [Theory]
