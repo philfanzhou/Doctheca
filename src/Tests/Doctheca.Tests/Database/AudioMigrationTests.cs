@@ -70,6 +70,8 @@ public sealed class AudioMigrationTests(PostgreSqlMigrationFixture fixture) : IA
                 """);
 
             await MigrationGoldenStates.ExecuteRawAsync(context, await File.ReadAllTextAsync(
+                StructureMigrationTests.RollbackScriptPath(DocthecaMigrationExecutor.AddBlockFootnotesMigrationId)));
+            await MigrationGoldenStates.ExecuteRawAsync(context, await File.ReadAllTextAsync(
                 StructureMigrationTests.RollbackScriptPath(DocthecaMigrationExecutor.AddDocumentParsePagesMigrationId)));
             await MigrationGoldenStates.ExecuteRawAsync(context, await File.ReadAllTextAsync(StructureMigrationTests.RollbackScriptPath(AudioId)));
 
@@ -139,7 +141,8 @@ public sealed class AudioMigrationTests(PostgreSqlMigrationFixture fixture) : IA
             try
             {
                 await using var command = connection.CreateCommand();
-                command.CommandText = $"SELECT '{table}:' || to_jsonb(t)::text FROM {table} t ORDER BY 1";
+                // Compare the historical row fields across the later additive nullable column.
+                command.CommandText = $"SELECT '{table}:' || (to_jsonb(t) - 'footnote')::text FROM {table} t ORDER BY 1";
                 await using var reader = await command.ExecuteReaderAsync();
                 while (await reader.ReadAsync()) rows.Add(reader.GetString(0));
             }

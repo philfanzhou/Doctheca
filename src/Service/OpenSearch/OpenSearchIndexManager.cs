@@ -11,10 +11,11 @@ internal sealed class OpenSearchIndexManager
     /// Current index mapping version. Increment when BuildIndexBody mapping changes.
     /// v1 = initial V1 search; v2 = minerU Gen-2 fields (x0/y0/x1/y1/score/has_image/sub_type/text_level/text_format/caption/_meta.block_data);
     /// v3 = hand-marked document structure (structure_node_ids/structure_path, issue #89).
+    /// v4 = searchable caption/footnote annotations with independent exact-phrase fields (issue #105).
     /// On startup, if the existing index has a missing or lower mapping_version, the index is deleted and recreated;
     /// parses are then re-indexed through POST /admin/search-index/reindex.
     /// </summary>
-    internal const int CurrentMappingVersion = 3;
+    internal const int CurrentMappingVersion = 4;
 
     private readonly OpenSearchLowLevelClient _client;
     private readonly string _indexName;
@@ -110,8 +111,15 @@ internal sealed class OpenSearchIndexManager
                         analyzer = "english_custom",
                         fields = new
                         {
+                            exact = new { type = "text", analyzer = "english_phrase" },
                             keyword = new { type = "keyword", ignore_above = 256 }
                         }
+                    },
+                    footnote = new
+                    {
+                        type = "text",
+                        analyzer = "english_custom",
+                        fields = new { exact = new { type = "text", analyzer = "english_phrase" } }
                     },
                     // [v3] hand-marked structure: the block's node and all its ancestors, and the
                     // readable path of node names; absent when no node contains the block.

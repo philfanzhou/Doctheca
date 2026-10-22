@@ -18,7 +18,7 @@
 |------|------|---------|
 | minerU dimension fields and `block_data` persisted successfully alongside | Debug | `Parse {ParseId} minerU fields + block_data indexed alongside V1 fields (BlockCount={BlockCount})` |
 | A single `blockData` block exceeds the threshold (≥64KB) | Warning | `Parse {ParseId} block {BlockId} block_data exceeds 64KB, may impact search response size` |
-| All minerU filters null → takes the V1 path | Debug | `All minerU filters null on query '{Query}', using V1 code path only` |
+| Search received | Information | `Search request: phrase={Phrase}, pageSize={PageSize}, hasMinerUFilter={HasMinerUFilter}` |
 
 - **No sensitive information in logs**: message templates **must not** include raw block text (`blockData`); only statistics such as hash / size / count, avoiding log injection and large log volumes.
 - **Logs include context**: search logs include `documentFileId` / `parseId` / `filterSummary` (excluding the raw keyword), `pageSize`.
@@ -30,19 +30,19 @@
 | Indexing succeeded | Information | `Parse {ParseId} indexed {BlockCount} blocks to OpenSearch (FileId={FileId})` |
 | Indexing failed | Warning | `Parse {ParseId} indexing failed, status code: {StatusCode}` |
 | Empty blocks | Warning | `Parse {ParseId} has no blocks to index` |
-| No indexable blocks | Warning | `Parse {ParseId} has no indexable blocks (all text_content empty)` |
+| No indexable blocks | Warning | `Parse {ParseId} has no indexable blocks (body and annotations are empty)` |
 | Parse index deletion succeeded | Information | `Parse {ParseId} search index deleted` |
 | Parse index deletion failed | Warning | `Failed to delete parse {ParseId} search index, status code: {StatusCode}` |
 | Document index deletion succeeded | Information | `Document file {FileId} search index deleted` |
 | Document index deletion failed | Warning | `Failed to delete document file {FileId} search index, status code: {StatusCode}` |
 | Metadata sync succeeded | Information | `Document file {FileId} search index metadata updated: Subject={Subject}, Grade={Grade}, Year={Year}` |
 | Metadata sync failed | Warning | `Failed to update document file {FileId} search index metadata, status code: {StatusCode}` |
-| Search degradation | Warning | `OpenSearch query failed for query '{Query}', returning empty results` |
+| Search degradation | Warning | `OpenSearch query failed; returning empty results` |
 | pageToken decode failure | Debug | `Failed to decode page token, starting from first page` |
 | Index does not exist (created at startup) | Information | `OpenSearch index created: {IndexName}` |
 | Index already exists | Information | `OpenSearch index already exists: {IndexName}` |
 
-- **No sensitive information in logs**: full query terms must not be logged (only truncated/statistical information); user identity information must not be logged.
+- **No sensitive information in logs**: never log raw/truncated query terms, body/annotations, provider errors or credentials. Index failure catches emit a fixed Warning without attaching the exception.
 - **Logs include context**: index/deletion logs must include `parseId` or `documentFileId` for troubleshooting.
 
 ## Error Message Format Conventions
@@ -71,17 +71,17 @@
 
 ## Search Conventions
 
-- **Phrase matching** (`phrase=true`): uses `match_phrase` + the `text.exact` field (english_phrase analyzer, lowercase only, preserves phrase integrity).
-- **Word matching** (`phrase=false`): uses `match` + the `text` field (english_custom analyzer, with stemming, expands recall).
+- **Phrase matching** (`phrase=true`): independent `match_phrase` clauses on text.exact/caption.exact/footnote.exact (english_phrase), in `bool.should` with minimum_should_match=1; phrases never cross fields.
+- **Word matching** (`phrase=false`): independent `match` clauses on text/caption/footnote (english_custom), with the same should rule and no field-specific boosts.
 - **Sorting**: `_score desc` → `block_id asc` (guarantees stable pagination).
 - **Pagination**: `search_after` cursor; `pageToken` is the Base64 encoding of the last sort array of the previous page.
 - **filter mapping**: `DocumentTitle` → index field `file_name` (note the name mismatch).
 - **filter empty values**: `null` or empty-string fields do not participate in filtering (checked with `string.IsNullOrEmpty` in `BuildSearchBody`).
-- **highlight**: `pre_tags = ["<em>"]`, `post_tags = ["</em>"]`; highlight takes priority over `_source.text` when parsing.
+- **highlight**: existing `<em>` markers remain; choose the first available matched highlight in text/caption/footnote priority, otherwise the first non-whitespace raw field in that order. Strings remain untrusted. Offsets stay `0` (unspecified), including annotation snippets.
 
 ### Generation 2 Search Conventions (extending the V1 endpoint, no parallel path)
 
-- **keyword execution**: reuses the V1 `match` / `match_phrase` queries on the `text` field (english_custom / english_phrase analyzers). **No new** `mineru_text` field (minerU `text|content|body` already lands in `text_content`).
+- **keyword execution**: mapping4 extends the existing `match` / `match_phrase` queries to body/caption/footnote, keeping one document per Block. No `mineru_text` alias is added.
 - **Fallback sorting without keyword**: by `sort_index asc` (block order).
 - **minerU exact-condition combination**: keyword goes to `must`; `blockType` (→ `block_type`) / `pageNumber` (→ `page_number`) / `parseId` / `documentFileId` / `hasImage` (→ `has_image`) go to `filter`.
 - **Zero-regression guard**: when all minerU filters are null, the V1 path is taken (output identical to pre-change). **No new** `DOCTHECA_FILTER_REQUIRED` error code — V1's required-`query` validation already serves as the sole guard.
@@ -110,7 +110,7 @@ Field governance boundaries that must be observed when implementing Generation 2
 
 ## Index Write Conventions
 
-- Only blocks with non-empty `text_content` are indexed (empty text has nothing searchable).
+- Index a Block when any body/caption/footnote is non-whitespace, even when body is null. Preserve exact nullable annotation values in typed storage and normalized block_data; no trimming or remote backfill. Mapping4 adds caption.exact and footnote/footnote.exact. See [migration/reindex/rollback](../../database/migrations.md#block-annotation-upgrade-issue-105).
 - `_id = $"block_{block.Id}"`, guaranteeing idempotency.
 - Bulk requests: 2 JSON lines per block (index instruction + document), separated by `\n`, with a trailing `\n`.
 - Deletions use `delete_by_query` (by `parse_id` or `document_file_id`).

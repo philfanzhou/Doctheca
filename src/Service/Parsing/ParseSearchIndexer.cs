@@ -60,9 +60,10 @@ public sealed class ParseSearchIndexer
             return await _searchIndexService.IndexParseBlocksAsync(
                 parse.Id, file.Id, file.FileName, file.Subject, file.Grade, file.Year);
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            _logger.LogWarning(ex, "Failed to re-index parse {ParseId} in OpenSearch", parse.Id);
+            // Index provider errors can contain the document body or annotations.
+            _logger.LogWarning("Failed to re-index parse {ParseId} in OpenSearch", parse.Id);
             return false;
         }
     }

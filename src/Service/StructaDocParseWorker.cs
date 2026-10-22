@@ -246,9 +246,10 @@ public sealed class StructaDocParseWorker : BackgroundService
             var searchIndexService = scopeProvider.GetRequiredService<ISearchIndexService>();
             await searchIndexService.IndexParseBlocksAsync(parseId, file.Id, file.FileName, file.Subject, file.Grade, file.Year);
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            _logger.LogWarning(ex, "Failed to index parse {ParseId} to OpenSearch", parseId);
+            // Provider errors can echo the bulk document, including body and annotations.
+            _logger.LogWarning("Failed to index parse {ParseId} to OpenSearch", parseId);
         }
     }
 

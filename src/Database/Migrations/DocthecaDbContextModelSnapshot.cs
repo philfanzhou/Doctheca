@@ -140,6 +140,10 @@ namespace Doctheca.Database.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
 
+                    b.Property<string>("Footnote")
+                        .HasColumnType("text")
+                        .HasColumnName("footnote");
+
                     b.Property<Guid?>("ImageId")
                         .HasColumnType("uuid")
                         .HasColumnName("image_id");

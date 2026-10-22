@@ -174,7 +174,8 @@ public sealed class StructaDocParseResultSync : IStructaDocParseResultSync
                 BboxX1 = Scale(block.BoundingBox?.X1),
                 BboxY1 = Scale(block.BoundingBox?.Y1),
                 MineruScore = block.Confidence,
-                Caption = null,
+                Caption = block.Caption,
+                Footnote = block.Footnote,
             });
         }
 

@@ -47,6 +47,8 @@ public sealed class PageMigrationTests(PostgreSqlMigrationFixture fixture) : IAs
                 VALUES ({MigrationGoldenStates.ParseId}, 1, {"页一"}, {"pdf-page-labels"})
                 """);
             await MigrationGoldenStates.ExecuteRawAsync(context, await File.ReadAllTextAsync(
+                StructureMigrationTests.RollbackScriptPath(DocthecaMigrationExecutor.AddBlockFootnotesMigrationId)));
+            await MigrationGoldenStates.ExecuteRawAsync(context, await File.ReadAllTextAsync(
                 StructureMigrationTests.RollbackScriptPath(DocthecaMigrationExecutor.AddDocumentParsePagesMigrationId)));
             (await SnapshotAsync(context)).Should().Equal(before);
             (await MigrationGoldenStates.ReadAppliedHistoryAsync(context)).Should().Equal(MigrationGoldenStates.AllIds.Take(3));
@@ -121,7 +123,8 @@ public sealed class PageMigrationTests(PostgreSqlMigrationFixture fixture) : IAs
             try
             {
                 await using var command = context.Database.GetDbConnection().CreateCommand();
-                command.CommandText = $"SELECT '{table}:' || to_jsonb(t)::text FROM {table} t ORDER BY 1";
+                // Compare the historical row fields across the later additive nullable column.
+                command.CommandText = $"SELECT '{table}:' || (to_jsonb(t) - 'footnote')::text FROM {table} t ORDER BY 1";
                 await using var reader = await command.ExecuteReaderAsync();
                 while (await reader.ReadAsync()) rows.Add(reader.GetString(0));
             }

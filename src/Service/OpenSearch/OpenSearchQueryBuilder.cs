@@ -13,22 +13,17 @@ internal static class OpenSearchQueryBuilder
     internal static Dictionary<string, object> BuildSearchBody(
         string query, bool phrase, SearchFilterModel? filter, int pageSize, string? pageToken, ILogger? logger = null)
     {
-        // Build the main query
-        // Phrase query uses text.exact field (english_phrase analyzer, lowercase only without stemming, ensures phrase integrity)
-        // Non-phrase query uses text field (english_custom analyzer, stemming for expanded recall)
-        // Note: OpenSearch multi-field uses "text.exact" at query time, C# anonymous objects cannot contain dots in property names, use dictionary instead
-        object mainQuery;
-        if (phrase)
-        {
-            mainQuery = new Dictionary<string, object>
+        // Each phrase stays inside one field; never concatenate body and annotations.
+        // All three fields use the same analyzer and have no field-specific boost.
+        var clauses = new[] { "text", "caption", "footnote" }.Select(field =>
+            new Dictionary<string, object>
             {
-                ["match_phrase"] = new Dictionary<string, object> { ["text.exact"] = new { query } }
-            };
-        }
-        else
-        {
-            mainQuery = new { match = new { text = new { query } } };
-        }
+                [phrase ? "match_phrase" : "match"] = new Dictionary<string, object>
+                {
+                    [phrase ? field + ".exact" : field] = new { query }
+                }
+            }).ToArray();
+        object mainQuery = new { @bool = new { should = clauses, minimum_should_match = 1 } };
 
         // Build filter clauses
         var filterClauses = new List<object>();
@@ -99,10 +94,10 @@ internal static class OpenSearchQueryBuilder
             },
             ["highlight"] = new
             {
-                fields = new
-                {
-                    text = new { }
-                },
+                // Highlight the field actually queried; OpenSearch does not treat a base
+                // field as a match on its .exact multi-field when require_field_match is true.
+                fields = new[] { "text", "caption", "footnote" }.ToDictionary(
+                    field => phrase ? field + ".exact" : field, _ => new { }),
                 pre_tags = new[] { "<em>" },
                 post_tags = new[] { "</em>" }
             }

@@ -42,6 +42,9 @@ Polls `pending` + `parsing` records every 5 seconds:
   - `text_level`: subtype `heading-N` → N, otherwise −1; `text_format` = contentFormat;
   - bbox: StructaDoc 0–1 normalized coordinates ×1000, aligned with the local 0–1000 convention; `score` = confidence;
   - `image_id`: block.assetId → local image record mapping; `block_data` = the block's normalized JSON.
+  - `caption` / `footnote`: optional plain-text annotations retained exactly in typed columns and
+    normalized `block_data`, including Unicode, line endings, empty/whitespace and null values.
+    No trimming, truncation or HTML interpretation is performed; missing older fields remain null.
 - **Markdown → `document_parses.markdown_content`**; status is set to `parsed` and `parsed_at` is recorded.
 - **Optional Pages → [`document_parse_pages`](../database/tables/document_parse_pages.md)**:
   the bare array `{number,label,labelSource}` uses positive one-based physical numbers. Labels
@@ -70,6 +73,15 @@ the console remain unchanged. Old parses remain readable without labels and are 
 re-synchronized automatically. See the
 [upgrade/down-script procedure](../database/migrations.md#printed-page-label-upgrade-issue-102).
 
+**Annotation search (#105).** A Block is indexed when any body/caption/footnote is non-whitespace,
+including captioned images with null body. Each Block remains one document/hit. Stemmed queries
+search all three fields; exact phrases stay inside one field. Snippets prefer the first matched
+highlight in body, caption, footnote order, then the first non-whitespace raw field in that order.
+Offsets remain the unspecified `0` sentinel. Index errors do not undo parsed persistence;
+cancelled client reads cannot publish a successful partial sync. Annotations/provider errors are
+not logged. No remote annotation backfill/re-sync or new UI is introduced. Deployments require the
+[nullable-column migration and mapping4 reindex procedure](../database/migrations.md#block-annotation-upgrade-issue-105).
+
 ## StructaDoc Client Contract Summary (IStructaDocClient)
 
 - Authentication: `Authorization: ApiKey <credential>`, requiring the `documents:write`, `parses:read`, `parses:write` scopes.
@@ -91,6 +103,6 @@ re-synchronized automatically. See the
 
 ## Validation
 
-- Unit/integration tests: `src/Tests/Doctheca.Tests/` (`StructaDoc/StructaDocClientTests`, `StructaDoc/StructaDocPagesClientTests`, `Parsing/StructaDocParseResultSyncTests`, `Parsing/StructaDocPagesSyncTests`, `Parsing/DocumentParsePageIdentityTests`, `Database/DocumentParsePageRepositoryTests`, `Database/PageMigrationTests`, `Parsing/ParseImageContentSourceTests`, `StructaDocParseWorkerTests`).
+- Unit/integration tests: `src/Tests/Doctheca.Tests/` (`StructaDoc/StructaDocClientTests`, `StructaDoc/StructaDocPagesClientTests`, `Parsing/StructaDocParseResultSyncTests`, `Parsing/StructaDocAnnotationSyncTests`, `Parsing/StructaDocPagesSyncTests`, `Parsing/DocumentParsePageIdentityTests`, `Database/DocumentParsePageRepositoryTests`, `Database/PageMigrationTests`, `Database/AnnotationMigrationTests`, `OpenSearch/OpenSearchAnnotationTests`, `Parsing/ParseImageContentSourceTests`, `StructaDocParseWorkerTests`).
 - Command: `dotnet test src/Doctheca.sln --configuration Release` (in this service's directory).
 - Before switching traffic, the `vlm` + batch endpoint combination must be validated with real documents in a real environment (ADR-0009 consequences clause).

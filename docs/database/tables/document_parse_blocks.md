@@ -33,7 +33,8 @@ This table stores the **structured block rows** of parse artifacts. Legacy data 
 | `bbox_x1` | `REAL` | NULL | | [Gen 2] bbox bottom-right X |
 | `bbox_y1` | `REAL` | NULL | | [Gen 2] bbox bottom-right Y |
 | `score` | `REAL` | NULL | | [Gen 2] Confidence: legacy records hold the minerU VLM score; new records hold StructaDoc `confidence` (0-1) |
-| `caption` | `TEXT` | NULL | | [Gen 2] Concatenated caption text (legacy-specific; NULL for new records) |
+| `caption` | `TEXT` | NULL | | Exact optional StructaDoc plain-text caption; legacy rows may contain derived captions |
+| `footnote` | `TEXT` | NULL | | Exact optional StructaDoc plain-text footnote (#105); NULL for older payloads and migrated rows |
 
 ## Indexes
 
@@ -51,7 +52,8 @@ This table stores the **structured block rows** of parse artifacts. Legacy data 
 - Frequently queried fields (page, type, text) are extracted into their own indexed columns — query performance is fine
 - Rarely queried fields (angle, formula_latex) stay inside `block_data` — they do not consume structured storage space
 - `image_id` is a soft association to `document_parse_images` (SET NULL) — when an image is deleted the block is kept but loses its image reference
-- **[Gen 2] Structured dimension fields**: `sub_type`/`text_level`/`text_format`/`bbox_x0..y1`/`score`/`caption` are independent columns, supporting OpenSearch mapping indexes and SQL filtering; the `block_data` JSONB still keeps the whole original block (fallback + re-attachment as `_meta.block_data`)
+- **Structured dimension fields**: `sub_type`/`text_level`/`text_format`/`bbox_x0..y1`/`score`/`caption`/`footnote` are independent columns; `block_data` still keeps the normalized block, including annotations.
+- **Annotations are untrusted plain text**: caption/footnote preserve null, empty/whitespace, Unicode and line endings exactly, without trimming, truncation, HTML interpretation or logging. An image/table with null body can still be searchable. Older runs are not automatically fetched again.
 - **[Gen 2] bbox normalization**: unified to the 0-1000 convention on write. Legacy records use heuristic detection (pipeline [0,1000] / VLM [0,1]×1000); new records are mapped from StructaDoc's 0-1 normalized coordinates ×1000
 - **New-pipeline mapping conventions**: `page_id` = StructaDoc `pageNumber` − 1 (null → 0); `sort_index` increments within a page; `text_level` is derived from subtype `heading-N`; `text_format` = `contentFormat`
 
@@ -77,7 +79,8 @@ Delete-then-insert INSERT INTO document_parse_blocks
      text_format    = block.contentFormat
      bbox_x0/y0/x1/y1 = block.boundingBox ×1000 (0-1 → 0-1000)
      score          = block.confidence
-     caption        = NULL
+     caption        = block.caption (exact nullable string)
+     footnote       = block.footnote (exact nullable string)
 ```
 
 > The legacy-record population flow (MinerU Worker downloads ZIP → parses content_list.json → DocumentParseBlockService.ParseBlock) was removed with ADR-0009; historical data is kept read-only.
@@ -87,3 +90,4 @@ Delete-then-insert INSERT INTO document_parse_blocks
 - Has a one-to-one relationship with `document_parse_images` when `block_type='image'`, but it is not a hard DB foreign-key constraint (soft reference via `image_id`)
 - Deleting a `document_parse` automatically deletes this table's rows via CASCADE
 - **`sequence` backfill** (migration `20261021094612_AddDocumentStructure`): a parse whose rows all carry a distinct non-negative integer `block_data.sequence` keeps those values; every other parse (legacy MinerU rows, missing or duplicated values) is numbered `0..n-1` by `(page_id, sort_index, id)`. No other column changes.
+- **Annotation upgrade** (`20261022184348_AddBlockFootnotes`): adds only nullable `footnote`, leaving older values null and retaining every other field/table. See [upgrade, reindex and rollback](../migrations.md#block-annotation-upgrade-issue-105).
