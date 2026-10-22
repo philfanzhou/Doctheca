@@ -10,7 +10,7 @@ public sealed class AudioStorageException() : Exception("Audio storage is unavai
 /// <summary>
 /// Structure audio objects in the existing S3-compatible storage (<see cref="IOssService"/>),
 /// always under <see cref="DocumentAudioOptions.ObjectPrefix"/> as
-/// <c>audio/{parseId}/{audioId}{extension}</c>. Keys never leave this lifecycle API; playback is a separate delivery (#109).
+/// <c>audio/{parseId}/{audioId}{extension}</c>. Keys are exposed only inside an authorized short-lived public playback URL.
 /// </summary>
 public sealed class StructureAudioStore
 {
@@ -20,14 +20,46 @@ public sealed class StructureAudioStore
     public StructureAudioStore(
         Func<IOssService> ossService,
         DocumentAudioStorageStatus status,
-        ILogger<StructureAudioStore> logger)
+        ILogger<StructureAudioStore> logger,
+        DocumentAudioPlaybackSettings? playback = null)
     {
         _ossService = new Lazy<IOssService>(ossService);
         Status = status;
         _logger = logger;
+        Playback = playback ?? new(false, 300);
     }
 
     public DocumentAudioStorageStatus Status { get; }
+
+    public DocumentAudioPlaybackSettings Playback { get; }
+
+    /// <summary>Checks bytes internally before signing through the separate public client.</summary>
+    public async Task<AudioPlaybackLink> GetPlaybackLinkAsync(string key, TimeProvider timeProvider, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (!Playback.Available) throw new AudioStorageException();
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(TimeSpan.FromSeconds(30));
+        try
+        {
+            EnsureAudioKey(key);
+            if (!await _ossService.Value.ObjectExistsAsync(key, timeout.Token)) throw new AudioStorageException();
+            timeout.Token.ThrowIfCancellationRequested();
+            var issuedAt = DateTimeOffset.FromUnixTimeSeconds(timeProvider.GetUtcNow().ToUnixTimeSeconds());
+            var url = await _ossService.Value.GetPresignedUrlAsync(key, Playback.LinkSeconds, issuedAt, timeout.Token);
+            timeout.Token.ThrowIfCancellationRequested();
+            return new(url, issuedAt.AddSeconds(Playback.LinkSeconds), Playback.LinkSeconds);
+        }
+        catch (Exception) when (cancellationToken.IsCancellationRequested)
+        {
+            throw new OperationCanceledException(cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning("Audio playback storage failed: {ExceptionType}", ex.GetType().Name);
+            throw new AudioStorageException();
+        }
+    }
 
     internal static string ParsePrefix(Guid parseId) => $"{DocumentAudioOptions.ObjectPrefix}{parseId:N}/";
 

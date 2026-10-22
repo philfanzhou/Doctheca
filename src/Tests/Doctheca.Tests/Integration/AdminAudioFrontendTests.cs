@@ -94,7 +94,7 @@ public sealed partial class AdminHostedFrontendTests
 
         var removed = h.Page.Locator("tr[data-audio-path='官方音频/unit8/9sVocabulary08Unit8.mp3']");
         var unchanged = h.Page.Locator("tr[data-audio-path='官方音频/unit1/9sVocabulary01Unit1.mp3']");
-        await removed.GetByRole(AriaRole.Button).ClickAsync();
+        await removed.Locator("button[aria-label^='删除 '], button[aria-label^='撤销删除 ']").ClickAsync();
 
         // Hold the real PUT response to exercise the entire save, including confirmation.
         var received = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -116,15 +116,15 @@ public sealed partial class AdminHostedFrontendTests
             await h.Page.GetByRole(AriaRole.Button, new() { Name = "取消", Exact = true }).ClickAsync();
             await Assertions.Expect(h.Page.Locator(".el-message-box:visible")).ToHaveCountAsync(0);
             await Assertions.Expect(unchanged.GetByRole(AriaRole.Combobox)).ToBeEnabledAsync();
-            await Assertions.Expect(removed.GetByRole(AriaRole.Button)).ToBeEnabledAsync();
+            await Assertions.Expect(removed.Locator("button[aria-label^='删除 '], button[aria-label^='撤销删除 ']")).ToBeEnabledAsync();
             await Assertions.Expect(cleared).ToContainTextAsync("未保存");
             await Assertions.Expect(mismatch).ToContainTextAsync("未保存");
             await Assertions.Expect(removed).ToContainTextAsync("待删除");
 
             // Undo and mark again after cancellation to prove the draft is editable again.
-            await removed.GetByRole(AriaRole.Button).ClickAsync();
+            await removed.Locator("button[aria-label^='删除 '], button[aria-label^='撤销删除 ']").ClickAsync();
             await Assertions.Expect(removed).Not.ToContainTextAsync("待删除");
-            await removed.GetByRole(AriaRole.Button).ClickAsync();
+            await removed.Locator("button[aria-label^='删除 '], button[aria-label^='撤销删除 ']").ClickAsync();
             await h.Page.GetByRole(AriaRole.Button, new() { Name = "保存", Exact = true }).ClickAsync();
             await h.Page.GetByRole(AriaRole.Button, new() { Name = "确定", Exact = true }).ClickAsync();
             using var sent = JsonDocument.Parse(await received.Task.WaitAsync(TimeSpan.FromSeconds(30)));
@@ -133,8 +133,8 @@ public sealed partial class AdminHostedFrontendTests
             await AssertAudioDraftLockedAsync(h.Page);
 
             // Native disabled controls reject both removal and undo while the response waits.
-            await unchanged.GetByRole(AriaRole.Button).EvaluateAsync("button => button.click()");
-            await removed.GetByRole(AriaRole.Button).EvaluateAsync("button => button.click()");
+            await unchanged.GetByRole(AriaRole.Button, new() { Name = "删除", Exact = false }).EvaluateAsync("button => button.click()");
+            await removed.Locator("button[aria-label^='删除 '], button[aria-label^='撤销删除 ']").EvaluateAsync("button => button.click()");
             await Assertions.Expect(unchanged).Not.ToContainTextAsync("待删除");
             await Assertions.Expect(removed).ToContainTextAsync("待删除");
             await Assertions.Expect(cleared).ToContainTextAsync("未保存");
@@ -142,7 +142,7 @@ public sealed partial class AdminHostedFrontendTests
             release.TrySetResult();
             await Assertions.Expect(h.Page.GetByText("音频关联已保存")).ToBeVisibleAsync();
             await Assertions.Expect(unchanged.GetByRole(AriaRole.Combobox)).ToBeEnabledAsync();
-            await Assertions.Expect(unchanged.GetByRole(AriaRole.Button)).ToBeEnabledAsync();
+            await Assertions.Expect(unchanged.GetByRole(AriaRole.Button, new() { Name = "删除", Exact = false })).ToBeEnabledAsync();
             await Assertions.Expect(h.Page.Locator(".page-actions .badge.amber")).ToHaveCountAsync(0);
         }
         finally

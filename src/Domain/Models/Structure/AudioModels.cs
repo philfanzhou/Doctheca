@@ -12,7 +12,7 @@ public sealed class DocumentStructureAudioModel
     public string ContentType { get; set; } = string.Empty;
     public long SizeBytes { get; set; }
 
-    /// <summary>Storage location; internal only and never part of a response.</summary>
+    /// <summary>Storage location; never projected as metadata, only inside an authorized temporary playback URL.</summary>
     public string ObjectKey { get; set; } = string.Empty;
 
     /// <summary>The pre-fill outcome, one of <see cref="AudioMatchStatus"/>.</summary>

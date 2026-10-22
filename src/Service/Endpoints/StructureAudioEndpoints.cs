@@ -14,7 +14,7 @@ namespace Doctheca.Service;
 /// <summary>
 /// Structure audio of a parse (issue #90): import with pre-filled links, review and change links,
 /// remove files. All JSON, all behind
-/// <c>DocthecaAdmin</c>. No response carries an object key, bucket, endpoint or credential.
+/// <c>DocthecaAdmin</c>. Only the temporary playback URL carries a public storage location and signature.
 /// </summary>
 public static class StructureAudioEndpoints
 {
@@ -28,6 +28,8 @@ public static class StructureAudioEndpoints
             .RequireAuthorization(DocthecaAuthorizationPolicies.Admin)
             .RequireServiceMantleSecurityResponseHeaders();
         parses.MapGet("/{parseId:guid}/audio", List);
+        parses.MapGet("/{parseId:guid}/structure/nodes/{nodeId:guid}/audio", ListNode);
+        parses.MapGet("/{parseId:guid}/audio/{audioId:guid}/playback-link", Playback);
         parses.MapPost("/{parseId:guid}/audio", Import)
             .WithMetadata(new RequestSizeLimitAttribute(checked((options.Validate() == null ? options.MaxArchiveBytes : new DocumentAudioOptions().MaxArchiveBytes) + MultipartOverheadBytes)));
         parses.MapPut("/{parseId:guid}/audio", Save);
@@ -54,6 +56,21 @@ public static class StructureAudioEndpoints
             parseId = parseId.ToString(),
             storage = Storage(audioService.StorageStatus, options.Value),
             items = Items(list),
+        });
+    }
+
+    private static async Task<IResult> ListNode(Guid parseId, Guid nodeId, StructureAudioService audioService, HttpContext context) =>
+        From(await audioService.ListNodeAsync(parseId, nodeId, context.RequestAborted),
+            list => new { parseId = parseId.ToString(), nodeId = nodeId.ToString(), items = Items(list) });
+
+    private static async Task<IResult> Playback(Guid parseId, Guid audioId, StructureAudioService audioService, HttpContext context)
+    {
+        context.Response.Headers.CacheControl = "no-store";
+        return From(await audioService.PlaybackAsync(parseId, audioId, context.RequestAborted), link => new
+        {
+            url = link.Url,
+            expiresAt = link.ExpiresAt,
+            expiresInSeconds = link.ExpiresInSeconds,
         });
     }
 

@@ -33,9 +33,23 @@ public interface IOssService
     Task<List<Stream>> DownloadManyAsync(IEnumerable<string> objectPaths);
     Task CopyObjectAsync(string sourcePath, string destPath);
     Task<bool> ObjectExistsAsync(string objectPath);
+    async Task<bool> ObjectExistsAsync(string objectPath, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var exists = await ObjectExistsAsync(objectPath);
+        cancellationToken.ThrowIfCancellationRequested();
+        return exists;
+    }
     Task<bool> DeleteAsync(string objectPath);
     Task<int> DeleteManyAsync(IEnumerable<string> objectPaths);
     Task<string> GetPresignedUrlAsync(string objectPath, int expirySeconds = 3600);
+    async Task<string> GetPresignedUrlAsync(string objectPath, int expirySeconds, DateTimeOffset issuedAt, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var url = await GetPresignedUrlAsync(objectPath, expirySeconds);
+        cancellationToken.ThrowIfCancellationRequested();
+        return url;
+    }
     Task<List<string>> GetPresignedUrlsAsync(IEnumerable<string> objectPaths, int expirySeconds = 3600);
     Task<bool> CheckConnectivityAsync();
     Task<List<OssObjectInfo>> ListObjectsAsync(string? prefix = null);
@@ -56,10 +70,11 @@ public class OssObjectInfo
 public class S3OssService : IOssService
 {
     private readonly IMinioClient _internalClient;
-    private readonly IMinioClient _presignClient;
+    private readonly Lazy<IMinioClient> _presignClient;
+    private readonly Lazy<IMinioClient> _audioPresignClient;
     private readonly string _bucketName;
     private readonly PathPrefixValidator? _prefixValidator;
-    private readonly Uri? _publicBaseUri;
+    private readonly Lazy<Uri?> _publicBaseUri;
 
     public S3OssService(OssOptions options, string[]? allowedPrefixes = null)
     {
@@ -73,28 +88,35 @@ public class S3OssService : IOssService
             options.SecretKey,
             options.InternalSecure);
 
-        _publicBaseUri = ParsePublicBaseUri(options.PublicBaseUrl);
-        _presignClient = _publicBaseUri == null
+        // Invalid public playback settings must not disable internal uploads, reads or cleanup.
+        var publicBaseUrl = options.PublicBaseUrl;
+        var accessKey = options.AccessKey;
+        var secretKey = options.SecretKey;
+        _publicBaseUri = new(() => ParsePublicBaseUri(publicBaseUrl));
+        _presignClient = new(() => _publicBaseUri.Value == null
             ? _internalClient
-            : BuildClient(
-                _publicBaseUri.Authority,
-                options.AccessKey,
-                options.SecretKey,
-                string.Equals(_publicBaseUri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase));
+            : BuildClient(_publicBaseUri.Value.Authority, accessKey, secretKey,
+                string.Equals(_publicBaseUri.Value.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase)));
+        _audioPresignClient = new(() => _publicBaseUri.Value is { } publicUri
+            ? BuildClient(publicUri.Authority, accessKey, secretKey,
+                string.Equals(publicUri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase), publicSigner: true)
+            : throw new InvalidOperationException("Public audio playback is not configured."));
     }
 
-    private static IMinioClient BuildClient(string endpoint, string accessKey, string secretKey, bool secure)
+    private static IMinioClient BuildClient(string endpoint, string accessKey, string secretKey, bool secure, bool publicSigner = false)
     {
         if (string.IsNullOrWhiteSpace(endpoint))
         {
             throw new ArgumentException("The S3 endpoint is required.", nameof(endpoint));
         }
 
-        return new MinioClient()
+        var client = new MinioClient()
             .WithEndpoint(endpoint)
             .WithCredentials(accessKey, secretKey)
-            .WithSSL(secure)
-            .Build();
+            .WithSSL(secure);
+        // Signing must not make region-discovery calls through the browser-facing endpoint.
+        if (publicSigner) client = client.WithRegion("us-east-1");
+        return client.Build();
     }
 
     public Task<string> UploadAsync(Stream stream, string fileName, string contentType, OssBucket bucket = OssBucket.Uploads, string? folder = null) =>
@@ -198,17 +220,21 @@ public class S3OssService : IOssService
         await _internalClient.PutObjectAsync(putObjectArgs);
     }
 
-    public async Task<bool> ObjectExistsAsync(string objectPath)
+    public Task<bool> ObjectExistsAsync(string objectPath) => ObjectExistsAsync(objectPath, CancellationToken.None);
+
+    public async Task<bool> ObjectExistsAsync(string objectPath, CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         try
         {
             var statArgs = new StatObjectArgs()
                 .WithBucket(_bucketName)
                 .WithObject(objectPath);
 
-            var stat = await _internalClient.StatObjectAsync(statArgs);
+            var stat = await _internalClient.StatObjectAsync(statArgs, cancellationToken);
             return stat != null && stat.Size > 0;
         }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
         catch
         {
             return false;
@@ -267,20 +293,31 @@ public class S3OssService : IOssService
         return count;
     }
 
-    public async Task<string> GetPresignedUrlAsync(string objectPath, int expirySeconds = 3600)
+    public Task<string> GetPresignedUrlAsync(string objectPath, int expirySeconds = 3600) =>
+        PresignAsync(objectPath, expirySeconds, null, CancellationToken.None);
+
+    /// <summary>Audio signing requires the explicit public client and one exact expiry timestamp.</summary>
+    public Task<string> GetPresignedUrlAsync(string objectPath, int expirySeconds, DateTimeOffset issuedAt, CancellationToken cancellationToken) =>
+        PresignAsync(objectPath, expirySeconds, issuedAt, cancellationToken);
+
+    private async Task<string> PresignAsync(string objectPath, int expirySeconds, DateTimeOffset? issuedAt, CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var presignedGetObjectArgs = new PresignedGetObjectArgs()
             .WithBucket(_bucketName)
             .WithObject(objectPath)
             .WithExpiry(expirySeconds);
+        if (issuedAt is { } timestamp) presignedGetObjectArgs.WithRequestDate(timestamp.UtcDateTime);
+        // Preserve the legacy presigner's region discovery; audio never uses it or its fallback.
+        var client = issuedAt != null ? _audioPresignClient.Value : _presignClient.Value;
+        var url = await client.PresignedGetObjectAsync(presignedGetObjectArgs);
 
-        var url = await _presignClient.PresignedGetObjectAsync(presignedGetObjectArgs);
-
-        if (_publicBaseUri != null && !string.IsNullOrEmpty(url))
+        if (_publicBaseUri.Value != null && !string.IsNullOrEmpty(url))
         {
-            url = PresignedUrlPathPrefixer.AddPrefix(url, _publicBaseUri);
+            url = PresignedUrlPathPrefixer.AddPrefix(url, _publicBaseUri.Value);
         }
 
+        cancellationToken.ThrowIfCancellationRequested();
         return url;
     }
 

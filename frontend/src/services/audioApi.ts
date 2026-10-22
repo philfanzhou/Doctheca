@@ -2,7 +2,7 @@ import { httpClient } from './httpClient'
 import type { ApiResponse } from './types'
 
 // Official audio linked to structure nodes (issue #90). Object keys and storage locations are
-// never sent to the console.
+// only present inside a temporary playback URL, never separate metadata fields.
 
 export interface StructureAudio {
   id: string
@@ -94,4 +94,21 @@ export async function saveParseAudio(
 export function getAudioFileErrors(error: unknown): AudioFileError[] {
   const data = (error as { response?: { data?: { errors?: unknown } } })?.response?.data
   return Array.isArray(data?.errors) ? (data!.errors as AudioFileError[]) : []
+}
+
+export interface AudioPlaybackLink {
+  url: string
+  expiresAt: string
+  expiresInSeconds: number
+}
+
+/** A fresh temporary credential for one play action; keep only in component memory. */
+export async function getAudioPlaybackLink(parseId: string, audioId: string, signal: AbortSignal): Promise<ApiResponse<AudioPlaybackLink>> {
+  const response = await httpClient.get(`/admin/document-parses/${parseId}/audio/${audioId}/playback-link`, { signal })
+  return response.data
+}
+
+export async function listNodeAudio(parseId: string, nodeId: string): Promise<ApiResponse<{ parseId: string; nodeId: string; items: StructureAudio[] }>> {
+  const response = await httpClient.get(`/admin/document-parses/${parseId}/structure/nodes/${nodeId}/audio`)
+  return response.data
 }

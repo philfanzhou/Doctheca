@@ -143,10 +143,12 @@ catch (InvalidOperationException)
 }
 builder.Services.AddSingleton(Options.Create(documentAudioOptions));
 builder.Services.AddSingleton(documentAudioStatus);
+var documentAudioPlayback = DocumentAudioPlaybackSettings.Evaluate(documentAudioStatus,
+    builder.Configuration["DocumentAudio:PlaybackLinkSeconds"], builder.Configuration["Oss:PublicBaseUrl"]);
 // Do not construct an S3 client just to report disabled/missing audio configuration.
 builder.Services.AddScoped(sp => new StructureAudioStore(
     () => sp.GetRequiredService<IOssService>(), documentAudioStatus,
-    sp.GetRequiredService<ILogger<StructureAudioStore>>()));
+    sp.GetRequiredService<ILogger<StructureAudioStore>>(), documentAudioPlayback));
 builder.Services.AddScoped<StructureAudioService>();
 
 // Search Index Services

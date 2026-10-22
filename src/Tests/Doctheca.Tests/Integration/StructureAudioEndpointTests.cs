@@ -73,6 +73,8 @@ public sealed partial class StructureAudioEndpointTests(PostgreSqlFixture databa
     [InlineData("POST", "/admin/document-parses/00000000-0000-0000-0000-000000000001/audio")]
     [InlineData("PUT", "/admin/document-parses/00000000-0000-0000-0000-000000000001/audio")]
     [InlineData("DELETE", "/admin/document-parses/00000000-0000-0000-0000-000000000001/audio/00000000-0000-0000-0000-000000000002")]
+    [InlineData("GET", "/admin/document-parses/00000000-0000-0000-0000-000000000001/structure/nodes/00000000-0000-0000-0000-000000000002/audio")]
+    [InlineData("GET", "/admin/document-parses/00000000-0000-0000-0000-000000000001/audio/00000000-0000-0000-0000-000000000002/playback-link")]
     [InlineData("POST", "/admin/structure-audio/orphan-sweep")]
     public async Task AudioRoutes_RequireAnAdminSession(string method, string path)
     {
@@ -81,8 +83,15 @@ public sealed partial class StructureAudioEndpointTests(PostgreSqlFixture databa
         using var user = factory.CreateClient();
         user.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", CreateToken("user"));
 
-        (await anonymous.SendAsync(new HttpRequestMessage(new HttpMethod(method), path))).StatusCode.Should().Be(HttpStatusCode.Unauthorized);
-        (await user.SendAsync(new HttpRequestMessage(new HttpMethod(method), path))).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        var anonymousResponse = await anonymous.SendAsync(new HttpRequestMessage(new HttpMethod(method), path));
+        var userResponse = await user.SendAsync(new HttpRequestMessage(new HttpMethod(method), path));
+        anonymousResponse.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+        userResponse.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        if (path.EndsWith("/playback-link", StringComparison.Ordinal))
+        {
+            anonymousResponse.Headers.CacheControl!.NoStore.Should().BeTrue();
+            userResponse.Headers.CacheControl!.NoStore.Should().BeTrue();
+        }
     }
 
     [Fact]

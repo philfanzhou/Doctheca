@@ -21,7 +21,7 @@ using Xunit;
 namespace Doctheca.Tests.Integration;
 
 /// <summary>
-/// ServiceMantle security response-header baseline on the real host: exactly the 30 JSON admin
+/// ServiceMantle security response-header baseline on the real host: exactly the registered JSON admin
 /// endpoints are marked and carry the six immutable single-value headers on success (2xx),
 /// business failure (4xx), and 401/403 challenges alike; a downstream component that pre-writes
 /// duplicate or wrong values converges back to the single baseline value because the library
@@ -46,7 +46,7 @@ public sealed class ServiceMantleSecurityHeadersTests : ServiceMantleIntegration
         ("Content-Security-Policy", CspValue),
     ];
 
-    // The exact 30 marked JSON admin endpoints (method + normalized route pattern): the
+    // The exact marked JSON admin endpoints (method + normalized route pattern): the
     // legacy auth area, the three hosted-login endpoints added by issue #47, and the eleven
     // document structure endpoints added by issue #89.
     private static readonly HashSet<string> ExpectedMarked = new(StringComparer.Ordinal)
@@ -88,6 +88,9 @@ public sealed class ServiceMantleSecurityHeadersTests : ServiceMantleIntegration
         "PUT /admin/document-parses/{parseId:guid}/audio",
         "DELETE /admin/document-parses/{parseId:guid}/audio/{audioId:guid}",
         "POST /admin/structure-audio/orphan-sweep",
+        // Structure audio administrator playback (#109): all JSON.
+        "GET /admin/document-parses/{parseId:guid}/structure/nodes/{nodeId:guid}/audio",
+        "GET /admin/document-parses/{parseId:guid}/audio/{audioId:guid}/playback-link",
     };
 
     // Endpoints that must exist but must NOT carry the marker (rendering contracts).

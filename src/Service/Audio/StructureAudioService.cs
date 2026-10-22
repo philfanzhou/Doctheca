@@ -53,6 +53,8 @@ public sealed record ParseAudio(
 
 public sealed record AudioImportOutcome(ParseAudio Imported, IReadOnlyList<string> Skipped);
 
+public sealed record AudioPlaybackLink(string Url, DateTimeOffset ExpiresAt, int ExpiresInSeconds);
+
 public sealed record AudioSweepOutcome(int Scanned, int Deleted, int Failed);
 
 /// <summary>
@@ -96,6 +98,36 @@ public sealed class StructureAudioService
     {
         if (!await ParseExistsAsync(parseId)) return ParseNotFound<ParseAudio>();
         return AudioResult<ParseAudio>.Ok(await LoadAsync(parseId, await _audioRepository.GetByParseIdAsync(parseId)));
+    }
+
+    public async Task<AudioResult<ParseAudio>> ListNodeAsync(Guid parseId, Guid nodeId, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (!await ParseExistsAsync(parseId)) return ParseNotFound<ParseAudio>();
+        var nodes = await NodesAsync(parseId);
+        if (!nodes.ContainsKey(nodeId))
+            return AudioResult<ParseAudio>.Fail(AudioResultStatus.NotFound, StructureErrorCodes.NodeNotFound, "Structure node not found");
+        var items = await _audioRepository.GetByNodeIdAsync(parseId, nodeId);
+        cancellationToken.ThrowIfCancellationRequested();
+        return AudioResult<ParseAudio>.Ok(new(parseId, items, nodes));
+    }
+
+    public async Task<AudioResult<AudioPlaybackLink>> PlaybackAsync(Guid parseId, Guid audioId, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (!await ParseExistsAsync(parseId)) return ParseNotFound<AudioPlaybackLink>();
+        var item = await _audioRepository.GetByIdAsync(parseId, audioId);
+        cancellationToken.ThrowIfCancellationRequested();
+        if (item == null)
+            return AudioResult<AudioPlaybackLink>.Fail(AudioResultStatus.NotFound, AudioErrorCodes.AudioNotFound, "Audio file not found");
+        if (!_store.Playback.Available) return StorageUnavailable<AudioPlaybackLink>();
+        try
+        {
+            var link = await _store.GetPlaybackLinkAsync(item.ObjectKey, _timeProvider, cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            return AudioResult<AudioPlaybackLink>.Ok(link);
+        }
+        catch (AudioStorageException) { return StorageUnavailable<AudioPlaybackLink>(); }
     }
 
     public async Task<AudioResult<AudioImportOutcome>> ImportAsync(Guid parseId, AudioImportBatch batch, DocumentAudioOptions options, CancellationToken cancellationToken = default)
