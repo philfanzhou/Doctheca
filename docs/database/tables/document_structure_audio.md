@@ -4,7 +4,7 @@
 
 ## Design Purpose
 
-A **Structure Audio** file is an audio file imported for one [Document Parse](document_parses.md), such as an official textbook recording, optionally linked to one of that parse's [structure nodes](document_structure_nodes.md). The persistence foundation (#107) is available; importing and reviewing audio (#108) and playback (#109) remain pending. The bytes live in the S3-compatible object storage under the `audio/` prefix; this table holds the reference and the link. See the module page [StructureAudio](../../modules/StructureAudio.md).
+A **Structure Audio** file is an audio file imported for one [Document Parse](document_parses.md), such as an official textbook recording, optionally linked to one of that parse's [structure nodes](document_structure_nodes.md). The persistence foundation (#107) and administrator import/review (#108) are available; playback (#109) remains pending. Import/review reuses this schema without a new migration. The bytes live in the S3-compatible object storage under the `audio/` prefix; this table holds the reference and the link. See the module page [StructureAudio](../../modules/StructureAudio.md).
 
 ## Field Inventory
 

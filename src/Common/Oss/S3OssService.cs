@@ -20,6 +20,13 @@ public enum OssBucket
 public interface IOssService
 {
     Task<string> UploadAsync(Stream stream, string fileName, string contentType, OssBucket bucket = OssBucket.Uploads, string? folder = null);
+    /// <summary>Cancelable upload; existing providers retain their original upload implementation.</summary>
+    async Task<string> UploadAsync(Stream stream, string fileName, string contentType, OssBucket bucket, string? folder,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return await UploadAsync(stream, fileName, contentType, bucket, folder);
+    }
     Task<string> UploadAsync(byte[] data, string fileName, string contentType, OssBucket bucket = OssBucket.Uploads, string? folder = null);
     Task<List<string>> UploadManyAsync(IEnumerable<(Stream stream, string fileName, string contentType)> files, OssBucket bucket = OssBucket.Uploads, string? folder = null);
     Task<Stream> DownloadAsync(string objectPath);
@@ -90,12 +97,17 @@ public class S3OssService : IOssService
             .Build();
     }
 
-    public async Task<string> UploadAsync(Stream stream, string fileName, string contentType, OssBucket bucket = OssBucket.Uploads, string? folder = null)
+    public Task<string> UploadAsync(Stream stream, string fileName, string contentType, OssBucket bucket = OssBucket.Uploads, string? folder = null) =>
+        UploadAsync(stream, fileName, contentType, bucket, folder, CancellationToken.None);
+
+    public async Task<string> UploadAsync(Stream stream, string fileName, string contentType, OssBucket bucket, string? folder,
+        CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var objectPath = GenerateObjectPath(fileName, bucket, folder);
         _prefixValidator?.ValidateWritePath(objectPath);
 
-        await EnsureBucketExistsAsync();
+        await EnsureBucketExistsAsync(cancellationToken);
 
         var putObjectArgs = new PutObjectArgs()
             .WithBucket(_bucketName)
@@ -104,7 +116,7 @@ public class S3OssService : IOssService
             .WithObjectSize(stream.Length)
             .WithContentType(contentType);
 
-        await _internalClient.PutObjectAsync(putObjectArgs);
+        await _internalClient.PutObjectAsync(putObjectArgs, cancellationToken);
 
         return objectPath;
     }
@@ -348,13 +360,19 @@ public class S3OssService : IOssService
         return await ListObjectsAsync(fullPrefix);
     }
 
-    private async Task EnsureBucketExistsAsync()
+    private async Task EnsureBucketExistsAsync(CancellationToken cancellationToken = default)
     {
         var beArgs = new BucketExistsArgs().WithBucket(_bucketName);
-        if (!await _internalClient.BucketExistsAsync(beArgs))
+        if (!await _internalClient.BucketExistsAsync(beArgs, cancellationToken))
         {
             var mbArgs = new MakeBucketArgs().WithBucket(_bucketName);
-            await _internalClient.MakeBucketAsync(mbArgs);
+            try { await _internalClient.MakeBucketAsync(mbArgs, cancellationToken); }
+            catch (ArgumentException ex) when (ex.ParamName == "response")
+            {
+                // MinIO maps BucketAlreadyOwnedByYou to ArgumentException. Another request may
+                // have created the bucket after our check; confirm it exists before continuing.
+                if (!await _internalClient.BucketExistsAsync(beArgs, cancellationToken)) throw;
+            }
         }
     }
 

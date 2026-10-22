@@ -11,6 +11,7 @@ import ParseResultsPage from './views/ParseResultsPage/ParseResultsPage.vue'
 import SearchPage from './views/SearchPage/SearchPage.vue'
 import StructureDefinitionsPage from './views/StructureDefinitionsPage/StructureDefinitionsPage.vue'
 import StructureEditorPage from './views/StructureEditorPage/StructureEditorPage.vue'
+import StructureAudioPage from './views/StructureAudioPage/StructureAudioPage.vue'
 import { useToast } from './composables/useToast'
 import { useAdminSession } from './composables/useAdminSession'
 import type { IconName } from './utils/icons'
@@ -59,12 +60,14 @@ const currentNavKey = computed(() => {
   if (state.value.page === 'detail') return 'docs'
   // The structure editor is reached from a parse record of a document
   if (state.value.page === 'structure') return 'docs'
+  if (state.value.page === 'audio') return 'docs'
   return state.value.page
 })
 
 const currentCrumb = computed(() => {
   if (state.value.page === 'detail') return '文档管理 / 文档详情'
   if (state.value.page === 'structure') return '文档管理 / 结构标注'
+  if (state.value.page === 'audio') return '文档管理 / 官方音频'
   return navItems.find((n) => n.key === state.value.page)?.label ?? ''
 })
 
@@ -73,8 +76,18 @@ function checkMobile() {
   if (!isMobile.value) sidebarOpen.value = false
 }
 
-function navigate(page: string, docId: string | null = null) {
+let navigationGuard: (() => Promise<boolean>) | null = null
+let navigationPending = false
+provide('setNavigationGuard', (guard: (() => Promise<boolean>) | null) => { navigationGuard = guard })
+async function mayLeave(): Promise<boolean> {
+  if (navigationPending) return false
+  navigationPending = true
+  try { return !navigationGuard || await navigationGuard() }
+  finally { navigationPending = false }
+}
+async function navigate(page: string, docId: string | null = null) {
   if (state.value.page === page && state.value.docId === docId) return
+  if (!(await mayLeave())) return
   // 200ms blur transition: add leaving class, swap content after 150ms
   const v = viewRef.value
   if (v) v.classList.add('leaving')
@@ -97,10 +110,10 @@ function syncHash() {
 }
 
 function parseHash() {
-  const m = location.hash.match(/^#(overview|docs|results|search|detail|structures|structure)(?:\/([A-Za-z0-9_-]+))?$/)
+  const m = location.hash.match(/^#(overview|docs|results|search|detail|structures|structure|audio)(?:\/([A-Za-z0-9_-]+))?$/)
   if (m) {
-    // detail/:fileId and structure/:parseId carry an id; the other pages do not
-    state.value = { page: m[1], docId: m[1] === 'detail' || m[1] === 'structure' ? m[2] || null : null }
+    // detail/:fileId, structure/:parseId and audio/:parseId carry an id; the other pages do not
+    state.value = { page: m[1], docId: ['detail', 'structure', 'audio'].includes(m[1]) ? m[2] || null : null }
   } else {
     state.value = { page: 'overview', docId: null }
   }
@@ -114,6 +127,7 @@ const componentMap: Record<string, typeof OverviewPage> = {
   search: SearchPage,
   structures: StructureDefinitionsPage,
   structure: StructureEditorPage,
+  audio: StructureAudioPage,
 }
 
 const currentComponent = computed(() => componentMap[state.value.page] || OverviewPage)
@@ -135,10 +149,12 @@ function toggleSidebar() {
 }
 
 async function handleLogout(): Promise<void> {
+  if (!(await mayLeave())) return
   await logout().catch(() => undefined)
 }
 
-function onHashChange() {
+async function onHashChange() {
+  if (!(await mayLeave())) { syncHash(); return }
   parseHash()
   nextTick(() => sidebarComp.value?.moveIndicator())
 }

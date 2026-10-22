@@ -53,13 +53,13 @@ public class DocumentStructureAudioRepository : IDocumentStructureAudioRepositor
         return [.. existing];
     }
 
-    public async Task<bool> InsertAsync(Guid parseId, IReadOnlyList<DocumentStructureAudioModel> items)
+    public async Task<bool> InsertAsync(Guid parseId, IReadOnlyList<DocumentStructureAudioModel> items, CancellationToken cancellationToken = default)
     {
-        await using var transaction = await _context.Database.BeginTransactionAsync();
-        if (!await LockParseAsync(parseId)) return false;
+        await using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
+        if (!await LockParseAsync(parseId, cancellationToken)) return false;
 
         // A structure save that ran after the links were computed may have removed a node.
-        var nodeIds = await NodeIdsAsync(parseId);
+        var nodeIds = await NodeIdsAsync(parseId, cancellationToken);
         foreach (var item in items)
         {
             var linked = item.NodeId is { } nodeId && nodeIds.Contains(nodeId);
@@ -79,27 +79,28 @@ public class DocumentStructureAudioRepository : IDocumentStructureAudioRepositor
             });
         }
 
-        await _context.SaveChangesAsync();
-        await transaction.CommitAsync();
+        await _context.SaveChangesAsync(cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
+        await transaction.CommitAsync(cancellationToken);
         _context.ChangeTracker.Clear();
         return true;
     }
 
     public async Task<AudioLinkUpdateResult> UpdateLinksAsync(Guid parseId, IReadOnlyList<AudioLinkChange> changes,
-        IReadOnlyCollection<Guid> removeIds, DateTimeOffset now)
+        IReadOnlyCollection<Guid> removeIds, DateTimeOffset now, CancellationToken cancellationToken = default)
     {
-        await using var transaction = await _context.Database.BeginTransactionAsync();
-        if (!await LockParseAsync(parseId)) return new(AudioLinkUpdateStatus.ParseNotFound, []);
+        await using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
+        if (!await LockParseAsync(parseId, cancellationToken)) return new(AudioLinkUpdateStatus.ParseNotFound, []);
 
         var audio = await _context.DocumentStructureAudio
             .Where(item => item.ParseId == parseId)
-            .ToDictionaryAsync(item => item.Id);
+            .ToDictionaryAsync(item => item.Id, cancellationToken);
         foreach (var id in changes.Select(change => change.AudioId).Concat(removeIds))
         {
             if (!audio.ContainsKey(id)) return new(AudioLinkUpdateStatus.AudioNotFound, [], id);
         }
 
-        var nodeIds = await NodeIdsAsync(parseId);
+        var nodeIds = await NodeIdsAsync(parseId, cancellationToken);
         foreach (var change in changes)
         {
             if (change.NodeId is { } nodeId && !nodeIds.Contains(nodeId))
@@ -123,8 +124,9 @@ public class DocumentStructureAudioRepository : IDocumentStructureAudioRepositor
             _context.DocumentStructureAudio.Remove(audio[id]);
         }
 
-        await _context.SaveChangesAsync();
-        await transaction.CommitAsync();
+        await _context.SaveChangesAsync(cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
+        await transaction.CommitAsync(cancellationToken);
         _context.ChangeTracker.Clear();
         return new(AudioLinkUpdateStatus.Ok, removedKeys);
     }
@@ -159,20 +161,20 @@ public class DocumentStructureAudioRepository : IDocumentStructureAudioRepositor
 
     // The same parse row lock as DocumentStructureRepository.ReplaceAsync, so links and the
     // node tree they point into never change concurrently.
-    private async Task<bool> LockParseAsync(Guid parseId)
+    private async Task<bool> LockParseAsync(Guid parseId, CancellationToken cancellationToken)
     {
         var locked = await _context.Database
             .SqlQuery<Guid>($"SELECT id AS \"Value\" FROM document_parses WHERE id = {parseId} FOR UPDATE")
-            .ToListAsync();
+            .ToListAsync(cancellationToken);
         return locked.Count > 0;
     }
 
-    private async Task<HashSet<Guid>> NodeIdsAsync(Guid parseId)
+    private async Task<HashSet<Guid>> NodeIdsAsync(Guid parseId, CancellationToken cancellationToken)
     {
         var ids = await _context.DocumentStructureNodes
             .Where(node => node.ParseId == parseId)
             .Select(node => node.Id)
-            .ToListAsync();
+            .ToListAsync(cancellationToken);
         return [.. ids];
     }
 

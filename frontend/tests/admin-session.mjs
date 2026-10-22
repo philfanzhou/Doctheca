@@ -104,10 +104,11 @@ test('rejected logout keeps the failure message; response-less logout lands sign
   await h.state.logout(); assert.equal(h.state.session.value, null); assert.deepEqual(h.navigations, ['/?authResult=signedOut'])
 }))
 test('return URL is an exact whitelist and double click navigates once', () => setup(async h => {
-  for (const hash of ['#search/other', '#docs/abc', '#detail/id/extra', '#detail/a?code=x', '#unknown', '#detail/%2f', '#structures/x', '#structure/a/b']) assert.equal(h.adminReturnUrl(hash), '/')
+  for (const hash of ['#search/other', '#docs/abc', '#detail/id/extra', '#detail/a?code=x', '#unknown', '#detail/%2f', '#structures/x', '#structure/a/b', '#audio/a/b']) assert.equal(h.adminReturnUrl(hash), '/')
   assert.equal(h.adminReturnUrl('#detail/A_b-12'), '/#detail/A_b-12')
   assert.equal(h.adminReturnUrl('#structures'), '/#structures')
   assert.equal(h.adminReturnUrl('#structure/A_b-12'), '/#structure/A_b-12')
+  assert.equal(h.adminReturnUrl('#audio/A_b-12'), '/#audio/A_b-12')
   h.state.login(); h.state.login(); assert.equal(h.navigations.length, 1)
   assert.equal(h.navigations[0], '/admin/auth/oidc/start?returnUrl=%2F%23docs')
 }))

@@ -32,14 +32,16 @@ public sealed class StructureAudioStore
     internal static string ParsePrefix(Guid parseId) => $"{DocumentAudioOptions.ObjectPrefix}{parseId:N}/";
 
     /// <summary>Stores one file and returns its object key.</summary>
-    public async Task<string> PutAsync(Guid parseId, Guid audioId, string extension, Stream content, string contentType)
+    public async Task<string> PutAsync(Guid parseId, Guid audioId, string extension, Stream content, string contentType, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         if (!Status.Available) throw new AudioStorageException();
         string key;
         try
         {
-            key = await _ossService.Value.UploadAsync(content, $"{audioId:N}{extension}", contentType, OssBucket.Audio, $"{parseId:N}");
+            key = await _ossService.Value.UploadAsync(content, $"{audioId:N}{extension}", contentType, OssBucket.Audio, $"{parseId:N}", cancellationToken);
         }
+        catch (OperationCanceledException) { throw; }
         catch (Exception ex)
         {
             // SDK exceptions can carry endpoints, keys or signed URLs; only the type is logged.
@@ -47,9 +49,9 @@ public sealed class StructureAudioStore
             throw new AudioStorageException();
         }
 
-        if (!key.StartsWith(ParsePrefix(parseId), StringComparison.Ordinal))
+        if (key != $"{ParsePrefix(parseId)}{audioId:N}{extension}")
         {
-            await DeleteAsync(key);
+            // An unexpected key may belong to another row. Only the service can confirm references.
             throw new InvalidOperationException("The storage returned an object key outside the audio prefix.");
         }
         return key;

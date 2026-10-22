@@ -20,14 +20,14 @@ public interface IDocumentStructureAudioRepository
     /// structure save). A link to a node that no longer exists is stored unlinked as
     /// <see cref="AudioMatchStatus.NodeRemoved"/>. Returns false when the parse does not exist.
     /// </summary>
-    Task<bool> InsertAsync(Guid parseId, IReadOnlyList<DocumentStructureAudioModel> items);
+    Task<bool> InsertAsync(Guid parseId, IReadOnlyList<DocumentStructureAudioModel> items, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Applies link changes and removals in one transaction under the parse row lock. Every audio
     /// id must belong to the parse and every node id to its tree, otherwise nothing changes.
     /// </summary>
     Task<AudioLinkUpdateResult> UpdateLinksAsync(Guid parseId, IReadOnlyList<AudioLinkChange> changes,
-        IReadOnlyCollection<Guid> removeIds, DateTimeOffset now);
+        IReadOnlyCollection<Guid> removeIds, DateTimeOffset now, CancellationToken cancellationToken = default);
 
     /// <summary>The object keys of every audio file of a parse.</summary>
     Task<List<string>> GetObjectKeysByParseIdAsync(Guid parseId);

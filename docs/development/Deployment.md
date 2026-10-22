@@ -92,17 +92,15 @@ LLM document-analysis configuration is injected via environment variables in `st
 
 The persistence and object-lifecycle foundation (#107) reserves `audio/` in the existing S3 bucket.
 Only `StructureAudioStore` can write/delete this prefix; keys are `audio/{parseId:N}/{audioId:N}{extension}`.
-Legacy uploads and parse images stay read-only. Import/review (#108) and playback (#109) are not
-available in this version; there is no audio UI or playback URL endpoint.
+Legacy uploads and parse images stay read-only. Administrator import/review (#108) is available from the structure editor; playback (#109) remains pending.
 
 `DocumentAudio:Enabled` (`DocumentAudio__Enabled`) defaults to `false`. Setting it to `true` enables
-the internal lifecycle and administrator recovery endpoint. It requires S3 (not `USE_LOCAL_OSS=1`)
+administrator import and the internal lifecycle/recovery endpoint. It requires S3 (not `USE_LOCAL_OSS=1`)
 and the existing `Oss:InternalEndpoint`, `Oss:AccessKey`, `Oss:SecretKey` and `Oss:BucketName`.
-`Oss:PublicBaseUrl` is not required for cleanup. Invalid `DocumentAudio` flags disable the audio lifecycle without stopping existing features.
+`Oss:PublicBaseUrl` is not required for import or cleanup. Invalid `DocumentAudio` flags disable the audio lifecycle without stopping existing features.
 Missing S3 settings disable recovery without constructing a client; document/structure reads remain
 available, while legacy storage operations keep their existing configuration requirements.
-Diagnostics contain only key names. No upload limits
-or playback TTL settings are introduced yet.
+Diagnostics contain only key names. `DocumentAudio:MaxFileBytes` defaults to 20971520 (20 MiB), and `DocumentAudio:MaxArchiveBytes` to 209715200 (200 MiB) for uploaded file bytes and the expanded total across the entire request. Limits must be positive, file <= archive, and archive <= Int64.MaxValue - 1048576. The full multipart body allows only 1 MiB additional overhead. Imports are capped at 1000 audio files, 4000 ZIP entries, 1000-character paths and 255-character segments. Invalid settings disable audio. Request/expanded overflow returns 413; invalid batches/per-file excess return 400, with no object or row writes. No playback TTL is introduced.
 
 After a parse/document deletion, object cleanup is best-effort. An administrator can call
 `POST /admin/structure-audio/orphan-sweep` to remove unreferenced `audio/` objects older than one
@@ -276,7 +274,7 @@ search. Rolling back to the previous image requires the documented down script f
 
 The first start of the image containing migration `20261021153535_AddStructureAudio` only creates the
 `document_structure_audio` table; no existing table or the OpenSearch mapping changes. It delivers
-the persistence/cleanup foundation only (#107); import/review and playback remain pending. Before
+the persistence/cleanup foundation (#107). Import/review (#108) reuses this schema without a new migration; playback remains pending. Before
 upgrading, take and verify a consistent database backup together with the corresponding image,
 configuration and object storage recovery set. To go back, stop all instances and restore that
 pre-upgrade recovery set; post-backup writes are lost. Old images need not accept the new schema,

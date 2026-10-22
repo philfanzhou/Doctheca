@@ -82,7 +82,11 @@ public sealed class ServiceMantleSecurityHeadersTests : ServiceMantleIntegration
         "GET /admin/document-parses/{parseId:guid}/structure/nodes/{nodeId:guid}/blocks",
         "POST /admin/document-parses/{parseId:guid}/search-index",
         "POST /admin/search-index/reindex",
-        // Structure audio lifecycle (#107): counts-only JSON.
+        // Structure audio import/review and recovery (#107/#108): all JSON.
+        "GET /admin/document-parses/{parseId:guid}/audio",
+        "POST /admin/document-parses/{parseId:guid}/audio",
+        "PUT /admin/document-parses/{parseId:guid}/audio",
+        "DELETE /admin/document-parses/{parseId:guid}/audio/{audioId:guid}",
         "POST /admin/structure-audio/orphan-sweep",
     };
 
@@ -117,7 +121,7 @@ public sealed class ServiceMantleSecurityHeadersTests : ServiceMantleIntegration
         var marked = endpoints.Where(pair => pair.Marked).Select(pair => pair.Key).ToHashSet();
         var all = endpoints.Select(pair => pair.Key).ToHashSet();
 
-        // Exactly the 30 JSON admin endpoints are marked — no more, no fewer.
+        // Exactly the expected JSON admin endpoints are marked.
         Assert.True(
             marked.SetEquals(ExpectedMarked),
             $"marked set mismatch.\n  extra: {string.Join(", ", marked.Except(ExpectedMarked))}\n" +
