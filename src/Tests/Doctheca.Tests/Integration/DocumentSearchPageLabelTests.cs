@@ -104,7 +104,7 @@ public sealed class DocumentSearchPageLabelTests(PostgreSqlFixture database) : S
                 (await db.DocumentParsePages.CountAsync(page => page.ParseId == first.Parse)).Should().Be(5);
             }
             using (var mapping = JsonDocument.Parse(await http.GetStringAsync($"{engine.Url}/{name}/_mapping")))
-                mapping.RootElement.GetProperty(name).GetProperty("mappings").GetProperty("_meta").GetProperty("mapping_version").GetInt32().Should().Be(3);
+                mapping.RootElement.GetProperty(name).GetProperty("mappings").GetProperty("_meta").GetProperty("mapping_version").GetInt32().Should().Be(4);
             logs.Messages.Should().NotContain(log => log.Contains("changing", StringComparison.OrdinalIgnoreCase));
 
             using (var removed = await http.DeleteAsync($"{engine.Url}/{name}")) removed.EnsureSuccessStatusCode();

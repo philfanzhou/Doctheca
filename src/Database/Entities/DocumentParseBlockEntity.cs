@@ -79,6 +79,9 @@ public class DocumentParseBlockEntity
     [Column("caption")]
     public string? Caption { get; set; }
 
+    [Column("footnote")]
+    public string? Footnote { get; set; }
+
     [ForeignKey(nameof(ParseId))]
     public DocumentParseEntity? Parse { get; set; }
 

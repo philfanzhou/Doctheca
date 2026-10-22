@@ -181,7 +181,7 @@ The V1 endpoint's new `blockType` parameter accepts a **string** (free text); th
 
 ### ISearchIndexService
 
-See [02-SPEC.md §1.1](./02-SPEC.md#11-isearchindexservice).
+See [02-SPEC.md §1.1](./02-SPEC.md#11-isearchindexservice-srcdomainrepositoriesisearchindexservicecs).
 
 ### Injected Dependencies
 
@@ -298,7 +298,7 @@ GET /admin/documents/search
             ├─ missing → CreateAsync (BuildIndexBody + _meta.mapping_version=CurrentMappingVersion)
             └─ exists → read the index _meta.mapping_version
                 ├─ version missing or < CurrentMappingVersion → delete index → CreateAsync (rebuild with the new mapping version)
-                │     ⚠️ rebuilding wipes all indexed documents; parsing must be re-triggered to restore index data
+                │     ⚠️ rebuilding wipes derived index documents; restore from local rows with POST /admin/search-index/reindex
                 │     Log: [WRN] OpenSearch index {name} has outdated mapping (expected=v, actual=v_old), recreating
                 └─ version matches → skip (normal startup)
 ```
@@ -317,6 +317,8 @@ An OpenSearch index's mapping **cannot be modified online** once created (field 
 > **Version history**:
 > - v1: initial mapping (V1 retrieval capabilities)
 > - v2: minerU Gen-2 evolution (adds x0/y0/x1/y1/score/has_image/sub_type/text_level/text_format/caption/_meta.block_data)
+> - v3: hand-marked structure (`structure_node_ids`, `structure_path`)
+> - v4: exact StructaDoc annotations, caption.exact and footnote/footnote.exact (#105)
 
 > **Historical background**: after deploying minerU Gen-2 on 2026-07-10, the old index (v1 mapping) was incompatible with the new query code and all search requests returned 400. The original `EnsureIndexAsync` only checked index existence, not the mapping version, so the old index could not be updated automatically. After introducing the version-number mechanism, a service restart automatically detects the mismatch and rebuilds once.
 
@@ -329,7 +331,7 @@ An OpenSearch index's mapping **cannot be modified online** once created (field 
 | OpenSearch search failure | `SearchDomainService` catches the exception → LogWarning, returns empty results |
 | OpenSearch metadata sync failure | The caller catches the exception → LogWarning, no blocking |
 | Empty blocks | LogWarning and return, no exception thrown |
-| Empty `text_content` | Skip the block (empty text is not indexed) |
+| Body/caption/footnote all whitespace or absent | Skip the block; annotation-only image/table Blocks are otherwise indexed |
 | Invalid Base64 `pageToken` | LogDebug, start from the first page |
 | HTTP parameter validation failure | Return 400 + error code |
 
@@ -349,8 +351,27 @@ filename, raw indexed JSON or shared physical page never grants a label from ano
 The admin projection adds nullable `pageLabel` after search, preserving hit order, total,
 cursor and every old field. A local failure makes all labels null with one fixed Warning;
 cancellation propagates. The existing internal hit allow-list excludes the field. This
-enrichment writes no data and adds no mapping field or version bump (version 3), migration,
+enrichment writes no data and adds no mapping field or version bump of its own, migration,
 configuration or dependency. Prior-image rollback drops only the response enrichment.
+
+### Annotation search invariant (mapping4, issue #105)
+
+Sync preserves exact nullable caption/footnote in typed columns and normalized block_data.
+Index once under the unchanged `block_{id}` identity if any body/caption/footnote is
+non-whitespace. Keep all existing filters and structure fields. Non-phrase queries use three
+independent `match` clauses in `bool.should`, `minimum_should_match=1`; phrase queries use the
+same shape with `match_phrase` on text.exact, caption.exact and footnote.exact. Phrases cannot
+cross fields. All fields share analyzers and have no field-specific boost or alternate ranking.
+
+Highlight the corresponding queried fields: base fields for word queries and `.exact`
+multi-fields for phrases. Select the first available highlight in text, caption,
+footnote order, then the first non-whitespace raw field in that order. Offsets remain `0` as
+unspecified sentinels and do not refer to body when an annotation supplies the snippet. Existing
+`<em>` markers remain display markers; every string remains untrusted plain text. Footnote is
+retained in the parser model for selection, without changing either HTTP hit allow-list. Index
+provider failures emit a fixed Warning without the exception/document and do not undo parsed
+persistence; failed queries retain the existing empty response. Client cancellation cannot
+publish a partial sync. See [upgrade and rollback reindex](../../database/migrations.md#block-annotation-upgrade-issue-105).
 
 ## External Module Interfaces Depended On
 

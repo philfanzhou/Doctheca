@@ -600,15 +600,15 @@ of returning an optional-label success. An already-sent OpenSearch request has n
 parameter and may finish before cancellation is observed. OpenSearch failure keeps the
 existing empty-result response. No read changes stored data.
 
-No schema, configuration, package or index mapping change is required; mapping version
-remains **3**, and no rebuild/reindex is needed. Existing clients can ignore the additive
+Page-label enrichment itself requires no schema, configuration, package or index mapping
+change and no rebuild/reindex. Annotation search below separately uses mapping **4**. Existing clients can ignore the additive
 field. Rolling back to the previous image removes the enrichment and preserves stored labels.
 
 ### 13.6 Generation 2 Query Building (extending `BuildSearchBody`, no standalone methods)
 
 | Parameter | Handling |
 |------|------|
-| `keyword` non-empty | `match` query on the `text` field (english_custom analyzer; minerU `text|content|body` already lands in V1 `text`, same source, not duplicated) |
+| `keyword` non-empty | `bool.should` of `match` on text/caption/footnote, minimum_should_match=1; phrase mode uses independent `match_phrase` on their `.exact` fields, never across fields |
 | `blockType` non-empty | `term: { block_type: { value } }` (minerU `type` and V1 `block_type` share the same source) |
 | `blockSubType` non-empty | `term: { sub_type: { value } }` (minerU `sub_type`, distinguishes caption/body/footnote) |
 | `pageNumber` non-empty | `term: { page_number: { value } }` (minerU `page_id` and V1 `page_number` share the same source) |
@@ -622,7 +622,7 @@ field. Rolling back to the previous image removes the enrichment and preserves s
 - Multiple conditions combine as `bool { must: [...], filter: [... }` (keyword goes to `must`, minerU exact terms go to `filter`; V1 without keyword has no minerU filters and follows the V1 path).
 - Sorting: `_score desc` (with keyword) → `block_id asc` (stable pagination); without keyword, `sort_index asc`.
 - Pagination: `search_after` cursor (same as V1).
-- Highlighting: enabled on the `text` field (`<em>...</em>`, reusing the V1 highlight field; minerU `text|content|body` already shares its source with V1 `text_content`, no need for a separate `mineru_text`).
+- Highlighting: enabled on text/caption/footnote (their queried `.exact` multi-fields in phrase mode) with the existing `<em>...</em>` markers. Strings are untrusted plain text; markers do not grant HTML trust.
 - `_source` includes `x0/y0/x1/y1/score/has_image` + `_meta.block_data`.
 
 ### 13.7 Generation 2 Response Parsing (extending `ParseSearchResponse`, no standalone methods)
@@ -637,11 +637,12 @@ A minerU attachment branch is appended at the end of the V1 `ParseSearchResponse
 | `SubType` (string?) | `_source.sub_type` (new in Generation 2, secondary classification such as caption/body/footnote) |
 | `TextLevel` (int?) | `_source.text_level` (new in Generation 2, heading level, -1 = non-heading text) |
 | `TextFormat` (string?) | `_source.text_format` (new in Generation 2, `latex`/`markdown`, etc., VLM-backend-specific) |
-| `Caption` (string?) | `_source.caption` (new in Generation 2, concatenated caption texts such as image_footnote/table_caption, for keyword hits) |
+| `Caption` (string?) | `_source.caption` (exact optional StructaDoc caption, or a legacy derived caption) |
 
 - `TotalCount` comes from `hits.total.value` (V1 unchanged).
 - `nextToken` generation condition is the same as V1 (`results.Count == pageSize`).
 - When `_meta.block_data` is missing, falls back to `BlockData = null` (no exception thrown, response not blocked).
+- Mapping4 also reads `_source.footnote` into the internal parser model; neither HTTP hit allow-list adds a top-level footnote field. Snippets choose the first available matched highlight in text/caption/footnote order, otherwise the first non-whitespace raw field in that order. StartOffset/EndOffset remain the unspecified `0` sentinel, not body offsets for annotation matches. One Block still yields one hit even when multiple fields match. Null-body images/tables are indexed if either annotation is non-whitespace; empty-only annotations are not searchable. See [upgrade/reindex and rollback/reindex](../../database/migrations.md#block-annotation-upgrade-issue-105).
 
 ### 13.8 Generation 2 Error Handling Table (additions)
 

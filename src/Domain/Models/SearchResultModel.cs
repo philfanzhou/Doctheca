@@ -28,8 +28,11 @@ public class SearchResultModel
     public int? TextLevel { get; set; }
     /// <summary>minerU text_format (VLM-only): latex/markdown/none.</summary>
     public string? TextFormat { get; set; }
-    /// <summary>Derived caption text (concatenated image/table/chart/code captions for keyword recall).</summary>
+    /// <summary>Stored caption text, including exact StructaDoc annotations or legacy derived captions.</summary>
     public string? Caption { get; set; }
+
+    /// <summary>Stored annotation used for snippet selection, not an additional HTTP response field.</summary>
+    public string? Footnote { get; set; }
 
     /// <summary>Readable path of the hand-marked structure nodes containing the block (node names joined by " &gt; ", root first); null when unmarked.</summary>
     public string? StructurePath { get; set; }

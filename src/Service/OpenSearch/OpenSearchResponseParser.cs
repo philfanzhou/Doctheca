@@ -34,16 +34,7 @@ internal static class OpenSearchResponseParser
 
                 var segmentId = source.TryGetProperty("block_id", out var bidEl) ? bidEl.GetString() ?? "" : "";
 
-                var associatedText = source.TryGetProperty("text", out var textEl) ? textEl.GetString() ?? "" : "";
-
-                // Use highlighted text if available
-                if (hit.TryGetProperty("highlight", out var highlightEl)
-                    && highlightEl.TryGetProperty("text", out var highlightTexts))
-                {
-                    var firstHighlight = highlightTexts.EnumerateArray().FirstOrDefault();
-                    if (firstHighlight.ValueKind != JsonValueKind.Undefined)
-                        associatedText = firstHighlight.GetString() ?? associatedText;
-                }
+                var associatedText = SelectAssociatedText(hit, source);
 
                 var score = hit.TryGetProperty("_score", out var scoreEl) ? scoreEl.GetDouble() : 0;
 
@@ -78,6 +69,7 @@ internal static class OpenSearchResponseParser
                 var textLevel = OpenSearchJsonHelper.TryGetInt(source, "text_level");
                 var textFormat = OpenSearchJsonHelper.TryGetString(source, "text_format");
                 var caption = OpenSearchJsonHelper.TryGetString(source, "caption");
+                var footnote = OpenSearchJsonHelper.TryGetString(source, "footnote");
                 var structurePath = OpenSearchJsonHelper.TryGetString(source, "structure_path");
 
                 results.Add(new SearchResultModel
@@ -99,6 +91,7 @@ internal static class OpenSearchResponseParser
                     TextLevel = textLevel,
                     TextFormat = textFormat,
                     Caption = caption,
+                    Footnote = footnote,
                     StructurePath = string.IsNullOrEmpty(structurePath) ? null : structurePath
                 });
 
@@ -117,5 +110,30 @@ internal static class OpenSearchResponseParser
         }
 
         return (results, totalCount, nextToken);
+    }
+
+    private static string SelectAssociatedText(JsonElement hit, JsonElement source)
+    {
+        string[] fields = ["text", "caption", "footnote"];
+        if (hit.TryGetProperty("highlight", out var highlights))
+        {
+            foreach (var field in fields)
+            {
+                if ((highlights.TryGetProperty(field, out var fragments)
+                     || highlights.TryGetProperty(field + ".exact", out fragments))
+                    && fragments.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var fragment in fragments.EnumerateArray())
+                        if (fragment.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(fragment.GetString()))
+                            return fragment.GetString()!;
+                }
+            }
+        }
+        foreach (var field in fields)
+        {
+            var text = OpenSearchJsonHelper.TryGetString(source, field);
+            if (!string.IsNullOrWhiteSpace(text)) return text;
+        }
+        return string.Empty;
     }
 }

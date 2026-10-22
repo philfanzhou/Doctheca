@@ -66,13 +66,14 @@ public sealed class DocthecaMigrationExecutor : IDatabaseMigrationExecutor
     internal const string AddDocumentStructureMigrationId = "20261021094612_AddDocumentStructure";
     internal const string AddStructureAudioMigrationId = "20261021153535_AddStructureAudio";
     internal const string AddDocumentParsePagesMigrationId = "20261022160829_AddDocumentParsePages";
+    internal const string AddBlockFootnotesMigrationId = "20261022184348_AddBlockFootnotes";
     internal const string HistoryTableName = "__EFMigrationsHistory";
     internal const string IncompatibleErrorCode = "DOCTHECA_DB_SCHEMA_INCOMPATIBLE";
     internal const string UpdatedAtTriggerName = "set_document_files_updated_at";
 
     /// <summary>The ordered migration contract this executor supports.</summary>
     internal static readonly IReadOnlyList<string> KnownMigrationIds =
-        [InitialCreateMigrationId, AddDocumentStructureMigrationId, AddStructureAudioMigrationId, AddDocumentParsePagesMigrationId];
+        [InitialCreateMigrationId, AddDocumentStructureMigrationId, AddStructureAudioMigrationId, AddDocumentParsePagesMigrationId, AddBlockFootnotesMigrationId];
 
     /// <summary>The four business tables of the baseline.</summary>
     internal static readonly IReadOnlyList<string> KnownTableNames =
@@ -90,8 +91,10 @@ public sealed class DocthecaMigrationExecutor : IDatabaseMigrationExecutor
 
     internal static readonly IReadOnlyList<string> AudioVersionTableNames = [.. StructureVersionTableNames, .. AudioTableNames];
 
+    internal static readonly IReadOnlyList<string> PageVersionTableNames = [.. AudioVersionTableNames, "document_parse_pages"];
+
     /// <summary>Every business table of the current model, in migration order.</summary>
-    internal static readonly IReadOnlyList<string> AllTableNames = [.. AudioVersionTableNames, "document_parse_pages"];
+    internal static readonly IReadOnlyList<string> AllTableNames = [.. PageVersionTableNames];
 
     /// <summary>The business tables each known migration leaves in place, by migration id.</summary>
     private static readonly IReadOnlyDictionary<string, IReadOnlyList<string>> TablesAfterMigration =
@@ -100,7 +103,8 @@ public sealed class DocthecaMigrationExecutor : IDatabaseMigrationExecutor
             [InitialCreateMigrationId] = KnownTableNames,
             [AddDocumentStructureMigrationId] = StructureVersionTableNames,
             [AddStructureAudioMigrationId] = AudioVersionTableNames,
-            [AddDocumentParsePagesMigrationId] = AllTableNames,
+            [AddDocumentParsePagesMigrationId] = PageVersionTableNames,
+            [AddBlockFootnotesMigrationId] = AllTableNames,
         };
 
     private const string SchemaName = "public";

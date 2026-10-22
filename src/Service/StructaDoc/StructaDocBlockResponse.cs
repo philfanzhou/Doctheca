@@ -25,6 +25,13 @@ public sealed class StructaDocBlockResponse
     [JsonPropertyName("content")]
     public string? Content { get; set; }
 
+    /// <summary>Optional plain text retained exactly as provided by the parse run.</summary>
+    [JsonPropertyName("caption")]
+    public string? Caption { get; set; }
+
+    [JsonPropertyName("footnote")]
+    public string? Footnote { get; set; }
+
     [JsonPropertyName("contentFormat")]
     public string? ContentFormat { get; set; }
 

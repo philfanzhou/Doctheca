@@ -106,12 +106,19 @@ public class OpenSearchIndexServiceTests
     // ==================== [v3] hand-marked structure fields (issue #89) ====================
 
     [Fact]
-    public void BuildIndexBody_IncludesStructureFieldsAtMappingVersion3()
+    public void BuildIndexBody_RetainsStructureFieldsAtMappingVersion4()
     {
         var json = JsonSerializer.Serialize(OpenSearchIndexService.BuildIndexBody());
 
         json.Should().Contain("\"structure_node_ids\":{\"type\":\"keyword\"}");
         json.Should().Contain("\"structure_path\":{\"type\":\"keyword\"");
-        json.Should().Contain("\"mapping_version\":3");
+        json.Should().Contain("\"mapping_version\":4");
+        using var doc = JsonDocument.Parse(json);
+        var fields = doc.RootElement.GetProperty("mappings").GetProperty("properties");
+        foreach (var name in new[] { "text", "caption", "footnote" })
+        {
+            fields.GetProperty(name).GetProperty("analyzer").GetString().Should().Be("english_custom");
+            fields.GetProperty(name).GetProperty("fields").GetProperty("exact").GetProperty("analyzer").GetString().Should().Be("english_phrase");
+        }
     }
 }

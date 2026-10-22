@@ -186,6 +186,7 @@ remain in temporary mode-0600 environment files and are checked for disclosure w
 | `20261021094612_AddDocumentStructure` | Nullable `document_parse_blocks.sequence` (backfilled) with the unique index `(parse_id, sequence)`; nullable `document_files.structure_definition_id`; the `structure_definitions`, `structure_levels`, and `document_structure_nodes` tables (issue #89) |
 | `20261021153535_AddStructureAudio` | The `document_structure_audio` table with its indexes and the cascade foreign key to `document_parses` (issue #90); no existing table changes |
 | `20261022160829_AddDocumentParsePages` | The `document_parse_pages` table with composite physical-page key and cascade parse ownership (#102); no existing table or row changes |
+| `20261022184348_AddBlockFootnotes` | Nullable `document_parse_blocks.footnote` (#105); existing captions and all page/structure/audio rows are retained |
 
 Adding or changing migrations requires extending `DocthecaMigrationExecutor.KnownMigrationIds`
 (the known-version contract) and `TablesAfterMigration` together with the executor's takeover
@@ -289,10 +290,49 @@ instead restores the verified pre-upgrade backup and its matching image/configur
 post-backup writes cannot survive that restoration. Roll back any later migrations first, in
 reverse order, before applying an older down script.
 
+## Block Annotation Upgrade (issue #105)
+
+**Compatibility.** StructaDoc caption/footnote strings now survive local sync exactly. The
+nullable `footnote` column is additive, with null for older rows; captions already have a column.
+Older payloads may omit both fields. No auth, route, configuration, object-storage, port or package
+change is required. No remote re-sync/backfill is performed. HTTP search keeps its existing fields
+(including caption and optional pageLabel); Footnote is an internal parser value, not a new
+top-level admin/internal field. Annotation matches change recall and can change relevance scores.
+
+**Upgrade and reindex.** Take a verified backup and stop all old instances before switching the
+image. Startup verifies the page-version history against its historical target model and applies
+`20261022184348_AddBlockFootnotes` under the existing migration lock. Unknown/conflicting schema
+or history is still refused. Check readiness and the complete ordered history before admitting
+traffic. The index mapping changes from 3 to 4: caption gains `.exact`, and footnote uses the same
+stemmed/phrase analyzers as body. The existing version mechanism deletes/recreates an old derived
+index. Search remains empty until an authenticated admin calls `POST /admin/search-index/reindex`;
+wait for that operation to finish, then verify body-only, caption-only and footnote-only probes
+with the intended document/parse filters. This reindexes local rows only and cannot recover
+annotations never synchronized from older remote runs. Do not reuse cursors across index rebuilds.
+
+**Rollback and reindex.** Changing only the image does not run EF `Down`: the previous image
+refuses the unknown history ID/extra column. Stop every instance, retain a verified backup, then
+apply [20261022184348_AddBlockFootnotes.down.sql](rollback/20261022184348_AddBlockFootnotes.down.sql)
+(or migrate to `20261022160829_AddDocumentParsePages` in a controlled EF maintenance environment).
+It drops only footnote and this history row: new footnotes are lost, while caption, page labels,
+structure/audio metadata, other business values and stored objects survive. Never bypass unknown
+history or delete arbitrary history rows. Start the previous matching image; its mapping3 startup
+rebuilds the derived index because mapping4 differs. Run the same authenticated admin reindex
+operation with that image and verify its previous search contract before admitting traffic.
+Exact recovery of discarded footnotes requires restoring the verified backup and matching image;
+post-backup writes cannot survive that restoration. Apply later down scripts first, newest first.
+
+`AnnotationMigrationTests` compares populated upgrade, nullable older-null values, EF and SQL
+down, exact page-version schema/history and every retained row (including pages/audio), forward
+migration again, and refused unknown/conflicting states. `OpenSearchAnnotationTests` verifies
+mapping3 rebuild and explicit local-row reindex. The optional previous-image startup check now
+targets the page version; the legacy-takeover check subsequently rolls back pages/audio/structure.
+
 ## Change Log
 
 | Date | Change | Impact |
 |------|------|------|
+| 2026-10-23 | Added `20261022184348_AddBlockFootnotes` and annotation mapping4 (#105) | Additive nullable footnote; upgrade and rollback require explicit local-row reindex; down discards only footnotes |
 | 2026-10-23 | Added `20261022160829_AddDocumentParsePages` (#102) | Additive optional page labels; previous image requires backup/down-script maintenance or pre-upgrade backup restoration |
 | 2026-10-22 | Added migration `20261021153535_AddStructureAudio` (issue #90) | Additive table only; standard recovery restores the pre-upgrade backup; the separate down script discards audio metadata |
 | 2026-10-21 | Added migration `20261021094612_AddDocumentStructure` (issue #89) and taught the executor to apply pending known migrations, verifying earlier versions against their own target model | Additive schema; `sequence` backfilled for every block; rollback requires the documented down script before the previous image starts |

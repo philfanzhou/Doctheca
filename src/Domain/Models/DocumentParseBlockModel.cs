@@ -33,6 +33,8 @@ public class DocumentParseBlockModel
     public float? BboxY1 { get; set; }
     /// <summary>minerU confidence score (VLM backend; null for pipeline which has no score).</summary>
     public double? MineruScore { get; set; }
-    /// <summary>Derived: concatenation of image_caption/table_caption/chart_caption/code_caption texts for keyword recall.</summary>
+    /// <summary>Exact optional StructaDoc plain-text caption; legacy rows may contain derived captions.</summary>
     public string? Caption { get; set; }
+    /// <summary>Exact optional StructaDoc plain-text footnote; absent on older payloads.</summary>
+    public string? Footnote { get; set; }
 }

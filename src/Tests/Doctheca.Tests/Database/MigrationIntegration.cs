@@ -162,6 +162,7 @@ internal static class MigrationGoldenStates
     [
         "document_files.structure_definition_id:",
         "document_parse_blocks.sequence:",
+        "document_parse_blocks.footnote:",
         "IX_document_files_structure_definition_id:",
         "IX_document_parse_blocks_parse_id_sequence:",
         "FK_document_files_structure_definitions_structure_definition_id:",

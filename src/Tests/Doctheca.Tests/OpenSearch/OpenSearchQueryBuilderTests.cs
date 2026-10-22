@@ -10,6 +10,20 @@ namespace Doctheca.Tests.OpenSearch;
 
 public class OpenSearchQueryBuilderTests
 {
+    [Fact]
+    public void PhraseQuery_UsesIndependentExactFieldsWithoutBoosts()
+    {
+        var body = OpenSearchQueryBuilder.BuildSearchBody("two words", true, null, 10, null);
+        using var document = JsonDocument.Parse(JsonSerializer.Serialize(body));
+        var query = document.RootElement.GetProperty("query").GetProperty("bool");
+        query.GetProperty("minimum_should_match").GetInt32().Should().Be(1);
+        query.GetProperty("should").EnumerateArray().Select(clause => clause.GetProperty("match_phrase").EnumerateObject().Single().Name)
+            .Should().Equal("text.exact", "caption.exact", "footnote.exact");
+        document.RootElement.GetProperty("highlight").GetProperty("fields").EnumerateObject().Select(field => field.Name)
+            .Should().Equal("text.exact", "caption.exact", "footnote.exact");
+        JsonSerializer.Serialize(body).Should().NotContain("boost");
+    }
+
     // ==================== BuildSearchBody — Query Construction ====================
 
     [Fact]
@@ -65,13 +79,18 @@ public class OpenSearchQueryBuilderTests
     }
 
     [Fact]
-    public void BuildSearchBody_WithNullFilter_DoesNotWrapInBool()
+    public void BuildSearchBody_WithNullFilter_RequiresAnyBodyOrAnnotationField()
     {
         var body = OpenSearchQueryBuilder.BuildSearchBody(
             "test", phrase: false, filter: null, pageSize: 10, pageToken: null);
 
         var json = JsonSerializer.Serialize(body);
-        json.Should().NotContain("\"bool\"");
+        using var document = JsonDocument.Parse(json);
+        var query = document.RootElement.GetProperty("query").GetProperty("bool");
+        query.GetProperty("minimum_should_match").GetInt32().Should().Be(1);
+        query.TryGetProperty("filter", out _).Should().BeFalse();
+        query.GetProperty("should").EnumerateArray().Select(clause => clause.GetProperty("match").EnumerateObject().Single().Name)
+            .Should().Equal("text", "caption", "footnote");
     }
 
     [Fact]

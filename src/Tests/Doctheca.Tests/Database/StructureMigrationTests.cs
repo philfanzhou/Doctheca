@@ -51,7 +51,7 @@ public sealed class StructureMigrationTests(PostgreSqlMigrationFixture fixture) 
         (await MigrationGoldenStates.ReadAppliedHistoryAsync(context)).Should().Equal(MigrationGoldenStates.AllIds);
 
         // Every existing row is unchanged apart from the new nullable columns.
-        (await RowsAsync(context, "SELECT (to_jsonb(b) - 'sequence')::text FROM document_parse_blocks b ORDER BY id")).Should().Equal(blocksBefore);
+        (await RowsAsync(context, "SELECT (to_jsonb(b) - 'sequence' - 'footnote')::text FROM document_parse_blocks b ORDER BY id")).Should().Equal(blocksBefore);
         (await RowsAsync(context, "SELECT (to_jsonb(f) - 'structure_definition_id')::text FROM document_files f ORDER BY id")).Should().Equal(filesBefore);
         (await RowsAsync(context, "SELECT to_jsonb(p)::text FROM document_parses p ORDER BY id")).Should().Equal(parsesBefore);
         (await MigrationGoldenStates.ScalarAsync<long>(context, "SELECT count(*) FROM document_files WHERE structure_definition_id IS NOT NULL")).Should().Be(0);
@@ -90,6 +90,8 @@ public sealed class StructureMigrationTests(PostgreSqlMigrationFixture fixture) 
                 """);
 
             // Apply the documented down scripts newest first.
+            await MigrationGoldenStates.ExecuteRawAsync(context, await File.ReadAllTextAsync(
+                RollbackScriptPath(DocthecaMigrationExecutor.AddBlockFootnotesMigrationId)));
             await MigrationGoldenStates.ExecuteRawAsync(context, await File.ReadAllTextAsync(
                 RollbackScriptPath(DocthecaMigrationExecutor.AddDocumentParsePagesMigrationId)));
             await MigrationGoldenStates.ExecuteRawAsync(context, await File.ReadAllTextAsync(

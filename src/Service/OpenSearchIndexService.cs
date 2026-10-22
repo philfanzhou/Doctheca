@@ -74,8 +74,10 @@ public sealed class OpenSearchIndexService : ISearchIndexService
         var bulkOps = new List<object>();
         foreach (var block in blocks)
         {
-            // Skip blocks with null/empty text content (nothing to search)
-            if (string.IsNullOrWhiteSpace(block.TextContent))
+            // An annotation can be the only searchable text of an image or table.
+            if (string.IsNullOrWhiteSpace(block.TextContent)
+                && string.IsNullOrWhiteSpace(block.Caption)
+                && string.IsNullOrWhiteSpace(block.Footnote))
                 continue;
 
             var position = structure.Resolve(block.Sequence);
@@ -106,6 +108,7 @@ public sealed class OpenSearchIndexService : ISearchIndexService
                 text_level = block.TextLevel,
                 text_format = block.TextFormat,
                 caption = block.Caption ?? string.Empty,
+                footnote = block.Footnote ?? string.Empty,
                 structure_node_ids = position?.NodeIds.Select(id => id.ToString()).ToArray() ?? [],
                 structure_path = position?.Path,
                 _meta = new { block_data = block.BlockData }
@@ -114,7 +117,7 @@ public sealed class OpenSearchIndexService : ISearchIndexService
 
         if (bulkOps.Count == 0)
         {
-            _logger.LogWarning("Parse {ParseId} has no indexable blocks (all text_content empty)", parseId);
+            _logger.LogWarning("Parse {ParseId} has no indexable blocks (body and annotations are empty)", parseId);
             return true;
         }
 

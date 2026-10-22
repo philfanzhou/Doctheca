@@ -103,6 +103,7 @@ public class DocumentParseBlockRepository : IDocumentParseBlockRepository
         BboxY1 = model.BboxY1,
         MineruScore = model.MineruScore,
         Caption = model.Caption,
+        Footnote = model.Footnote,
     };
 
     private static DocumentParseBlockModel MapToModel(DocumentParseBlockEntity entity) => new()
@@ -127,5 +128,6 @@ public class DocumentParseBlockRepository : IDocumentParseBlockRepository
         BboxY1 = entity.BboxY1,
         MineruScore = entity.MineruScore,
         Caption = entity.Caption,
+        Footnote = entity.Footnote,
     };
 }
