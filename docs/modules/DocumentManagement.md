@@ -36,7 +36,7 @@ Pagination via `page`/`pageSize`; `fileName` fuzzy search; `parseStatus` filter 
 
 ### PUT /admin/document-files/{id}/metadata
 
-Updates `subject`/`grade`/`year` (null fields are not modified); best-effort OpenSearch sync (update_by_query), failures only log a Warning.
+Updates `subject`/`grade`/`year` (null fields are not modified); best-effort OpenSearch sync (update_by_query), failures only log a Warning. The optional `structureDefinitionId` field chooses the document's structure definition (`""` clears it; 400 for an unknown id; 409 `DOCTHECA_DOCUMENT_STRUCTURE_IN_USE` while marked nodes exist) and is validated before the other fields are applied — see [DocumentStructure](./DocumentStructure.md).
 
 ### DELETE /admin/document-files/{id}
 

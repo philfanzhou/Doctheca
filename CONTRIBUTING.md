@@ -22,7 +22,7 @@ Docker is required to build the container image.
 
 Commit messages and pull request titles use the [Conventional Commits](https://www.conventionalcommits.org/) format in English, for example `feat: filter documents by subject` or `fix: keep parse blocks consistent after a re-parse`. Use a body to explain why the change is needed when the subject alone does not.
 
-Use the issue and pull request templates. Issue titles and the bodies of issues and pull requests are written in Chinese.
+Use the issue and pull request templates. Issue titles and bodies are written in English; pull request bodies are written in Chinese.
 
 ## Database changes
 

@@ -23,6 +23,14 @@ public class DocumentParseBlockEntity
     [Required]
     public int SortIndex { get; set; }
 
+    /// <summary>
+    /// Global 0-based reading order within the parse (StructaDoc <c>sequence</c>); unlike
+    /// <see cref="SortIndex"/> it does not restart on every page. Nullable so the previous
+    /// application version keeps working against a migrated database.
+    /// </summary>
+    [Column("sequence")]
+    public int? Sequence { get; set; }
+
     [Column("block_type")]
     [Required]
     [MaxLength(20)]

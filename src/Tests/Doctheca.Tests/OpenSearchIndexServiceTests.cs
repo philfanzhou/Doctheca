@@ -102,4 +102,16 @@ public class OpenSearchIndexServiceTests
         json.Should().Contain("\"enabled\":false");
         json.Should().Contain("\"block_data\"");
     }
+
+    // ==================== [v3] hand-marked structure fields (issue #89) ====================
+
+    [Fact]
+    public void BuildIndexBody_IncludesStructureFieldsAtMappingVersion3()
+    {
+        var json = JsonSerializer.Serialize(OpenSearchIndexService.BuildIndexBody());
+
+        json.Should().Contain("\"structure_node_ids\":{\"type\":\"keyword\"}");
+        json.Should().Contain("\"structure_path\":{\"type\":\"keyword\"");
+        json.Should().Contain("\"mapping_version\":3");
+    }
 }

@@ -3,6 +3,7 @@ using System.Reflection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.Extensions.Logging;
 using Npgsql;
 using ServiceMantle.Migration;
@@ -37,10 +38,13 @@ namespace Doctheca.Database;
 /// Empty; creating it remains EF Core <c>Migrate</c>'s existing job, unchanged from before).</item>
 /// <item>CurrentVersionCompatible: the baseline is applied and the complete current schema
 /// verifies; nothing will be written.</item>
-/// <item>LegacyTakeoverRequired: all four business tables are present without history and the
-/// structure verifies — missing columns that are nullable or have a store default, missing model
-/// indexes, and the updated_at trigger are collected as safe backfills to apply before
-/// stamping.</item>
+/// <item>LegacyTakeoverRequired: all four baseline tables are present without history and the
+/// structure verifies against the baseline — missing columns that are nullable or have a store
+/// default, missing model indexes, and the updated_at trigger are collected as safe backfills to
+/// apply before stamping; the later known migrations then run as usual.</item>
+/// <item>PendingMigrations (issue #89): the history is a strict prefix of the known migrations,
+/// the tables of that applied version verify exactly, and no table of a later migration exists
+/// yet; EF Core applies the remaining migrations.</item>
 /// <item>VersionTooNew: the history contains migration ids this application does not know.</item>
 /// <item>InspectionFailed: any unknown or conflicting structure (extra or wrong-typed columns,
 /// nullability mismatches, missing NOT NULL columns without a default, primary-key/foreign-key
@@ -59,16 +63,33 @@ namespace Doctheca.Database;
 public sealed class DocthecaMigrationExecutor : IDatabaseMigrationExecutor
 {
     internal const string InitialCreateMigrationId = "20260930161548_InitialCreate";
+    internal const string AddDocumentStructureMigrationId = "20261021094612_AddDocumentStructure";
     internal const string HistoryTableName = "__EFMigrationsHistory";
     internal const string IncompatibleErrorCode = "DOCTHECA_DB_SCHEMA_INCOMPATIBLE";
     internal const string UpdatedAtTriggerName = "set_document_files_updated_at";
 
-    /// <summary>The ordered migration contract this executor supports; frozen by the issue.</summary>
-    internal static readonly IReadOnlyList<string> KnownMigrationIds = [InitialCreateMigrationId];
+    /// <summary>The ordered migration contract this executor supports.</summary>
+    internal static readonly IReadOnlyList<string> KnownMigrationIds =
+        [InitialCreateMigrationId, AddDocumentStructureMigrationId];
 
     /// <summary>The four business tables of the baseline.</summary>
     internal static readonly IReadOnlyList<string> KnownTableNames =
         ["document_files", "document_parses", "document_parse_images", "document_parse_blocks"];
+
+    /// <summary>The tables added by <see cref="AddDocumentStructureMigrationId"/> (issue #89).</summary>
+    internal static readonly IReadOnlyList<string> StructureTableNames =
+        ["structure_definitions", "structure_levels", "document_structure_nodes"];
+
+    /// <summary>Every business table of the current model, in migration order.</summary>
+    internal static readonly IReadOnlyList<string> AllTableNames = [.. KnownTableNames, .. StructureTableNames];
+
+    /// <summary>The business tables each known migration leaves in place, by migration id.</summary>
+    private static readonly IReadOnlyDictionary<string, IReadOnlyList<string>> TablesAfterMigration =
+        new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal)
+        {
+            [InitialCreateMigrationId] = KnownTableNames,
+            [AddDocumentStructureMigrationId] = AllTableNames,
+        };
 
     private const string SchemaName = "public";
     private const string InvalidCatalogSqlState = "3D000";
@@ -114,6 +135,7 @@ public sealed class DocthecaMigrationExecutor : IDatabaseMigrationExecutor
         DatabaseState.Empty => MigrationObservationState.Empty,
         DatabaseState.CurrentVersionCompatible => MigrationObservationState.CurrentVersionCompatible,
         DatabaseState.LegacyTakeoverRequired => MigrationObservationState.PendingMigration,
+        DatabaseState.PendingMigrations => MigrationObservationState.PendingMigration,
         DatabaseState.VersionTooNew => MigrationObservationState.VersionTooNew,
         _ => MigrationObservationState.InspectionFailed,
     };
@@ -129,6 +151,9 @@ public sealed class DocthecaMigrationExecutor : IDatabaseMigrationExecutor
 
         /// <summary>A verified legacy database without history: backfill, then stamp the baseline.</summary>
         LegacyTakeoverRequired,
+
+        /// <summary>A verified earlier known version: EF Core applies the remaining migrations.</summary>
+        PendingMigrations,
 
         /// <summary>The history contains migration ids this application does not know.</summary>
         VersionTooNew,
@@ -234,7 +259,7 @@ public sealed class DocthecaMigrationExecutor : IDatabaseMigrationExecutor
 
             case DatabaseState.Empty:
                 _logger?.LogInformation(
-                    "Applying the {MigrationId} baseline migration to the empty database state ({Reason})",
+                    "Applying every known migration from the {MigrationId} baseline to the empty database state ({Reason})",
                     InitialCreateMigrationId, inspection.Reason);
                 cancellationToken.ThrowIfCancellationRequested();
                 await _context.Database.MigrateAsync(cancellationToken).ConfigureAwait(false);
@@ -252,6 +277,20 @@ public sealed class DocthecaMigrationExecutor : IDatabaseMigrationExecutor
                 await StampBaselineAsync(cancellationToken).ConfigureAwait(false);
                 _logger?.LogInformation(
                     "Legacy database taken over: schema verified, data preserved, baseline registered");
+                cancellationToken.ThrowIfCancellationRequested();
+                // The migrations after the baseline run exactly as on any baseline database.
+                await _context.Database.MigrateAsync(cancellationToken).ConfigureAwait(false);
+                cancellationToken.ThrowIfCancellationRequested();
+                return;
+
+            case DatabaseState.PendingMigrations:
+                _logger?.LogInformation(
+                    "Applying the pending known migrations to the verified database ({Reason})",
+                    inspection.Reason);
+                cancellationToken.ThrowIfCancellationRequested();
+                await _context.Database.MigrateAsync(cancellationToken).ConfigureAwait(false);
+                cancellationToken.ThrowIfCancellationRequested();
+                _logger?.LogInformation("Database migrated to the current version");
                 cancellationToken.ThrowIfCancellationRequested();
                 return;
 
@@ -271,7 +310,6 @@ public sealed class DocthecaMigrationExecutor : IDatabaseMigrationExecutor
     private async Task<DatabaseInspection> InspectOpenDatabaseAsync(CancellationToken cancellationToken)
     {
         var connection = _context.Database.GetDbConnection();
-        var expected = BuildExpectedTables();
 
         // History belongs to public even when the supplied search_path resolves another
         // schema first. Keep the original unknown-version priority before reading shapes.
@@ -286,7 +324,7 @@ public sealed class DocthecaMigrationExecutor : IDatabaseMigrationExecutor
 
         var shared = await new PostgreSqlSchemaEvidenceReader().ReadAsync((NpgsqlConnection)connection,
             new PostgreSqlSchemaEvidenceReadOptions(includeExtendedObjectEvidence: true,
-                tables: KnownTableNames.Select(name => (SchemaName, name)).ToArray()),
+                tables: AllTableNames.Select(name => (SchemaName, name)).ToArray()),
             cancellationToken).ConfigureAwait(false);
         cancellationToken.ThrowIfCancellationRequested();
         if (shared.State == SchemaEvidenceReadState.TargetDatabaseMissing)
@@ -296,16 +334,45 @@ public sealed class DocthecaMigrationExecutor : IDatabaseMigrationExecutor
         var snapshot = shared.Snapshot!;
         var presentBusinessTables = snapshot.Tables.Select(table => table.Name).ToList();
 
-        if (applied.Count == KnownMigrationIds.Count)
+        if (applied.Count > 0)
         {
-            // The history claims the current version; the complete current schema must verify.
-            var mismatch = ValidateTables(snapshot, expected, KnownTableNames, backfills: null);
-            return mismatch is null
-                ? DatabaseInspection.Of(
-                    DatabaseState.CurrentVersionCompatible,
-                    "the full known history is applied and the current schema verifies")
-                : DatabaseInspection.Failed(
-                    $"the history claims the current version but the schema does not verify: {mismatch.Reason}");
+            // The history must be a prefix of the known contract; gaps or reordering are unknown.
+            if (!applied.SequenceEqual(KnownMigrationIds.Take(applied.Count), StringComparer.Ordinal))
+            {
+                return DatabaseInspection.Failed(
+                    $"the migration history [{Join(applied)}] is not a prefix of the known migrations [{Join(KnownMigrationIds)}]");
+            }
+
+            var appliedVersion = applied[^1];
+            var appliedTables = TablesAfterMigration[appliedVersion];
+            var mismatch = ValidateTables(snapshot, BuildExpectedTables(appliedVersion), appliedTables, backfills: null);
+            if (applied.Count == KnownMigrationIds.Count)
+            {
+                // The history claims the current version; the complete current schema must verify.
+                return mismatch is null
+                    ? DatabaseInspection.Of(
+                        DatabaseState.CurrentVersionCompatible,
+                        "the full known history is applied and the current schema verifies")
+                    : DatabaseInspection.Failed(
+                        $"the history claims the current version but the schema does not verify: {mismatch.Reason}");
+            }
+
+            if (mismatch is not null)
+            {
+                return DatabaseInspection.Failed(
+                    $"the history claims {appliedVersion} but its schema does not verify: {mismatch.Reason}");
+            }
+
+            var unexpected = presentBusinessTables.Where(name => !appliedTables.Contains(name)).ToList();
+            if (unexpected.Count > 0)
+            {
+                return DatabaseInspection.Failed(
+                    $"tables of a later migration already exist without history: [{Join(unexpected)}]");
+            }
+
+            return DatabaseInspection.Of(
+                DatabaseState.PendingMigrations,
+                $"{appliedVersion} is applied and verifies; {KnownMigrationIds.Count - applied.Count} known migration(s) are pending");
         }
 
         if (presentBusinessTables.Count == 0)
@@ -316,6 +383,14 @@ public sealed class DocthecaMigrationExecutor : IDatabaseMigrationExecutor
                 "no business tables and no applied migrations are present");
         }
 
+        var laterTables = presentBusinessTables.Where(name => !KnownTableNames.Contains(name)).ToList();
+        if (laterTables.Count > 0)
+        {
+            // Tables of a later migration without any history are never taken over.
+            return DatabaseInspection.Failed(
+                $"tables of a later migration exist without migration history: [{Join(laterTables)}]");
+        }
+
         if (presentBusinessTables.Count != KnownTableNames.Count)
         {
             // Partial table sets without a full history are refused.
@@ -323,9 +398,10 @@ public sealed class DocthecaMigrationExecutor : IDatabaseMigrationExecutor
                 $"business tables are partially present: found [{Join(presentBusinessTables)}] but the baseline requires all of [{Join(KnownTableNames)}]");
         }
 
-        // All four tables are present without history: verify and collect safe backfills.
+        // All four tables are present without history: verify against the baseline (not the
+        // current model) and collect safe backfills; later migrations run after the stamp.
         var backfills = new List<BackfillStatement>();
-        var verification = ValidateTables(snapshot, expected, KnownTableNames, backfills);
+        var verification = ValidateTables(snapshot, BuildExpectedTables(InitialCreateMigrationId), KnownTableNames, backfills);
         if (verification is not null)
         {
             return DatabaseInspection.Failed(verification.Reason);
@@ -397,16 +473,24 @@ public sealed class DocthecaMigrationExecutor : IDatabaseMigrationExecutor
 
     // ---------- shared expectation + product metadata ----------
 
-    private IReadOnlyDictionary<string, ExpectedTable> BuildExpectedTables()
+    /// <summary>
+    /// The expected shape after <paramref name="migrationId"/>: the current design-time model for
+    /// the last known migration, otherwise that migration's own target model (its Designer
+    /// snapshot), so an earlier version is verified against exactly what it created.
+    /// </summary>
+    private IReadOnlyDictionary<string, ExpectedTable> BuildExpectedTables(string migrationId)
     {
-        var model = _context.GetService<IDesignTimeModel>().Model;
+        var model = string.Equals(migrationId, KnownMigrationIds[^1], StringComparison.Ordinal)
+            ? _context.GetService<IDesignTimeModel>().Model
+            : BuildMigrationTargetModel(migrationId);
+        var tableNames = TablesAfterMigration[migrationId];
         var shared = EfCoreExpectedSchemaDerivation.Derive(model,
             new EfCoreExpectedSchemaDerivationOptions(includeExtendedObjectEvidence: true));
         var relational = model.GetRelationalModel();
         var result = new Dictionary<string, ExpectedTable>(StringComparer.Ordinal);
         foreach (var table in shared.Tables)
         {
-            if (!KnownTableNames.Contains(table.Name))
+            if (!tableNames.Contains(table.Name))
                 throw new InvalidOperationException($"[{IncompatibleErrorCode}] The EF model contains table '{table.Name}' outside the supported migration contract.");
             var metadata = relational.Tables.Single(item => item.Name == table.Name);
             // Shared derivation supplies names and all neutral shapes. Only product defaults
@@ -417,9 +501,19 @@ public sealed class DocthecaMigrationExecutor : IDatabaseMigrationExecutor
             result.Add(table.Name, new ExpectedTable(table.Name, columns, table.PrimaryKey,
                 table.ForeignKeys, table.Indexes));
         }
-        if (KnownTableNames.Any(name => !result.ContainsKey(name)))
+        if (tableNames.Any(name => !result.ContainsKey(name)))
             throw new InvalidOperationException($"[{IncompatibleErrorCode}] The EF model does not contain every contract table.");
         return result;
+    }
+
+    private IModel BuildMigrationTargetModel(string migrationId)
+    {
+        var migrations = _context.GetService<IMigrationsAssembly>();
+        var migration = migrations.CreateMigration(migrations.Migrations[migrationId],
+            _context.Database.ProviderName!);
+        var target = migration.TargetModel
+            ?? throw new InvalidOperationException($"[{IncompatibleErrorCode}] Migration '{migrationId}' has no target model.");
+        return _context.GetService<IModelRuntimeInitializer>().Initialize(target, designTime: true, validationLogger: null);
     }
 
     // ---------- unique difference -> refusal / safe backfill / ignore ----------

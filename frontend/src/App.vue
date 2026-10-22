@@ -9,6 +9,8 @@ import DocManagePage from './views/DocManagePage/DocManagePage.vue'
 import DocDetailPage from './views/DocDetailPage/DocDetailPage.vue'
 import ParseResultsPage from './views/ParseResultsPage/ParseResultsPage.vue'
 import SearchPage from './views/SearchPage/SearchPage.vue'
+import StructureDefinitionsPage from './views/StructureDefinitionsPage/StructureDefinitionsPage.vue'
+import StructureEditorPage from './views/StructureEditorPage/StructureEditorPage.vue'
 import { useToast } from './composables/useToast'
 import { useAdminSession } from './composables/useAdminSession'
 import type { IconName } from './utils/icons'
@@ -24,6 +26,7 @@ const navItems: NavItem[] = [
   { key: 'docs', label: '文档管理', icon: 'file' },
   { key: 'results', label: '解析结果', icon: 'doc' },
   { key: 'search', label: '检索测试', icon: 'search' },
+  { key: 'structures', label: '结构定义', icon: 'book' },
 ]
 
 const state = ref<{ page: string; docId: string | null }>({
@@ -54,11 +57,14 @@ if (typeof window !== 'undefined') {
 const currentNavKey = computed(() => {
   // For sidebar active highlighting, treat 'detail' as part of 'docs'
   if (state.value.page === 'detail') return 'docs'
+  // The structure editor is reached from a parse record of a document
+  if (state.value.page === 'structure') return 'docs'
   return state.value.page
 })
 
 const currentCrumb = computed(() => {
   if (state.value.page === 'detail') return '文档管理 / 文档详情'
+  if (state.value.page === 'structure') return '文档管理 / 结构标注'
   return navItems.find((n) => n.key === state.value.page)?.label ?? ''
 })
 
@@ -91,9 +97,10 @@ function syncHash() {
 }
 
 function parseHash() {
-  const m = location.hash.match(/^#(overview|docs|results|search|detail)(?:\/([A-Za-z0-9_-]+))?$/)
+  const m = location.hash.match(/^#(overview|docs|results|search|detail|structures|structure)(?:\/([A-Za-z0-9_-]+))?$/)
   if (m) {
-    state.value = { page: m[1], docId: m[1] === 'detail' ? m[2] || null : null }
+    // detail/:fileId and structure/:parseId carry an id; the other pages do not
+    state.value = { page: m[1], docId: m[1] === 'detail' || m[1] === 'structure' ? m[2] || null : null }
   } else {
     state.value = { page: 'overview', docId: null }
   }
@@ -105,6 +112,8 @@ const componentMap: Record<string, typeof OverviewPage> = {
   detail: DocDetailPage,
   results: ParseResultsPage,
   search: SearchPage,
+  structures: StructureDefinitionsPage,
+  structure: StructureEditorPage,
 }
 
 const currentComponent = computed(() => componentMap[state.value.page] || OverviewPage)

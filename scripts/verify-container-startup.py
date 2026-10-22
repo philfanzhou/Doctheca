@@ -231,23 +231,24 @@ def main(image, rollback_image=None):
             print("PASS missing login: startup/health/SPA, six OIDC 503, retired POST 410, auth 401, no protocol query disclosure at Trace", flush=True)
 
             if rollback_image:
+                def psql(sql):
+                    return docker("exec", postgres, "psql", "-v", "ON_ERROR_STOP=1", "-U", "startup_test",
+                                  "-d", "startup_existing", "-tAc", sql)
+
                 def fingerprint():
-                    return docker("exec", postgres, "psql", "-U", "startup_test", "-d", "startup_existing", "-tAc", """
+                    return psql("""
                         SELECT jsonb_agg(jsonb_build_array(c.relname, a.attname, format_type(a.atttypid, a.atttypmod), a.attnotnull) ORDER BY c.relname, a.attnum)
                         FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace JOIN pg_attribute a ON a.attrelid=c.oid
                         WHERE n.nspname='public' AND c.relkind='r' AND a.attnum>0 AND NOT a.attisdropped;
                         SELECT "MigrationId", "ProductVersion" FROM "__EFMigrationsHistory" ORDER BY "MigrationId";
                         SELECT count(*) FROM document_files;
                         """)
-                before = fingerprint()
-                # This database is owned by the random test prefix. Remove only its exact
-                # verified history table to exercise legacy takeover through the shared writer.
-                docker("exec", postgres, "psql", "-U", "startup_test", "-d", "startup_existing", "-c",
-                       'DROP TABLE public."__EFMigrationsHistory"')
-                for label, selected_image in (("legacy", image), ("rollback", rollback_image)):
+
+                def start_until_ready(label, selected_image):
                     name = prefix + "-" + label
                     run(name, selected_image, settings | {"Database__Name": "startup_existing"},
                         "-p", "127.0.0.1::5012")
+                    nonlocal port
                     port = json.loads(docker("inspect", "--format", "{{json .NetworkSettings.Ports}}", name))["5012/tcp"][0]["HostPort"]
                     deadline = time.monotonic() + 45
                     while time.monotonic() < deadline:
@@ -260,17 +261,37 @@ def main(image, rollback_image=None):
                         time.sleep(0.25)
                     else:
                         raise RuntimeError(label + " image did not become ready")
-                    require(fingerprint() == before, label + " image changed schema/history/data")
                     logs = check_logs(name)
                     require(logs.count("Database startup gate completed") == 1,
                             "Expected one " + label + " startup gate")
-                    if label == "legacy":
-                        require(logs.count("Legacy database taken over") == 1,
-                                "Shared baseline writer was not exercised")
                     docker("kill", "--signal", "TERM", name)
                     require(wait_exit(name) == 0, label + " SIGTERM did not shut down gracefully")
                     check_logs(name)
-                    print("PASS " + label + ": same database accepted; schema/history/data unchanged", flush=True)
+                    return logs
+
+                # The current image migrated this database above. The documented rollback script
+                # (issue #89) must return it to exactly the previous image's baseline.
+                rollback_sql = (Path(__file__).resolve().parent.parent / "docs" / "database" / "rollback"
+                                / "20261021094612_AddDocumentStructure.down.sql").read_text()
+                psql(rollback_sql)
+                before = fingerprint()
+                require("20261021094612_AddDocumentStructure" not in before, "rollback left the migration history row")
+                start_until_ready("rollback", rollback_image)
+                require(fingerprint() == before, "rollback image changed schema/history/data")
+                print("PASS rollback: down script applied; previous image accepted the database unchanged", flush=True)
+
+                # This database is owned by the random test prefix. Remove only its exact
+                # verified history table to exercise legacy takeover through the shared writer,
+                # followed by the forward migration of the current image.
+                psql('DROP TABLE public."__EFMigrationsHistory"')
+                logs = start_until_ready("legacy", image)
+                require(logs.count("Legacy database taken over") == 1,
+                        "Shared baseline writer was not exercised")
+                after = fingerprint()
+                require("20260930161548_InitialCreate" in after and "20261021094612_AddDocumentStructure" in after,
+                        "legacy takeover did not reach the current version")
+                require(after.splitlines()[-1] == before.splitlines()[-1], "legacy takeover changed business rows")
+                print("PASS legacy: baseline taken over and migrated forward; business rows unchanged", flush=True)
         finally:
             # Remove only resources created under this run's random prefix.
             for name in reversed(containers):

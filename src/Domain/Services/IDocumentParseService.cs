@@ -21,6 +21,7 @@ public interface IDocumentParseService
         string? zipPath = null,
         Guid? structaDocParseRunId = null);
     Task<List<DocumentParseModel>> GetPendingJobsAsync();
+    Task<List<DocumentParseModel>> GetByStatusAsync(string status);
     Task<List<DocumentParseModel>> GetActiveJobsAsync();
     Task AddImageAsync(DocumentParseImageModel image);
     Task<List<DocumentParseImageModel>> GetImagesByParseIdAsync(Guid parseId);

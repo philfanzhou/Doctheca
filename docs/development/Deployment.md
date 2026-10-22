@@ -242,6 +242,15 @@ not mix old and new versions against the same database. The readiness `migration
 follows the same orchestration result (`succeeded` only after the held-lock final inspection
 passed).
 
+### Document structure upgrade (issue #89)
+
+The first start of the image containing migration `20261021094612_AddDocumentStructure` migrates the
+database in place (new nullable columns, three new tables, `sequence` backfilled for every block)
+and recreates the OpenSearch index for mapping version 3. Afterwards, call
+`POST /admin/search-index/reindex` once (or click 重建检索索引 on the parse results page) to restore
+search. Rolling back to the previous image requires the documented down script first; see
+[Migrations — Document Structure Upgrade](../database/migrations.md#document-structure-upgrade-issue-89).
+
 ## Startup Command
 
 ```bash
@@ -283,6 +292,19 @@ The service automatically performs the following at startup:
 3. `OpenSearchIndexService.EnsureIndexAsync` — create the search index (best-effort)
 
 ## Prebuilt Images & Version Releases
+
+Newly published release images contain both `linux/amd64` and `linux/arm64` under the same
+tag. Docker selects the matching platform automatically, including ARM64 when Colima
+runs an `aarch64` VM on Apple Silicon. Existing version tags are unchanged; use a
+version published after multi-platform support was added, or a new `edge` image where
+that channel is available. `docker buildx imagetools inspect <image>:<tag>` lists
+the platforms included in a published tag.
+
+The Node and .NET SDK stages run on the build host and produce static web assets and
+framework-dependent assemblies. The runtime base image and OS packages follow the
+target architecture. CI builds both complete images without publishing on pull
+requests, and publishing waits for that check as well as the existing tests.
+
 
 `start.sh` runs the locally built `doctheca:latest` by default; when using a published image, specify `IMAGE_REPO` and `IMAGE_TAG`:
 

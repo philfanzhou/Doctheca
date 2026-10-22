@@ -27,4 +27,7 @@ public class SearchFilterModel
     public Guid? DocumentFileId { get; set; }
     /// <summary>Filter blocks with img_path (maps to index field has_image).</summary>
     public bool? HasImage { get; set; }
+
+    /// <summary>Hand-marked structure node: matches blocks inside the node or any of its descendants (index field structure_node_ids).</summary>
+    public Guid? StructureNodeId { get; set; }
 }

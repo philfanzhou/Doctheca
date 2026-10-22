@@ -21,7 +21,7 @@ using Xunit;
 namespace Doctheca.Tests.Integration;
 
 /// <summary>
-/// ServiceMantle security response-header baseline on the real host: exactly the 19 JSON admin
+/// ServiceMantle security response-header baseline on the real host: exactly the 30 JSON admin
 /// endpoints are marked and carry the six immutable single-value headers on success (2xx),
 /// business failure (4xx), and 401/403 challenges alike; a downstream component that pre-writes
 /// duplicate or wrong values converges back to the single baseline value because the library
@@ -46,8 +46,9 @@ public sealed class ServiceMantleSecurityHeadersTests : ServiceMantleIntegration
         ("Content-Security-Policy", CspValue),
     ];
 
-    // The exact 19 marked JSON admin endpoints (method + normalized route pattern): the
-    // legacy auth area plus the three hosted-login endpoints added by issue #47.
+    // The exact 30 marked JSON admin endpoints (method + normalized route pattern): the
+    // legacy auth area, the three hosted-login endpoints added by issue #47, and the eleven
+    // document structure endpoints added by issue #89.
     private static readonly HashSet<string> ExpectedMarked = new(StringComparer.Ordinal)
     {
         "POST /admin/auth/login",
@@ -69,6 +70,18 @@ public sealed class ServiceMantleSecurityHeadersTests : ServiceMantleIntegration
         "GET /admin/document-parses",
         "DELETE /admin/document-parses/{parseId:guid}",
         "GET /admin/documents/search",
+        // Document structure (issue #89): all JSON.
+        "GET /admin/structure-definitions",
+        "GET /admin/structure-definitions/{id:guid}",
+        "POST /admin/structure-definitions",
+        "PUT /admin/structure-definitions/{id:guid}",
+        "DELETE /admin/structure-definitions/{id:guid}",
+        "GET /admin/document-parses/{parseId:guid}/blocks",
+        "GET /admin/document-parses/{parseId:guid}/structure",
+        "PUT /admin/document-parses/{parseId:guid}/structure",
+        "GET /admin/document-parses/{parseId:guid}/structure/nodes/{nodeId:guid}/blocks",
+        "POST /admin/document-parses/{parseId:guid}/search-index",
+        "POST /admin/search-index/reindex",
     };
 
     // Endpoints that must exist but must NOT carry the marker (rendering contracts).
@@ -87,7 +100,7 @@ public sealed class ServiceMantleSecurityHeadersTests : ServiceMantleIntegration
     }
 
     [Fact]
-    public void MarkedEndpoints_AreExactlyTheSixteenJsonAdminEndpoints()
+    public void MarkedEndpoints_AreExactlyTheJsonAdminEndpoints()
     {
         using var factory = CreateFactory();
         var endpoints = factory.Services.GetRequiredService<EndpointDataSource>().Endpoints
@@ -102,7 +115,7 @@ public sealed class ServiceMantleSecurityHeadersTests : ServiceMantleIntegration
         var marked = endpoints.Where(pair => pair.Marked).Select(pair => pair.Key).ToHashSet();
         var all = endpoints.Select(pair => pair.Key).ToHashSet();
 
-        // Exactly the 19 JSON admin endpoints are marked — no more, no fewer.
+        // Exactly the 30 JSON admin endpoints are marked — no more, no fewer.
         Assert.True(
             marked.SetEquals(ExpectedMarked),
             $"marked set mismatch.\n  extra: {string.Join(", ", marked.Except(ExpectedMarked))}\n" +

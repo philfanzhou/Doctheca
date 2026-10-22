@@ -9,4 +9,11 @@ public record UpdateMetadataRequest
     public string? Subject { get; init; }
     public string? Grade { get; init; }
     public string? Year { get; init; }
+
+    /// <summary>
+    /// The structure definition the document uses (issue #89): a definition id sets it, an empty
+    /// string clears it, null leaves it unchanged. Rejected with 409 while any parse of the
+    /// document has marked structure nodes.
+    /// </summary>
+    public string? StructureDefinitionId { get; init; }
 }

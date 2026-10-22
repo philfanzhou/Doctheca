@@ -48,10 +48,11 @@ Startup sequence (all observed through the host's shutdown token):
 
 | Database state at startup | Handling | Result |
 |---------------------------|----------|--------|
-| Empty (no business tables, no history; a missing catalog counts too) | Apply the baseline migration | The four tables + indexes + FKs + trigger, empty data, history = baseline |
-| Full legacy database (all four tables verify against the baseline, no history) | Safe backfills + register the baseline | Startup succeeds; schema and data unchanged |
-| Legacy database with missing nullable/defaulted columns or missing model indexes | Backfill those columns/indexes, then register the baseline | Startup succeeds; existing data preserved |
-| Unknown or conflicting structure (extra or wrong-typed columns, nullability mismatch, missing NOT NULL column without a default, constraint mismatch, partial table set, history claiming a version the schema contradicts, or unknown migration ids) | Refuse | Startup fails with the fixed error code `DOCTHECA_DB_SCHEMA_INCOMPATIBLE` (executor level) or the orchestrator's `migration.inspection_failed` / `migration.version_too_new` / `migration.final_state_invalid` safe codes; nothing is written, nothing is auto-repaired |
+| Empty (no business tables, no history; a missing catalog counts too) | Apply every known migration | All tables + indexes + FKs + trigger, empty data, history = every known migration |
+| Earlier known version (history is a strict prefix of the known migrations, that version's tables verify exactly, no table of a later migration exists) | Apply the pending migrations with EF Core | Startup succeeds; existing data kept, new columns backfilled as each migration defines |
+| Full legacy database (all four tables verify against the baseline, no history) | Safe backfills + register the baseline, then apply the later migrations | Startup succeeds; baseline data unchanged |
+| Legacy database with missing nullable/defaulted columns or missing model indexes | Backfill those columns/indexes, register the baseline, then apply the later migrations | Startup succeeds; existing data preserved |
+| Unknown or conflicting structure (extra or wrong-typed columns, nullability mismatch, missing NOT NULL column without a default, constraint mismatch, partial table set, history claiming a version the schema contradicts, a history that is not a prefix of the known migrations, tables of a later migration without its history, or unknown migration ids) | Refuse | Startup fails with the fixed error code `DOCTHECA_DB_SCHEMA_INCOMPATIBLE` (executor level) or the orchestrator's `migration.inspection_failed` / `migration.version_too_new` / `migration.final_state_invalid` safe codes; nothing is written, nothing is auto-repaired |
 
 The registration ("stamp") of the baseline happens only after the structure verification passes,
 inside one parameterized transaction. Refused states fail startup; logs and errors carry safe
@@ -168,10 +169,11 @@ integration assertions. Run the container contract and actual old-image acceptan
 python3 scripts/verify-container-startup.py doctheca:current doctheca:previous
 ```
 
-With the optional second image, the script removes only the verified history table in its own
-isolated test database, reruns the current image through legacy takeover/shared stamp, then
-starts the previous image sequentially. Schema, history and business-row counts must match
-the original baseline exactly. Synthetic credentials
+With the optional second image, the script works in its own isolated test database migrated by
+the current image: it applies the documented down script of the newest migration, starts the
+previous image (schema, history and business-row counts must stay exactly the same), then removes
+only the verified history table and starts the current image again, which must take the baseline
+over through the shared stamp and migrate it forward with business rows unchanged. Synthetic credentials
 remain in temporary mode-0600 environment files and are checked for disclosure without printing.
 
 ## Current Database Version
@@ -179,14 +181,52 @@ remain in temporary mode-0600 environment files and are checked for disclosure w
 | Migration | Contents |
 |-----------|----------|
 | `20260930161548_InitialCreate` | All four tables, their indexes and foreign keys, and the `set_document_files_updated_at` trigger — the production structure as of the StructaDoc migration (ADR-0009) |
+| `20261021094612_AddDocumentStructure` | Nullable `document_parse_blocks.sequence` (backfilled) with the unique index `(parse_id, sequence)`; nullable `document_files.structure_definition_id`; the `structure_definitions`, `structure_levels`, and `document_structure_nodes` tables (issue #89) |
 
 Adding or changing migrations requires extending `DocthecaMigrationExecutor.KnownMigrationIds`
-(the known-version contract) together with the executor's takeover rules.
+(the known-version contract) and `TablesAfterMigration` together with the executor's takeover
+rules. An earlier version is verified against that migration's own target model (its Designer
+snapshot), never against the current model, so every known version stays upgradeable in place.
+
+## Document Structure Upgrade (issue #89)
+
+**Upgrade.** Starting the new image on a database at `20260930161548_InitialCreate` classifies it as
+pending (`PendingMigration` for the orchestrator) and applies `20261021094612_AddDocumentStructure`
+in one EF Core migration transaction under the advisory lock:
+
+1. add the nullable `document_parse_blocks.sequence` and `document_files.structure_definition_id`;
+2. backfill `sequence` for every existing block: a parse whose rows all carry a distinct
+   non-negative integer `block_data.sequence` (StructaDoc-synced rows) keeps those values; every
+   other parse is numbered `0..n-1` by `(page_id, sort_index, id)`;
+3. create the three structure tables, the unique index `(parse_id, sequence)`, and the foreign keys.
+
+No existing row changes otherwise (verified by `StructureMigrationTests` with populated data). The
+backfill is one `UPDATE` per numbering rule; on large block tables expect it to take roughly as long
+as rewriting the table once.
+
+**OpenSearch.** The index mapping moves to version 3 (`structure_node_ids`, `structure_path`). As
+for every mapping step, the first start of the new image deletes and recreates the index, so search
+answers no hits until the parses are re-indexed. After the upgrade, call
+`POST /admin/search-index/reindex` once (or click "重建检索索引" on the parse results page).
+
+**Rollback.** The previous image refuses a history that contains a migration id it does not know
+(`migration.version_too_new`) and refuses extra columns on its four tables, so it cannot run
+against the migrated database as is. To roll back:
+
+1. stop every instance of the new image and back up the database;
+2. run [rollback/20261021094612_AddDocumentStructure.down.sql](rollback/20261021094612_AddDocumentStructure.down.sql)
+   (it drops the structure tables, the two new columns and their indexes, and removes the history
+   row; all structure definitions and marked nodes are lost, business rows are kept);
+3. start the previous image — the database is then exactly its baseline (verified by
+   `StructureMigrationTests.RollbackScript_RestoresTheExactBaselineAndKeepsBusinessRows`);
+4. re-index search from the previous image if needed (its mapping version 2 index is recreated on
+   start because the stored version 3 differs).
 
 ## Change Log
 
 | Date | Change | Impact |
 |------|------|------|
+| 2026-10-21 | Added migration `20261021094612_AddDocumentStructure` (issue #89) and taught the executor to apply pending known migrations, verifying earlier versions against their own target model | Additive schema; `sequence` backfilled for every block; rollback requires the documented down script before the previous image starts |
 | 2026-10-06 | Adopted extended shared exact-scope evidence; removed all local catalog adaptation and redundant evidence types | Original decisions/backfill/public history/lease retained; no schema change |
 | 2026-10-04 | Adopted shared schema reader/derivation/comparer/baseline writer with bounded PostgreSQL naming/model-gap adaptation | Original classification/backfill/history/lease preserved; no schema or configuration change; same-database rollback verified |
 | 2026-10-02 | Adopted formal ServiceMantle 0.3.0 shared direct startup gate, receipt, and EF Core health snapshot source; removed local duplicate algorithms | Only the two operational refusal codes above change; no schema/data/configuration/HTTP changes; old images can roll back against the same compatible existing database |

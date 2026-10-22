@@ -12,8 +12,9 @@ Doctheca 是通用的文档库与检索服务：.NET 最小 API、Vue 3 管理�
 
 ## 文档与沟通语言
 
-- 面向用户的回复、进度更新及 Issue、PR、review 正文使用自然、具体的中文，直接说明对象、动作和结果，避免照搬内部流程术语；引用原文或讨论术语本身时可保留原词。
-- 流程与约束文档（本文件）、GitHub issue/PR 正文和 review 全程使用中文；Issue 标题使用中文，建议格式为 `[模块] 简明动作`。
+- 面向用户的回复、进度更新及 PR、review 正文使用自然、具体的中文，直接说明对象、动作和结果，避免照搬内部流程术语；引用原文或讨论术语本身时可保留原词。
+- 流程与约束文档（本文件）、GitHub PR 正文和 review 全程使用中文。
+- GitHub issue 的标题和正文使用自然、具体的英文；标题建议格式为 `[Module] Concise action`。
 - PR 标题和 commit message 使用英文 conventional commit 格式（`feat:` / `fix:` / `docs:` / `test:` / `refactor:` / `chore:` / `ci:` 等）；subject 说明做了什么，需要时用 body 说明原因。
 - `README.md`、`CONTRIBUTING.md`、`SECURITY.md`、`docs/`、`CONTEXT.md`、代码注释、日志与 API/异常消息等面向使用者的文字使用英文。
 - 从 Ruoyu.Study 继承的中文文档、注释与日志的英文化由 #2 跟踪：新增内容直接用英文；修改现有中文内容时不顺带整篇翻译，翻译不与功能改动混在同一提交。
@@ -23,7 +24,7 @@ Doctheca 是通用的文档库与检索服务：.NET 最小 API、Vue 3 管理�
 ## 贡献约定
 
 - `CONTRIBUTING.md` 是所有贡献者的工程入口；漏洞通过 `SECURITY.md` 所述的私密渠道报告，不开公开 issue。
-- Issue 使用 `.github/ISSUE_TEMPLATE/task.md`，PR 使用 `.github/pull_request_template.md`，按模板逐节填写，不适用的节写明“无”或“不适用”及理由。
+- Issue 使用 `.github/ISSUE_TEMPLATE/task.md`，PR 使用 `.github/pull_request_template.md`，按模板逐节填写，不适用的节写明“无”或“不适用”及理由（issue 中写 "None" 或 "Not applicable"）。
 
 ## 项目边界与架构
 

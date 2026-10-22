@@ -10,6 +10,7 @@ using Microsoft.Extensions.Options;
 using OpenSearch.Net;
 using Doctheca.Domain.Models;
 using Doctheca.Domain.Repositories;
+using Doctheca.Domain.Services.Structure;
 using Doctheca.Service.OpenSearch;
 
 namespace Doctheca.Service;
@@ -52,19 +53,23 @@ public sealed class OpenSearchIndexService : ISearchIndexService
         return OpenSearchIndexManager.BuildIndexBody();
     }
 
-    public async Task IndexParseBlocksAsync(Guid parseId, Guid documentFileId, string fileName, string? subject, string? grade, string? year)
+    public async Task<bool> IndexParseBlocksAsync(Guid parseId, Guid documentFileId, string fileName, string? subject, string? grade, string? year)
     {
         var indexName = _options.IndexName;
 
         using var scope = _serviceProvider.CreateScope();
         var blockRepository = scope.ServiceProvider.GetRequiredService<IDocumentParseBlockRepository>();
+        var structureRepository = scope.ServiceProvider.GetRequiredService<IDocumentStructureRepository>();
 
         var blocks = await blockRepository.GetByParseIdAsync(parseId);
         if (blocks.Count == 0)
         {
             _logger.LogWarning("Parse {ParseId} has no blocks to index", parseId);
-            return;
+            return true;
         }
+
+        // Hand-marked structure (issue #89): each block carries its deepest node and ancestors.
+        var structure = new StructurePathResolver(await structureRepository.GetByParseIdAsync(parseId));
 
         var bulkOps = new List<object>();
         foreach (var block in blocks)
@@ -73,6 +78,7 @@ public sealed class OpenSearchIndexService : ISearchIndexService
             if (string.IsNullOrWhiteSpace(block.TextContent))
                 continue;
 
+            var position = structure.Resolve(block.Sequence);
             bulkOps.Add(new { index = new { _index = indexName, _id = $"block_{block.Id}" } });
             bulkOps.Add(new
             {
@@ -100,6 +106,8 @@ public sealed class OpenSearchIndexService : ISearchIndexService
                 text_level = block.TextLevel,
                 text_format = block.TextFormat,
                 caption = block.Caption ?? string.Empty,
+                structure_node_ids = position?.NodeIds.Select(id => id.ToString()).ToArray() ?? [],
+                structure_path = position?.Path,
                 _meta = new { block_data = block.BlockData }
             });
         }
@@ -107,20 +115,36 @@ public sealed class OpenSearchIndexService : ISearchIndexService
         if (bulkOps.Count == 0)
         {
             _logger.LogWarning("Parse {ParseId} has no indexable blocks (all text_content empty)", parseId);
-            return;
+            return true;
         }
 
         var bulkJson = string.Join("\n", bulkOps.Select(op => JsonSerializer.Serialize(op))) + "\n";
         var response = await _client.BulkAsync<BytesResponse>(PostData.String(bulkJson));
 
-        if (response.Success && (response.HttpStatusCode == 200 || response.HttpStatusCode == 201))
+        if (response.Success && (response.HttpStatusCode == 200 || response.HttpStatusCode == 201)
+            && !BulkResponseHasItemErrors(response.Body))
         {
             _logger.LogInformation("Parse {ParseId} indexed {BlockCount} blocks to OpenSearch (FileId={FileId})",
                 parseId, bulkOps.Count / 2, documentFileId);
+            return true;
         }
-        else
+
+        _logger.LogWarning("Parse {ParseId} indexing failed, status code: {StatusCode}", parseId, response.HttpStatusCode);
+        return false;
+    }
+
+    /// <summary>A bulk request answers 200 even when individual items fail; read its "errors" flag.</summary>
+    private static bool BulkResponseHasItemErrors(byte[]? body)
+    {
+        if (body == null || body.Length == 0) return false;
+        try
         {
-            _logger.LogWarning("Parse {ParseId} indexing failed, status code: {StatusCode}", parseId, response.HttpStatusCode);
+            using var doc = JsonDocument.Parse(body);
+            return doc.RootElement.TryGetProperty("errors", out var errors) && errors.ValueKind == JsonValueKind.True;
+        }
+        catch (JsonException)
+        {
+            return false;
         }
     }
 
