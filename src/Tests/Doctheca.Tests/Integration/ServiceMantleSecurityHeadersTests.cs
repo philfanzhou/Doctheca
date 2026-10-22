@@ -134,6 +134,7 @@ public sealed class ServiceMantleSecurityHeadersTests : ServiceMantleIntegration
         {
             expected.Add("GET /internal/v1/structure-definitions");
             expected.Add("GET /internal/v1/documents");
+            expected.Add("GET /internal/v1/documents/{documentFileId}/structure");
         }
         // Exactly the expected JSON endpoints are marked; disabled internal routes do not exist.
         Assert.True(
