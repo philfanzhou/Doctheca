@@ -148,6 +148,33 @@ public sealed class StructaDocAnnotationSyncTests(PostgreSqlMigrationFixture fix
             .And.NotContain(Caption).And.NotContain(Footnote);
     }
 
+    [Fact]
+    public async Task HeadingClassification_IndexFailureKeepsCorrectLocalLevelAndParsedStatus()
+    {
+        using var context = fixture.CreateContext(_database);
+        using var logs = new CapturingLoggerProvider();
+        using var loggerFactory = LoggerFactory.Create(builder => builder.AddProvider(logs));
+        var client = Client(loggerFactory, _ => Task.FromResult(Json(
+            "{\"items\":[{\"sequence\":0,\"pageNumber\":1,\"type\":\"title\",\"content\":\"synthetic heading\"}]}")));
+        var fileService = new Mock<IDocumentFileService>();
+        fileService.Setup(service => service.GetByIdAsync(MigrationGoldenStates.FileId))
+            .ReturnsAsync(new DocumentFileModel { Id=MigrationGoldenStates.FileId,FileName="synthetic.pdf" });
+        var index = new Mock<ISearchIndexService>();
+        index.Setup(service => service.IndexParseBlocksAsync(It.IsAny<Guid>(),It.IsAny<Guid>(),It.IsAny<string>(),
+            It.IsAny<string?>(),It.IsAny<string?>(),It.IsAny<string?>()))
+            .ThrowsAsync(new InvalidOperationException("synthetic index failure"));
+        using var services = new ServiceCollection().AddSingleton(client).AddSingleton(fileService.Object)
+            .AddSingleton<IStructaDocParseResultSync>(Sync(context,client,loggerFactory)).AddSingleton(index.Object)
+            .AddSingleton<IDocumentParseService>(ParseService(context,loggerFactory)).BuildServiceProvider();
+        var worker = new StructaDocParseWorker(services,loggerFactory.CreateLogger<StructaDocParseWorker>(),
+            new ServiceLogContext(ServiceId.Parse("doctheca"),InstanceId.Parse("heading-test"),"1.0.0"));
+        await worker.PollAsync(Model(),services,default);
+        context.ChangeTracker.Clear();
+        (await context.DocumentParseBlocks.SingleAsync()).TextLevel.Should().Be(-2);
+        (await context.DocumentParses.SingleAsync()).Status.Should().Be(DocumentParseStatus.Parsed);
+        string.Join('\n',logs.Messages).Should().NotContain("synthetic heading").And.NotContain("synthetic index failure");
+    }
+
     private DocumentParseModel Model() => new()
     {
         Id = MigrationGoldenStates.ParseId, DocumentFileId = MigrationGoldenStates.FileId,

@@ -26,7 +26,7 @@ This table stores the **structured block rows** of parse artifacts. Legacy data 
 | `block_data` | `JSONB` | NOT NULL | | ⭐ Whole-block original JSON (fallback): legacy records hold the original MinerU content_list item; new records hold the normalized JSON of the StructaDoc block (camelCase) |
 | `created_at` | `TIMESTAMP WITH TIME ZONE` | NOT NULL | `NOW()` | Creation time |
 | `sub_type` | `VARCHAR(50)` | NULL | | [Gen 2] minerU secondary classification (e.g. `image_body`/`table_caption`/`text`/`ref_text`) |
-| `text_level` | `INT` | NOT NULL | `-1` | [Gen 2] Heading level: 0=body,1=h1,2=h2...; non-heading text is `-1` |
+| `text_level` | `INT` | NOT NULL | `-1` | Canonical: positive numbered heading, `-2` level-less title, `-1` other; historical MinerU `0`/body and positive levels remain valid |
 | `text_format` | `VARCHAR(20)` | NOT NULL | `''` | [Gen 2] Text format (VLM backend): `latex`/`markdown`/`none` |
 | `bbox_x0` | `REAL` | NULL | | [Gen 2] bbox top-left X (normalized to the 0-1000 pipeline convention) |
 | `bbox_y0` | `REAL` | NULL | | [Gen 2] bbox top-left Y |
@@ -55,7 +55,7 @@ This table stores the **structured block rows** of parse artifacts. Legacy data 
 - **Structured dimension fields**: `sub_type`/`text_level`/`text_format`/`bbox_x0..y1`/`score`/`caption`/`footnote` are independent columns; `block_data` still keeps the normalized block, including annotations.
 - **Annotations are untrusted plain text**: caption/footnote preserve null, empty/whitespace, Unicode and line endings exactly, without trimming, truncation, HTML interpretation or logging. An image/table with null body can still be searchable. Older runs are not automatically fetched again.
 - **[Gen 2] bbox normalization**: unified to the 0-1000 convention on write. Legacy records use heuristic detection (pipeline [0,1000] / VLM [0,1]×1000); new records are mapped from StructaDoc's 0-1 normalized coordinates ×1000
-- **New-pipeline mapping conventions**: `page_id` = StructaDoc `pageNumber` − 1 (null → 0); `sort_index` increments within a page; `text_level` is derived from subtype `heading-N`; `text_format` = `contentFormat`
+- **New-pipeline mapping conventions**: `page_id` = StructaDoc `pageNumber` − 1 (null → 0); `sort_index` increments within a page; `text_level` uses a valid positive `heading-N`, otherwise exact canonical `title` is `-2` and other new blocks are `-1`; `text_format` = `contentFormat`
 
 ## Population Flow
 
@@ -75,7 +75,7 @@ Delete-then-insert INSERT INTO document_parse_blocks
      block_data     = normalized JSON of the block
      image_id       = block.assetId → document_parse_images mapping
      sub_type       = block.subtype
-     text_level     = subtype heading-N → N, otherwise -1
+     text_level     = valid positive heading-N → N; otherwise exact title → -2, other → -1
      text_format    = block.contentFormat
      bbox_x0/y0/x1/y1 = block.boundingBox ×1000 (0-1 → 0-1000)
      score          = block.confidence
@@ -91,3 +91,5 @@ Delete-then-insert INSERT INTO document_parse_blocks
 - Deleting a `document_parse` automatically deletes this table's rows via CASCADE
 - **`sequence` backfill** (migration `20261021094612_AddDocumentStructure`): a parse whose rows all carry a distinct non-negative integer `block_data.sequence` keeps those values; every other parse (legacy MinerU rows, missing or duplicated values) is numbered `0..n-1` by `(page_id, sort_index, id)`. No other column changes.
 - **Annotation upgrade** (`20261022184348_AddBlockFootnotes`): adds only nullable `footnote`, leaving older values null and retaining every other field/table. See [upgrade, reindex and rollback](../migrations.md#block-annotation-upgrade-issue-105).
+
+- **Level-less title correction** (`20261022194526_ClassifyLevelLessTitles`, #106): only exact `title` rows with nonpositive `text_level` and no valid positive stored `heading-N` become `-2`. Existing positive values (including missing/truncated subtype), all non-title rows and legacy body `0` stay unchanged. New sync parses the full upstream subtype before its 50-character stored truncation, using ordinal case-insensitive `heading-` and invariant `Int32` integer parsing with a positive result. ASCII integer whitespace, optional plus and leading zeros remain accepted; zero, negative and overflow values are invalid. `block_data` is not rewritten by the migration. See [upgrade, down and explicit reindex](../migrations.md#level-less-title-classification-issue-106).

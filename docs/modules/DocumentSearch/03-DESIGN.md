@@ -431,3 +431,13 @@ GET /admin/documents/search
 - **Startup initialization is best-effort**: `EnsureIndexAsync` failure does not block service startup; it only logs.
 - **Generation 2 minerU filter pure logic is testable**: `BuildSearchBody` adds filter-construction assertions on top of the existing `internal static` tests; `ParseSearchResponse` adds minerU field attachment assertions (`BlockData`/`Bbox`/`Score` extraction) on top of the existing `internal static` tests. **No new** standalone `BuildBlock*` / `ParseBlock*` methods, avoiding double maintenance.
 - **Generation 2 degradation is verifiable**: reuses the existing mock-throw path for `ISearchIndexService.ExactSearchAsync` to verify minerU filters still go through `SearchDomainService` degradation, returning empty results + LogWarning.
+
+### Canonical level-less titles (#106)
+
+The existing integer `text_level` now distinguishes exact canonical `title` without a valid
+positive `heading-N` as `-2`; other new canonical blocks use `-1`, and numbered headings retain
+their positive integer. Historical MinerU `0`/body and positive levels retain their original
+meaning. A guarded data-only migration preserves non-title rows and existing positive values,
+including absent/truncated subtype metadata. No mapping-version bump is required beyond mapping4.
+An explicit administrator reindex updates derived copies; empty-content titles remain excluded
+under the body/caption/footnote indexability rule. See the [migration contract](../../database/migrations.md#level-less-title-classification-issue-106).

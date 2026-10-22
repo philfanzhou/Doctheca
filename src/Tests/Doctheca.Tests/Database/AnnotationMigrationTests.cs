@@ -52,8 +52,12 @@ public sealed class AnnotationMigrationTests(PostgreSqlMigrationFixture fixture)
             await context.Database.ExecuteSqlAsync($"UPDATE document_parse_blocks SET footnote = {"新注释\nα"}");
             var before = await ExistingRowsAsync(context);
             if (documentedSql)
+            {
+                await MigrationGoldenStates.ExecuteRawAsync(context, await File.ReadAllTextAsync(
+                    StructureMigrationTests.RollbackScriptPath(DocthecaMigrationExecutor.ClassifyLevelLessTitlesMigrationId)));
                 await MigrationGoldenStates.ExecuteRawAsync(context, await File.ReadAllTextAsync(
                     StructureMigrationTests.RollbackScriptPath(DocthecaMigrationExecutor.AddBlockFootnotesMigrationId)));
+            }
             else
                 await context.GetService<IMigrator>().MigrateAsync(DocthecaMigrationExecutor.AddDocumentParsePagesMigrationId);
             (await ExistingRowsAsync(context)).Should().Equal(before);

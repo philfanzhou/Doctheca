@@ -129,6 +129,32 @@ public class StructaDocParseResultSyncTests
     }
 
     [Fact]
+    public async Task SyncAsync_ClassifiesUsingFullTypeAndSubtypeBeforeStorageTruncation()
+    {
+        var longSubtype = "heading-" + new string('0', 60) + "2";
+        List<DocumentParseBlockModel>? inserted = null;
+        var repository = new Mock<IDocumentParseBlockRepository>();
+        repository.Setup(value => value.AddBlocksAsync(ParseId, It.IsAny<IEnumerable<DocumentParseBlockModel>>()))
+            .Callback<Guid, IEnumerable<DocumentParseBlockModel>>((_, rows) => inserted = rows.ToList())
+            .Returns(Task.CompletedTask);
+        var (sync, _) = CreateSync(blockRepository: repository, blocks:
+        [
+            new() { Sequence = 2, PageNumber = 2, Type = "text", Subtype = "heading-+3", Content = "compatible" },
+            new() { Sequence = 0, PageNumber = 2, Type = "title", Content = "level-less" },
+            new() { Sequence = 1, PageNumber = 2, Type = "title", Subtype = longSubtype, Content = "numbered" },
+            new() { Sequence = 3, Type = "TITLE", Subtype = "malformed", Content = "legacy type" }
+        ]);
+        await sync.SyncAsync(CreateParse(), RunId, default);
+        inserted!.Select(row => row.TextLevel).Should().Equal(-2, 2, 3, -1);
+        inserted.Take(3).Select(row => row.PageId).Should().Equal(1, 1, 1);
+        inserted.Take(3).Select(row => row.SortIndex).Should().Equal(0, 1, 2);
+        inserted.Select(row => row.Sequence).Should().Equal(0, 1, 2, 3);
+        inserted[1].SubType.Should().Be(longSubtype[..50]);
+        using var original = System.Text.Json.JsonDocument.Parse(inserted[1].BlockData);
+        original.RootElement.GetProperty("subtype").GetString().Should().Be(longSubtype);
+    }
+
+    [Fact]
     public async Task SyncAsync_MarksParseParsedWithMarkdownAndRunId()
     {
         var parseService = new Mock<IDocumentParseService>();

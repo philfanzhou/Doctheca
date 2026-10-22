@@ -187,6 +187,7 @@ remain in temporary mode-0600 environment files and are checked for disclosure w
 | `20261021153535_AddStructureAudio` | The `document_structure_audio` table with its indexes and the cascade foreign key to `document_parses` (issue #90); no existing table changes |
 | `20261022160829_AddDocumentParsePages` | The `document_parse_pages` table with composite physical-page key and cascade parse ownership (#102); no existing table or row changes |
 | `20261022184348_AddBlockFootnotes` | Nullable `document_parse_blocks.footnote` (#105); existing captions and all page/structure/audio rows are retained |
+| `20261022194526_ClassifyLevelLessTitles` | Data-only title classification correction (#106); identical schema including pages/footnotes/audio |
 
 Adding or changing migrations requires extending `DocthecaMigrationExecutor.KnownMigrationIds`
 (the known-version contract) and `TablesAfterMigration` together with the executor's takeover
@@ -325,13 +326,62 @@ post-backup writes cannot survive that restoration. Apply later down scripts fir
 `AnnotationMigrationTests` compares populated upgrade, nullable older-null values, EF and SQL
 down, exact page-version schema/history and every retained row (including pages/audio), forward
 migration again, and refused unknown/conflicting states. `OpenSearchAnnotationTests` verifies
-mapping3 rebuild and explicit local-row reindex. The optional previous-image startup check now
-targets the page version; the legacy-takeover check subsequently rolls back pages/audio/structure.
+mapping3 rebuild and explicit local-row reindex. The annotation down tests target the page version. The current optional previous-image startup
+check targets the annotation version after the later classification down; its legacy-takeover
+check then rolls back footnotes/pages/audio/structure.
+
+## Level-less Title Classification (issue #106)
+
+**Compatibility and exact rule.** New StructaDoc sync first parses the full subtype, before the
+50-character stored truncation: ordinal case-insensitive `heading-` plus invariant `Int32.TryParse`
+with `NumberStyles.Integer` and a result greater than zero. Leading zeros, optional plus and
+surrounding ASCII integer whitespace remain valid; zero, negative, malformed and overflow inputs
+are invalid. Without a valid positive level, exact lowercase canonical `title` becomes `-2`,
+and every other new block becomes `-1`. Historical positive levels and all non-title rows,
+including MinerU body `0`, retain their meanings. The HTTP field/filter is still the same integer;
+callers that need level-less titles should filter `textLevel=-2` rather than `-1` after reindex.
+
+**Upgrade.** Verify a backup and stop mixed-version writers. Startup applies data-only migration
+`20261022194526_ClassifyLevelLessTitles` under the existing advisory lock. Only `block_type='title'`
+with nonpositive stored level and an invalid stored positive-heading subtype is set to `-2`.
+An already `-2` target is unchanged; existing positive values win over missing/truncated subtype,
+and inconsistent nonpositive rows with a valid positive subtype remain outside the correction.
+All other rows/columns, including raw block JSON, caption/footnote, pages and structure/audio,
+are unchanged. SQL uses an ASCII lexical check inside `CASE` before bounded numeric conversion,
+so malformed/overflow input cannot reach an unchecked cast. The generated target model is
+identical to the annotation version. Empty, earlier known and verified legacy databases retain
+the existing ordered migration/takeover and unknown-history/schema refusal rules. A failed or
+cancelled pre-commit transaction must not commit either correction or this history row.
+
+The integer search mapping remains **4**, so startup does not rebuild the index for this change.
+After readiness and complete history verification, run the existing authenticated
+`POST /admin/search-index/reindex` and wait for completion before relying on corrected filters.
+It reindexes local rows only: no remote backfill/reparse, new empty-content hit, network operation
+inside the migration, or new UI/configuration/port/storage change is provided. Index failure
+leaves corrected database values intact; use the same administrator repair path to retry.
+
+**Down and recovery.** Stop every instance and retain the verified backup before applying
+[20261022194526_ClassifyLevelLessTitles.down.sql](rollback/20261022194526_ClassifyLevelLessTitles.down.sql)
+(or migrate to `20261022184348_AddBlockFootnotes` using controlled EF maintenance). One transaction
+returns title `-2` to the previous `-1` representation and removes only this history row, retaining
+the complete annotation/page/audio schema and sibling data. This deliberately collapses the new
+classification, including post-upgrade writes; it cannot reconstruct malformed historical values
+such as `-9`. Exact pre-upgrade recovery requires the verified backup and matching image. Bare
+old-image startup can refuse unknown history: never delete arbitrary history or bypass inspection.
+Start the chosen image only after compatible down/backup recovery, reindex local rows again and
+verify old filter behavior before reopening traffic. Apply any later down scripts first.
+
+`HeadingClassificationMigrationTests` covers a shared runtime/SQL corpus, populated annotation
+upgrade with every other value retained, verified legacy takeover, EF and shipped SQL down,
+re-forward, pre-commit failure/cancellation, and concurrent/repeated starts under the real advisory
+lock. `OpenSearchHeadingClassificationTests` verifies real local-row reindex without a mapping
+bump, legacy values, returned integers, phrase/stemmed behavior and empty-title exclusion.
 
 ## Change Log
 
 | Date | Change | Impact |
 |------|------|------|
+| 2026-10-23 | Added data-only `20261022194526_ClassifyLevelLessTitles` (#106) | Canonical level-less titles use -2; preserve legacy positives/body0; explicit reindex and backup/down recovery |
 | 2026-10-23 | Added `20261022184348_AddBlockFootnotes` and annotation mapping4 (#105) | Additive nullable footnote; upgrade and rollback require explicit local-row reindex; down discards only footnotes |
 | 2026-10-23 | Added `20261022160829_AddDocumentParsePages` (#102) | Additive optional page labels; previous image requires backup/down-script maintenance or pre-upgrade backup restoration |
 | 2026-10-22 | Added migration `20261021153535_AddStructureAudio` (issue #90) | Additive table only; standard recovery restores the pre-upgrade backup; the separate down script discards audio metadata |
