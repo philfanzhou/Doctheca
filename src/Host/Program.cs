@@ -407,6 +407,7 @@ app.MapStructureAudioEndpoints();
 app.MapInternalCatalogEndpoints(internalApiOptions);
 app.MapInternalStructureEndpoints(internalApiOptions);
 app.MapInternalContentEndpoints(internalApiOptions);
+app.MapInternalSearchEndpoints(internalApiOptions);
 
 // ServiceMantle fixed health endpoints: GET /health/live (liveness, never touches the
 // database), GET /health/ready and the GET /health alias (readiness projection). All three

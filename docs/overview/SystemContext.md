@@ -28,7 +28,7 @@ Doctheca :5012 ─────► SignaCore :5002
 | Caller | Entry | Identity | Purpose |
 |--------|------|------|------|
 | Admin UI | `/`, `/admin/*` | Identity `role=admin` Cookie/JWT | File, parse, metadata, export, and search management |
-| Internal business services (opt-in) | `/internal/v1/structure-definitions`, `/internal/v1/documents`, `/internal/v1/documents/{documentFileId}/structure`, `/internal/v1/structure-nodes/{nodeId}/content`, `/internal/v1/structure-nodes/{nodeId}/images/{imageId}/content` | Anonymous; deployer restricts network reachability | Read-only definition and marked-document catalogs, current document trees, revision-checked content pages and owned image bytes |
+| Internal business services (opt-in) | `/internal/v1/structure-definitions`, `/internal/v1/documents`, `/internal/v1/documents/{documentFileId}/structure`, `/internal/v1/structure-nodes/{nodeId}/content`, `/internal/v1/structure-nodes/{nodeId}/images/{imageId}/content`, `/internal/v1/search` | Anonymous; deployer restricts network reachability | Read-only definition and marked-document catalogs, current document trees, revision-checked content pages, owned image bytes and subtree search |
 
 Regular Identity users have no administrator role and cannot log in or call the admin API.
 `InternalApi:Enabled` defaults to false; missing or malformed values disable the internal API.
@@ -40,7 +40,9 @@ The tree selects the latest parsed parse with saved nodes (timestamp descending,
 UUID descending), and reads all tree data in one repeatable-read snapshot. Node content
 resolves ownership in its own snapshot; SHA-256 revisions reject changed tree/block membership
 between pages with 409. Owned images are proxied through StructaDoc or legacy OSS with safe
-errors and stream disposal, without storage links. Search and audio remain separate follow-up work (#100/#101).
+errors and stream disposal, without storage links. Search validates current-node ownership and strict bounded
+cursors, then applies the existing indexed subtree filter; the derived index remains eventually consistent.
+Audio remains separate follow-up work (#101).
 See [Internal API](../Integration/InternalApi.md) for pagination and deployment responsibilities.
 
 ## Downstream Dependencies

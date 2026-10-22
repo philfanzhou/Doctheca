@@ -80,10 +80,10 @@ internal static class OpenSearchQueryBuilder
                 var decoded = Encoding.UTF8.GetString(Convert.FromBase64String(pageToken));
                 searchAfter = JsonSerializer.Deserialize<List<object>>(decoded);
             }
-            catch (Exception ex)
+            catch (Exception)
             {
                 // pageToken is opaque client input; invalid tokens are expected occasionally
-                logger?.LogDebug(ex, "Failed to decode page token, starting from first page");
+                logger?.LogDebug("Invalid search page token; starting from first page");
                 searchAfter = null;
             }
         }

@@ -241,14 +241,13 @@ public sealed class OpenSearchIndexService : ISearchIndexService
 
         var searchBody = OpenSearchQueryBuilder.BuildSearchBody(query, phrase, filter, pageSize, pageToken, _logger);
         var json = JsonSerializer.Serialize(searchBody);
-        _logger.LogDebug("OpenSearch search request: index={Index}, body={Body}", indexName, json);
+        _logger.LogDebug("OpenSearch query started");
         var response = await _client.SearchAsync<BytesResponse>(indexName, json);
 
         if (!response.Success || response.HttpStatusCode != 200)
         {
-            var errorBody = response.Body != null ? Encoding.UTF8.GetString(response.Body) : "(empty)";
-            throw new InvalidOperationException(
-                $"OpenSearch query failed, status code: {response.HttpStatusCode}, response: {errorBody}, query: {json}");
+            _logger.LogDebug("OpenSearch query rejected, status code: {StatusCode}", response.HttpStatusCode);
+            throw new InvalidOperationException("OpenSearch query failed.");
         }
 
         var responseJson = Encoding.UTF8.GetString(response.Body);
