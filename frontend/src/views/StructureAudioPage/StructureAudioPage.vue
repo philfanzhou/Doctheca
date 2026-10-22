@@ -134,7 +134,13 @@ async function onPicked(event: Event) {
   }
 }
 
+function updateNode(id: string, nodeId: string | null) {
+  if (saving.value) return
+  edited.value[id] = nodeId
+}
+
 function toggleRemove(item: StructureAudio) {
+  if (saving.value) return
   removed.value = removedSet.value.has(item.id)
     ? removed.value.filter((id) => id !== item.id)
     : [...removed.value, item.id]
@@ -277,12 +283,13 @@ onUnmounted(() => {
               </td>
               <td class="audio-node">
                 <el-select
-                  v-model="edited[item.id]"
+                  :model-value="edited[item.id]"
+                  @update:model-value="updateNode(item.id, $event)"
                   filterable
                   clearable
                   placeholder="未关联"
                   :aria-label="`关联节点 ${item.sourcePath}`"
-                  :disabled="removedSet.has(item.id)"
+                  :disabled="saving || removedSet.has(item.id)"
                   :value-on-clear="null"
                   style="width: 100%"
                 >
@@ -301,6 +308,7 @@ onUnmounted(() => {
                   class="btn btn-sm"
                   :class="removedSet.has(item.id) ? 'btn-ghost' : 'btn-danger'"
                   :aria-label="`${removedSet.has(item.id) ? '撤销删除' : '删除'} ${item.sourcePath}`"
+                  :disabled="saving"
                   @click="toggleRemove(item)"
                 >
                   <span v-html="iconHtml(removedSet.has(item.id) ? 'refresh' : 'trash')"></span>{{ removedSet.has(item.id) ? '撤销' : '删除' }}

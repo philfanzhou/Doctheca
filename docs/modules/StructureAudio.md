@@ -103,7 +103,7 @@ Missing parse or disabled storage is refused before buffering uploads. Removal c
 
 ## Console workflow
 
-Choose a folder, multiple files or ZIPs, then review flagged files or all files. Change/clear links and mark removals, then save once and reload persisted results. Import merges new rows while keeping an existing unsaved draft. Reload, sidebar/back/hash navigation and logout require discard confirmation for a dirty draft; tab close uses the browser's unload confirmation. In-flight import/save prevents navigation and duplicate writes. Paths/node names render as escaped text. Drafts stay in memory; neither payloads nor credentials are persisted in browser storage. Authentication failures never replay a write automatically. There is no player UI, text/exercise alignment, transcript or downstream audio read API.
+Choose a folder, multiple files or ZIPs, then review flagged files or all files. Change/clear links and mark removals, then save once and reload persisted results. Import merges new rows while keeping an existing unsaved draft. Reload, sidebar/back/hash navigation and logout require discard confirmation for a dirty draft; tab close uses the browser's unload confirmation. In-flight import/save prevents navigation and duplicate writes. Saving also disables node selection/clearing and removal/undo from the deletion confirmation until the request finishes; cancelling confirmation or a failed request keeps the draft editable. Paths/node names render as escaped text. Drafts stay in memory; neither payloads nor credentials are persisted in browser storage. Authentication failures never replay a write automatically. There is no player UI, text/exercise alignment, transcript or downstream audio read API.
 
 ## Deferred playback
 

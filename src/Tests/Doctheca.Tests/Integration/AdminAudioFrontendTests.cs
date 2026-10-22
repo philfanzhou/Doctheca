@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -91,10 +92,63 @@ public sealed partial class AdminHostedFrontendTests
             Assert.Contains("#audio/", h.Page.Url);
         }
 
-        await h.Page.GetByRole(AriaRole.Button, new() { Name = "删除 官方音频/unit8/9sVocabulary08Unit8.mp3" }).ClickAsync();
-        await h.Page.GetByRole(AriaRole.Button, new() { Name = "保存", Exact = true }).ClickAsync();
-        await h.Page.GetByRole(AriaRole.Button, new() { Name = "确定" }).ClickAsync();
-        await Assertions.Expect(h.Page.GetByText("音频关联已保存")).ToBeVisibleAsync();
+        var removed = h.Page.Locator("tr[data-audio-path='官方音频/unit8/9sVocabulary08Unit8.mp3']");
+        var unchanged = h.Page.Locator("tr[data-audio-path='官方音频/unit1/9sVocabulary01Unit1.mp3']");
+        await removed.GetByRole(AriaRole.Button).ClickAsync();
+
+        // Hold the real PUT response to exercise the entire save, including confirmation.
+        var received = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        await h.Page.RouteAsync("**/admin/document-parses/" + parseId + "/audio", async route =>
+        {
+            if (route.Request.Method != "PUT") { await route.ContinueAsync(); return; }
+            var response = await route.FetchAsync();
+            received.TrySetResult(route.Request.PostData ?? "");
+            await release.Task;
+            await route.FulfillAsync(new() { Response = response });
+        });
+        try
+        {
+            await h.Page.GetByRole(AriaRole.Button, new() { Name = "保存", Exact = true }).ClickAsync();
+            await Assertions.Expect(h.Page.Locator(".el-message-box:visible")).ToBeVisibleAsync();
+            await AssertAudioDraftLockedAsync(h.Page);
+            Assert.False(received.Task.IsCompleted, "Save was sent before deletion confirmation.");
+            await h.Page.GetByRole(AriaRole.Button, new() { Name = "取消", Exact = true }).ClickAsync();
+            await Assertions.Expect(h.Page.Locator(".el-message-box:visible")).ToHaveCountAsync(0);
+            await Assertions.Expect(unchanged.GetByRole(AriaRole.Combobox)).ToBeEnabledAsync();
+            await Assertions.Expect(removed.GetByRole(AriaRole.Button)).ToBeEnabledAsync();
+            await Assertions.Expect(cleared).ToContainTextAsync("未保存");
+            await Assertions.Expect(mismatch).ToContainTextAsync("未保存");
+            await Assertions.Expect(removed).ToContainTextAsync("待删除");
+
+            // Undo and mark again after cancellation to prove the draft is editable again.
+            await removed.GetByRole(AriaRole.Button).ClickAsync();
+            await Assertions.Expect(removed).Not.ToContainTextAsync("待删除");
+            await removed.GetByRole(AriaRole.Button).ClickAsync();
+            await h.Page.GetByRole(AriaRole.Button, new() { Name = "保存", Exact = true }).ClickAsync();
+            await h.Page.GetByRole(AriaRole.Button, new() { Name = "确定", Exact = true }).ClickAsync();
+            using var sent = JsonDocument.Parse(await received.Task.WaitAsync(TimeSpan.FromSeconds(30)));
+            Assert.Equal(2, sent.RootElement.GetProperty("links").GetArrayLength());
+            Assert.Single(sent.RootElement.GetProperty("removeIds").EnumerateArray());
+            await AssertAudioDraftLockedAsync(h.Page);
+
+            // Native disabled controls reject both removal and undo while the response waits.
+            await unchanged.GetByRole(AriaRole.Button).EvaluateAsync("button => button.click()");
+            await removed.GetByRole(AriaRole.Button).EvaluateAsync("button => button.click()");
+            await Assertions.Expect(unchanged).Not.ToContainTextAsync("待删除");
+            await Assertions.Expect(removed).ToContainTextAsync("待删除");
+            await Assertions.Expect(cleared).ToContainTextAsync("未保存");
+            await Assertions.Expect(mismatch).ToContainTextAsync("未保存");
+            release.TrySetResult();
+            await Assertions.Expect(h.Page.GetByText("音频关联已保存")).ToBeVisibleAsync();
+            await Assertions.Expect(unchanged.GetByRole(AriaRole.Combobox)).ToBeEnabledAsync();
+            await Assertions.Expect(unchanged.GetByRole(AriaRole.Button)).ToBeEnabledAsync();
+            await Assertions.Expect(h.Page.Locator(".page-actions .badge.amber")).ToHaveCountAsync(0);
+        }
+        finally
+        {
+            release.TrySetResult();
+        }
 
         // 5. A reload shows the saved result.
         await h.Page.ReloadAsync();
@@ -108,6 +162,14 @@ public sealed partial class AdminHostedFrontendTests
         Assert.Equal(58, await CountAudioAsync(h, parseId));
 
 
+    }
+
+    private static async Task AssertAudioDraftLockedAsync(IPage page)
+    {
+        // Disabled select inputs block changing and clearing every node, even an open selection.
+        await Assertions.Expect(page.Locator(".audio-node input:not(:disabled)")).ToHaveCountAsync(0);
+        await Assertions.Expect(page.Locator(".audio-node .el-select__clear:visible")).ToHaveCountAsync(0);
+        await Assertions.Expect(page.Locator(".audio-actions button:not(:disabled)")).ToHaveCountAsync(0);
     }
 
     private static async Task<string> SeedTextbookStructureAsync(BrowserHarness h)
