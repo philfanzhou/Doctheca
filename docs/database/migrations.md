@@ -227,6 +227,8 @@ against the migrated database as is. To roll back:
 
 ## Structure Audio Upgrade (issue #90)
 
+Import/review (#108) and administrator playback (#109) reuse this schema without additional migrations. Playback reads write no state or URLs. Reverting only playback restores the earlier image/configuration while retaining audio data; recovery to before the audio migration uses the verified backup/restore procedure below.
+
 **Upgrade.** Starting the new image on a database at `20261021094612_AddDocumentStructure` (or
 earlier) classifies it as pending and applies `20261021153535_AddStructureAudio` under the advisory
 lock: it only creates the `document_structure_audio` table, its three indexes and its foreign key to

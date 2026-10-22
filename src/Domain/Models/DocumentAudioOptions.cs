@@ -36,3 +36,18 @@ public sealed record DocumentAudioStorageStatus(bool Available, string? Reason)
         return missing.Count > 0 ? new(false, "missing " + string.Join(", ", missing)) : new(true, null);
     }
 }
+
+/// <summary>Playback availability is independent of import and cleanup configuration.</summary>
+public sealed record DocumentAudioPlaybackSettings(bool Available, int LinkSeconds)
+{
+    public static DocumentAudioPlaybackSettings Evaluate(DocumentAudioStorageStatus storage, string? seconds, string? publicBaseUrl)
+    {
+        var ttl = 300;
+        if (seconds != null && !int.TryParse(seconds, out ttl)) return new(false, 300);
+        var validPublic = Uri.TryCreate(publicBaseUrl, UriKind.Absolute, out var uri)
+            && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps)
+            && string.IsNullOrEmpty(uri.Query) && string.IsNullOrEmpty(uri.Fragment)
+            && string.IsNullOrEmpty(uri.UserInfo);
+        return new(storage.Available && ttl is >= 60 and <= 3600 && validPublic, ttl);
+    }
+}

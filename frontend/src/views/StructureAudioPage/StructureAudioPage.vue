@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { computed, inject, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, inject, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { ElMessageBox } from 'element-plus'
 import { iconHtml } from '../../utils/icons'
 import { useToast } from '../../composables/useToast'
 import { getApiMessage, getParseStructure, type StructureTree } from '../../services/structureApi'
 import {
   getAudioFileErrors,
+  getAudioPlaybackLink,
   importParseAudio,
   listParseAudio,
   saveParseAudio,
@@ -39,6 +40,68 @@ const importErrors = ref<AudioFileError[]>([])
 const folderInput = ref<HTMLInputElement | null>(null)
 const fileInput = ref<HTMLInputElement | null>(null)
 
+const player = ref<HTMLAudioElement | null>(null)
+const playingItem = ref<StructureAudio | null>(null)
+const playbackError = ref('')
+const playbackLoading = ref(false)
+let playbackRequest = 0
+let playbackAbort: AbortController | null = null
+let playbackExpiry = 0
+
+function stopPlayback() {
+  playbackRequest++
+  playbackAbort?.abort()
+  playbackAbort = null
+  if (player.value) {
+    player.value.pause()
+    player.value.removeAttribute('src')
+    player.value.load()
+  }
+  playingItem.value = null
+  playbackLoading.value = false
+  playbackExpiry = 0
+}
+
+function mediaFailed() {
+  if (!playingItem.value || playbackLoading.value) return
+  const expired = playbackExpiry > 0 && Date.now() >= playbackExpiry
+  stopPlayback()
+  playbackError.value = expired ? '播放链接已过期，请重新点击播放。' : '音频无法播放，请检查网络或文件格式后重试。'
+}
+
+async function play(item: StructureAudio) {
+  if (saving.value || removedSet.value.has(item.id)) return
+  stopPlayback()
+  playbackError.value = ''
+  playingItem.value = item
+  playbackLoading.value = true
+  const request = playbackRequest
+  const controller = new AbortController()
+  playbackAbort = controller
+  try {
+    const response = await getAudioPlaybackLink(parseId.value, item.id, controller.signal)
+    if (request !== playbackRequest) return
+    playbackExpiry = Date.parse(response.data.expiresAt)
+    if (!Number.isFinite(playbackExpiry) || Date.now() >= playbackExpiry) {
+      stopPlayback()
+      playbackError.value = '播放链接已过期，请重新点击播放。'
+      return
+    }
+    await nextTick()
+    if (request !== playbackRequest || !player.value) return
+    player.value.src = response.data.url
+    playbackLoading.value = false
+    await player.value.play()
+  } catch (error) {
+    if (request !== playbackRequest) return
+    const status = (error as { response?: { status?: number } })?.response?.status
+    stopPlayback()
+    playbackError.value = status === 404 ? '音频已不存在，请重新加载列表。'
+      : status === 503 ? '音频播放暂时不可用，请稍后重试。'
+      : '无法播放音频，请检查网络或文件格式后重试。'
+  }
+}
+
 const options = computed(() => nodeOptions(tree.value?.nodes ?? []))
 const hasNodes = computed(() => options.value.length > 0)
 const removedSet = computed(() => new Set(removed.value))
@@ -68,6 +131,8 @@ function applyItems(list: StructureAudio[], keepEdits: boolean) {
 
 async function load() {
   if (!parseId.value) return
+  stopPlayback()
+  playbackError.value = ''
   loading.value = true
   importErrors.value = []
   try {
@@ -141,6 +206,7 @@ function updateNode(id: string, nodeId: string | null) {
 
 function toggleRemove(item: StructureAudio) {
   if (saving.value) return
+  if (playingItem.value?.id === item.id) stopPlayback()
   removed.value = removedSet.value.has(item.id)
     ? removed.value.filter((id) => id !== item.id)
     : [...removed.value, item.id]
@@ -149,6 +215,7 @@ function toggleRemove(item: StructureAudio) {
 async function save() {
   if (!dirty.value || saving.value || uploading.value || loading.value) return
   saving.value = true
+  stopPlayback()
   try {
     if (payload.value.removeIds.length && !(await confirm(`删除 ${payload.value.removeIds.length} 个音频文件？删除后需重新导入。`))) return
     const response = await saveParseAudio(parseId.value, payload.value.links, payload.value.removeIds)
@@ -182,7 +249,8 @@ onMounted(() => {
   void load()
 })
 
-onUnmounted(() => {
+onBeforeUnmount(() => {
+  stopPlayback()
   setNavigationGuard?.(null)
   window.removeEventListener('beforeunload', beforeUnload)
 })
@@ -252,6 +320,14 @@ onUnmounted(() => {
       </div>
     </div>
 
+    <div v-if="playingItem" class="card audio-player" role="region" aria-label="音频播放器">
+      <div>{{ playingItem.fileName }}</div>
+      <span v-if="playbackLoading" role="status">正在获取播放链接…</span>
+      <audio ref="player" controls preload="none" @error="mediaFailed"></audio>
+      <button class="btn btn-ghost btn-sm" @click="stopPlayback">关闭播放</button>
+    </div>
+    <div v-if="playbackError" class="error-box" role="alert">{{ playbackError }}</div>
+
     <div class="card">
       <div class="audio-filter" role="tablist" aria-label="筛选">
         <button class="btn btn-sm" :class="filter === 'all' ? '' : 'btn-ghost'" role="tab" :aria-selected="filter === 'all'" @click="filter = 'all'">
@@ -304,6 +380,7 @@ onUnmounted(() => {
                 <span v-else-if="edited[item.id] !== item.nodeId" class="badge amber audio-pending">未保存</span>
               </td>
               <td class="audio-actions">
+                <button class="btn btn-ghost btn-sm" :disabled="saving || removedSet.has(item.id)" :aria-label="`播放 ${item.sourcePath}`" @click="play(item)">播放</button>
                 <button
                   class="btn btn-sm"
                   :class="removedSet.has(item.id) ? 'btn-ghost' : 'btn-danger'"

@@ -4,7 +4,6 @@ using System.Net.Http.Json;
 using System.Text.Json.Nodes;
 using FluentAssertions;
 using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -55,7 +54,7 @@ public sealed class StructureAudioLifecycleTests(PostgreSqlFixture database, Min
     }
 
     [Fact]
-    public async Task RecoveryRequiresAdmin_AndDeferredFeatureRoutesAreAbsent()
+    public async Task RecoveryRequiresAdmin()
     {
         using var factory = Factory();
         using var anonymous = factory.CreateClient();
@@ -63,11 +62,6 @@ public sealed class StructureAudioLifecycleTests(PostgreSqlFixture database, Min
         user.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", CreateToken("user"));
         (await anonymous.PostAsync(Sweep, null)).StatusCode.Should().Be(HttpStatusCode.Unauthorized);
         (await user.PostAsync(Sweep, null)).StatusCode.Should().Be(HttpStatusCode.Forbidden);
-        var routes = factory.Services.GetRequiredService<EndpointDataSource>().Endpoints
-            .OfType<RouteEndpoint>().Select(endpoint => endpoint.RoutePattern.RawText).ToList();
-        routes.Should().Contain(Sweep);
-        routes.Should().NotContain(route => route != Sweep && route != null &&
-            (route.Contains("playback-link") || route.Contains("/structure/nodes/{nodeId:guid}/audio")));
     }
 
     [Fact]

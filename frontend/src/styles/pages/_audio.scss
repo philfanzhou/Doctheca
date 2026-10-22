@@ -63,3 +63,15 @@ table.audio-table {
 .audio-pending {
   margin-left: 6px;
 }
+
+.audio-player {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+
+  audio {
+    max-width: 100%;
+  }
+}
