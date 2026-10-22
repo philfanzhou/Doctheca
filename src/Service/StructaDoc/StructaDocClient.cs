@@ -193,13 +193,19 @@ public sealed class StructaDocClient : IStructaDocClient
         {
             using (response)
             {
-                throw await BuildErrorAsync(response, "get-asset-content", ct);
+                // Asset bytes are also served to anonymous internal callers. Never consume
+                // provider error text or headers into diagnostics on this shared boundary.
+                var status = (int)response.StatusCode;
+                throw new StructaDocException("StructaDoc image content request failed.", status,
+                    status is 408 or 429 || status >= 500);
             }
         }
 
         try
         {
-            return await response.Content.ReadAsStreamAsync(ct);
+            var stream = await response.Content.ReadAsStreamAsync(ct);
+            ct.ThrowIfCancellationRequested();
+            return new ResponseOwnedStream(stream, response);
         }
         catch
         {

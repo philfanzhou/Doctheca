@@ -31,19 +31,27 @@ public sealed class ParseImageContentSource
     /// </summary>
     public async Task<Stream?> OpenAsync(DocumentParseModel parse, DocumentParseImageModel image, CancellationToken ct = default)
     {
+        ct.ThrowIfCancellationRequested();
         if (parse.StructaDocParseRunId is Guid runId)
         {
             if (!Guid.TryParse(image.ImagePath, out var assetId))
             {
                 _logger.LogWarning(
-                    "Image {ImageId} of parse {ParseId} does not reference a valid StructaDoc asset: {ImagePath}",
-                    image.Id, parse.Id, image.ImagePath);
+                    "Image {ImageId} of parse {ParseId} does not reference a valid StructaDoc asset.",
+                    image.Id, parse.Id);
                 return null;
             }
 
             return await _structaDocClient.GetAssetContentAsync(runId, assetId, ct);
         }
 
-        return await _ossService.DownloadAsync(image.ImagePath);
+        if (string.IsNullOrWhiteSpace(image.ImagePath)) return null;
+        var stream = await _ossService.DownloadAsync(image.ImagePath);
+        if (ct.IsCancellationRequested)
+        {
+            if (stream is not null) await stream.DisposeAsync();
+            ct.ThrowIfCancellationRequested();
+        }
+        return stream;
     }
 }

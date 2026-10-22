@@ -7,6 +7,8 @@ Only explicit true at process startup registers these anonymous routes:
 - `GET /internal/v1/structure-definitions`
 - `GET /internal/v1/documents`
 - `GET /internal/v1/documents/{documentFileId}/structure`
+- `GET /internal/v1/structure-nodes/{nodeId}/content`
+- `GET /internal/v1/structure-nodes/{nodeId}/images/{imageId}/content`
 
 There is no caller authentication or document-level authorization. The deployer must restrict
 the entire `/internal` path segment, case insensitively, to internal callers and prevent direct
@@ -14,8 +16,8 @@ public access to port 5012. Request parameters, Cookies and Bearer tokens cannot
 Existing `/admin/*` authentication and CSRF rules are unchanged. See
 [deployment](../development/Deployment.md#internal-api).
 
-Catalogs (#97) and the current document tree (#98) are implemented. Content/images (#99),
-search (#100) and audio (#101) are separate tasks under [#91](https://github.com/philfanzhou/Doctheca/issues/91).
+Catalogs (#97), current trees (#98) and content/owned images (#99) are implemented.
+Search (#100) and audio (#101) are separate tasks under [#91](https://github.com/philfanzhou/Doctheca/issues/91).
 Unimplemented paths return 404 even when the setting is enabled.
 
 ## Lists and inputs
@@ -132,6 +134,95 @@ snapshot and must be resolved again by later requests. Cancellation aborts reads
 produce a partial successful response. The endpoint writes no data or external objects.
 No file name, administrative timestamps, raw Block/provider JSON or storage identity is included.
 
+## Node content pages
+
+`GET /internal/v1/structure-nodes/{nodeId}/content?afterSequence=&limit=&revision=`
+accepts a canonical hyphenated node UUID. Omit unused parameters; empty values are invalid.
+`limit` defaults to 200 and accepts 1 through 1000. `afterSequence` is an optional nonnegative
+32-bit decimal integer within this node's inclusive bounds. Only ASCII digits are accepted;
+signs, whitespace, fractions, overflow, duplicate and unknown parameters return 400.
+A cursor need not point to an existing block (sequence gaps are allowed). The page returns
+only sequence-bearing blocks with `sequence > afterSequence` inside the inclusive node range,
+ordered by global sequence. An unchanged dataset yields each block exactly once. One extra
+row determines continuation; no offset or neighbor-node blocks are used.
+
+```json
+{
+  "success": true,
+  "data": {
+    "parseId": "00000000-0000-0000-0000-000000000004",
+    "nodeId": "00000000-0000-0000-0000-000000000005",
+    "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "items": [
+      {
+        "id": "00000000-0000-0000-0000-000000000006",
+        "sequence": 10,
+        "blockType": "text",
+        "subType": null,
+        "content": "Untrusted document text",
+        "contentFormat": null,
+        "pageNumber": 3,
+        "imageId": null,
+        "imageUrl": null
+      }
+    ],
+    "nextAfterSequence": null,
+    "hasMore": false
+  }
+}
+```
+
+The initial request returns a 64-character lowercase hexadecimal SHA-256 revision. Every
+request with `afterSequence` must also send the preceding revision. A revision may be sent
+on the initial request too. Hexadecimal input is case insensitive. Missing required or
+malformed revisions return 400; a different revision returns 409
+`DOCTHECA_INTERNAL_STRUCTURE_CHANGED`. Discard previous pages and restart without a cursor.
+Do not silently retry an old cursor without its revision. A deleted/replaced node or a node
+outside the selected current parse returns 404. Empty ranges return an empty page; a cursor
+at the inclusive end returns an empty terminal page.
+
+Each request resolves current-node/parse/definition ownership, revision and blocks inside
+one PostgreSQL repeatable-read snapshot. The revision fingerprints the selected parse,
+complete current tree IDs, levels, parents, names, ranges, order and creation/update times,
+and ordered in-range block IDs, sequences and image IDs. Synced blocks receive new IDs;
+tree replacement, current-parse changes or changed block membership cannot silently complete
+an old traversal. It does not keep a server-side snapshot alive across HTTP requests or hash
+document text; arbitrary direct database edits to text with unchanged IDs are outside the
+supported synchronization contract. A current-parse switch normally makes old node IDs 404.
+Physical `pageNumber` is `PageId + 1`. Empty formats become null. Content includes text/table
+strings as data: consumers must not execute HTML. Raw `blockData`, provider JSON, administrative
+metadata and storage references are excluded. Optional Markdown is not supplied.
+
+## Owned image bytes
+
+When a block references an image, `imageUrl` is a relative link to
+`GET /internal/v1/structure-nodes/{nodeId}/images/{imageId}/content?revision=...`.
+Both IDs must be canonical hyphenated UUIDs. Only the required 64-hex `revision` parameter is
+accepted. The route re-resolves the current node and revision in its own repeatable-read
+snapshot, then requires the image's parse ID to match and at least one in-range block to
+reference that image. Unknown, cross-node, cross-parse and stale references fail before any
+source is opened. The caller cannot supply a URL, object key or source location.
+
+`ParseImageContentSource` reads the scoped versioned StructaDoc asset API for migrated parses
+or the existing legacy OSS reader. The response proxies only bytes with the stored allowed
+media type: `image/png`, `image/jpeg`, `image/gif`, `image/webp`, `image/bmp`, `image/avif`, or
+`image/tiff`. Other types, including SVG, are unavailable (404). Successful responses are full
+200 streams; this route does not implement ranges or transformation. They carry
+`Cache-Control: no-store` and `X-Content-Type-Options: nosniff`. No upstream headers, redirects,
+protected `/admin` links or presigned storage URLs are forwarded.
+
+Null/broken/missing sources return fixed 404; upstream/storage/unexpected image-read failures
+before response start return fixed 503. Cancellation propagates through relational reads,
+StructaDoc and stream copying. The legacy buffered download cannot cancel the provider call,
+but post-await cancellation disposes its result instead of returning success. Success, failure
+and cancellation dispose the opened stream and its owning HTTP response. A failure after
+response start aborts the connection; it is never swallowed into a successful truncated image.
+Image authorization applies to the request snapshot. Deletion after that check can allow an
+already-open stream to finish or fail; immediate byte-stream revocation is not guaranteed.
+Error bodies and diagnostics contain no provider text, source paths, endpoints or credentials.
+Existing admin image status/authentication and range behavior remain unchanged except safer
+shared source diagnostics and stream ownership.
+
 ## Errors, confidentiality and rollback
 
 | Condition | Status | Fixed error code |
@@ -141,10 +232,13 @@ No file name, administrative timestamps, raw Block/provider JSON or storage iden
 | Unknown requested definition | 404 | `DOCTHECA_INTERNAL_DEFINITION_NOT_FOUND` |
 | Unknown document | 404 | `DOCTHECA_INTERNAL_DOCUMENT_NOT_FOUND` |
 | Document exists without a qualifying marked parsed tree | 404 | `DOCTHECA_INTERNAL_STRUCTURE_NOT_FOUND` |
-| Database/unexpected read failure on an implemented route | 500 | `http.internal_server_error` |
+| Missing/deleted/stale node, unowned image or missing/unsupported image source | 404 | `DOCTHECA_INTERNAL_RESOURCE_NOT_FOUND` |
+| Content revision changed | 409 | `DOCTHECA_INTERNAL_STRUCTURE_CHANGED` |
+| Image source/read failure before response start | 503 | `DOCTHECA_INTERNAL_IMAGE_UNAVAILABLE` |
+| Database/unexpected JSON read failure on an implemented route | 500 | `http.internal_server_error` |
 
 Business errors use `{"success":false,"errorCode":"...","message":"..."}` with fixed English
-messages. Unexpected failures use the existing safe ServiceMantle Problem Details boundary
+messages. Unexpected JSON failures use the existing safe ServiceMantle Problem Details boundary
 (`application/problem+json`) and a correlation id. No raw input, provider error, stack trace,
 document content, storage reference or credential is added to error bodies or diagnostics.
 Every `/internal` path is reserved before static/SPA handling, including nested static-looking

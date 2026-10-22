@@ -64,6 +64,35 @@ public class ParseImageContentSourceTests
         stream.Should().BeNull();
     }
 
+    [Fact]
+    public async Task LegacyPostAwaitCancellation_DisposesBufferedDownload()
+    {
+        using var cancellation = new CancellationTokenSource();
+        var stream = new MemoryStream([1]);
+        var oss = new Mock<IOssService>();
+        oss.Setup(service => service.DownloadAsync(It.IsAny<string>())).Returns(() =>
+        {
+            cancellation.Cancel();
+            return Task.FromResult<Stream>(stream);
+        });
+        var source = CreateSource(new Mock<IStructaDocClient>(), oss);
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => source.OpenAsync(new(), new() { ImagePath = "synthetic" }, cancellation.Token));
+        Assert.False(stream.CanRead);
+    }
+
+    [Fact]
+    public async Task PreCancelledRead_DoesNotOpenEitherSource()
+    {
+        var oss = new Mock<IOssService>(MockBehavior.Strict);
+        var remote = new Mock<IStructaDocClient>(MockBehavior.Strict);
+        var source = CreateSource(remote, oss);
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+        foreach (var parse in new[] { new DocumentParseModel(), new DocumentParseModel { StructaDocParseRunId = Guid.NewGuid() } })
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => source.OpenAsync(parse, new() { ImagePath = "synthetic" }, cancellation.Token));
+        oss.VerifyNoOtherCalls(); remote.VerifyNoOtherCalls();
+    }
+
     private static ParseImageContentSource CreateSource(
         Mock<IStructaDocClient> client, Mock<IOssService> ossService) =>
         new(client.Object, ossService.Object, NullLogger<ParseImageContentSource>.Instance);
