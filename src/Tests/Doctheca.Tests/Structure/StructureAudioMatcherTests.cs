@@ -187,6 +187,37 @@ public class StructureAudioMatcherTests
         matcher.Match("SectionB.mp3").Should().Be(new AudioMatchResult(null, AudioMatchStatus.NoMatch));
     }
 
+    [Theory]
+    [InlineData("unit1/sectiona/SectionB.mp3")]
+    [InlineData("unit1/sectiona/Unit1SectionB.mp3")]
+    [InlineData("sectiona/Unit1SectionB.mp3")]
+    public void FolderAndNameMustAgree_EvenWhenOneOmitsTheSharedAncestor(string path)
+    {
+        var unit = Node("Unit 1", null, 0, 49);
+        var sectionA = Node("Section A", unit.Id, 0, 19);
+        var sectionB = Node("Section B", unit.Id, 20, 39);
+        var matcher = new StructureAudioMatcher([unit, sectionA, sectionB]);
+
+        matcher.Match(path).Should().Be(new AudioMatchResult(null, AudioMatchStatus.FolderNameMismatch));
+        matcher.Match("unit1/SectionB.mp3").Should().Be(new AudioMatchResult(sectionB.Id, AudioMatchStatus.Matched));
+        matcher.Match("SectionB.mp3").Should().Be(new AudioMatchResult(null, AudioMatchStatus.NoMatch));
+    }
+
+    [Fact]
+    public void FolderAndNameMustAgree_AtEverySharedAncestor()
+    {
+        var chapter = Node("Chapter 2", null, 0, 99);
+        var section = Node("Section 2.1", chapter.Id, 0, 49);
+        var first = Node("Subsection a", section.Id, 0, 19);
+        var second = Node("Subsection b", section.Id, 20, 39);
+        var matcher = new StructureAudioMatcher([chapter, section, first, second]);
+
+        matcher.Match("Chapter2/Section2.1/SubsectionA/SubsectionB.wav")
+            .Should().Be(new AudioMatchResult(null, AudioMatchStatus.FolderNameMismatch));
+        matcher.Match("Chapter2/Section2.1/SubsectionB.wav")
+            .Should().Be(new AudioMatchResult(second.Id, AudioMatchStatus.Matched));
+    }
+
     [Fact]
     public void SiblingsMatchingTheSameName_AreAmbiguous_UnlessOneLabelContainsTheOther()
     {

@@ -28,12 +28,12 @@ public sealed record AudioMatchResult(Guid? NodeId, string Status);
 /// so <c>unit1</c> does not match <c>Unit10</c>.
 /// </para>
 /// <para>
-/// Folder and file name are matched separately, each descending from the root nodes to their
-/// children and stopping at the deepest node whose children no longer match. When both find a
-/// node they must agree (one is the other or its ancestor), and the deeper one is taken; when they
-/// point to different branches the file is left unlinked as
-/// <see cref="AudioMatchStatus.FolderNameMismatch"/>. From the agreed node the descent continues
-/// with folder and name together, so <c>unit1/SectionB.mp3</c> reaches the Section B child. Two matching siblings at any step make the
+/// Folder and file name are compared separately at each level, descending from the root nodes
+/// through the child matched by either source. When both match a child they must agree; when they
+/// point to different children the file is left unlinked as
+/// <see cref="AudioMatchStatus.FolderNameMismatch"/>. This also checks a file name without its
+/// parent label, so <c>unit1/SectionB.mp3</c> reaches Section B, while
+/// <c>unit1/sectiona/SectionB.mp3</c> is a conflict. Two matching siblings in either source make the
 /// result <see cref="AudioMatchStatus.Ambiguous"/>, unless one sibling's label occurrences all lie
 /// inside a longer sibling label's occurrence.
 /// </para>
@@ -68,55 +68,36 @@ public sealed class StructureAudioMatcher
         var dot = fileName.LastIndexOf('.');
         if (dot > 0) fileName = fileName[..dot];
 
-        var byFolder = Descend(folder, null);
-        var byName = Descend(fileName, null);
-        if (byFolder.Ambiguous || byName.Ambiguous) return new(null, AudioMatchStatus.Ambiguous);
-
-        Guid? agreed;
-        if (byFolder.NodeId is not { } folderNode) agreed = byName.NodeId;
-        else if (byName.NodeId is not { } nameNode) agreed = folderNode;
-        else if (IsSelfOrAncestor(folderNode, nameNode)) agreed = nameNode;
-        else if (IsSelfOrAncestor(nameNode, folderNode)) agreed = folderNode;
-        else return new(null, AudioMatchStatus.FolderNameMismatch);
-        if (agreed == null) return new(null, AudioMatchStatus.NoMatch);
-
-        // Below the agreed node, folder and name together may name a child neither names alone
-        // from the root, as in unit1/SectionB.mp3.
-        var deeper = Descend($"{folder}/{fileName}", agreed);
-        return deeper.Ambiguous
-            ? new(null, AudioMatchStatus.Ambiguous)
-            : new(deeper.NodeId, AudioMatchStatus.Matched);
-    }
-
-    private (Guid? NodeId, bool Ambiguous) Descend(string text, Guid? from)
-    {
-        var compared = Tokenized.Of(text);
-        var current = from;
+        var comparedFolder = Tokenized.Of(folder);
+        var comparedName = Tokenized.Of(fileName);
+        Guid? current = null;
         while (true)
         {
-            var matches = _children[current]
-                .Select(candidate => (candidate, spans: compared.Occurrences(candidate.Label)))
-                .Where(match => match.spans.Count > 0)
-                .ToList();
-            // A sibling whose every occurrence lies inside a longer sibling's occurrence loses,
-            // so a node named "Section" does not compete with "Section A" for "SectionA".
-            matches = matches
-                .Where(match => !matches.Any(other => other.candidate.Label.Length > match.candidate.Label.Length
-                    && match.spans.All(span => other.spans.Any(outer => outer.Start <= span.Start && span.End <= outer.End))))
-                .ToList();
-            if (matches.Count == 0) return (current, false);
-            if (matches.Count > 1) return (null, true);
-            current = matches[0].candidate.Id;
+            var folderMatches = MatchingChildren(comparedFolder, current);
+            var nameMatches = MatchingChildren(comparedName, current);
+            if (folderMatches.Count > 1 || nameMatches.Count > 1)
+                return new(null, AudioMatchStatus.Ambiguous);
+            if (folderMatches.Count == 1 && nameMatches.Count == 1 && folderMatches[0] != nameMatches[0])
+                return new(null, AudioMatchStatus.FolderNameMismatch);
+            if (folderMatches.Count == 0 && nameMatches.Count == 0)
+                return new(current, current == null ? AudioMatchStatus.NoMatch : AudioMatchStatus.Matched);
+            current = folderMatches.Count == 1 ? folderMatches[0] : nameMatches[0];
         }
     }
 
-    private bool IsSelfOrAncestor(Guid ancestor, Guid node)
+    private List<Guid> MatchingChildren(Tokenized compared, Guid? parent)
     {
-        for (Guid? cursor = node; cursor is { } id; cursor = _parentOf.GetValueOrDefault(id))
-        {
-            if (id == ancestor) return true;
-        }
-        return false;
+        var matches = _children[parent]
+            .Select(candidate => (candidate, spans: compared.Occurrences(candidate.Label)))
+            .Where(match => match.spans.Count > 0)
+            .ToList();
+        // A sibling whose every occurrence lies inside a longer sibling's occurrence loses,
+        // so a node named "Section" does not compete with "Section A" for "SectionA".
+        return matches
+            .Where(match => !matches.Any(other => other.candidate.Label.Length > match.candidate.Label.Length
+                && match.spans.All(span => other.spans.Any(outer => outer.Start <= span.Start && span.End <= outer.End))))
+            .Select(match => match.candidate.Id)
+            .ToList();
     }
 
     /// <summary>The comparable label of a node name (see the class remarks).</summary>
