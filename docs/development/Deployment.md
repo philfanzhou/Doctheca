@@ -392,18 +392,18 @@ GitHub Actions (`.github/workflows/ci.yml`) runs builds, tests and image builds 
 | Trigger | Published image tag | GitHub Release |
 |------|---------------|----------------|
 | Merge to `main` | `edge` (moves with the latest commit; not a formal release) | none |
-| `MAJOR.MINOR.PATCH` tag | `MAJOR.MINOR.PATCH`, `MAJOR.MINOR`, `latest` | Formal release, marked as latest |
-| `MAJOR.MINOR.PATCH-rc.NUMBER` tag | `MAJOR.MINOR.PATCH-rc.NUMBER` only | Pre-release; does not move `MAJOR.MINOR` or `latest` |
+| `vMAJOR.MINOR.PATCH` tag | `MAJOR.MINOR.PATCH`, `MAJOR.MINOR`, `latest` | Formal release, marked as latest |
+| `vMAJOR.MINOR.PATCH-rc.NUMBER` tag | `MAJOR.MINOR.PATCH-rc.NUMBER` only | Pre-release; does not move `MAJOR.MINOR` or `latest` |
 
-Releases are driven entirely by pushing tags; do not create Releases or push images manually. Tags carry no `v` prefix and are placed on commits already merged into `main`:
+Releases are driven entirely by pushing tags; do not create Releases or push images manually. Git tags carry a `v` prefix (as in the other repositories of this owner) and are placed on commits already merged into `main`; the `v` is dropped from the published image tags:
 
 ```bash
 git switch main && git pull
-git tag -a 0.1.0 -m "Doctheca 0.1.0"
-git push origin 0.1.0
+git tag -a v0.1.0 -m "v0.1.0"
+git push origin v0.1.0
 ```
 
-Release candidates use the `-rc.NUMBER` suffix, e.g. `git tag -a 0.1.0-rc.1 -m "Doctheca 0.1.0-rc.1"`. Tags in any other format are rejected by CI.
+Release candidates use the `-rc.NUMBER` suffix, e.g. `git tag -a v0.1.0-rc.1 -m "v0.1.0-rc.1"`. Tags in any other format are rejected by CI.
 
 After a tag is pushed, the full `Build & Test` runs first; once it passes, the following execute in order:
 
