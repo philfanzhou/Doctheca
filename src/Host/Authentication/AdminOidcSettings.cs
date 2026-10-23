@@ -6,7 +6,7 @@ namespace Doctheca.Host.Authentication;
 /// package is never wired and every hosted-login endpoint answers the fixed 503 result.
 /// </summary>
 public sealed record AdminOidcSettings(bool Available, string Authority, string ClientId, string ClientSecret,
-    string RedirectUri, bool InsecureLoopback = false, string PostLogoutRedirectUri = "")
+    string RedirectUri, string PostLogoutRedirectUri = "")
 {
     internal const string DisabledError = "Hosted sign-in is not configured.";
     public IReadOnlyList<string> MissingKeys { get; init; } = [];
@@ -17,17 +17,16 @@ public sealed record AdminOidcSettings(bool Available, string Authority, string 
             "AdminOidc:RedirectUri", "AdminOidc:PostLogoutRedirectUri" };
         var missing = required.Where(key => string.IsNullOrWhiteSpace(config[key])).ToArray();
         if (missing.Length > 0)
-            return new(false, "", "", "", "", false) { MissingKeys = missing };
+            return new(false, "", "", "", "") { MissingKeys = missing };
 
-        var dev = environment.IsDevelopment() || environment.IsEnvironment("Testing");
         var redirect = config["AdminOidc:RedirectUri"] ?? "";
         var authority = (config["IdentityService:Authority"] ?? "").TrimEnd('/');
-        if (!IsSafeUri(redirect, dev, out var redirectUri) || redirectUri!.AbsolutePath != "/admin/auth/oidc/callback"
+        if (!IsSafeUri(redirect, out var redirectUri) || redirectUri!.AbsolutePath != "/admin/auth/oidc/callback"
             || redirectUri.AbsoluteUri != redirect || redirect.Length > 500 || redirect.Any(c => c > 127))
             throw new InvalidOperationException("AdminOidc:RedirectUri");
-        if (!IsSafeUri(authority, dev, out _)) throw new InvalidOperationException("IdentityService:Authority");
+        if (!IsSafeUri(authority, out _)) throw new InvalidOperationException("IdentityService:Authority");
         var postLogout = config["AdminOidc:PostLogoutRedirectUri"] ?? "";
-        if (!IsSafeUri(postLogout, dev, out var postLogoutUri)
+        if (!IsSafeUri(postLogout, out var postLogoutUri)
             || postLogoutUri!.AbsolutePath != AdminOidcConstants.LogoutReturnPath
             || postLogoutUri.AbsoluteUri != postLogout || postLogout.Length > 500 || postLogout.Any(c => c > 127)
             || postLogoutUri.GetLeftPart(UriPartial.Authority) != redirectUri.GetLeftPart(UriPartial.Authority))
@@ -43,15 +42,15 @@ public sealed record AdminOidcSettings(bool Available, string Authority, string 
         if (rawSkew is not null && !int.TryParse(rawSkew, out skew))
             throw new InvalidOperationException("IdentityService:ClockSkewSeconds");
         if (skew is < 0 or > 300) throw new InvalidOperationException("IdentityService:ClockSkewSeconds");
-        return new(true, authority, clientId, secret, redirect, redirectUri.Scheme == "http", postLogout);
+        return new(true, authority, clientId, secret, redirect, postLogout);
     }
 
-    internal static bool IsSafeUri(string value, bool allowLoopback, out Uri? uri)
+    internal static bool IsSafeUri(string value, out Uri? uri)
     {
         return Uri.TryCreate(value, UriKind.Absolute, out uri)
             && string.IsNullOrEmpty(uri.UserInfo) && string.IsNullOrEmpty(uri.Query) && string.IsNullOrEmpty(uri.Fragment)
             && !value.Any(char.IsControl) && !value.Contains('*')
-            && (uri.Scheme == "https" || allowLoopback && uri.Scheme == "http" && uri.Host is "127.0.0.1" or "[::1]");
+            && (uri.Scheme is "http" or "https");
     }
 
     /// <summary>

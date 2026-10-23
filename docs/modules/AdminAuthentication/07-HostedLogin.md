@@ -19,7 +19,7 @@ and secret-free bounded logging. Doctheca keeps a thin adaptation layer in
 sign-in-entry input guard, the pre-sign-in administrator gate on the verified access-token
 principal (`AdminPreSignInAuthorizationDecision`), the fixed JSON/redirect presentation
 (`AdminLoginResponseWriter`), the cookie-session request boundary with the verified-Bearer scheme
-split (`AdminOidcSessionMiddleware`), the antiforgery cookie-name and loopback policies, and the
+split (`AdminOidcSessionMiddleware`), the antiforgery cookie name, and the
 backchannel timeout normalization. The admin policy's `role=admin` assertion and the existing
 JwtBearer path are unchanged.
 
@@ -33,21 +33,45 @@ JwtBearer path are unchanged.
 | `IdentityService:AppId` / `AppSecret` | yes | Confidential client ID and server-only secret. |
 | `IdentityService:ClockSkewSeconds` | no; default 30 | Token skew, 0–300 seconds. |
 
-Both registered callback URIs must be canonical absolute HTTPS URIs, at most 500 ASCII characters,
-without query, fragment, user information or wildcard. Development/Testing alone allow numeric
-loopback HTTP (`127.0.0.1` or `[::1]`); `localhost` is rejected. Missing required configuration logs `DOCTHECA_OIDC_NOT_CONFIGURED` with missing key names only
+Both registered callback URIs must be canonical absolute HTTP or HTTPS URIs, at most 500 ASCII
+characters, without query, fragment, user information, wildcard or control characters. Their
+scheme, host and port must match. Both schemes work in every environment for DNS names and IP
+addresses, with no opt-in or host allowlist. Authority accepts either scheme independently;
+its existing structural and discovery-origin checks still apply. Missing required configuration logs `DOCTHECA_OIDC_NOT_CONFIGURED` with missing key names only
 and returns 503 on every hosted route without pending state, tickets or provider calls. Complete
 nonempty invalid URI/skew configuration fails startup with the key name only. Restart after
 restoring configuration. Missing Bearer trust safely refuses header credentials with 401. Inject credentials through environment
 variables or Consul KV. Configuration objects hide their values when formatted.
+
+### Transport profiles
+
+The configured **external callback scheme** controls all four Cookie carriers: login binding,
+`docthecaAdminSession`, `docthecaAdminCsrf`, and logout-return binding. HTTPS uses Secure Cookies;
+HTTP omits Secure, including when an inbound request uses a different scheme. Cookie clearing
+uses the same profile. Names, HttpOnly, SameSite, paths and lifetimes are unchanged. The CSRF
+Cookie remains HttpOnly/SameSite=Strict and uses `X-CSRF-TOKEN`; the other three use SameSite=Lax.
+
+Transport protection is a deployment decision. Plain HTTP provides no network confidentiality,
+integrity or listener authenticity; deployers choose network/TLS protection for the browser and
+identity backchannel. Register exact effective external URIs on both sides. Behind TLS
+termination, keep HTTPS callbacks and the existing trusted-proxy/forwarded-scheme configuration:
+ASP.NET needs an effective HTTPS request to issue and validate its Always-secure antiforgery
+credentials. This
+change does not redesign proxy trust or downgrade HTTPS Cookies for internal HTTP hops.
+
+Bearer discovery keeps its independent `IdentityService:RequireHttpsMetadata=true` default.
+An intentionally HTTP Authority **or Issuer** requires explicit `false`; HTTP callbacks alone
+with HTTPS identity metadata do not. Issuer/audience trust remains unchanged. HTTPS deployments
+need no configuration migration; no new transport switch or package upgrade is introduced.
 
 Before rollout, register SignaCore in this order:
 
 1. Create a **Confidential** application and protect the one-time client secret server-side.
 2. Set **PerApplication** audience (`aud = appId`). Migrate downstream access-token validators
    before switching the audience; existing Bearer trust settings remain independent.
-3. Register `https://<doctheca-host>/admin/auth/oidc/callback` as `Redirect`, and
-   `https://<doctheca-host>/admin/auth/oidc/logout/return` as `PostLogout`. Register the exact
+3. Register `<origin>/admin/auth/oidc/callback` as `Redirect`, and
+   `<origin>/admin/auth/oidc/logout/return` as `PostLogout`, where `<origin>` is the effective
+   external HTTP or HTTPS scheme, host and port. Register the exact
    normalized values used in configuration; path case, query and trailing slash differences
    cannot be substituted at runtime.
 4. Enable authorization code with `openid profile` and refresh disabled. Doctheca never requests
@@ -90,7 +114,7 @@ Return URLs accept station-local absolute paths, including SPA hash routes such 
 External origins, encoded alternate origins, backslashes, control characters, dot segments and
 `/admin/auth` paths are rejected. Login code/state never enter the SPA or business return URL.
 
-The login binding Cookie is Secure (except validated development loopback), SameSite=Lax and
+The login binding Cookie follows the configured transport profile above, is SameSite=Lax and
 expires after five minutes. A missing, wrong, other-state or replayed binding fails before code
 redemption and creates no session. A callback expires its matching Cookie. Cookie names contain
 state for protocol correlation; application pages, redirects and logs never echo it. The package
@@ -118,7 +142,8 @@ when present; duplicate top-level response members are refused; token and prepar
 responses are limited to 64 KB and 4 KB respectively. Missing ID-token `iat` remains valid.
 Keep Identity and Host clocks synchronized; no new configuration key or SQL migration is needed.
 
-`docthecaAdminSession` is HttpOnly, Secure and SameSite=Lax; it contains the raw opaque key of
+`docthecaAdminSession` is HttpOnly and SameSite=Lax; its Secure attribute follows the configured
+callback scheme; it contains the raw opaque key of
 the server-side ticket, never a token. The ticket keeps both tokens server-side and expires no
 later than the verified access-token expiry. Expired/unknown Cookie requests to protected
 `/admin/*` return fixed re-authentication 401. There is no automatic refresh or write replay.
@@ -135,7 +160,7 @@ ignored.
 
 Pending sign-ins and logout returns expire after five minutes. The in-memory ticket store holds
 at most 4096 sessions (capacity-bounded, refusing rather than evicting) and all stores are swept
-periodically. Logout return state is bound to a separate HttpOnly, Secure, SameSite=Lax Cookie
+periodically. Logout return state is bound to a separate HttpOnly, SameSite=Lax Cookie with the same configured Secure profile
 (named after the session Cookie) scoped to the logout paths. Revocation removes the ticket in one
 locked operation and at most one preparation per session is possible; a stale session Cookie copy
 returns 401 after revocation.
@@ -158,11 +183,12 @@ upstream logout. Already issued access tokens may remain valid until expiry afte
 Deploy the API and current SPA together. Complete exact application registrations and credential
 injection before rollout. `AdminOidc:Enabled` no longer controls availability, even if an old
 configuration still sets it to false. `Authentication:CookieSecure` and its startup variable are
-retired; hosted Cookie security follows the validated callback/environment contract.
+retired; hosted Cookie security follows the configured callback scheme.
 
 See [Breaking changes, upgrade and rollback](../../development/HostedLoginUpgrade.md). Rollback
-requires the previous matching API/SPA image and its runtime configuration, restores that image's
-old password/token-Cookie contracts and requires reauthentication. No SQL is required.
+to the preceding image requires its matching API/SPA and HTTPS-compatible configuration: that
+image again refuses Production HTTP. Restore HTTPS registration/configuration before rolling
+back, then sign in again. No SQL or data rollback is required.
 
 ## Administration SPA
 

@@ -29,7 +29,7 @@ namespace Doctheca.Tests.Integration;
 public sealed partial class AdminOidcIntegrationTests(PostgreSqlFixture database) : ServiceMantleIntegrationTestBase(database)
 {
     private WebApplicationFactory<Program> OidcFactory(OidcTestAuthority authority, ManualOidcTime? time = null,
-        Action<IServiceCollection>? configure = null)
+        Action<IServiceCollection>? configure = null, bool http = false)
         => CreateFactory(configureTestServices: services =>
         {
             // The package consumes the authority through its named backchannel client; the short
@@ -41,19 +41,19 @@ public sealed partial class AdminOidcIntegrationTests(PostgreSqlFixture database
             configure?.Invoke(services);
         }, settings: new Dictionary<string, string?>
         {
-            ["AdminOidc:Enabled"] = "false", ["AdminOidc:PostLogoutRedirectUri"] = OidcTestAuthority.PostLogoutUri,
-            ["AdminOidc:RedirectUri"] = OidcTestAuthority.RedirectUri,
+            ["AdminOidc:Enabled"] = "false", ["AdminOidc:PostLogoutRedirectUri"] = http ? OidcTestAuthority.PostLogoutUri.Replace("https:", "http:") : OidcTestAuthority.PostLogoutUri,
+            ["AdminOidc:RedirectUri"] = http ? OidcTestAuthority.RedirectUri.Replace("https:", "http:") : OidcTestAuthority.RedirectUri,
             ["IdentityService:Authority"] = OidcTestAuthority.Issuer,
             ["IdentityService:Issuer"] = OidcTestAuthority.Issuer,
             // Mixed-session tests use the base fixture's separately signed Bearer token.
             ["IdentityService:AdditionalValidIssuers:1"] = TestIssuer,
             ["IdentityService:AppId"] = OidcTestAuthority.ClientId,
             ["IdentityService:AppSecret"] = OidcTestAuthority.Secret
-        });
+        }, environment: http ? "Production" : "Testing");
 
-    private static HttpClient Browser(WebApplicationFactory<Program> factory) => factory.CreateClient(new()
+    private static HttpClient Browser(WebApplicationFactory<Program> factory, bool http = false) => factory.CreateClient(new()
     {
-        BaseAddress = new Uri("https://admin.example.test"), AllowAutoRedirect = false, HandleCookies = false
+        BaseAddress = new Uri(http ? "http://admin.example.test" : "https://admin.example.test"), AllowAutoRedirect = false, HandleCookies = false
     });
 
     private sealed record Handshake(Dictionary<string, string> Query, HttpResponseMessage Response, string BindingCookie);
@@ -69,7 +69,7 @@ public sealed partial class AdminOidcIntegrationTests(PostgreSqlFixture database
         var cookie = Assert.Single(response.Headers.GetValues("Set-Cookie"));
         Assert.StartsWith(AdminOidcConstants.SessionCookie + "-login-binding.", cookie);
         Assert.Contains("httponly", cookie.ToLowerInvariant());
-        Assert.Contains("secure", cookie.ToLowerInvariant());
+        Assert.Equal(query["redirect_uri"].StartsWith("https:"), cookie.Split(';').Any(value => value.Trim().Equals("secure", StringComparison.OrdinalIgnoreCase)));
         Assert.Contains("samesite=lax", cookie.ToLowerInvariant());
         Assert.Contains("path=" + AdminOidcConstants.CallbackPath, cookie.ToLowerInvariant());
         return new(query, response, cookie.Split(';')[0]);
@@ -204,11 +204,12 @@ public sealed partial class AdminOidcIntegrationTests(PostgreSqlFixture database
     [Theory]
     [InlineData("user")]
     [InlineData("none")]
-    public async Task NonAdminAccessTokenIsDeniedWithoutSession(string accessDefect)
+    [InlineData("user", true)]
+    public async Task NonAdminAccessTokenIsDeniedWithoutSession(string accessDefect, bool http = false)
     {
         using var authority = new OidcTestAuthority();
-        using var factory = OidcFactory(authority);
-        using var client = Browser(factory);
+        using var factory = OidcFactory(authority, http: http);
+        using var client = Browser(factory, http);
         var handshake = await Start(client);
         var response = await Callback(client, handshake, authority.Code(handshake.Query, accessDefect: accessDefect));
         Failed(response, AdminLoginResponseWriter.DeniedRedirect);
@@ -221,11 +222,12 @@ public sealed partial class AdminOidcIntegrationTests(PostgreSqlFixture database
     [InlineData("sub-missing")][InlineData("sub-empty")][InlineData("sub-array")][InlineData("sub-duplicate")]
     [InlineData("sub-number")][InlineData("iss-array")][InlineData("iss-number")][InlineData("iss-empty")]
     [InlineData("exp-expired")][InlineData("nonce")][InlineData("nonce-missing")][InlineData("iat-future")]
-    public async Task InvalidIdTokenIsRejectedWithoutTicket(string defect)
+    [InlineData("nonce", true)]
+    public async Task InvalidIdTokenIsRejectedWithoutTicket(string defect, bool http = false)
     {
         using var authority = new OidcTestAuthority();
-        using var factory = OidcFactory(authority);
-        using var client = Browser(factory);
+        using var factory = OidcFactory(authority, http: http);
+        using var client = Browser(factory, http);
         var handshake = await Start(client);
         Failed(await Callback(client, handshake, authority.Code(handshake.Query, defect)));
         Assert.Equal(0, Tickets(factory).Count);
@@ -309,12 +311,13 @@ public sealed partial class AdminOidcIntegrationTests(PostgreSqlFixture database
     /// The package separates cancellation from gate denial; the host keeps both on the
     /// existing notAdmin result. Repeated cancellation still creates no ticket or exchange.
     /// </summary>
-    [Fact]
-    public async Task CancelledAnswersDeniedResultWithoutTicketOrExchange()
+    [Theory]
+    [InlineData(false)][InlineData(true)]
+    public async Task CancelledAnswersDeniedResultWithoutTicketOrExchange(bool http)
     {
         using var authority = new OidcTestAuthority();
-        using var factory = OidcFactory(authority);
-        using var client = Browser(factory);
+        using var factory = OidcFactory(authority, http: http);
+        using var client = Browser(factory, http);
         var handshake = await Start(client);
         var query = QueryHelpers.AddQueryString(AdminOidcConstants.CallbackPath, new Dictionary<string, string?>
         {
@@ -415,12 +418,13 @@ public sealed partial class AdminOidcIntegrationTests(PostgreSqlFixture database
         Assert.Equal("/", response.Headers.Location!.OriginalString);
     }
 
-    [Fact]
-    public async Task ParallelRepeatRedeemsOnceAndIndependentHandshakesBothSucceed()
+    [Theory]
+    [InlineData(false)][InlineData(true)]
+    public async Task ParallelRepeatRedeemsOnceAndIndependentHandshakesBothSucceed(bool http)
     {
         using var authority = new OidcTestAuthority();
-        using var factory = OidcFactory(authority);
-        using var client = Browser(factory);
+        using var factory = OidcFactory(authority, http: http);
+        using var client = Browser(factory, http);
         var handshake = await Start(client);
         var code = authority.Code(handshake.Query);
         // Two concurrent callbacks over the same pending state: exactly one completes the
@@ -465,12 +469,13 @@ public sealed partial class AdminOidcIntegrationTests(PostgreSqlFixture database
         finally { Directory.Delete(root, true); }
     }
 
-    [Fact]
-    public async Task SessionWritesRequireCsrfAndBearerCallersAreUnaffected()
+    [Theory]
+    [InlineData(false)][InlineData(true)]
+    public async Task SessionWritesRequireCsrfAndBearerCallersAreUnaffected(bool http)
     {
         using var authority = new OidcTestAuthority();
-        using var factory = OidcFactory(authority);
-        using var client = Browser(factory);
+        using var factory = OidcFactory(authority, http: http);
+        using var client = Browser(factory, http);
         var handshake = await Start(client);
         var cookieValue = SessionCookie(await Callback(client, handshake, authority.Code(handshake.Query)));
 
@@ -552,12 +557,13 @@ public sealed partial class AdminOidcIntegrationTests(PostgreSqlFixture database
         Assert.Equal(1, authority.Redeems);
     }
 
-    [Fact]
-    public async Task StartCancellationCreatesNoPendingOrTicket()
+    [Theory]
+    [InlineData(false)][InlineData(true)]
+    public async Task StartCancellationCreatesNoPendingOrTicket(bool http)
     {
         using var authority = new OidcTestAuthority { HoldDiscovery = true };
-        using var factory = OidcFactory(authority);
-        using var client = Browser(factory);
+        using var factory = OidcFactory(authority, http: http);
+        using var client = Browser(factory, http);
         using var cancellation = new CancellationTokenSource();
         var pending = client.GetAsync("/admin/auth/oidc/start", cancellation.Token);
         await authority.DiscoveryEntered.Task.WaitAsync(TimeSpan.FromSeconds(5));

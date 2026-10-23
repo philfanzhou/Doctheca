@@ -168,11 +168,12 @@ public abstract class ServiceMantleIntegrationTestBase
     protected WebApplicationFactory<Program> CreateFactory(
         string? contentRoot = null,
         Action<IServiceCollection>? configureTestServices = null,
-        IReadOnlyDictionary<string, string?>? settings = null)
+        IReadOnlyDictionary<string, string?>? settings = null,
+        string environment = "Testing")
     {
         return new WebApplicationFactory<Program>().WithWebHostBuilder(webHostBuilder =>
         {
-            webHostBuilder.UseEnvironment("Testing");
+            webHostBuilder.UseEnvironment(environment);
             if (contentRoot is not null)
             {
                 webHostBuilder.UseSetting(WebHostDefaults.ContentRootKey, contentRoot);

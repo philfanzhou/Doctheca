@@ -180,8 +180,17 @@ post-logout registrations. AppId/AppSecret remain required server-only backchann
 existing Bearer trust/audience configuration remains independent. Inject secrets at runtime.
 The current SPA uses [hosted login](../modules/AdminAuthentication/07-HostedLogin.md).
 
-Hosted Cookies are Secure outside Development/Testing numeric loopback HTTP; private hostnames
-or production HTTP are not exceptions. Missing required login keys permit service startup,
+Canonical HTTP and HTTPS callback/post-logout pairs are accepted in every environment, with
+matching scheme, host and port and exact registered paths. All four hosted Cookie carriers and
+their clear operations follow the configured external callback scheme: HTTPS uses Secure, HTTP
+omits it, independently of environment and inbound scheme. For TLS termination, keep HTTPS
+callbacks and existing trusted forwarded-scheme handling; ASP.NET antiforgery issuance/validation needs an
+effective HTTPS request for that profile. No proxy configuration redesign is included.
+
+Operators choose browser/backchannel network and TLS protection. Plain HTTP provides no network
+confidentiality, integrity or listener authenticity. For HTTP Authority or Issuer, explicitly set
+`IdentityService:RequireHttpsMetadata=false`; the independent Bearer default remains `true` and
+issuer/audience checks are unchanged. HTTPS deployments need no configuration migration. Missing required login keys permit service startup,
 log a fixed code and missing key names, and return fixed 503 on all hosted routes. Complete
 nonempty invalid configuration still refuses startup. Missing Bearer trust rejects all credentials.
 Configuration recovery requires restart. `start.sh` no longer fails early when client credentials
@@ -190,7 +199,8 @@ are empty, so liveness/static serving can run while operators finish registratio
 Old POST login/refresh/logout return fixed 410 JSON without body binding or provider calls; old
 access/refresh token Cookies are ignored. `AdminOidc:Enabled`, `Authentication:CookieSecure` and
 `DOCTHECA_COOKIE_SECURE` are retired. Follow [Breaking changes and upgrade](HostedLoginUpgrade.md)
-for the matched-image rollback, which restores the old password contract without SQL.
+for the matched-image rollback. The preceding image refuses Production HTTP: restore HTTPS
+registrations/configuration before rolling back and sign in again. No SQL/data rollback applies.
 
 ## Logging Configuration
 

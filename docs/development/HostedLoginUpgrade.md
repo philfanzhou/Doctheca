@@ -15,7 +15,7 @@ storage or HTTP port 5012. It introduces no dependency or automatic refresh.
   strict trust and administrator-role checks.
 - `AdminOidc:Enabled` is ignored. Complete configuration always activates hosted login, including
   deployments that still set it to false. `Authentication:CookieSecure` and
-  `DOCTHECA_COOKIE_SECURE` are removed. Secure hosted Cookies follow validated TLS/environment rules.
+  `DOCTHECA_COOKIE_SECURE` are removed. Hosted Cookie Secure attributes follow the configured external callback scheme.
 - Missing any required hosted key allows service startup but all six hosted endpoints return
   `503 {"success":false,"message":"Hosted sign-in is not configured."}` without provider calls or
   pending/ticket state. Startup logs contain only `DOCTHECA_OIDC_NOT_CONFIGURED` and key names.
@@ -27,7 +27,7 @@ storage or HTTP port 5012. It introduces no dependency or automatic refresh.
 1. Register a Confidential SignaCore application with PerApplication audience (`aud=appId`),
    `openid profile`, S256 PKCE and refresh disabled. Preserve the independent existing API Bearer
    trust/audience settings; plan any caller audience migration separately.
-2. Register exact canonical HTTPS `/admin/auth/oidc/callback` and
+2. Register exact canonical HTTP or HTTPS `/admin/auth/oidc/callback` and
    `/admin/auth/oidc/logout/return` URIs on the same origin; inject them through
    `AdminOidc:RedirectUri` and `AdminOidc:PostLogoutRedirectUri`.
 3. Inject `IdentityService:Authority`, `AppId` and `AppSecret` at runtime. AppId/AppSecret remain
@@ -38,13 +38,30 @@ storage or HTTP port 5012. It introduces no dependency or automatic refresh.
    Only one instance/process is supported: restart loses in-memory sessions/pending/returns.
    Verify anonymous health/static serving, hosted login, CSRF rejection and logout before use.
 
+## HTTP transport correction (issue #125)
+
+The host now accepts structurally valid HTTP and HTTPS callbacks, post-logout URIs and Authority
+in Production, Staging, Development and Testing, matching the already installed 0.1.18 client.
+No opt-in, host allowlist, dependency upgrade or configuration key is added. The configured
+external callback scheme selects the Cookie profile for login binding, session, antiforgery and
+logout-return binding, including clearing: HTTPS stays Secure, HTTP omits Secure. Request scheme
+and environment do not override that choice. Exact same-origin/path registrations, PKCE, tokens,
+admin authorization, CSRF, cancellation and local-first logout are unchanged.
+
+Plain HTTP provides no network confidentiality, integrity or listener authenticity. Operators
+choose network/TLS protection and align the exact effective external registrations. Keep existing
+trusted proxy/forwarded-scheme configuration when terminating TLS; HTTPS callbacks remain HTTPS
+and ASP.NET antiforgery issuance/validation needs the effective HTTPS request. HTTP Authority or Issuer
+requires explicit `IdentityService:RequireHttpsMetadata=false`; its independent Bearer default
+remains true. HTTPS deployments need no configuration migration. Restart requires sign-in again.
+
 ## Rollback
 
-Restore the previous matching API/SPA image and all runtime configuration required by that image,
-including its old login enablement/Cookie security settings when applicable. Users must sign in
-again. No migration or rollback SQL is required. Rolling back restores the old password proxy,
-refresh/revoke calls and token-Cookie contracts; disabling a removed switch in the current image
-cannot perform that rollback.
+Restore the preceding matched API/SPA image and its HTTPS-compatible runtime configuration.
+That image refuses Production HTTP again: restore HTTPS callbacks/post-logout registrations and
+configuration before rolling back. Users must sign in again because tickets are in memory.
+No SQL or data rollback applies. Older historical password/package transitions are described
+below; rolling back this transport correction alone does not restore the password proxy.
 
 ## Package adoption (issue #70)
 
@@ -77,7 +94,7 @@ re-authenticate after either direction of the change. No SQL or configuration ch
 
 ## Grouped dependency upgrade (SignaCore 0.1.18)
 
-The login start now issues a per-state HttpOnly, Secure, SameSite=Lax browser-binding Cookie
+The login start now issues a per-state HttpOnly, SameSite=Lax browser-binding Cookie (Secure in the HTTPS profile)
 for the callback path with a five-minute expiry. The callback requires it before redeeming the
 code and expires it; missing, wrong or replayed bindings do not create a session. Browsers must
 allow that Cookie. There is no configuration or SQL migration.

@@ -52,17 +52,10 @@ public static class AdminOidcRegistration
             options.PostLogoutRedirectUri = settings.PostLogoutRedirectUri;
             options.PostLogoutReturnPath = AdminOidcConstants.SignedOutRedirect;
         });
-        // The package's registration owns the antiforgery header name on the shared options;
-        // this keeps the antiforgery cookie name on the same stable public identifier. An
-        // insecure-loopback deployment (Development/Testing only) additionally restores the
-        // same-request secure policy: the framework refuses to issue antiforgery cookies over
-        // plain HTTP otherwise, which the replaced slice already accommodated.
+        // Keep the public cookie name; the package owns the Secure policy derived from the
+        // configured callback scheme, independently of the environment and request scheme.
         services.AddOptions<AntiforgeryOptions>()
-            .PostConfigure(options =>
-            {
-                options.Cookie.Name = AdminOidcConstants.CsrfCookie;
-                if (settings.InsecureLoopback) options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
-            });
+            .PostConfigure(options => options.Cookie.Name = AdminOidcConstants.CsrfCookie);
         // The SPA consumes the protected API with explicit sign-in, so challenges must keep the
         // fixed 401 contract instead of redirecting anonymous API calls to the sign-in start.
         services.AddOptions<PolicySchemeOptions>(SignaCoreHostedLoginDefaults.AuthenticationScheme)
