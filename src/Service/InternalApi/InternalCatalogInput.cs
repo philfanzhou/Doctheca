@@ -13,7 +13,7 @@ internal static class InternalCatalogInput
     {
         query = new(20, null, null, null, null);
         identity = "";
-        var allowed = documents ? new[] { "pageSize", "pageToken", "structureDefinitionId", "subject", "grade" }
+        var allowed = documents ? new[] { "pageSize", "pageToken", "structureDefinitionId", "subject", "grade", "hasAudio" }
             : new[] { "pageSize", "pageToken" };
         if (input.Any(item => !allowed.Contains(item.Key, StringComparer.Ordinal) || item.Value.Count != 1)) return false;
         var size = 20;
@@ -29,15 +29,24 @@ internal static class InternalCatalogInput
             if (!Guid.TryParseExact(definitionText, "D", out var id)) return false;
             definition = id;
         }
-        identity = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(
-            JsonSerializer.Serialize(new { catalog = documents ? "documents" : "definitions", definition, subject, grade }))));
+        var hasAudio = false;
+        if (input.TryGetValue("hasAudio", out var audio))
+        {
+            if (string.Equals(audio.ToString(), "true", StringComparison.OrdinalIgnoreCase)) hasAudio = true;
+            else if (!string.Equals(audio.ToString(), "false", StringComparison.OrdinalIgnoreCase)) return false;
+        }
+        // Keep the original v1 identity byte-for-byte for omitted/false filters.
+        var normalized = hasAudio
+            ? JsonSerializer.Serialize(new { catalog = "documents", definition, subject, grade, hasAudio = true })
+            : JsonSerializer.Serialize(new { catalog = documents ? "documents" : "definitions", definition, subject, grade });
+        identity = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(normalized)));
         Guid? after = null;
         if (input.TryGetValue("pageToken", out var token))
         {
             if (!TryDecode(token.ToString(), identity, out var id)) return false;
             after = id;
         }
-        query = new(size, after, definition, subject, grade);
+        query = new(size, after, definition, subject, grade, hasAudio);
         return true;
     }
 

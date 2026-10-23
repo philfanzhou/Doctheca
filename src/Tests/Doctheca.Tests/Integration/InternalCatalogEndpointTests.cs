@@ -19,7 +19,7 @@ using Xunit;
 namespace Doctheca.Tests.Integration;
 
 [Collection(ServiceMantleIntegrationCollection.Name)]
-public sealed class InternalCatalogEndpointTests(PostgreSqlFixture database) : ServiceMantleIntegrationTestBase(database)
+public sealed partial class InternalCatalogEndpointTests(PostgreSqlFixture database) : ServiceMantleIntegrationTestBase(database)
 {
     private const string Documents = "/internal/v1/documents";
     private const string Definitions = "/internal/v1/structure-definitions";
@@ -91,7 +91,7 @@ public sealed class InternalCatalogEndpointTests(PostgreSqlFixture database) : S
             Assert.Equal(seed.Matching.Order(), documents.Select(item => item.GetProperty("id").GetGuid()));
             foreach (var item in documents)
             {
-                AssertKeys(item, "id", "title", "subject", "grade", "structureDefinitionId", "structureDefinitionName");
+                AssertKeys(item, "id", "title", "subject", "grade", "structureDefinitionId", "structureDefinitionName", "audioCount");
                 Assert.Equal("duplicate-title", item.GetProperty("title").GetString());
                 Assert.Equal("duplicate-definition", item.GetProperty("structureDefinitionName").GetString());
                 Assert.DoesNotContain("canary", item.ToString());
@@ -150,6 +150,7 @@ public sealed class InternalCatalogEndpointTests(PostgreSqlFixture database) : S
                 "pageSize=0", "pageSize=101", "pageSize=-1", "pageSize=1.5", "pageSize=abc-canary", "pageSize=1&pageSize=2",
                 "structureDefinitionId=bad-canary", "structureDefinitionId=a&structureDefinitionId=b", "subject=" + new string('x', 101),
                 "grade=" + new string('x', 101), "subject=a&subject=b", "unknown=value-canary", "pageToken=", "pageToken=***",
+                "hasAudio=", "hasAudio=1", "hasAudio=%20true", "hasAudio=false%20", "hasAudio=true&hasAudio=false", "hasAudio=null", "hasAudio=canary",
                 "pageToken=" + new string('A', 2049), "pageToken=" + token, "pageToken=" + token + "="
             };
             foreach (var raw in new[] { "null", "[]", "{}", "{\"v\":2,\"after\":\"bad\",\"filter\":\"x\"}",
@@ -169,6 +170,8 @@ public sealed class InternalCatalogEndpointTests(PostgreSqlFixture database) : S
             Assert.Equal(HttpStatusCode.BadRequest, mismatch.StatusCode);
             using var crossRoute = await client.GetAsync(Definitions + "?pageToken=" + token);
             Assert.Equal(HttpStatusCode.BadRequest, crossRoute.StatusCode);
+            using var definitionAudio = await client.GetAsync(Definitions + "?hasAudio=false");
+            Assert.Equal(HttpStatusCode.BadRequest, definitionAudio.StatusCode);
             using var unknown = await client.GetAsync($"{Documents}?structureDefinitionId={Guid.NewGuid()}");
             Assert.Equal(HttpStatusCode.NotFound, unknown.StatusCode);
             Assert.Contains("DOCTHECA_INTERNAL_DEFINITION_NOT_FOUND", await unknown.Content.ReadAsStringAsync());

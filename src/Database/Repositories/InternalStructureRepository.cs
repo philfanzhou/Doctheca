@@ -39,7 +39,9 @@ public sealed partial class InternalStructureRepository(DbContextOptions<Docthec
                 context.DocumentParseBlocks.Where(block => block.ParseId == parseId && block.Sequence >= node.StartSequence && block.Sequence <= node.EndSequence)
                     .Min(block => (int?)(block.PageId + 1)),
                 context.DocumentParseBlocks.Where(block => block.ParseId == parseId && block.Sequence >= node.StartSequence && block.Sequence <= node.EndSequence)
-                    .Max(block => (int?)(block.PageId + 1))))
+                    .Max(block => (int?)(block.PageId + 1)),
+                context.DocumentStructureAudio.Count(audio => audio.ParseId == node.ParseId && audio.NodeId == node.Id &&
+                    node.Level!.DefinitionId == document.StructureDefinitionId)))
             .ToListAsync(cancellationToken);
 
         var children = nodes.ToLookup(node => node.ParentId);
@@ -47,7 +49,7 @@ public sealed partial class InternalStructureRepository(DbContextOptions<Docthec
         {
             var path = parentPath is null ? node.Name : parentPath + " > " + node.Name;
             return new(node.Id, node.LevelId, levels[node.LevelId], node.Name, path, node.StartSequence, node.EndSequence,
-                node.StartPageNumber, node.EndPageNumber, Ordered(node.Id).Select(child => Project(child, path)).ToList());
+                node.StartPageNumber, node.EndPageNumber, Ordered(node.Id).Select(child => Project(child, path)).ToList(), node.AudioCount);
         }
         IEnumerable<NodeRow> Ordered(Guid? parent) => children[parent].OrderBy(node => node.SortOrder)
             .ThenBy(node => node.StartSequence).ThenBy(node => node.Id);
@@ -77,5 +79,5 @@ public sealed partial class InternalStructureRepository(DbContextOptions<Docthec
     }
 
     private sealed record NodeRow(Guid Id, Guid LevelId, Guid? ParentId, string Name, int SortOrder,
-        int StartSequence, int EndSequence, int? StartPageNumber, int? EndPageNumber);
+        int StartSequence, int EndSequence, int? StartPageNumber, int? EndPageNumber, int AudioCount);
 }

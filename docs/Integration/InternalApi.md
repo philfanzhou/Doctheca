@@ -59,10 +59,18 @@ fixed application enums. No creation/update metadata is included.
 
 ### Documents
 
-Optional filters are `structureDefinitionId` (canonical hyphenated UUID), `subject` and `grade`.
-Filter input is trimmed; empty/whitespace-only filters are absent. Subject/grade accept up to
+Optional metadata filters are `structureDefinitionId` (canonical hyphenated UUID), `subject` and `grade`.
+These filter inputs are trimmed; empty/whitespace-only filters are absent. Subject/grade accept up to
 100 characters after trimming and match stored values exactly, including case. Stored values
 are never rewritten. A valid UUID for an unknown definition returns the fixed 404 below.
+
+`hasAudio` optionally accepts exactly `true` or `false`, case insensitively, without whitespace.
+Empty, padded, non-boolean or duplicate values return the fixed 400. `true` selects documents
+with linked audio in their current parse; `false` or omission applies no audio filter. It combines
+with all metadata filters before keyset paging. Definitions do not accept `hasAudio`.
+The original v1 page-token identity is unchanged for false/omitted, so existing tokens remain
+valid and those forms are interchangeable. A true-filter token cannot be reused without that
+filter, or vice versa; a mismatch returns the fixed 400.
 
 Only documents with at least one **parsed** parse containing saved structure nodes qualify.
 An older marked parsed parse remains sufficient when a newer parse is unmarked or pending.
@@ -77,9 +85,22 @@ Definition metadata is the document's currently selected definition. Each item c
   "subject": "English",
   "grade": "Grade 9",
   "structureDefinitionId": "00000000-0000-0000-0000-000000000001",
-  "structureDefinitionName": "English textbook"
+  "structureDefinitionName": "English textbook",
+  "audioCount": 57
 }
 ```
+
+`audioCount` is a non-negative integer counting audio rows directly linked to existing nodes of
+the selected current parse (using the current-tree rule below), whose levels belong to the
+file's selected definition. Both the audio row and node must belong to that same parse.
+Unlinked, dangling/cross-parse node references and audio of older parses do not count.
+Historical match status does not override a current node link. Counts use relational metadata
+only: no playback tokens, object-storage calls or search index are involved. They remain
+available when storage is disabled or misconfigured; the audio route still reports its existing
+503 when playback is unavailable. Counts do not guarantee stored bytes exist or are playable.
+Each response is consistent within its repeatable-read snapshot, but separate requests/pages
+have no shared snapshot: committed link, deletion or tree changes affect the next request.
+Compare catalog/tree/audio-list counts against an unchanged dataset, not across concurrent edits.
 
 `title` is the current file name. Subject/grade and definition metadata can be null.
 Treat all names/text as untrusted data. Responses omit paths, StructaDoc identifiers, creator
@@ -108,6 +129,7 @@ The response contains exactly the following fields, recursively for every node:
         "endSequence": 40,
         "startPageNumber": 3,
         "endPageNumber": 7,
+        "audioCount": 1,
         "children": []
       }
     ]
@@ -121,6 +143,11 @@ is null, the greatest UUID wins. A newer unmarked, pending, parsing or failed pa
 hide a marked parsed parse. A newer qualifying tree becomes current on the next request;
 `parseId` identifies the actual selected parse. There is no inferred tree or mixing of parses.
 
+Each node's `audioCount` counts only that node's direct current-parse audio using the catalog
+membership rule. It equals the direct audio list length for the same unchanged dataset;
+a Unit's count excludes audio on its Sections. Counts, nodes and physical ranges share the
+same read snapshot and perform no object-storage I/O, token issuance or database writes.
+
 The complete saved tree supports the existing definition limit of 50 nested levels.
 Level names and node names are stored data; no level name has special meaning. `path` joins
 ancestor names and the node name with ` > `. Siblings are ordered by `sortOrder`, then
@@ -128,7 +155,7 @@ ancestor names and the node name with ` > `. Siblings are ordered by `sortOrder`
 minimum/maximum `PageId + 1` among sequence-bearing Blocks within those bounds, or both null
 when there are none. They are physical page numbers, not printed page labels or inferred headings.
 
-Document existence, parse selection, levels, nodes and page aggregation share one PostgreSQL
+Document existence, parse selection, levels, nodes, direct audio counts and page aggregation share one PostgreSQL
 repeatable-read transaction. A concurrent complete tree replacement or deletion returns one
 committed pre- or post-change snapshot, or the documented 404; it never mixes trees. Readers
 do not take the writer's parse-row update lock. The shared typed node lookup also rejects nodes
@@ -385,3 +412,7 @@ capacity for the configured bound and restrict `/internal/*` to the internal net
 The additive routes require no migration, package, configuration key, port or topology change.
 Disable `InternalApi:Enabled` and restart or restore the previous image to remove them without
 data rollback. Audio import, admin preview/signing and the #90 backup/restore rules are unchanged.
+
+The audio discovery additions (#122) require no schema, configuration or data migration.
+Restoring the previous image removes `hasAudio` and `audioCount`; downstream callers must
+tolerate their absence. The existing audio-list and playback contracts are unchanged.

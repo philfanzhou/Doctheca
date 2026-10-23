@@ -56,12 +56,13 @@ public sealed class InternalStructureEndpointTests(PostgreSqlFixture database) :
             foreach (var expected in seed.Nodes)
             {
                 var actual = nodes[expected.Id];
-                AssertKeys(actual, "id", "levelId", "levelName", "name", "path", "startSequence", "endSequence", "startPageNumber", "endPageNumber", "children");
+                AssertKeys(actual, "id", "levelId", "levelName", "name", "path", "startSequence", "endSequence", "startPageNumber", "endPageNumber", "children", "audioCount");
                 Assert.Equal(expected.LevelId, actual.GetProperty("levelId").GetGuid());
                 Assert.Equal("Layer " + Array.IndexOf(seed.Levels, expected.LevelId), actual.GetProperty("levelName").GetString());
                 Assert.Equal(expected.Name, actual.GetProperty("name").GetString());
                 Assert.Equal(expected.StartSequence, actual.GetProperty("startSequence").GetInt32());
                 Assert.Equal(expected.EndSequence, actual.GetProperty("endSequence").GetInt32());
+                Assert.Equal(0, actual.GetProperty("audioCount").GetInt32());
             }
             Assert.Equal(new[] { "A1", "A2" }, roots[1].GetProperty("children").EnumerateArray().Select(node => node.GetProperty("name").GetString()));
             Assert.Equal("A > A1", nodes[seed.Nodes[3].Id].GetProperty("path").GetString());
@@ -121,11 +122,29 @@ public sealed class InternalStructureEndpointTests(PostgreSqlFixture database) :
             var now = DateTimeOffset.UtcNow;
             await db.DocumentParses.Where(item => item.Id == seed.Parse).ExecuteUpdateAsync(set => set.SetProperty(item => item.ParsedAt, now.AddDays(-1)));
             var ids = Enumerable.Range(0, 10).Select(_ => Guid.NewGuid()).Order().ToArray();
+            var counts = new Dictionary<Guid, int> { [seed.Parse] = 0 };
             async Task Add(Guid id, string status, DateTimeOffset? parsedAt, bool marked)
             {
                 db.DocumentParses.Add(new DocumentParseEntity { Id = id, DocumentFileId = seed.File, Status = status, ParsedAt = parsedAt });
-                if (marked) db.DocumentStructureNodes.Add(new DocumentStructureNodeEntity { ParseId = id, LevelId = seed.Levels[0], Name = "alternate", StartSequence = 0, EndSequence = 1 });
+                if (marked)
+                {
+                    var node = new DocumentStructureNodeEntity { ParseId = id, LevelId = seed.Levels[0], Name = "alternate", StartSequence = 0, EndSequence = 1 };
+                    db.DocumentStructureNodes.Add(node);
+                    counts[id] = Array.IndexOf(ids, id) + 1;
+                    db.DocumentStructureAudio.AddRange(Enumerable.Range(0, counts[id]).Select(_ => new DocumentStructureAudioEntity
+                    { ParseId = id, NodeId = node.Id, SourcePath = Guid.NewGuid() + ".mp3", ObjectKey = "audio-key-canary-" + Guid.NewGuid(), ContentType = "audio/mpeg", MatchStatus = "matched" }));
+                }
+                else counts[id] = 0;
                 await db.SaveChangesAsync();
+            }
+            async Task AssertSelected(Guid expected)
+            {
+                await AssertCurrentAsync(client, seed.File, expected);
+                using var tree = JsonDocument.Parse(await client.GetStringAsync(Url(seed.File)));
+                Assert.Equal(counts[expected], Flatten(tree.RootElement.GetProperty("data").GetProperty("nodes").EnumerateArray())
+                    .Sum(node => node.GetProperty("audioCount").GetInt32()));
+                using var catalog = JsonDocument.Parse(await client.GetStringAsync($"/internal/v1/documents?structureDefinitionId={seed.Definition}"));
+                Assert.Equal(counts[expected], Assert.Single(catalog.RootElement.GetProperty("data").GetProperty("items").EnumerateArray()).GetProperty("audioCount").GetInt32());
             }
             await Add(ids[0], DocumentParseStatus.Parsed, now, true);
             await Add(ids[1], DocumentParseStatus.Parsed, now, true);
@@ -134,18 +153,18 @@ public sealed class InternalStructureEndpointTests(PostgreSqlFixture database) :
             await Add(ids[7], DocumentParseStatus.Parsing, now.AddDays(1), true);
             await Add(ids[6], DocumentParseStatus.Failed, now.AddDays(1), true);
             await Add(ids[5], DocumentParseStatus.Parsed, now.AddDays(1), false);
-            await AssertCurrentAsync(client, seed.File, ids[1]);
+            await AssertSelected(ids[1]);
             // UUID alone cannot hide an older timestamp, or promote a null timestamp over a real one.
             await db.DocumentParses.Where(item => item.Id == ids[9]).ExecuteUpdateAsync(set => set.SetProperty(item => item.ParsedAt, now.AddDays(-2)));
-            await AssertCurrentAsync(client, seed.File, ids[1]);
+            await AssertSelected(ids[1]);
             await db.DocumentParses.Where(item => item.Id == ids[9]).ExecuteUpdateAsync(set => set.SetProperty(item => item.ParsedAt, now.AddMinutes(1)));
-            await AssertCurrentAsync(client, seed.File, ids[9]);
+            await AssertSelected(ids[9]);
             // A newly marked parsed parse becomes current on the next request.
             db.DocumentStructureNodes.Add(new DocumentStructureNodeEntity { ParseId = ids[5], LevelId = seed.Levels[0], Name = "promoted", StartSequence = 0, EndSequence = 1 });
             await db.SaveChangesAsync();
-            await AssertCurrentAsync(client, seed.File, ids[5]);
+            await AssertSelected(ids[5]);
             await db.DocumentParses.Where(item => item.DocumentFileId == seed.File).ExecuteUpdateAsync(set => set.SetProperty(item => item.ParsedAt, (DateTimeOffset?)null));
-            await AssertCurrentAsync(client, seed.File, new[] { seed.Parse, ids[0], ids[1], ids[5], ids[9] }.Max());
+            await AssertSelected(new[] { seed.Parse, ids[0], ids[1], ids[5], ids[9] }.Max());
         }
         finally { await CleanupAsync(factory, seed); }
     }
@@ -219,6 +238,13 @@ public sealed class InternalStructureEndpointTests(PostgreSqlFixture database) :
         using var client = factory.CreateClient();
         try
         {
+            using (var scope = seedFactory.Services.CreateScope())
+            {
+                var db = scope.ServiceProvider.GetRequiredService<DocthecaDbContext>();
+                db.DocumentStructureAudio.Add(new() { ParseId = seed.Parse, NodeId = seed.Nodes[0].Id,
+                    SourcePath = "snapshot.mp3", ObjectKey = "audio-key-canary-" + Guid.NewGuid(), ContentType = "audio/mpeg", MatchStatus = "matched" });
+                await db.SaveChangesAsync();
+            }
             pause.Active = true;
             var reading = client.GetStringAsync(Url(seed.File));
             await pause.Entered.Task.WaitAsync(TimeSpan.FromSeconds(10));
@@ -245,12 +271,18 @@ public sealed class InternalStructureEndpointTests(PostgreSqlFixture database) :
             Assert.All(nodes, node => Assert.StartsWith("Layer ", node.GetProperty("levelName").GetString()));
             var rootA = Assert.Single(nodes, node => node.GetProperty("name").GetString() == "A");
             Assert.Equal(5, rootA.GetProperty("endPageNumber").GetInt32());
+            Assert.Equal(1, rootA.GetProperty("audioCount").GetInt32());
             Assert.Equal(IsolationLevel.RepeatableRead, pause.Isolation);
             using var next = await client.GetAsync(Url(seed.File));
             Assert.Equal(delete ? HttpStatusCode.NotFound : HttpStatusCode.OK, next.StatusCode);
             var nextText = await next.Content.ReadAsStringAsync();
             Assert.Contains(delete ? "DOCTHECA_INTERNAL_DOCUMENT_NOT_FOUND" : "replacement", nextText);
-            if (!delete) Assert.Contains("100", nextText);
+            if (!delete)
+            {
+                Assert.Contains("100", nextText);
+                using var nextBody = JsonDocument.Parse(nextText);
+                Assert.Equal(0, Assert.Single(nextBody.RootElement.GetProperty("data").GetProperty("nodes").EnumerateArray()).GetProperty("audioCount").GetInt32());
+            }
         }
         finally { pause.Resume.TrySetResult(); await CleanupAsync(seedFactory, seed); }
     }
