@@ -97,7 +97,7 @@ public sealed partial class StructureAudioEndpointTests(PostgreSqlFixture databa
     [Fact]
     public async Task OfficialTextbookAudio_IsPreLinkedReviewedChangedAndProtected()
     {
-        using var factory = Factory();
+        using var factory = Factory(extra: new() { ["InternalApi:Enabled"] = "true" });
         using var client = Admin(factory);
         var (fileId, parseId) = await SeedTextbookAsync(factory, client);
 
@@ -133,6 +133,30 @@ public sealed partial class StructureAudioEndpointTests(PostgreSqlFixture databa
             item["linkSource"]!.GetValue<string>().Should().Be("prefill");
         }
 
+        Guid? directoryDefinition;
+        using (var scope = factory.Services.CreateScope())
+            directoryDefinition = await scope.ServiceProvider.GetRequiredService<DocthecaDbContext>().DocumentFiles
+                .Where(file => file.Id == Guid.Parse(fileId)).Select(file => file.StructureDefinitionId).SingleAsync();
+        async Task AssertDiscovery(int expected)
+        {
+            using var anonymous = factory.CreateClient();
+            var catalog = (await ReadData(await anonymous.GetAsync($"/internal/v1/documents?hasAudio=true&structureDefinitionId={directoryDefinition}")))!;
+            var document = catalog["items"]!.AsArray().Single(item => item!["id"]!.GetValue<string>() == fileId)!;
+            document["audioCount"]!.GetValue<int>().Should().Be(expected);
+            var metadata = (await ReadData(await anonymous.GetAsync($"/internal/v1/documents/{fileId}/structure")))!;
+            AssertNoStorageDetails(metadata.ToJsonString());
+            var directTotal = 0;
+            foreach (var root in metadata["nodes"]!.AsArray())
+            foreach (var node in new[] { root }.Concat(root!["children"]!.AsArray()))
+            {
+                var list = (await ReadData(await anonymous.GetAsync($"/internal/v1/structure-nodes/{node!["id"]}/audio")))!;
+                var count = list["items"]!.AsArray().Count;
+                node["audioCount"]!.GetValue<int>().Should().Be(count);
+                directTotal += count;
+            }
+            directTotal.Should().Be(expected);
+        }
+        await AssertDiscovery(57);
         var tree = (await ReadData(await client.GetAsync($"/admin/document-parses/{parseId}/structure")))!;
         // 3. The administrator links the mismatch to Unit 4 Section A, clears another link, saves; a reload shows both.
         var unit4SectionA = tree["nodes"]![3]!["children"]![0]!["id"]!.GetValue<string>();
@@ -157,6 +181,7 @@ public sealed partial class StructureAudioEndpointTests(PostgreSqlFixture databa
         unlinked["linkSource"]!.GetValue<string>().Should().Be("manual");
         reloaded["storage"]!["available"]!.GetValue<bool>().Should().BeTrue();
         reloaded["storage"]!["maxFileBytes"]!.GetValue<long>().Should().Be(MaxFileBytes);
+        await AssertDiscovery(57);
 
         // 5. Removing a node in a structure save unlinks its audio; kept nodes keep theirs.
         var unit8 = tree["nodes"]![7]!.AsObject();
@@ -170,11 +195,13 @@ public sealed partial class StructureAudioEndpointTests(PostgreSqlFixture databa
         orphaned["nodeId"].Should().BeNull();
         orphaned["matchStatus"]!.GetValue<string>().Should().Be("node_removed");
         afterSave.Count(item => item!["nodeId"] != null).Should().Be(56);
+        await AssertDiscovery(56);
         (await minio.KeysAsync(_bucket)).Should().HaveCount(58);
 
         // 6. Removing a file deletes its object; unknown files and nodes are 404 and change nothing.
         (await client.DeleteAsync($"/admin/document-parses/{parseId}/audio/{orphaned["id"]}")).StatusCode.Should().Be(HttpStatusCode.OK);
         (await minio.KeysAsync(_bucket)).Should().HaveCount(57);
+        await AssertDiscovery(56);
         var missing = Guid.NewGuid();
         (await client.DeleteAsync($"/admin/document-parses/{parseId}/audio/{missing}")).StatusCode.Should().Be(HttpStatusCode.NotFound);
         (await client.PutAsJsonAsync($"/admin/document-parses/{parseId}/audio", new { links = new[] { new { id = missing, nodeId = (Guid?)null } } }))

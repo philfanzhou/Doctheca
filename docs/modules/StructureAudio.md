@@ -126,6 +126,21 @@ No schema, package, port or deployment topology change is introduced. Reverting 
 
 ## Downstream audio proxy
 
+For a recording directory, first read `GET /internal/v1/documents?hasAudio=true`, then the opened
+document's `/internal/v1/documents/{documentFileId}/structure`. Every document and tree node
+has an integer `audioCount`; document totals count current-parse links, while node counts are
+direct and exclude descendants. Links require an existing node in that parse and the file's
+selected definition. Unlinked/removed/dangling references and old-parse rows are excluded;
+historical match status does not suppress a real current link. False/omitted `hasAudio` retains
+the unfiltered catalog and old v1 cursors; true uses a distinct cursor identity.
+
+These reads query relational metadata only, without playback tokens or S3 access, even when
+storage is unavailable. Counts are not playback availability guarantees. Each response has its
+own repeatable-read snapshot; there is no shared snapshot across catalog pages, tree reads or
+audio lists during concurrent changes. The next request reflects committed relinks, unlinks,
+deletions and tree replacement. No migration is needed; restoring the previous image removes
+the additive filter/counts, so consumers must tolerate their absence (#122).
+
 The optional [internal API](../Integration/InternalApi.md#direct-node-audio-and-temporary-playback)
 provides anonymous direct-node metadata and same-origin expiring byte links. It reuses the
 current parsed tree rule in read-only repeatable-read snapshots, independently of administrator

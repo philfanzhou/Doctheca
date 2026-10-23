@@ -16,7 +16,7 @@ A self-hosted **document library & full-text retrieval** service for educational
 | **DocumentStructure** | Runtime-configured structure definitions and levels (for example Unit → Section), hand-marked structure nodes on a continuous view of a parse, and search narrowed to a node's subtree |
 | **StructureAudio** | Bounded ZIP/folder/file import, hierarchical matching and administrator link review, metadata persistence, deletion/orphan recovery and administrator playback using fresh expiring public S3 links |
 | **AdminAuthentication** | SignaCore hosted admin login via the official `SignaCore.Client.AspNetCore` client: `role=admin` pre-sign-in gate, server sessions, CSRF and prepared logout; legacy Bearer compatibility |
-| **InternalCatalog** | Optional anonymous read-only structure definition and marked-document catalogs, current document trees, node content pages, owned image bytes, subtree search and expiring same-origin direct-node audio; disabled by default and restricted to the internal network by the deployer |
+| **InternalCatalog** | Optional anonymous read-only structure definition and marked-document catalogs, current document trees with direct audio counts and audio-filtered discovery, node content pages, owned image bytes, subtree search and expiring same-origin direct-node audio; disabled by default and restricted to the internal network by the deployer |
 
 ## Tech Stack
 
