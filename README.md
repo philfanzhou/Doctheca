@@ -126,9 +126,16 @@ MIT — see [LICENSE](LICENSE).
 The administration SPA uses SignaCore hosted login, driven by the official
 `SignaCore.Client.AspNetCore` package with a thin host adaptation layer. Register exact
 callback/post-logout URIs and inject server-only Confidential client credentials; deploy API and
-SPA in the same image.
+SPA in the same image. Canonical HTTP and HTTPS callback pairs work in every environment.
+The configured external callback scheme selects Secure Cookies for HTTPS and non-Secure Cookies
+for HTTP, including clearing. Plain HTTP provides no network confidentiality, integrity or
+listener authenticity; network/TLS protection is the deployer's responsibility. HTTP Authority
+or Issuer still requires explicit `IdentityService:RequireHttpsMetadata=false` (default true).
+Keep HTTPS callbacks and existing trusted forwarded-scheme handling behind TLS termination.
+HTTPS deployments need no configuration migration.
 See [hosted login](docs/modules/AdminAuthentication/07-HostedLogin.md) and
 [Breaking changes and upgrade](docs/development/HostedLoginUpgrade.md). Old password endpoints
 return 410 and old token Cookies are ignored. Missing login configuration permits startup with
-fixed 503 login responses. Rollback restores a matching old image and configuration, including
-its old password contract, and requires reauthentication. No database migration or rollback SQL.
+fixed 503 login responses. Before rolling back to the preceding matching API/SPA image, restore
+HTTPS registrations/configuration: it again refuses Production HTTP. Restart requires sign-in
+again. No database migration or SQL/data rollback applies.

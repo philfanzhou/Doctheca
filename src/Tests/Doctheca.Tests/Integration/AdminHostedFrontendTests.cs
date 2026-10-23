@@ -46,7 +46,7 @@ public sealed partial class AdminHostedFrontendTests(PostgreSqlFixture database,
     }
 
     private async Task<BrowserHarness> Open(string scenario = "admin", IReadOnlyDictionary<string, string?>? settings = null,
-        Action<IServiceCollection>? configureServices = null)
+        Action<IServiceCollection>? configureServices = null, string environment = "Testing", bool nonLoopback = false)
     {
         var spa = await Spa.Value;
         var root = CreateTempContentRoot(false);
@@ -58,14 +58,14 @@ public sealed partial class AdminHostedFrontendTests(PostgreSqlFixture database,
         }
         var appPort = Port();
         var providerPort = Port();
-        var origin = $"http://127.0.0.1:{appPort}";
-        var authority = new OidcTestAuthority { AuthorityIssuer = $"http://127.0.0.1:{providerPort}" };
+        var origin = $"http://{(nonLoopback ? "admin.doctheca.test" : "127.0.0.1")}:{appPort}";
+        var authority = new OidcTestAuthority { AuthorityIssuer = $"http://{(nonLoopback ? "identity.doctheca.test" : "127.0.0.1")}:{providerPort}" };
         if (scenario == "unavailable") authority.DiscoveryDefect = "500";
         if (scenario == "local") authority.LogoutFailure = "500";
         if (scenario == "signInFailed") authority.TokenFailure = "500";
         var builder = WebApplication.CreateBuilder();
         builder.Logging.ClearProviders();
-        builder.WebHost.UseUrls(authority.AuthorityIssuer);
+        builder.WebHost.UseUrls($"http://127.0.0.1:{providerPort}");
         var provider = builder.Build();
         provider.MapGet("/authorize", (Microsoft.AspNetCore.Http.HttpContext context) =>
         {
@@ -93,15 +93,72 @@ public sealed partial class AdminHostedFrontendTests(PostgreSqlFixture database,
             ["AdminOidc:RedirectUri"] = origin + AdminOidcConstants.CallbackPath,
             ["AdminOidc:PostLogoutRedirectUri"] = origin + AdminOidcConstants.LogoutReturnPath,
             ["IdentityService:Authority"] = authority.AuthorityIssuer, ["IdentityService:Issuer"] = authority.AuthorityIssuer,
-            ["IdentityService:AppId"] = OidcTestAuthority.ClientId, ["IdentityService:AppSecret"] = OidcTestAuthority.Secret });
+            ["IdentityService:AppId"] = OidcTestAuthority.ClientId, ["IdentityService:AppSecret"] = OidcTestAuthority.Secret }, environment);
         factory.UseKestrel(appPort);
         factory.StartServer();
         var playwright = await Playwright.CreateAsync();
-        var browser = await playwright.Chromium.LaunchAsync(new() { Headless = true });
+        var browser = await playwright.Chromium.LaunchAsync(new() { Headless = true, Args = nonLoopback
+            ? ["--host-resolver-rules=MAP admin.doctheca.test 127.0.0.1, MAP identity.doctheca.test 127.0.0.1", "--no-proxy-server"] : [] });
         var context = await browser.NewContextAsync();
         var page = await context.NewPageAsync();
         // No traces, HAR, storage state, request headers or protocol URLs are recorded.
         return new(root, origin, authority, provider, factory, playwright, browser, context, page, time);
+    }
+
+    [Fact]
+    public async Task ProductionNonLoopbackHttpCompletesLoginCsrfWriteAndPreparedLogout()
+    {
+        await using var h = await Open(environment: "Production", nonLoopback: true);
+        Assert.Equal("Production", h.Factory.Services.GetRequiredService<Microsoft.Extensions.Hosting.IHostEnvironment>().EnvironmentName);
+        await h.Page.GotoAsync(h.Origin + "/#search");
+        await h.Page.GetByRole(AriaRole.Button, new() { Name = "使用 SignaCore 登录" }).ClickAsync();
+        await Assertions.Expect(h.Page.GetByText("检索测试", new() { Exact = true }).First).ToBeVisibleAsync();
+        Assert.True(h.Page.Url.EndsWith("/#search", StringComparison.Ordinal), "Deep link was not restored.");
+        Assert.Equal("admin.doctheca.test", new Uri(h.Page.Url).Host);
+        Assert.False(await h.Page.EvaluateAsync<bool>("window.isSecureContext"));
+        Assert.Equal(0, await h.Page.EvaluateAsync<int>("localStorage.length + sessionStorage.length"));
+        var statuses = await h.Page.EvaluateAsync<int[]>("""
+            async () => {
+              const route = '/admin/document-files/00000000-0000-0000-0000-000000000125';
+              const read = await fetch('/admin/document-files');
+              const missing = await fetch(route, { method: 'DELETE' });
+              const pair = await (await fetch('/admin/auth/oidc/csrf')).json();
+              const wrong = await fetch(route, { method: 'DELETE', headers: { 'X-CSRF-TOKEN': 'forged-token' } });
+              const valid = await fetch(route, { method: 'DELETE', headers: { 'X-CSRF-TOKEN': pair.token } });
+              return [read.status, missing.status, wrong.status, valid.status];
+            }
+            """);
+        // A CSRF-authorized DELETE reaches the intended handler and its missing-document result.
+        Assert.Equal(new[] { 200, 403, 403, 404 }, statuses);
+        var cookies = await h.Context.CookiesAsync();
+        foreach (var name in new[] { AdminOidcConstants.SessionCookie, AdminOidcConstants.CsrfCookie })
+        {
+            var cookie = Assert.Single(cookies, value => value.Name == name);
+            Assert.False(cookie.Secure);
+            Assert.True(cookie.HttpOnly);
+            Assert.Equal("/", cookie.Path);
+            Assert.Equal(name == AdminOidcConstants.CsrfCookie ? SameSiteAttribute.Strict : SameSiteAttribute.Lax, cookie.SameSite);
+        }
+        // A top-level form follows the provider/return redirects in Chromium. The existing
+        // SPA button's cross-origin fetch behavior is covered separately below.
+        var field = h.Factory.Services.GetRequiredService<Microsoft.Extensions.Options.IOptions<Microsoft.AspNetCore.Antiforgery.AntiforgeryOptions>>().Value.FormFieldName;
+        await h.Page.EvaluateAsync("""
+            async field => {
+              const pair = await (await fetch('/admin/auth/oidc/csrf')).json();
+              const form = document.createElement('form');
+              form.method = 'POST'; form.action = '/admin/auth/oidc/logout';
+              const input = document.createElement('input');
+              input.type = 'hidden'; input.name = field; input.value = pair.token;
+              form.append(input); document.body.append(form); form.submit();
+            }
+            """, field);
+        await Assertions.Expect(h.Page.GetByRole(AriaRole.Alert)).ToContainTextAsync("已退出登录");
+        Assert.Single(h.Authority.LogoutForms);
+        Assert.Equal(0, TicketCount(h.Factory));
+        var remainingNames = (await h.Context.CookiesAsync()).Select(value => value.Name).ToArray();
+        Assert.DoesNotContain(remainingNames, name => name == AdminOidcConstants.SessionCookie
+            || name == AdminOidcConstants.SessionCookie + "-logout-return" || name.Contains("-login-binding."));
+        Assert.Equal(401, await h.Page.EvaluateAsync<int>("async () => (await fetch('/admin/document-files')).status"));
     }
 
     [Fact]

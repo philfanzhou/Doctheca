@@ -127,12 +127,13 @@ public sealed partial class AdminOidcIntegrationTests
         await AssertRevoked(client, session.Cookie);
     }
 
-    [Fact]
-    public async Task ParallelAndRepeatedLogoutMakesAtMostOneProviderCall()
+    [Theory]
+    [InlineData(false)][InlineData(true)]
+    public async Task ParallelAndRepeatedLogoutMakesAtMostOneProviderCall(bool http)
     {
         using var authority = new OidcTestAuthority { HoldLogout = true };
-        using var factory = OidcFactory(authority);
-        using var client = Browser(factory);
+        using var factory = OidcFactory(authority, http: http);
+        using var client = Browser(factory, http);
         var session = await SignInWithCsrf(client, authority);
         var pending = Enumerable.Range(0, 6).Select(_ => Logout(client, session)).ToArray();
         await authority.LogoutEntered.Task.WaitAsync(TimeSpan.FromSeconds(5));
@@ -151,11 +152,12 @@ public sealed partial class AdminOidcIntegrationTests
 
     [Theory]
     [InlineData("500")][InlineData("404")][InlineData("json")][InlineData("timeout")][InlineData("oversized")][InlineData("duplicate")]
-    public async Task ProviderFailureLeavesLocalRevocationAndNeverRetries(string failure)
+    [InlineData("500", true)][InlineData("timeout", true)]
+    public async Task ProviderFailureLeavesLocalRevocationAndNeverRetries(string failure, bool http = false)
     {
         using var authority = new OidcTestAuthority { LogoutFailure = failure };
-        using var factory = OidcFactory(authority);
-        using var client = Browser(factory);
+        using var factory = OidcFactory(authority, http: http);
+        using var client = Browser(factory, http);
         var session = await SignInWithCsrf(client, authority);
         var response = await Logout(client, session);
         AssertSessionCookieDeleted(response);
@@ -224,12 +226,13 @@ public sealed partial class AdminOidcIntegrationTests
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
-    [Fact]
-    public async Task LogoutCancellationDoesNotResurrectLocalSession()
+    [Theory]
+    [InlineData(false)][InlineData(true)]
+    public async Task LogoutCancellationDoesNotResurrectLocalSession(bool http)
     {
         using var authority = new OidcTestAuthority { HoldLogout = true };
-        using var factory = OidcFactory(authority);
-        using var client = Browser(factory);
+        using var factory = OidcFactory(authority, http: http);
+        using var client = Browser(factory, http);
         var session = await SignInWithCsrf(client, authority);
         using var cancellation = new CancellationTokenSource();
         var pending = Logout(client, session, cancellation: cancellation.Token);
@@ -328,12 +331,13 @@ public sealed partial class AdminOidcIntegrationTests
 
     [Theory]
     [InlineData(false, true)][InlineData(true, true)][InlineData(false, false)][InlineData(true, false)]
-    public async Task MixedBearerAndSessionCookieWritesRequireActuallyVerifiedBearer(bool expired, bool validBearer)
+    [InlineData(false, false, true)][InlineData(false, true, true)]
+    public async Task MixedBearerAndSessionCookieWritesRequireActuallyVerifiedBearer(bool expired, bool validBearer, bool http = false)
     {
         using var authority = new OidcTestAuthority();
         var time = new ManualOidcTime();
-        using var factory = OidcFactory(authority, time);
-        using var client = Browser(factory);
+        using var factory = OidcFactory(authority, time, http: http);
+        using var client = Browser(factory, http);
         var session = await SignInWithCsrf(client, authority);
         if (expired) time.Advance(TimeSpan.FromMinutes(16));
         using var request = new HttpRequestMessage(HttpMethod.Delete, ProtectedApiRoute + "/00000000-0000-0000-0000-000000000047");
@@ -352,12 +356,13 @@ public sealed partial class AdminOidcIntegrationTests
         }
     }
 
-    [Fact]
-    public async Task BearerPrincipalCannotBorrowCookieAdministratorRole()
+    [Theory]
+    [InlineData(false)][InlineData(true)]
+    public async Task BearerPrincipalCannotBorrowCookieAdministratorRole(bool http)
     {
         using var authority = new OidcTestAuthority();
-        using var factory = OidcFactory(authority);
-        using var client = Browser(factory);
+        using var factory = OidcFactory(authority, http: http);
+        using var client = Browser(factory, http);
         var session = await SignInWithCsrf(client, authority);
         using var request = new HttpRequestMessage(HttpMethod.Get, ProtectedApiRoute);
         request.Headers.Add("Cookie", session.Cookie);

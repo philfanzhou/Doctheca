@@ -4,8 +4,13 @@
 
 Register a Confidential SignaCore client and exact callback/post-logout URIs; inject server-only
 credentials and trust settings per [Hosted Login](../modules/AdminAuthentication/07-HostedLogin.md).
-Use HTTPS outside Development/Testing numeric loopback. Never include credentials, protocol
-parameters, tokens or Cookies in test reports.
+Choose the effective external HTTP or HTTPS profile in every environment; exact callback and
+post-logout origins/paths must match registration. HTTPS uses Secure Cookies; HTTP omits Secure
+for all four carriers and provides no network confidentiality, integrity or listener authenticity.
+Operators choose network/TLS protection. Keep trusted forwarded-scheme handling behind TLS
+termination, and explicitly set `IdentityService:RequireHttpsMetadata=false` for HTTP Authority or
+Issuer (the Bearer default remains true). Never include credentials, protocol parameters, tokens
+or Cookies in test reports.
 
 ## Anonymous Entry Points
 
@@ -35,8 +40,25 @@ Session restoration uses `/admin/auth/oidc/session`; writes carry the CSRF pair 
 401 without refresh or write replay. The old token Cookies alone must return 401.
 
 Use the SPA logout button: local revocation precedes provider preparation, successful preparation
-navigates to the validated provider URL, and provider failure reports local-only exit. Repeated
+returns the validated provider redirect, and provider failure reports local-only exit. Repeated
 exit cannot resurrect a session or repeat provider preparation.
+
+Run the browser flow on a Production host at a non-loopback HTTP origin as well as the HTTPS
+profile. The automated Chromium test maps synthetic `.test` names to loopback, uses random
+Kestrel ports and asserts the page is not a secure context. It verifies route restoration,
+protected reads, missing/wrong CSRF rejection, a CSRF-authorized DELETE reaching its handler,
+non-Secure HttpOnly Cookies, prepared logout/return via a CSRF-authorized top-level form, and
+subsequent 401. The existing SPA button's cross-origin fetch path is tested separately; the form
+ensures Chromium actually traverses the provider and return redirects. No production service,
+trace, HAR or storage-state capture is used. Effective-options/Set-Cookie tests also cover all
+four carriers and clearing when request and configured callback schemes differ; HTTPS remains
+Secure. HTTP failure/cancellation/replay/concurrency and mixed Bearer/session checks retain the
+same authorization boundaries. Settings cover all environments, independent Authority transport,
+structural URI failures, safe diagnostics and the 500-character registration boundary.
+
+HTTPS deployment configuration needs no migration. Before rollback to the preceding image,
+restore HTTPS registrations/configuration: that image refuses Production HTTP. Restart requires
+sign-in again; no SQL/data rollback applies.
 
 ## Retired Endpoints and Missing Configuration
 

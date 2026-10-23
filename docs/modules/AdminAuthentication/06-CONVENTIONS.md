@@ -11,8 +11,13 @@
 | Exact application callbacks | `AdminOidc:RedirectUri/PostLogoutRedirectUri` |
 
 `AdminOidc:Enabled`, `Authentication:CookieSecure` and `DOCTHECA_COOKIE_SECURE` are retired.
-Hosted login is always configured when required values are complete. Secure Cookies are required
-outside Development/Testing numeric loopback HTTP.
+Hosted login is always configured when required values are complete. Canonical HTTP and HTTPS
+callbacks are accepted in every environment; callback and post-logout origins must match exactly.
+The configured external callback scheme selects Secure for HTTPS and no Secure for HTTP on all
+four Cookie carriers, including deletion, independently of request scheme. Network/TLS protection
+is the deployer's responsibility; plain HTTP provides no confidentiality, integrity or listener
+authenticity. HTTP Authority or Issuer still requires `IdentityService:RequireHttpsMetadata=false`;
+its default and issuer trust are unchanged.
 
 Use fixed English errors and code/key-only startup diagnostics. Never log passwords, protocol
 parameters, tokens, Cookies or client secrets. Browser auth material never enters persistent
