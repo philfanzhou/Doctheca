@@ -38,7 +38,7 @@ public sealed partial class StructureAudioEndpointTests(PostgreSqlFixture databa
     private WebApplicationFactory<Program> Factory(
         bool storage = true,
         Dictionary<string, string?>? extra = null,
-        TimeProvider? audioTime = null, ILoggerProvider? logs = null)
+        TimeProvider? audioTime = null, ILoggerProvider? logs = null, Action<IServiceCollection>? configure = null)
     {
         var settings = storage ? minio.Settings(_bucket) : new Dictionary<string, string?> { ["Oss:InternalEndpoint"] = "" };
         settings["DocumentAudio:MaxFileBytes"] = MaxFileBytes.ToString();
@@ -58,6 +58,7 @@ public sealed partial class StructureAudioEndpointTests(PostgreSqlFixture databa
                 services.RemoveAll<StructureAudioService>();
                 services.AddScoped(sp => ActivatorUtilities.CreateInstance<StructureAudioService>(sp, audioTime));
             }
+            configure?.Invoke(services);
         }, settings: settings);
     }
 
@@ -105,7 +106,10 @@ public sealed partial class StructureAudioEndpointTests(PostgreSqlFixture databa
         var entries = StructureAudioMatcherTests.OfficialAudioPaths.Select(path => (path, Mp3(path))).ToList();
         entries.Add((".DS_Store", "junk"u8.ToArray()));
         entries.Add(("__MACOSX/unit1/._9s01Unit1SectionA1b.mp3", "junk"u8.ToArray()));
-        var imported = await client.PostAsync($"/admin/document-parses/{parseId}/audio", Upload(("official.zip", Zip(entries))));
+        var proposals = (await ReadData(await client.PostAsync($"/admin/document-parses/{parseId}/audio?preview=true", Upload(("official.zip", Zip(entries))))))!["items"]!.AsArray();
+        using var selected = Upload(("official.zip", Zip(entries)));
+        selected.Add(new StringContent(System.Text.Json.JsonSerializer.Serialize(proposals.Select(p => new { sourcePath = p!["sourcePath"]!.GetValue<string>(), nodeId = p["suggestedNodeId"]?.GetValue<string>() }))), "targets");
+        var imported = await client.PostAsync($"/admin/document-parses/{parseId}/audio", selected);
         var importBody = await imported.Content.ReadAsStringAsync();
         imported.StatusCode.Should().Be(HttpStatusCode.OK, importBody);
         AssertNoStorageDetails(importBody);
@@ -130,7 +134,7 @@ public sealed partial class StructureAudioEndpointTests(PostgreSqlFixture databa
             var path = item!["sourcePath"]!.GetValue<string>();
             var unit = path[4..path.IndexOf('/')];
             item["nodePath"]!.GetValue<string>().Should().StartWith($"Unit {unit} ").And.EndWith(path.Contains("SectionA") ? " > Section A" : " > Section B");
-            item["linkSource"]!.GetValue<string>().Should().Be("prefill");
+            item["linkSource"]!.GetValue<string>().Should().Be("manual");
         }
 
         Guid? directoryDefinition;
@@ -252,12 +256,15 @@ public sealed partial class StructureAudioEndpointTests(PostgreSqlFixture databa
         using var client = Admin(factory);
         var (_, parseId) = await SeedTextbookAsync(factory, client);
 
-        var byName = await ReadData(await client.PostAsync($"/admin/document-parses/{parseId}/audio",
-            Upload(("unit2/9s06Unit2SectionB1b.mp3", Mp3("x")))));
+        var tree = (await ReadData(await client.GetAsync($"/admin/document-parses/{parseId}/structure")))!;
+        using var byNameForm = Upload(("unit2/9s06Unit2SectionB1b.mp3", Mp3("x")));
+        byNameForm.Add(new StringContent(tree["nodes"]![1]!["children"]![1]!["id"]!.GetValue<string>()), "targetNodeId");
+        var byName = await ReadData(await client.PostAsync($"/admin/document-parses/{parseId}/audio", byNameForm));
         byName!["items"]![0]!["nodePath"]!.GetValue<string>().Should().EndWith(" > Section B");
 
         var form = Upload(("9s01Unit3SectionA1b.mp3", Mp3("y")));
         form.Add(new StringContent("官方音频/unit3/9s01Unit3SectionA1b.mp3"), "paths");
+        form.Add(new StringContent(tree["nodes"]![2]!["children"]![0]!["id"]!.GetValue<string>()), "targetNodeId");
         var byPath = (await ReadData(await client.PostAsync($"/admin/document-parses/{parseId}/audio", form)))!["items"]![0]!;
         byPath["sourcePath"]!.GetValue<string>().Should().Be("官方音频/unit3/9s01Unit3SectionA1b.mp3");
         byPath["folder"]!.GetValue<string>().Should().Be("官方音频/unit3");
@@ -444,7 +451,7 @@ public sealed partial class StructureAudioEndpointTests(PostgreSqlFixture databa
         var definitionId = (await ReadData(await client.PostAsJsonAsync("/admin/structure-definitions", new
         {
             name = "Audio textbook " + Guid.NewGuid().ToString("N")[..6],
-            levels = new object[] { new { id = unit, name = "Unit", parentLevelId = (Guid?)null, required = true }, new { id = section, name = "Section", parentLevelId = unit, required = true } },
+            levels = new object[] { new { id = unit, name = "Unit", parentLevelId = (Guid?)null, required = false }, new { id = section, name = "Section", parentLevelId = unit, required = false } },
         })))!["id"]!.GetValue<string>();
         var (fileId, parseId) = await SeedParseAsync(factory, 400);
         (await client.PutAsJsonAsync($"/admin/document-files/{fileId}/metadata", new { structureDefinitionId = definitionId }))

@@ -47,20 +47,22 @@ public static class AudioErrorCodes
 
 /// <summary>The audio of a parse together with the nodes they link to, for projection.</summary>
 public sealed record ParseAudio(
-    Guid ParseId,
+    Guid? ParseId,
     IReadOnlyList<DocumentStructureAudioModel> Items,
-    IReadOnlyDictionary<Guid, DocumentStructureNodeModel> Nodes);
+    IReadOnlyDictionary<Guid, DocumentStructureNodeModel> Nodes,
+    Guid DocumentFileId = default, Guid? TreeId = null, IReadOnlyList<StructureLevelModel>? Levels = null);
 
 public sealed record AudioImportOutcome(ParseAudio Imported, IReadOnlyList<string> Skipped);
+public sealed record AudioPreviewEntry(string SourcePath, string ContentType, long SizeBytes, string MatchStatus,
+    Guid? SuggestedNodeId, string? SuggestedNodePath);
+public sealed record AudioPreview(IReadOnlyList<AudioPreviewEntry> Items, IReadOnlyList<string> Skipped);
 
 public sealed record AudioPlaybackLink(string Url, DateTimeOffset ExpiresAt, int ExpiresInSeconds);
 
 public sealed record AudioSweepOutcome(int Scanned, int Deleted, int Failed);
 
 /// <summary>
-/// Structure audio (issue #90): import with pre-filled node links, manual link changes and
-/// removal and cleanup of stored objects when a file, parse or
-/// document is deleted.
+/// Document/tree audio proposals, atomic Required-policy commits and reference-safe object cleanup.
 /// </summary>
 public sealed class StructureAudioService
 {
@@ -94,185 +96,189 @@ public sealed class StructureAudioService
 
     public async Task<bool> ParseExistsAsync(Guid parseId) => await _parseRepository.GetByIdAsync(parseId) != null;
 
-    public async Task<AudioResult<ParseAudio>> ListAsync(Guid parseId)
+    public Task<AudioResult<ParseAudio>> ListAsync(Guid parseId) => ListAsync(new AudioOwner(parseId));
+    public async Task<AudioResult<ParseAudio>> ListAsync(AudioOwner owner, CancellationToken ct = default)
     {
-        if (!await ParseExistsAsync(parseId)) return ParseNotFound<ParseAudio>();
-        return AudioResult<ParseAudio>.Ok(await LoadAsync(parseId, await _audioRepository.GetByParseIdAsync(parseId)));
+        var scope = await _audioRepository.GetScopeAsync(owner, ct);
+        if (scope is null) return OwnerMissing<ParseAudio>(owner);
+        return AudioResult<ParseAudio>.Ok(Load(scope, await _audioRepository.GetByOwnerAsync(owner, ct)));
     }
 
-    public async Task<AudioResult<ParseAudio>> ListNodeAsync(Guid parseId, Guid nodeId, CancellationToken cancellationToken)
+    public Task<AudioResult<ParseAudio>> ListNodeAsync(Guid parseId, Guid nodeId, CancellationToken ct) => ListNodeAsync(new AudioOwner(parseId), nodeId, ct);
+    public async Task<AudioResult<ParseAudio>> ListNodeAsync(AudioOwner owner, Guid nodeId, CancellationToken ct)
     {
-        cancellationToken.ThrowIfCancellationRequested();
-        if (!await ParseExistsAsync(parseId)) return ParseNotFound<ParseAudio>();
-        var nodes = await NodesAsync(parseId);
-        if (!nodes.ContainsKey(nodeId))
+        var result = await ListAsync(owner, ct);
+        if (result.Status != AudioResultStatus.Ok) return result;
+        if (!result.Value!.Nodes.ContainsKey(nodeId))
             return AudioResult<ParseAudio>.Fail(AudioResultStatus.NotFound, StructureErrorCodes.NodeNotFound, "Structure node not found");
-        var items = await _audioRepository.GetByNodeIdAsync(parseId, nodeId);
-        cancellationToken.ThrowIfCancellationRequested();
-        return AudioResult<ParseAudio>.Ok(new(parseId, items, nodes));
+        return AudioResult<ParseAudio>.Ok(result.Value with { Items = result.Value.Items.Where(a => a.NodeId == nodeId).ToArray() });
     }
 
-    public async Task<AudioResult<AudioPlaybackLink>> PlaybackAsync(Guid parseId, Guid audioId, CancellationToken cancellationToken)
+    public Task<AudioResult<AudioPlaybackLink>> PlaybackAsync(Guid parseId, Guid audioId, CancellationToken ct) => PlaybackAsync(new AudioOwner(parseId), audioId, ct);
+    public async Task<AudioResult<AudioPlaybackLink>> PlaybackAsync(AudioOwner owner, Guid audioId, CancellationToken ct)
     {
-        cancellationToken.ThrowIfCancellationRequested();
-        if (!await ParseExistsAsync(parseId)) return ParseNotFound<AudioPlaybackLink>();
-        var item = await _audioRepository.GetByIdAsync(parseId, audioId);
-        cancellationToken.ThrowIfCancellationRequested();
-        if (item == null)
-            return AudioResult<AudioPlaybackLink>.Fail(AudioResultStatus.NotFound, AudioErrorCodes.AudioNotFound, "Audio file not found");
+        var scope = await _audioRepository.GetScopeAsync(owner, ct);
+        if (scope is null) return OwnerMissing<AudioPlaybackLink>(owner);
+        var item = (await _audioRepository.GetByOwnerAsync(owner, ct)).SingleOrDefault(a => a.Id == audioId);
+        if (item is null) return AudioResult<AudioPlaybackLink>.Fail(AudioResultStatus.NotFound, AudioErrorCodes.AudioNotFound, "Audio file not found");
         if (!_store.Playback.Available) return StorageUnavailable<AudioPlaybackLink>();
-        try
-        {
-            var link = await _store.GetPlaybackLinkAsync(item.ObjectKey, _timeProvider, cancellationToken);
-            cancellationToken.ThrowIfCancellationRequested();
-            return AudioResult<AudioPlaybackLink>.Ok(link);
-        }
+        try { return AudioResult<AudioPlaybackLink>.Ok(await _store.GetPlaybackLinkAsync(item, _timeProvider, ct)); }
         catch (AudioStorageException) { return StorageUnavailable<AudioPlaybackLink>(); }
     }
 
-    public async Task<AudioResult<AudioImportOutcome>> ImportAsync(Guid parseId, AudioImportBatch batch, DocumentAudioOptions options, CancellationToken cancellationToken = default)
+    public async Task<AudioResult<AudioScope>> PreflightAsync(AudioOwner owner, CancellationToken ct)
     {
-        cancellationToken.ThrowIfCancellationRequested();
-        if (!await ParseExistsAsync(parseId)) return ParseNotFound<AudioImportOutcome>();
-        if (!_store.Status.Available) return NotConfigured<AudioImportOutcome>();
-
-        var nodes = await _structureRepository.GetByParseIdAsync(parseId);
-        if (nodes.Count == 0)
-        {
-            return AudioResult<AudioImportOutcome>.Fail(AudioResultStatus.Conflict, AudioErrorCodes.StructureRequired,
-                "The parse has no marked structure nodes; mark its structure before importing audio");
-        }
-
-        if (batch.TooLarge)
-        {
-            return AudioResult<AudioImportOutcome>.Fail(AudioResultStatus.TooLarge, AudioErrorCodes.ImportTooLarge,
-                $"The import exceeds the {AudioImportReader.FormatBytes(options.MaxArchiveBytes)} limit");
-        }
-        if (batch.Errors.Count > 0)
-        {
-            return AudioResult<AudioImportOutcome>.Fail(AudioResultStatus.Invalid, AudioErrorCodes.ImportInvalid,
-                "Some files cannot be imported; nothing was stored", batch.Errors);
-        }
-        if (batch.Entries.Count == 0)
-        {
-            return AudioResult<AudioImportOutcome>.Fail(AudioResultStatus.Invalid, AudioErrorCodes.ImportInvalid,
-                "The import contains no audio files", [new("", "no audio files")]);
-        }
-
-        var existing = await _audioRepository.GetExistingSourcePathsAsync(parseId, batch.Entries.Select(entry => entry.SourcePath).ToList());
-        if (existing.Count > 0)
-        {
-            return AudioResult<AudioImportOutcome>.Fail(AudioResultStatus.Conflict, AudioErrorCodes.AlreadyImported,
-                "Some files are already imported for this parse; remove them first",
-                existing.Order(StringComparer.Ordinal).Select(path => new AudioFileError(path, "is already imported")).ToList());
-        }
-
-        var matcher = new StructureAudioMatcher(nodes);
-        var now = _timeProvider.GetUtcNow();
-        var stored = new List<DocumentStructureAudioModel>();
-        var plannedIds = batch.Entries.ToDictionary(entry => entry.SourcePath, _ => Guid.NewGuid());
-        var plannedKeys = batch.Entries.Select(entry => $"{StructureAudioStore.ParsePrefix(parseId)}{plannedIds[entry.SourcePath]:N}{entry.Format.Extension}").ToArray();
-        await using var lease = await _audioRepository.AcquireObjectKeyLeaseAsync(plannedKeys, cancellationToken);
-        try
-        {
-            foreach (var entry in batch.Entries)
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-                var id = plannedIds[entry.SourcePath];
-                using var buffer = new MemoryStream();
-                await using (var source = entry.Open())
-                {
-                    var chunk = new byte[81920];
-                    int read;
-                    while ((read = await source.ReadAsync(chunk, cancellationToken)) > 0)
-                    {
-                        if (read > options.MaxFileBytes - buffer.Length)
-                            throw new IOException("Validated audio changed before storage.");
-                        await buffer.WriteAsync(chunk.AsMemory(0, read), cancellationToken);
-                    }
-                }
-                if (buffer.Length != entry.SizeBytes) throw new IOException("Validated audio changed before storage.");
-                buffer.Position = 0;
-                var match = matcher.Match(entry.SourcePath);
-                // Record the deterministic key before upload, including uncertain upload outcomes.
-                var item = new DocumentStructureAudioModel
-                {
-                    Id = id, ParseId = parseId, NodeId = match.NodeId,
-                    SourcePath = entry.SourcePath, ContentType = entry.Format.ContentType,
-                    SizeBytes = entry.SizeBytes,
-                    ObjectKey = $"{StructureAudioStore.ParsePrefix(parseId)}{id:N}{entry.Format.Extension}",
-                    MatchStatus = match.Status,
-                    LinkSource = match.NodeId == null ? null : AudioLinkSource.Prefill,
-                    CreatedAt = now, UpdatedAt = now,
-                };
-                stored.Add(item);
-                await _store.PutAsync(parseId, id, entry.Format.Extension, buffer, entry.Format.ContentType, cancellationToken);
-            }
-            cancellationToken.ThrowIfCancellationRequested();
-            if (!await _audioRepository.InsertAsync(parseId, stored, cancellationToken))
-            {
-                await DiscardAsync(parseId, stored);
-                return ParseNotFound<AudioImportOutcome>();
-            }
-            cancellationToken.ThrowIfCancellationRequested();
-        }
-        catch (OperationCanceledException)
-        {
-            await DiscardAsync(parseId, stored);
-            throw;
-        }
-        catch (DbUpdateException ex) when (ex.InnerException is PostgresException
-            { SqlState: PostgresErrorCodes.UniqueViolation, ConstraintName: "IX_document_structure_audio_tree_id_source_path" })
-        {
-            await DiscardAsync(parseId, stored);
-            return AudioResult<AudioImportOutcome>.Fail(AudioResultStatus.Conflict, AudioErrorCodes.AlreadyImported,
-                "Some files are already imported for this parse; remove them first");
-        }
-        catch (Exception ex)
-        {
-            await DiscardAsync(parseId, stored);
-            _logger.LogWarning("Audio import failed for parse {ParseId}: {ExceptionType}", parseId, ex.GetType().Name);
-            return StorageUnavailable<AudioImportOutcome>();
-        }
-
-        var saved = await _audioRepository.GetByParseIdAsync(parseId);
-        var ids = stored.Select(item => item.Id).ToHashSet();
-        var imported = await LoadAsync(parseId, saved.Where(item => ids.Contains(item.Id)).ToList());
-        cancellationToken.ThrowIfCancellationRequested();
-        _logger.LogInformation(
-            "Imported {Count} audio files for parse {ParseId}: {Linked} linked, {Flagged} unlinked, {Skipped} skipped",
-            stored.Count, parseId, saved.Count(item => ids.Contains(item.Id) && item.NodeId != null),
-            saved.Count(item => ids.Contains(item.Id) && item.NodeId == null), batch.Skipped.Count);
-        return AudioResult<AudioImportOutcome>.Ok(new AudioImportOutcome(
-            imported, batch.Skipped));
+        var scope = await _audioRepository.GetScopeAsync(owner, ct);
+        if (scope is null) return OwnerMissing<AudioScope>(owner);
+        if (!_store.Status.Available) return NotConfigured<AudioScope>();
+        if (!scope.IsCurrent || scope.TreeId is null || scope.Nodes.Count == 0)
+            return AudioResult<AudioScope>.Fail(AudioResultStatus.Conflict, AudioErrorCodes.StructureRequired,
+                "Import requires the document's current structure with saved nodes; historical trees are read-only for imports");
+        return AudioResult<AudioScope>.Ok(scope);
     }
 
-    public async Task<AudioResult<ParseAudio>> UpdateAsync(Guid parseId, IReadOnlyList<AudioLinkChange> changes, IReadOnlyCollection<Guid> removeIds, CancellationToken cancellationToken = default)
+    public async Task<AudioResult<AudioPreview>> PreviewAsync(AudioOwner owner, AudioImportBatch batch, DocumentAudioOptions options, CancellationToken ct)
     {
-        cancellationToken.ThrowIfCancellationRequested();
-        var result = await _audioRepository.UpdateLinksAsync(parseId, changes, removeIds, _timeProvider.GetUtcNow(), cancellationToken);
-        switch (result.Status)
+        var preflight = await PreflightAsync(owner, ct);
+        if (preflight.Status != AudioResultStatus.Ok) return CopyFailure<AudioScope, AudioPreview>(preflight);
+        var failure = BatchError<AudioPreview>(batch, options);
+        if (failure is not null) return failure;
+        var scope = preflight.Value!;
+        var matcher = new StructureAudioMatcher(scope.Nodes);
+        var nodes = scope.Nodes.ToDictionary(n => n.Id);
+        var items = batch.Entries.Select(entry =>
         {
-            case AudioLinkUpdateStatus.ParseNotFound:
-                return ParseNotFound<ParseAudio>();
-            case AudioLinkUpdateStatus.AudioNotFound:
-                return AudioResult<ParseAudio>.Fail(AudioResultStatus.NotFound, AudioErrorCodes.AudioNotFound,
-                    $"Audio file {result.MissingId} not found");
-            case AudioLinkUpdateStatus.NodeNotFound:
-                return AudioResult<ParseAudio>.Fail(AudioResultStatus.NotFound, StructureErrorCodes.NodeNotFound,
-                    $"Structure node {result.MissingId} not found");
-        }
+            var match = matcher.Match(entry.SourcePath);
+            return new AudioPreviewEntry(entry.SourcePath, entry.Format.ContentType, entry.SizeBytes, match.Status,
+                match.NodeId, match.NodeId is { } id ? NodePath(nodes[id], nodes) : null);
+        }).ToArray();
+        ct.ThrowIfCancellationRequested();
+        return AudioResult<AudioPreview>.Ok(new(items, batch.Skipped));
+    }
 
-        if (result.RemovedObjectKeys.Count > 0)
+    public Task<AudioResult<AudioImportOutcome>> ImportAsync(Guid parseId, AudioImportBatch batch, DocumentAudioOptions options, CancellationToken ct = default) =>
+        ImportAsync(new AudioOwner(parseId), batch, options, null, [], [], [], ct);
+
+    public async Task<AudioResult<AudioImportOutcome>> ImportAsync(AudioOwner owner, AudioImportBatch batch, DocumentAudioOptions options,
+        Guid? commonTarget, IReadOnlyList<AudioTarget> targets, IReadOnlyList<AudioLinkChange> changes, IReadOnlyCollection<Guid> removeIds, CancellationToken ct = default)
+    {
+        var preflight = await PreflightAsync(owner, ct);
+        if (preflight.Status != AudioResultStatus.Ok) return CopyFailure<AudioScope, AudioImportOutcome>(preflight);
+        var failure = BatchError<AudioImportOutcome>(batch, options);
+        if (failure is not null) return failure;
+        var scope = preflight.Value!;
+        var entryPaths = batch.Entries.Select(e => e.SourcePath).ToHashSet(StringComparer.Ordinal);
+        var selected = new Dictionary<string, Guid?>(StringComparer.Ordinal);
+        var targetErrors = new List<AudioFileError>();
+        foreach (var target in targets)
         {
-            var failed = await DeleteUnreferencedObjectsAsync(result.RemovedObjectKeys);
-            if (failed > 0)
-                _logger.LogWarning("Removed {Count} audio files of parse {ParseId}; {Failed} objects could not be deleted", result.RemovedObjectKeys.Count, parseId, failed);
+            if (target is null || !AudioImportReader.TryNormalizePath(target.SourcePath, out var path, out _) || !entryPaths.Contains(path))
+                targetErrors.Add(new(target?.SourcePath is { } raw ? raw[..Math.Min(raw.Length, AudioImportReader.MaxPathLength)] : "", "does not match an expanded source path in this import"));
+            else if (!selected.TryAdd(path, target.NodeId)) targetErrors.Add(new(path, "has more than one target selection"));
         }
-        _logger.LogInformation("Audio of parse {ParseId} saved: {Changed} link changes, {Removed} removed", parseId, changes.Count, removeIds.Count);
-        var reloaded = await LoadAsync(parseId, await _audioRepository.GetByParseIdAsync(parseId));
-        cancellationToken.ThrowIfCancellationRequested();
-        return AudioResult<ParseAudio>.Ok(reloaded);
+        if (targetErrors.Count > 0) return AudioResult<AudioImportOutcome>.Fail(AudioResultStatus.Invalid, AudioErrorCodes.Invalid,
+            "Target validation failed; nothing was stored", targetErrors);
+        var now = _timeProvider.GetUtcNow();
+        var matcher = new StructureAudioMatcher(scope.Nodes);
+        var planned = batch.Entries.Select(entry =>
+        {
+            var id = Guid.NewGuid();
+            var match = matcher.Match(entry.SourcePath);
+            return new DocumentStructureAudioModel { Id = id, DocumentFileId = scope.DocumentFileId, TreeId = scope.TreeId!.Value,
+                ParseId = owner.IsDocument ? null : owner.Id, NodeId = selected.TryGetValue(entry.SourcePath, out var target) ? target : commonTarget,
+                SourcePath = entry.SourcePath, ContentType = entry.Format.ContentType, SizeBytes = entry.SizeBytes,
+                ObjectKey = $"{(owner.IsDocument ? StructureAudioStore.DocumentPrefix(scope.DocumentFileId) : StructureAudioStore.ParsePrefix(owner.Id))}{id:N}{entry.Format.Extension}",
+                MatchStatus = match.Status, LinkSource = AudioLinkSource.Manual, CreatedAt = now, UpdatedAt = now };
+        }).ToArray();
+        var stored = new List<DocumentStructureAudioModel>();
+        AudioLinkUpdateResult committed;
+        await using (var lease = await _audioRepository.AcquireObjectKeyLeaseAsync(planned.Select(a => a.ObjectKey).ToArray(), ct))
+        {
+            try
+            {
+                for (var i = 0; i < batch.Entries.Count; i++)
+                {
+                    var entry = batch.Entries[i]; var item = planned[i];
+                    using var buffer = new MemoryStream();
+                    await using (var source = entry.Open())
+                    {
+                        var chunk = new byte[81920]; int read;
+                        while ((read = await source.ReadAsync(chunk, ct)) > 0)
+                        {
+                            if (read > options.MaxFileBytes - buffer.Length) throw new IOException("Validated audio changed before storage.");
+                            await buffer.WriteAsync(chunk.AsMemory(0, read), ct);
+                        }
+                    }
+                    if (buffer.Length != entry.SizeBytes) throw new IOException("Validated audio changed before storage.");
+                    buffer.Position = 0;
+                    stored.Add(item);
+                    if (owner.IsDocument) await _store.PutDocumentAsync(scope.DocumentFileId, item.Id, entry.Format.Extension, buffer, entry.Format.ContentType, ct);
+                    else await _store.PutAsync(owner.Id, item.Id, entry.Format.Extension, buffer, entry.Format.ContentType, ct);
+                }
+                committed = await _audioRepository.CommitAsync(owner, planned, changes, removeIds, now, ct: ct);
+                if (committed.Status != AudioLinkUpdateStatus.Ok)
+                {
+                    await DiscardAsync(owner.Id, stored);
+                    return CommitFailure<AudioImportOutcome>(owner, committed);
+                }
+                ct.ThrowIfCancellationRequested();
+            }
+            catch (OperationCanceledException) { await DiscardAsync(owner.Id, stored); throw; }
+            catch (DbUpdateException ex) when (ex.InnerException is PostgresException
+                { SqlState: PostgresErrorCodes.UniqueViolation, ConstraintName: "IX_document_structure_audio_tree_id_source_path" })
+            {
+                await DiscardAsync(owner.Id, stored);
+                return AudioResult<AudioImportOutcome>.Fail(AudioResultStatus.Conflict, AudioErrorCodes.AlreadyImported, "Some files are already imported; nothing was changed");
+            }
+            catch (Exception ex)
+            {
+                await DiscardAsync(owner.Id, stored);
+                _logger.LogWarning("Audio import failed for owner {OwnerId}: {ExceptionType}", owner.Id, ex.GetType().Name);
+                return StorageUnavailable<AudioImportOutcome>();
+            }
+        }
+        // Removed objects take their own exact-key leases only after releasing upload leases and owner locks.
+        await DeleteUnreferencedObjectsAsync(committed.RemovedObjectKeys);
+        var reloaded = await ListAsync(owner, ct);
+        if (reloaded.Status != AudioResultStatus.Ok) return CopyFailure<ParseAudio, AudioImportOutcome>(reloaded);
+        var ids = planned.Select(a => a.Id).ToHashSet();
+        return AudioResult<AudioImportOutcome>.Ok(new(reloaded.Value! with { Items = reloaded.Value!.Items.Where(a => ids.Contains(a.Id)).ToArray() }, batch.Skipped));
+    }
+
+    public Task<AudioResult<ParseAudio>> UpdateAsync(Guid parseId, IReadOnlyList<AudioLinkChange> changes, IReadOnlyCollection<Guid> removeIds, CancellationToken ct = default) =>
+        UpdateAsync(new AudioOwner(parseId), changes, removeIds, false, ct);
+    public async Task<AudioResult<ParseAudio>> UpdateAsync(AudioOwner owner, IReadOnlyList<AudioLinkChange> changes, IReadOnlyCollection<Guid> removeIds,
+        bool deleteOnly, CancellationToken ct = default)
+    {
+        var result = await _audioRepository.CommitAsync(owner, [], changes, removeIds, _timeProvider.GetUtcNow(), deleteOnly, ct);
+        if (result.Status != AudioLinkUpdateStatus.Ok) return CommitFailure<ParseAudio>(owner, result);
+        await DeleteUnreferencedObjectsAsync(result.RemovedObjectKeys);
+        return await ListAsync(owner, ct);
+    }
+
+    private static AudioResult<T> CommitFailure<T>(AudioOwner owner, AudioLinkUpdateResult result) => result.Status switch
+    {
+        AudioLinkUpdateStatus.ParseNotFound or AudioLinkUpdateStatus.DocumentNotFound => OwnerMissing<T>(owner),
+        AudioLinkUpdateStatus.AudioNotFound => AudioResult<T>.Fail(AudioResultStatus.NotFound, AudioErrorCodes.AudioNotFound, "Audio file not found"),
+        AudioLinkUpdateStatus.NodeNotFound => AudioResult<T>.Fail(AudioResultStatus.NotFound, StructureErrorCodes.NodeNotFound, "Structure node not found"),
+        AudioLinkUpdateStatus.StructureRequired => AudioResult<T>.Fail(AudioResultStatus.Conflict, AudioErrorCodes.StructureRequired, "Import requires the current structure with saved nodes"),
+        AudioLinkUpdateStatus.AlreadyImported => AudioResult<T>.Fail(AudioResultStatus.Conflict, AudioErrorCodes.AlreadyImported, "Some files are already imported; nothing was changed", result.Errors?.Select(e => new AudioFileError(e.File, e.Reason)).ToArray()),
+        _ => AudioResult<T>.Fail(AudioResultStatus.Invalid, AudioErrorCodes.Invalid, "Audio policy validation failed; nothing was changed", result.Errors?.Select(e => new AudioFileError(e.File, e.Reason)).ToArray()),
+    };
+    private static AudioResult<T>? BatchError<T>(AudioImportBatch batch, DocumentAudioOptions options) =>
+        batch.TooLarge ? AudioResult<T>.Fail(AudioResultStatus.TooLarge, AudioErrorCodes.ImportTooLarge, $"The import exceeds the {AudioImportReader.FormatBytes(options.MaxArchiveBytes)} limit") :
+        batch.Errors.Count > 0 ? AudioResult<T>.Fail(AudioResultStatus.Invalid, AudioErrorCodes.ImportInvalid, "Some files cannot be imported; nothing was stored", batch.Errors) :
+        batch.Entries.Count == 0 ? AudioResult<T>.Fail(AudioResultStatus.Invalid, AudioErrorCodes.ImportInvalid, "The import contains no audio files", [new("", "no audio files")]) : null;
+    private static AudioResult<TOut> CopyFailure<TIn, TOut>(AudioResult<TIn> result) => AudioResult<TOut>.Fail(result.Status, result.ErrorCode!, result.Message!, result.Errors);
+    private static AudioResult<T> OwnerMissing<T>(AudioOwner owner) => AudioResult<T>.Fail(AudioResultStatus.NotFound,
+        owner.IsDocument ? StructureErrorCodes.FileNotFound : StructureErrorCodes.ParseNotFound, owner.IsDocument ? "File not found" : "Parse record not found");
+    private static ParseAudio Load(AudioScope scope, IReadOnlyList<DocumentStructureAudioModel> items) =>
+        new(scope.ParseId, items, scope.Nodes.ToDictionary(n => n.Id), scope.DocumentFileId, scope.TreeId, scope.Levels);
+    internal static string NodePath(DocumentStructureNodeModel node, IReadOnlyDictionary<Guid, DocumentStructureNodeModel> nodes)
+    {
+        var names = new List<string>(); var seen = new HashSet<Guid>();
+        for (var cursor = node; cursor is not null && seen.Add(cursor.Id); cursor = cursor.ParentId is { } parent ? nodes.GetValueOrDefault(parent) : null) names.Insert(0, cursor.Name);
+        return string.Join(" > ", names);
     }
 
     public Task<List<string>> GetParseObjectKeysAsync(Guid parseId) => _audioRepository.GetObjectKeysByParseIdAsync(parseId);
@@ -345,15 +351,6 @@ public sealed class StructureAudioService
         if (failed > 0)
             _logger.LogWarning("A failed audio import for parse {ParseId} left {Failed} objects; run the audio orphan sweep", parseId, failed);
     }
-
-    private async Task<ParseAudio> LoadAsync(Guid parseId, IReadOnlyList<DocumentStructureAudioModel> items) =>
-        new(parseId, items, await NodesAsync(parseId));
-
-    private async Task<Dictionary<Guid, DocumentStructureNodeModel>> NodesAsync(Guid parseId) =>
-        (await _structureRepository.GetByParseIdAsync(parseId)).ToDictionary(node => node.Id);
-
-    private static AudioResult<T> ParseNotFound<T>() =>
-        AudioResult<T>.Fail(AudioResultStatus.NotFound, StructureErrorCodes.ParseNotFound, "Parse record not found");
 
     private AudioResult<T> NotConfigured<T>() =>
         AudioResult<T>.Fail(AudioResultStatus.StorageNotConfigured, AudioErrorCodes.StorageNotConfigured,

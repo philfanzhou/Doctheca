@@ -361,8 +361,7 @@ The first start containing `20261024021500_AddRequiredStructureLevels` adds the 
 `structure_levels.required` boolean, default false for every saved level. Stop mixed-version
 writers and retain a verified database backup plus its matching image/configuration. Administrator
 levels gain an additive boolean/control (also in administrator tree definitions); a complete PUT
-from an older client that omits the field resets it to false. This records policy only; audio
-validation is not active. No configuration, port, storage or search-index change is required.
+from an older client that omits the field resets it to false. The later #134 capability enforces this policy at each complete audio save; policy edits themselves retain existing recordings for review. No configuration, port, storage or search-index change is required.
 
 An image-only downgrade is rejected by earlier schema/history checks. Standard recovery restores
 the pre-upgrade backup with its matching image/configuration and loses later writes. Optional
@@ -509,3 +508,11 @@ An old image cannot run against the new schema/history. Standard rollback restor
 
 
 The #133 administrator book/current-tree authoring capability adds no migration, backfill, ordering rewrite, object copy, configuration or deployment topology. It reuses #132's nullable source/binding and stable tree columns. Reverting to the #132 application hides the new authoring/source entry points while retaining data; source-free books still have no parse. Downgrading the ownership schema remains subject to its representability refusal and verified backup/matching-image recovery. Never invent parses to make a downgrade pass.
+
+### Document audio import and Required saves (#134)
+
+This capability adds no schema/history/backfill, object rewrite, package, configuration or deployment topology. New document imports have null immutable parse provenance and use `audio/documents/{documentFileId:N}/{audioId:N}{extension}` in the existing audio bucket. Legacy parse-prefixed keys/IDs/bytes are unchanged. Missing public S3 addressing disables only administrator signing; internal same-origin playback/import/cleanup remain available.
+
+The administrator audio page now previews in memory and submits additions, explicit targets, existing link edits/removals once; every retained file must satisfy the committed Required-level graph. Old clients that rely on matching to confirm links must send explicit targets, and invalid existing retained audio must be fixed/removed before the next import/review Save. Single-file DELETE remains recovery. Policy edits retain data and playback.
+
+An older binary cannot read the new namespace even though no migration was added. Stop mixed-version writers, retain audio objects, and restore a compatible image or a verified database backup with its matching image/configuration/storage set. Restoring that backup loses subsequent metadata writes. Do not delete bytes, fabricate parses or rewrite old keys to make an image-only downgrade appear compatible. The existing ownership-schema Down refusal and backup procedure still apply. See [audio usage and API](../modules/StructureAudio.md).

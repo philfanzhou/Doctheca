@@ -4,6 +4,12 @@ namespace Doctheca.Domain.Repositories;
 
 public interface IDocumentStructureAudioRepository
 {
+    Task<AudioScope?> GetScopeAsync(AudioOwner owner, CancellationToken ct = default);
+    Task<List<DocumentStructureAudioModel>> GetByOwnerAsync(AudioOwner owner, CancellationToken ct = default);
+    /// <summary>One document-first, definition-share transaction validates the entire retained set before mutation.</summary>
+    Task<AudioLinkUpdateResult> CommitAsync(AudioOwner owner, IReadOnlyList<DocumentStructureAudioModel> additions,
+        IReadOnlyList<AudioLinkChange> changes, IReadOnlyCollection<Guid> removeIds, DateTimeOffset now,
+        bool deleteOnly = false, CancellationToken ct = default);
     /// <summary>Leases immutable keys in ordinal order across uploads and reference-safe cleanup.</summary>
     Task<IAsyncDisposable> AcquireObjectKeyLeaseAsync(IReadOnlyCollection<string> keys, CancellationToken ct = default);
 
@@ -19,14 +25,13 @@ public interface IDocumentStructureAudioRepository
     Task<HashSet<string>> GetExistingSourcePathsAsync(Guid parseId, IReadOnlyCollection<string> sourcePaths);
 
     /// <summary>
-    /// Inserts imported audio in one transaction that locks the parse row first (the same lock as a
-    /// structure save). A link to a node that no longer exists is stored unlinked as
-    /// <see cref="AudioMatchStatus.NodeRemoved"/>. Returns false when the parse does not exist.
+    /// Compatibility insert under the shared document/definition commit boundary. Required policy applies
+    /// to every retained file; a rejected or missing owner returns false.
     /// </summary>
     Task<bool> InsertAsync(Guid parseId, IReadOnlyList<DocumentStructureAudioModel> items, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Applies link changes and removals in one transaction under the parse row lock. Every audio
+    /// Applies link changes and removals in one document-first, definition-share transaction. Every audio
     /// id must belong to the parse and every node id to its tree, otherwise nothing changes.
     /// </summary>
     Task<AudioLinkUpdateResult> UpdateLinksAsync(Guid parseId, IReadOnlyList<AudioLinkChange> changes,

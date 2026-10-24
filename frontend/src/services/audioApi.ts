@@ -17,6 +17,8 @@ export interface StructureAudio {
   linkSource: string | null
   createdAt: string
   updatedAt: string
+  requiresReview?: boolean
+  reviewReason?: string | null
 }
 
 export interface AudioStorageInfo {
@@ -33,13 +35,13 @@ export interface AudioStorageInfo {
 }
 
 export interface ParseAudioList {
-  parseId: string
+  parseId: string | null
   storage: AudioStorageInfo
   items: StructureAudio[]
 }
 
 export interface AudioImportResult {
-  parseId: string
+  parseId: string | null
   imported: number
   linked: number
   flagged: number
@@ -111,4 +113,44 @@ export async function getAudioPlaybackLink(parseId: string, audioId: string, sig
 export async function listNodeAudio(parseId: string, nodeId: string): Promise<ApiResponse<{ parseId: string; nodeId: string; items: StructureAudio[] }>> {
   const response = await httpClient.get(`/admin/document-parses/${parseId}/structure/nodes/${nodeId}/audio`)
   return response.data
+}
+
+export interface AudioProposal {
+  sourcePath: string
+  contentType: string
+  sizeBytes: number
+  matchStatus: string
+  suggestedNodeId: string | null
+  suggestedNodePath: string | null
+}
+export type AudioFiles = { file: File; path: string }[]
+function audioBase(id: string, document: boolean): string {
+  return `/admin/${document ? 'document-files' : 'document-parses'}/${id}/audio`
+}
+export async function listAudio(id: string, document: boolean): Promise<ApiResponse<ParseAudioList>> {
+  return (await httpClient.get(audioBase(id, document))).data
+}
+export async function previewAudio(id: string, document: boolean, files: AudioFiles, signal: AbortSignal,
+  onUploadProgress?: (event: { loaded: number; total?: number }) => void): Promise<ApiResponse<{ items: AudioProposal[]; skipped: string[] }>> {
+  return (await httpClient.post(audioBase(id, document) + '?preview=true', audioForm(files), {
+    timeout: 600000, signal, onUploadProgress,
+  })).data
+}
+function audioForm(files: AudioFiles): FormData {
+  const form = new FormData()
+  for (const { file, path } of files) { form.append('files', file, file.name); form.append('paths', path) }
+  return form
+}
+export async function commitAudio(id: string, document: boolean, files: AudioFiles,
+  targets: { sourcePath: string; nodeId: string | null }[], links: AudioLinkInput[], removeIds: string[], signal: AbortSignal,
+  onUploadProgress?: (event: { loaded: number; total?: number }) => void): Promise<ApiResponse<AudioImportResult>> {
+  const form = audioForm(files)
+  form.append('targets', JSON.stringify(targets)); form.append('links', JSON.stringify(links)); form.append('removeIds', JSON.stringify(removeIds))
+  return (await httpClient.post(audioBase(id, document), form, { timeout: 600000, signal, onUploadProgress })).data
+}
+export async function saveAudio(id: string, document: boolean, links: AudioLinkInput[], removeIds: string[], signal: AbortSignal): Promise<ApiResponse<{ items: StructureAudio[] }>> {
+  return (await httpClient.put(audioBase(id, document), { links, removeIds }, { signal })).data
+}
+export async function getOwnerAudioPlaybackLink(id: string, document: boolean, audioId: string, signal: AbortSignal): Promise<ApiResponse<AudioPlaybackLink>> {
+  return (await httpClient.get(`${audioBase(id, document)}/${audioId}/playback-link`, { signal })).data
 }

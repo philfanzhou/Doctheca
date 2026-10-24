@@ -86,6 +86,13 @@ public sealed class ServiceMantleSecurityHeadersTests : ServiceMantleIntegration
         "GET /admin/document-parses/{parseId:guid}/structure/nodes/{nodeId:guid}/blocks",
         "POST /admin/document-parses/{parseId:guid}/search-index",
         "POST /admin/search-index/reindex",
+        // Document-current audio adapters (#134): the same authenticated JSON/security boundary.
+        "GET /admin/document-files/{documentFileId:guid}/audio",
+        "POST /admin/document-files/{documentFileId:guid}/audio",
+        "PUT /admin/document-files/{documentFileId:guid}/audio",
+        "DELETE /admin/document-files/{documentFileId:guid}/audio/{audioId:guid}",
+        "GET /admin/document-files/{documentFileId:guid}/structure/nodes/{nodeId:guid}/audio",
+        "GET /admin/document-files/{documentFileId:guid}/audio/{audioId:guid}/playback-link",
         // Structure audio import/review and recovery (#107/#108): all JSON.
         "GET /admin/document-parses/{parseId:guid}/audio",
         "POST /admin/document-parses/{parseId:guid}/audio",

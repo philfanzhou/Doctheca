@@ -35,8 +35,7 @@ A **Structure Level** is one configured level of a [structure definition](struct
 ## Required-level policy (#129)
 
 `20261024021500_AddRequiredStructureLevels` adds `required` with database default false, including
-for all existing rows. The administrator API exposes it as `required`; it does not grant permissions
-or enforce audio links. Optional descendants and separate all-optional root branches are valid.
+for all existing rows. The administrator API exposes it as `required`; it grants no permissions. Audio commits enforce the graph against every retained recording (#134), while policy edits themselves preserve metadata/bytes for review. Optional descendants and separate all-optional root branches are valid.
 The service rejects a required level with an optional ancestor at `levels[i].required`, after
 validating IDs, parents and cycles. A complete PUT that omits the boolean replaces it with false.
 Definition replacements lock the definition row before reading its levels and commit atomically.

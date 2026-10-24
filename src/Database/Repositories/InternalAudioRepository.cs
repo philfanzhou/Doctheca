@@ -17,7 +17,7 @@ public sealed partial class InternalStructureRepository : IInternalAudioReposito
         var rows = await context.DocumentStructureAudio.AsNoTracking()
             .Where(audio => audio.TreeId == node.TreeId && audio.DocumentFileId == node.DocumentFileId && audio.NodeId == nodeId && (audioId == null || audio.Id == audioId))
             .Select(audio => new InternalAudioObject(audio.Id, audio.ParseId, nodeId, audio.SourcePath,
-                audio.ContentType, audio.SizeBytes, audio.ObjectKey)).ToListAsync(cancellationToken);
+                audio.ContentType, audio.SizeBytes, audio.ObjectKey, audio.DocumentFileId)).ToListAsync(cancellationToken);
         cancellationToken.ThrowIfCancellationRequested();
         await transaction.CommitAsync(cancellationToken);
         return new(node, rows.OrderBy(audio => audio.SourcePath, StringComparer.Ordinal).ThenBy(audio => audio.Id).ToArray());

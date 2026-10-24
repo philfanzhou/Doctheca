@@ -8,6 +8,8 @@ using Microsoft.Extensions.Options;
 using Doctheca.Domain.Models;
 using Doctheca.Domain.Models.Structure;
 using Doctheca.Service.Audio;
+using Doctheca.Domain.Services.Structure;
+using System.Text.Json;
 
 namespace Doctheca.Service;
 
@@ -35,6 +37,21 @@ public static class StructureAudioEndpoints
         parses.MapPut("/{parseId:guid}/audio", Save);
         parses.MapDelete("/{parseId:guid}/audio/{audioId:guid}", Remove);
 
+        var documents = app.MapGroup("/admin/document-files").RequireAuthorization(DocthecaAuthorizationPolicies.Admin)
+            .RequireServiceMantleSecurityResponseHeaders();
+        documents.MapGet("/{documentFileId:guid}/audio", (Guid documentFileId, StructureAudioService service, IOptions<DocumentAudioOptions> limits) => ListOwner(new(documentFileId, true), service, limits));
+        documents.MapGet("/{documentFileId:guid}/structure/nodes/{nodeId:guid}/audio", (Guid documentFileId, Guid nodeId, StructureAudioService service, HttpContext context) =>
+            ListNodeOwner(new(documentFileId, true), nodeId, service, context));
+        documents.MapGet("/{documentFileId:guid}/audio/{audioId:guid}/playback-link", (Guid documentFileId, Guid audioId, StructureAudioService service, HttpContext context) =>
+            PlaybackOwner(new(documentFileId, true), audioId, service, context));
+        documents.MapPost("/{documentFileId:guid}/audio", (Guid documentFileId, HttpRequest request, StructureAudioService service, IOptions<DocumentAudioOptions> limits, ILoggerFactory logs) =>
+            ImportOwner(new(documentFileId, true), request, service, limits, logs))
+            .WithMetadata(new RequestSizeLimitAttribute(checked(options.MaxArchiveBytes + MultipartOverheadBytes)));
+        documents.MapPut("/{documentFileId:guid}/audio", (Guid documentFileId, HttpRequest request, StructureAudioService service, ILoggerFactory logs) =>
+            SaveOwner(new(documentFileId, true), request, service, logs));
+        documents.MapDelete("/{documentFileId:guid}/audio/{audioId:guid}", (Guid documentFileId, Guid audioId, StructureAudioService service, HttpContext context) =>
+            RemoveOwner(new(documentFileId, true), audioId, service, context));
+
         var audio = app.MapGroup("/admin/structure-audio")
             .RequireAuthorization(DocthecaAuthorizationPolicies.Admin)
             .RequireServiceMantleSecurityResponseHeaders();
@@ -48,34 +65,25 @@ public static class StructureAudioEndpoints
 
     public sealed record LinkRequest(Guid? Id, Guid? NodeId);
 
-    private static async Task<IResult> List(Guid parseId, StructureAudioService audioService, IOptions<DocumentAudioOptions> options)
-    {
-        var result = await audioService.ListAsync(parseId);
-        return From(result, list => new
-        {
-            parseId = parseId.ToString(),
-            storage = Storage(audioService.StorageStatus, options.Value),
-            items = Items(list),
-        });
-    }
-
-    private static async Task<IResult> ListNode(Guid parseId, Guid nodeId, StructureAudioService audioService, HttpContext context) =>
-        From(await audioService.ListNodeAsync(parseId, nodeId, context.RequestAborted),
-            list => new { parseId = parseId.ToString(), nodeId = nodeId.ToString(), items = Items(list) });
-
-    private static async Task<IResult> Playback(Guid parseId, Guid audioId, StructureAudioService audioService, HttpContext context)
+    private static Task<IResult> List(Guid parseId, StructureAudioService service, IOptions<DocumentAudioOptions> limits) => ListOwner(new(parseId), service, limits);
+    private static async Task<IResult> ListOwner(AudioOwner owner, StructureAudioService service, IOptions<DocumentAudioOptions> limits) =>
+        From(await service.ListAsync(owner), list => new { parseId = list.ParseId?.ToString(), documentFileId = list.DocumentFileId.ToString(),
+            treeId = list.TreeId?.ToString(), storage = Storage(service.StorageStatus, limits.Value), items = Items(list) });
+    private static Task<IResult> ListNode(Guid parseId, Guid nodeId, StructureAudioService service, HttpContext context) => ListNodeOwner(new(parseId), nodeId, service, context);
+    private static async Task<IResult> ListNodeOwner(AudioOwner owner, Guid nodeId, StructureAudioService service, HttpContext context) =>
+        From(await service.ListNodeAsync(owner, nodeId, context.RequestAborted), list => new { parseId = list.ParseId?.ToString(),
+            documentFileId = list.DocumentFileId.ToString(), nodeId = nodeId.ToString(), items = Items(list) });
+    private static Task<IResult> Playback(Guid parseId, Guid audioId, StructureAudioService service, HttpContext context) => PlaybackOwner(new(parseId), audioId, service, context);
+    private static async Task<IResult> PlaybackOwner(AudioOwner owner, Guid audioId, StructureAudioService service, HttpContext context)
     {
         context.Response.Headers.CacheControl = "no-store";
-        return From(await audioService.PlaybackAsync(parseId, audioId, context.RequestAborted), link => new
-        {
-            url = link.Url,
-            expiresAt = link.ExpiresAt,
-            expiresInSeconds = link.ExpiresInSeconds,
-        });
+        return From(await service.PlaybackAsync(owner, audioId, context.RequestAborted), link => new { url = link.Url, expiresAt = link.ExpiresAt, expiresInSeconds = link.ExpiresInSeconds });
     }
+    private static Task<IResult> Import(Guid parseId, HttpRequest request, StructureAudioService audioService,
+        IOptions<DocumentAudioOptions> options, ILoggerFactory loggerFactory) => ImportOwner(new(parseId), request, audioService, options, loggerFactory);
 
-    private static async Task<IResult> Import(
-        Guid parseId,
+    private static async Task<IResult> ImportOwner(
+        AudioOwner owner,
         HttpRequest request,
         StructureAudioService audioService,
         IOptions<DocumentAudioOptions> options,
@@ -84,12 +92,8 @@ public static class StructureAudioEndpoints
         var logger = loggerFactory.CreateLogger(nameof(StructureAudioEndpoints));
         var limits = options.Value;
 
-        // Refuse before reading the body: an unknown parse or missing configuration never buffers uploads.
-        if (!await audioService.ParseExistsAsync(parseId) || !audioService.StorageStatus.Available)
-        {
-            using var empty = new AudioImportBatch();
-            return From(await audioService.ImportAsync(parseId, empty, limits), Imported);
-        }
+        var preflight = await audioService.PreflightAsync(owner, request.HttpContext.RequestAborted);
+        if (preflight.Status != AudioResultStatus.Ok) return From(preflight, _ => new { });
         if (!request.HasFormContentType)
             return Error(StatusCodes.Status400BadRequest, AudioErrorCodes.ImportInvalid, "Request must be multipart/form-data");
 
@@ -114,7 +118,7 @@ public static class StructureAudioEndpoints
         catch (Exception ex) when (ex is InvalidDataException or IOException
             || (ex is BadHttpRequestException bad && bad.StatusCode == StatusCodes.Status413PayloadTooLarge))
         {
-            logger.LogWarning("Rejected an oversized or malformed audio import for parse {ParseId}", parseId);
+            logger.LogWarning("Rejected an oversized or malformed audio import for owner {OwnerId}", owner.Id);
             return ex is BadHttpRequestException || ex.Message.Contains("length limit", StringComparison.OrdinalIgnoreCase)
                 ? Error(StatusCodes.Status413PayloadTooLarge, AudioErrorCodes.ImportTooLarge,
                     $"The import exceeds the {AudioImportReader.FormatBytes(limits.MaxArchiveBytes)} limit")
@@ -124,11 +128,39 @@ public static class StructureAudioEndpoints
         finally { request.Body = originalBody; }
 
         using var batch = await AudioImportReader.ReadAsync(form, limits, request.HttpContext.RequestAborted);
-        var result = await audioService.ImportAsync(parseId, batch, limits, request.HttpContext.RequestAborted);
-        return From(result, Imported);
+        var preview = request.Query["preview"];
+        if (preview.Count > 1 || (preview.Count == 1 && preview[0] is not ("true" or "false")))
+            return Error(400, AudioErrorCodes.Invalid, "preview must be true or false");
+        if (preview.Count == 1 && preview[0] == "true")
+            return From(await audioService.PreviewAsync(owner, batch, limits, request.HttpContext.RequestAborted), outcome => new
+            { items = outcome.Items.Select(i => new { sourcePath = i.SourcePath, contentType = i.ContentType, sizeBytes = i.SizeBytes,
+                matchStatus = i.MatchStatus, suggestedNodeId = i.SuggestedNodeId?.ToString(), suggestedNodePath = i.SuggestedNodePath }), skipped = outcome.Skipped });
+        try
+        {
+            if (new[] { "targetNodeId", "targets", "links", "removeIds" }.Any(key => form[key].Count > 1))
+                return Error(400, AudioErrorCodes.Invalid, "Each selection field must occur at most once");
+            Guid? common = null;
+            if (form["targetNodeId"].Count > 0 && form["targetNodeId"].ToString() is not ("" or "null"))
+            {
+                if (!Guid.TryParse(form["targetNodeId"].ToString(), out var id)) return Error(400, AudioErrorCodes.Invalid, "Invalid targetNodeId");
+                common = id;
+            }
+            var json = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+            var targets = form["targets"].Count == 0 ? [] : JsonSerializer.Deserialize<List<AudioTarget>>(form["targets"].ToString(), json) ?? throw new JsonException();
+            var links = form["links"].Count == 0 ? [] : JsonSerializer.Deserialize<List<LinkRequest?>>(form["links"].ToString(), json) ?? throw new JsonException();
+            var removes = form["removeIds"].Count == 0 ? [] : JsonSerializer.Deserialize<List<Guid>>(form["removeIds"].ToString(), json) ?? throw new JsonException();
+            if (targets.Count > DocumentAudioOptions.MaxFilesPerImport || links.Any(l => l?.Id is null) || links.GroupBy(l => l!.Id).Any(g => g.Count() > 1))
+                return Error(400, AudioErrorCodes.Invalid, "Invalid or duplicate file selections");
+            return From(await audioService.ImportAsync(owner, batch, limits, common, targets,
+                links.Select(l => new AudioLinkChange(l!.Id!.Value, l.NodeId)).ToList(), removes.Distinct().ToArray(), request.HttpContext.RequestAborted), Imported);
+        }
+        catch (JsonException) { return Error(400, AudioErrorCodes.Invalid, "Invalid target or review selections"); }
     }
 
-    private static async Task<IResult> Save(Guid parseId, HttpRequest request, StructureAudioService audioService, ILoggerFactory loggerFactory)
+    private static Task<IResult> Save(Guid parseId, HttpRequest request, StructureAudioService audioService, ILoggerFactory loggerFactory) =>
+        SaveOwner(new(parseId), request, audioService, loggerFactory);
+
+    private static async Task<IResult> SaveOwner(AudioOwner owner, HttpRequest request, StructureAudioService audioService, ILoggerFactory loggerFactory)
     {
         SaveAudioRequest? body;
         try
@@ -138,7 +170,7 @@ public static class StructureAudioEndpoints
         catch (Exception ex) when (ex is System.Text.Json.JsonException or InvalidOperationException)
         {
             loggerFactory.CreateLogger(nameof(StructureAudioEndpoints))
-                .LogWarning("Rejected an unreadable audio link request body for parse {ParseId}", parseId);
+                .LogWarning("Rejected an unreadable audio link request body for owner {OwnerId}", owner.Id);
             return Error(StatusCodes.Status400BadRequest, AudioErrorCodes.Invalid, "Invalid request body");
         }
 
@@ -155,13 +187,14 @@ public static class StructureAudioEndpoints
         if (errors.Count > 0)
             return Results.BadRequest(new { success = false, message = "Audio link validation failed", errorCode = AudioErrorCodes.Invalid, errors });
 
-        var result = await audioService.UpdateAsync(parseId, changes, (body.RemoveIds ?? []).Distinct().ToList(), request.HttpContext.RequestAborted);
-        return From(result, list => new { parseId = parseId.ToString(), items = Items(list) });
+        var result = await audioService.UpdateAsync(owner, changes, (body.RemoveIds ?? []).Distinct().ToList(), false, request.HttpContext.RequestAborted);
+        return From(result, list => new { parseId = list.ParseId?.ToString(), documentFileId = list.DocumentFileId.ToString(), items = Items(list) });
     }
 
-    private static async Task<IResult> Remove(Guid parseId, Guid audioId, StructureAudioService audioService, HttpContext context)
+    private static Task<IResult> Remove(Guid parseId, Guid audioId, StructureAudioService audioService, HttpContext context) => RemoveOwner(new(parseId), audioId, audioService, context);
+    private static async Task<IResult> RemoveOwner(AudioOwner owner, Guid audioId, StructureAudioService audioService, HttpContext context)
     {
-        var result = await audioService.UpdateAsync(parseId, [], [audioId], context.RequestAborted);
+        var result = await audioService.UpdateAsync(owner, [], [audioId], true, context.RequestAborted);
         return From(result, _ => new { id = audioId.ToString(), deleted = true });
     }
 
@@ -173,7 +206,8 @@ public static class StructureAudioEndpoints
 
     private static object Imported(AudioImportOutcome outcome) => new
     {
-        parseId = outcome.Imported.ParseId.ToString(),
+        parseId = outcome.Imported.ParseId?.ToString(),
+        documentFileId = outcome.Imported.DocumentFileId.ToString(),
         imported = outcome.Imported.Items.Count,
         linked = outcome.Imported.Items.Count(item => item.NodeId != null),
         flagged = outcome.Imported.Items.Count(item => item.NodeId == null),
@@ -196,26 +230,32 @@ public static class StructureAudioEndpoints
     };
 
     /// <summary>The public projection of audio rows; the object key is deliberately absent.</summary>
-    private static List<object> Items(ParseAudio list) => list.Items.Select(item =>
+    private static List<object> Items(ParseAudio list)
     {
-        var slash = item.SourcePath.LastIndexOf('/');
-        var node = item.NodeId is { } nodeId ? list.Nodes.GetValueOrDefault(nodeId) : null;
-        return (object)new
+        var policy = new AudioRequiredPolicy(list.Levels ?? [], list.Nodes);
+        return list.Items.Select(item =>
         {
-            id = item.Id.ToString(),
-            sourcePath = item.SourcePath,
-            folder = slash < 0 ? "" : item.SourcePath[..slash],
-            fileName = slash < 0 ? item.SourcePath : item.SourcePath[(slash + 1)..],
-            contentType = item.ContentType,
-            sizeBytes = item.SizeBytes,
-            nodeId = item.NodeId?.ToString(),
-            nodePath = node == null ? null : NodePath(node, list.Nodes),
-            matchStatus = item.MatchStatus,
-            linkSource = item.LinkSource,
-            createdAt = item.CreatedAt.UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'"),
-            updatedAt = item.UpdatedAt.UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'"),
-        };
-    }).ToList();
+            var slash = item.SourcePath.LastIndexOf('/');
+            var node = item.NodeId is { } nodeId ? list.Nodes.GetValueOrDefault(nodeId) : null;
+            return (object)new
+            {
+                id = item.Id.ToString(),
+                sourcePath = item.SourcePath,
+                folder = slash < 0 ? "" : item.SourcePath[..slash],
+                fileName = slash < 0 ? item.SourcePath : item.SourcePath[(slash + 1)..],
+                contentType = item.ContentType,
+                sizeBytes = item.SizeBytes,
+                nodeId = item.NodeId?.ToString(),
+                nodePath = node == null ? null : NodePath(node, list.Nodes),
+                matchStatus = item.MatchStatus,
+                linkSource = item.LinkSource,
+                requiresReview = policy.Reason(item.NodeId) is not null,
+                reviewReason = policy.Reason(item.NodeId),
+                createdAt = item.CreatedAt.UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'"),
+                updatedAt = item.UpdatedAt.UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'"),
+            };
+        }).ToList();
+    }
 
     private static string NodePath(DocumentStructureNodeModel node, IReadOnlyDictionary<Guid, DocumentStructureNodeModel> nodes)
     {

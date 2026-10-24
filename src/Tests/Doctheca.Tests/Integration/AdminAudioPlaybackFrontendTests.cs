@@ -28,7 +28,9 @@ public sealed partial class AdminHostedFrontendTests
             new FilePayload { Name = "Unit2SectionA.wav", MimeType = "audio/wav", Buffer = PlayableWave.Bytes() },
             new FilePayload { Name = "Unit3SectionA.wav", MimeType = "audio/wav", Buffer = "RIFFxxxxWAVEbroken-media"u8.ToArray() },
         });
-        await Assertions.Expect(h.Page.GetByText("已导入 3 个文件：3 个已自动关联，0 个待处理")).ToBeVisibleAsync();
+        await Assertions.Expect(h.Page.GetByText("已选择 3 个文件，确认目标后点击保存")).ToBeVisibleAsync();
+        await h.Page.GetByRole(AriaRole.Button, new() { Name = "保存", Exact = true }).ClickAsync();
+        await Assertions.Expect(h.Page.GetByText("音频关联已保存", new() { Exact = true })).ToBeVisibleAsync();
         var first = h.Page.GetByRole(AriaRole.Button, new() { Name = "播放 Unit1SectionA.wav", Exact = true });
         var second = h.Page.GetByRole(AriaRole.Button, new() { Name = "播放 Unit2SectionA.wav", Exact = true });
         var player = h.Page.Locator("audio");

@@ -8,13 +8,13 @@ A self-hosted **document library & full-text retrieval** service for educational
 
 | Module | Capability |
 |--------|-----------|
-| **DocumentManagement** | Upload (multipart), list, detail, metadata update (subject/grade/year), delete |
+| **DocumentManagement** | Source-free named books, first-source attachment (multipart), list, detail, metadata update (subject/grade/year), delete |
 | **DocumentParse** | Delegate parsing to StructaDoc (Parse Run create/poll), sync Blocks/Markdown/Assets and optional printed page labels locally, proxy parsed images (ADR-0009) |
 | **DocumentExport** | Export Markdown / HTML per document file or per parse |
 | **DocumentMetadataAnalysis** | Optional LLM analysis of parsed Markdown to auto-detect subject/grade and backfill; failure never blocks parsing |
 | **DocumentSearch** | OpenSearch full-text precise search with block-level indexing and subject/grade filters |
-| **DocumentStructure** | Runtime-configured structure definitions and levels with required-ancestor audio policy (recorded only; enforcement pending), hand-marked structure nodes on a continuous view of a parse, and search narrowed to a node's subtree |
-| **StructureAudio** | Bounded ZIP/folder/file import, hierarchical matching and administrator link review, metadata persistence, deletion/orphan recovery and administrator playback using fresh expiring public S3 links |
+| **DocumentStructure** | Runtime-configured structure definitions and levels with required-ancestor audio policy enforced at audio commit, hand-marked structure nodes on a continuous view of a parse, and search narrowed to a node's subtree |
+| **StructureAudio** | Document-owned audio without a source/parse; bounded ZIP/folder/file preview, suggested/explicit targets and one atomic Required-policy import/link/removal Save, metadata persistence, deletion/orphan recovery and administrator playback using fresh expiring public S3 links |
 | **AdminAuthentication** | SignaCore hosted admin login via the official `SignaCore.Client.AspNetCore` client: `role=admin` pre-sign-in gate, server sessions, CSRF and prepared logout; legacy Bearer compatibility |
 | **InternalCatalog** | Anonymous read-only structure definition and marked-document catalogs, current document trees with direct audio counts and audio-filtered discovery, node content pages, owned image bytes, subtree search and expiring same-origin direct-node audio; always mapped and restricted to the internal network by the deployer |
 
@@ -102,7 +102,7 @@ and taking a verified backup; it cannot run directly against the newer migration
 
 Required-level policy (#129) adds default-false `structure_levels.required` and an administrator
 level control/response field, including embedded administrator tree definitions. All ancestors of
-a required level must also be required. This records policy only; audio behavior is unchanged.
+a required level must also be required. Audio import/review now enforces it atomically for every retained recording; see [audio authoring](docs/modules/StructureAudio.md).
 A complete older-client PUT omitting the field resets flags to false. Stop mixed-version writers
 and keep a verified backup and matching image/configuration before upgrading. Earlier images
 require backup recovery or the explicit policy down maintenance (which discards flags); see

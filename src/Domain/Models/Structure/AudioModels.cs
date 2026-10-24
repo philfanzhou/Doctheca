@@ -1,6 +1,6 @@
 namespace Doctheca.Domain.Models.Structure;
 
-/// <summary>An imported audio file of one parse and its optional link to a structure node (issue #90).</summary>
+/// <summary>An imported recording owned by a document/tree; parse provenance is optional.</summary>
 public sealed class DocumentStructureAudioModel
 {
     public Guid Id { get; set; }
@@ -60,7 +60,19 @@ public enum AudioLinkUpdateStatus
     ParseNotFound,
     AudioNotFound,
     NodeNotFound,
+    DocumentNotFound,
+    StructureRequired,
+    AlreadyImported,
+    Invalid,
 }
 
 /// <summary>The outcome of a link save; <see cref="RemovedObjectKeys"/> are the objects to delete after commit.</summary>
-public sealed record AudioLinkUpdateResult(AudioLinkUpdateStatus Status, IReadOnlyList<string> RemovedObjectKeys, Guid? MissingId = null);
+public sealed record AudioLinkUpdateResult(AudioLinkUpdateStatus Status, IReadOnlyList<string> RemovedObjectKeys, Guid? MissingId = null,
+    IReadOnlyList<AudioPolicyError>? Errors = null);
+
+/// <summary>Explicit adapter identity: document and parse IDs are never interchangeable.</summary>
+public sealed record AudioOwner(Guid Id, bool IsDocument = false);
+public sealed record AudioScope(Guid DocumentFileId, Guid? TreeId, Guid? ParseId, bool IsCurrent,
+    IReadOnlyList<DocumentStructureNodeModel> Nodes, IReadOnlyList<StructureLevelModel> Levels);
+public sealed record AudioPolicyError(string File, string Reason);
+public sealed record AudioTarget(string? SourcePath, Guid? NodeId);
