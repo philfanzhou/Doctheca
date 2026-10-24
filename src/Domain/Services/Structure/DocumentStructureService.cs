@@ -8,6 +8,7 @@ namespace Doctheca.Domain.Services.Structure;
 /// <summary>The marked structure of one parse together with the definition it was marked against.</summary>
 public sealed class DocumentStructureTree
 {
+    public Guid? TreeId { get; init; }
     public Guid? ParseId { get; init; }
     public Guid DocumentFileId { get; init; }
     public string FileName { get; init; } = string.Empty;
@@ -79,6 +80,7 @@ public sealed class DocumentStructureService : IDocumentStructureService
         var bindings = nodes.Select(node => node.ParseId).Distinct().ToArray();
         return new DocumentStructureTree
         {
+            TreeId = nodes.FirstOrDefault()?.TreeId,
             ParseId = bindings.Length == 1 ? bindings[0] : null,
             DocumentFileId = parse.DocumentFileId,
             FileName = file?.FileName ?? string.Empty,

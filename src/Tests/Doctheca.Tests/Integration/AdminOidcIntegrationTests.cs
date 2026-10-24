@@ -501,14 +501,13 @@ public sealed partial class AdminOidcIntegrationTests(PostgreSqlFixture database
         Assert.Contains(AdminOidcConstants.CsrfCookie + "=", csrfCookie);
         var requestToken = (await csrfResponse.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("token").GetString()!;
 
-        // With the CSRF credential pair the boundary passes; the request then reaches route
-        // matching, which answers 405 because the list endpoint has no POST handler — proof
-        // the write crossed the CSRF boundary without being answered by it.
+        // A valid CSRF pair now reaches the additive book creation handler (issue #133).
         using var post = new HttpRequestMessage(HttpMethod.Post, ProtectedApiRoute);
         post.Headers.Add("Cookie", cookieValue + "; " + csrfCookie);
         post.Headers.Add(AdminOidcConstants.CsrfHeader, requestToken);
+        post.Content = JsonContent.Create(new { fileName = "CSRF book " + Guid.NewGuid() });
         var posted = await client.SendAsync(post);
-        Assert.Equal(HttpStatusCode.MethodNotAllowed, posted.StatusCode);
+        Assert.Equal(HttpStatusCode.Created, posted.StatusCode);
 
         // A wrong CSRF header value is still rejected.
         using var wrongPost = new HttpRequestMessage(HttpMethod.Post, ProtectedApiRoute);

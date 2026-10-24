@@ -81,6 +81,8 @@ internal static class DocumentFileDetailEndpoint
                 contentType = file.ContentType,
                 createdAt = file.CreatedAt.UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'"),
                 structureDefinitionId = file.StructureDefinitionId?.ToString(),
+                subject = file.Subject, grade = file.Grade, year = file.Year,
+                hasSource = file.HasSource, sourceState = file.SourceState,
                 parses = parseResults,
             }
         });

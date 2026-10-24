@@ -1,6 +1,10 @@
 <script setup lang="ts">
-import { inject } from 'vue'
+import { inject, ref } from 'vue'
 import { iconHtml } from '../../utils/icons'
+import BookMetadataForm from '../../components/BookMetadataForm.vue'
+import { attachFirstSource } from '../../services/documentApi'
+import { getApiMessage, getStructureFieldErrors } from '../../services/structureApi'
+import { useToast } from '../../composables/useToast'
 import FileHeader from './FileHeader.vue'
 import FileInfoCard from './FileInfoCard.vue'
 import ParseStatsCard from './ParseStatsCard.vue'
@@ -12,10 +16,25 @@ interface Props {
 }
 const props = defineProps<Props>()
 
+const editing = ref(false)
+const attaching = ref(false)
+const attachmentError = ref('')
+const navigate = inject<(page: string, id: string) => void>('navigate')
+const { success } = useToast()
+async function attach(event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file || !props.docId) return
+  attaching.value = true; attachmentError.value = ''
+  try { await attachFirstSource(props.docId, file); await loadDetail(); success('首个源文件已附加，请显式启动解析') }
+  catch (e) { attachmentError.value = getStructureFieldErrors(e).map(f => `${f.field}: ${f.reason}`).join('; ') || getApiMessage(e, '附件失败') }
+  finally { attaching.value = false; input.value = '' }
+}
 const backToDocs = inject<() => void>('backToDocs')
 
 const {
   detail,
+  loadDetail,
   loading,
   parsing,
   deleting,
@@ -40,6 +59,17 @@ const {
       @delete="handleDeleteFile"
     />
 
+    <div v-if="detail" class="card section-gap">
+      <button class="btn" @click="navigate?.('document-structure', detail.id)">编辑书籍章节</button>
+      <button class="btn btn-ghost" @click="editing = true">编辑书籍信息</button>
+      <template v-if="!detail.hasSource">
+        <p>仅结构书籍：可先编排章节，稍后附加首个 PDF 或 Office 文件。附件不会自动解析。</p>
+        <label>附加首个源文件 <input aria-label="附加首个源文件" type="file" :disabled="attaching" accept=".pdf,.doc,.docx,.ppt,.pptx" @change="attach" /></label>
+        <p role="alert">{{ attachmentError }}</p>
+      </template>
+      <p>无解析音频创作将在后续功能中提供。</p>
+    </div>
+    <BookMetadataForm v-if="detail && editing" :detail="detail" @cancel="editing = false" @saved="() => { editing = false; loadDetail() }" />
     <div v-if="detail" class="grid-2r" style="margin-bottom: 16px">
       <FileInfoCard :detail="detail" @definition-changed="detail.structureDefinitionId = $event" />
       <ParseStatsCard :detail="detail" />
@@ -55,7 +85,7 @@ const {
 
       <div v-if="!detail.parses.length" class="empty">
         <span v-html="iconHtml('doc')"></span><br />
-        暂无解析记录，请点击上方按钮触发解析
+        {{ detail.hasSource ? '暂无解析记录，请点击上方按钮触发解析' : '暂无解析记录；无源文件时不创建解析。' }}
       </div>
 
       <div v-else class="parse-list">

@@ -51,7 +51,7 @@ public sealed class OpenSearchHeadingClassificationTests(OpenSearchFixture fixtu
             using var services = new ServiceCollection()
                 .AddDbContext<DocthecaDbContext>(options => options.UseNpgsql(postgres.GetConnectionString(database)))
                 .AddScoped<IDocumentParseBlockRepository, DocumentParseBlockRepository>()
-                .AddSingleton(Moq.Mock.Of<IDocumentStructureRepository>(repository => repository.GetByParseIdAsync(Moq.It.IsAny<Guid>()) == Task.FromResult(new List<Doctheca.Domain.Models.Structure.DocumentStructureNodeModel>()))).BuildServiceProvider();
+                .AddSingleton(Moq.Mock.Of<IDocumentStructureRepository>(repository => repository.GetCurrentBindingsAsync(Moq.It.IsAny<Guid>()) == Task.FromResult(new List<Doctheca.Domain.Models.Structure.DocumentStructureNodeModel>()))).BuildServiceProvider();
             var index = new OpenSearchIndexService(Options.Create(new OpenSearchOptions { Url=fixture.Url, IndexName=name }),
                 services, NullLogger<OpenSearchIndexService>.Instance);
             await index.EnsureIndexAsync();

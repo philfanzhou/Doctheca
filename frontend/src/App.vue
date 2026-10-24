@@ -10,6 +10,7 @@ import DocDetailPage from './views/DocDetailPage/DocDetailPage.vue'
 import ParseResultsPage from './views/ParseResultsPage/ParseResultsPage.vue'
 import SearchPage from './views/SearchPage/SearchPage.vue'
 import StructureDefinitionsPage from './views/StructureDefinitionsPage/StructureDefinitionsPage.vue'
+import DocumentStructureEditorPage from './views/DocumentStructureEditorPage.vue'
 import StructureEditorPage from './views/StructureEditorPage/StructureEditorPage.vue'
 import StructureAudioPage from './views/StructureAudioPage/StructureAudioPage.vue'
 import { useToast } from './composables/useToast'
@@ -58,15 +59,15 @@ if (typeof window !== 'undefined') {
 const currentNavKey = computed(() => {
   // For sidebar active highlighting, treat 'detail' as part of 'docs'
   if (state.value.page === 'detail') return 'docs'
-  // The structure editor is reached from a parse record of a document
-  if (state.value.page === 'structure') return 'docs'
+  // Separate document and parse editors retain their identifier meanings.
+  if (['structure', 'document-structure'].includes(state.value.page)) return 'docs'
   if (state.value.page === 'audio') return 'docs'
   return state.value.page
 })
 
 const currentCrumb = computed(() => {
   if (state.value.page === 'detail') return '文档管理 / 文档详情'
-  if (state.value.page === 'structure') return '文档管理 / 结构标注'
+  if (['structure', 'document-structure'].includes(state.value.page)) return '文档管理 / 结构标注'
   if (state.value.page === 'audio') return '文档管理 / 官方音频'
   return navItems.find((n) => n.key === state.value.page)?.label ?? ''
 })
@@ -110,10 +111,10 @@ function syncHash() {
 }
 
 function parseHash() {
-  const m = location.hash.match(/^#(overview|docs|results|search|detail|structures|structure|audio)(?:\/([A-Za-z0-9_-]+))?$/)
+  const m = location.hash.match(/^#(overview|docs|results|search|detail|structures|structure|document-structure|audio)(?:\/([A-Za-z0-9_-]+))?$/)
   if (m) {
-    // detail/:fileId, structure/:parseId and audio/:parseId carry an id; the other pages do not
-    state.value = { page: m[1], docId: ['detail', 'structure', 'audio'].includes(m[1]) ? m[2] || null : null }
+    // detail/document-structure use file IDs; structure/audio use real parse IDs.
+    state.value = { page: m[1], docId: ['detail', 'structure', 'document-structure', 'audio'].includes(m[1]) ? m[2] || null : null }
   } else {
     state.value = { page: 'overview', docId: null }
   }
@@ -127,6 +128,7 @@ const componentMap: Record<string, typeof OverviewPage> = {
   search: SearchPage,
   structures: StructureDefinitionsPage,
   structure: StructureEditorPage,
+  'document-structure': DocumentStructureEditorPage,
   audio: StructureAudioPage,
 }
 

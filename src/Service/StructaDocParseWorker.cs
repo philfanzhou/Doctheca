@@ -311,22 +311,12 @@ public sealed class StructaDocParseWorker : BackgroundService
                 return;
             }
 
-            // Only fill in fields that are currently empty (don't overwrite existing values)
-            var newSubject = string.IsNullOrWhiteSpace(file.Subject) ? analysis.Subject : file.Subject;
-            var newGrade = string.IsNullOrWhiteSpace(file.Grade) ? analysis.Grade : file.Grade;
-            var newYear = string.IsNullOrWhiteSpace(file.Year) ? analysis.Year : file.Year;
-
-            // Check if anything actually changed
-            if (newSubject == file.Subject && newGrade == file.Grade && newYear == file.Year)
-            {
-                _logger.LogInformation("LLM did not provide any missing metadata for file {FileId}", documentFileId);
-                return;
-            }
-
-            await fileService.UpdateMetadataAsync(documentFileId, newSubject, newGrade, newYear);
-            _logger.LogInformation(
-                "Metadata updated by LLM for file {FileId}: Subject={Subject}, Grade={Grade}, Year={Year}",
-                documentFileId, newSubject ?? "(none)", newGrade ?? "(none)", newYear ?? "(none)");
+            var updated = await scopeProvider.GetRequiredService<IDocumentAuthoringRepository>()
+                .FillMissingAsync(documentFileId, analysis.Subject, analysis.Grade, analysis.Year, ct);
+            if (updated is null) return;
+            var newSubject = updated.Subject;
+            var newGrade = updated.Grade;
+            var newYear = updated.Year;
 
             // Sync OpenSearch index with new metadata (best-effort)
             try

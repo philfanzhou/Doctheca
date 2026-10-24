@@ -48,13 +48,29 @@ Updates `subject`/`grade`/`year` (null fields are not modified); best-effort Ope
 
 ### POST /admin/document-files/{id}/parse
 
-Validation sequence: modelVersion ∈ {`vlm`, `pipeline`} → file exists → no in-progress parse with the same modelVersion (422 `DOCTHECA_PARSE_IN_PROGRESS`) → StructaDoc configured (503 `DOCTHECA_STRUCTADOC_NOT_CONFIGURED`). On success, a parse record with `status=pending` is created; for the actual submission and polling see [DocumentParse](./DocumentParse.md).
+Validation sequence: modelVersion ∈ {`vlm`, `pipeline`} → file exists → has source (409 `DOCTHECA_DOCUMENT_SOURCE_REQUIRED`) → no in-progress parse with the same modelVersion (422 `DOCTHECA_PARSE_IN_PROGRESS`) → StructaDoc configured (503 `DOCTHECA_STRUCTADOC_NOT_CONFIGURED`). On success, a parse record with `status=pending` is created; for the actual submission and polling see [DocumentParse](./DocumentParse.md).
 
 ## Data
 
-Key columns of `document_files`: `file_path` (nullable, legacy only), `structadoc_document_id` (nullable uuid; one of the two is required for new documents), `content_type`, `created_by`, `subject`/`grade`/`year`, `created_at`/`updated_at` (maintained by trigger). See [database/tables/document_files.md](../database/tables/document_files.md).
+Key columns of `document_files`: `file_path` (nullable, legacy only), `structadoc_document_id` (nullable uuid; both absent for source-free books), `content_type`, `created_by`, `subject`/`grade`/`year`, `created_at`/`updated_at` (maintained by trigger). See [database/tables/document_files.md](../database/tables/document_files.md).
 
 ## Validation
 
 - Unit tests: `DocumentFileServiceTests/` (including Attach reference backfill), `Authentication/DocumentFileUploadAuthorizationTests` (createdBy, 503 when not configured), `Authentication/AuthorizationBoundaryTests` (401/403 boundaries), `DocumentFileDeleteCleanupTests` (legacy path collection).
 - Command: `dotnet test src/Doctheca.sln --configuration Release` (in this service's directory).
+
+## Books authored before a source exists (#133)
+
+`POST /admin/document-files` accepts JSON `{ "fileName": "PEP English Grade 9", "subject": "English", "grade": "9", "year": "2026", "structureDefinitionId": "<definition UUID>" }` and returns 201. `fileName` is the logical book title (trimmed, 1–500 characters); optional subject/grade/year have limits 50/20/10. A supplied definition must exist. Invalid fields return 400 with field reasons and no write. Creation records the authenticated UUID subject, or null for a non-UUID subject. It needs no configured StructaDoc, object store or search service and creates no parse, job, content, image, index entry or remote object.
+
+Both source references are null and `contentType` is the empty string for a book without a file. Administrator list/detail add `hasSource` and `sourceState` (`structure-only` or `with-source`) derived from the committed source reference/path, independently of parse status. Detail includes subject/grade/year; list includes metadata and the selected definition. The optional list `sourceState` filter composes with name/latest-parse filters and pagination. A source-free book has null parse status and an empty parse list; an uploaded but unparsed book has `hasSource=true`.
+
+`POST /admin/document-files/{id}/source` attaches the first multipart `file` to that same book. It uses the existing supported PDF/Word/PowerPoint MIME types and 200 MB limit. Missing book returns 404; an existing source returns 409 `DOCTHECA_DOCUMENT_SOURCE_EXISTS` before upload. Unconfigured upstream returns 503; provider errors use fixed, redacted messages. Upload is outside the document row lock. Compare-and-attach under the common owner lock lets only one concurrent upload win; it changes the upstream reference and validated MIME, retaining title, metadata, definition, tree, chapters and audio. It never enqueues parsing. Streams are disposed. A definitely unattached new source is cleaned best-effort after a fresh owner-serialized reference check; an unresolved database/reference outcome defers deletion.
+
+Parsing without a source returns 409 `DOCTHECA_DOCUMENT_SOURCE_REQUIRED` before configuration checks. The shared enqueue transaction repeats this check before inserting a job. Attach a source, explicitly start VLM/Pipeline parsing, then explicitly bind existing chapters through the [document tree editor](DocumentStructure.md#document-current-tree-authoring-133). Successful reparse detaches content bindings while preserving chapters and audio; failures preserve committed state. Optional LLM analysis fills only fields still empty after taking the document lock, so a newer human value wins.
+
+Metadata PUT also accepts `fileName`; null means unchanged and empty strings clear optional fields. A title cannot become blank. Title, metadata and definition are validated and committed together under the document lock. A definition change while any current or historical nodes use it returns the existing 409 and changes no metadata.
+
+In the console: **New book → choose metadata/definition → Edit book chapters → add/reorder Unit/Section nodes → Save → attach first source → explicitly parse → select real parse in chapter editor → bind existing chapters → Save**. The `#document-structure/{documentFileId}` page loads no blocks until a real successful parse is selected. It supports unbound chapters and unsaved-change protection. Existing file-first upload, `#structure/{parseId}`, content/export and parse audio links retain their meanings. Document audio authoring and the complete listening workflow remain follow-up work under #128/#134.
+
+All new writes inherit administrator authorization, hosted Cookie CSRF and security response headers. Names are rendered as text. No credentials, provider problem bodies or storage fields are added to the new responses/logs. There is no new configuration, package, schema migration or container change. Reverting the application to #132 removes these entry points but retains authored records; it cannot turn a source-free book into a parsed file. Older-schema recovery still requires the verified backup and matching image/configuration described in [migration recovery](../database/migrations.md#document-owned-structure-132).

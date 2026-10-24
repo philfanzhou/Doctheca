@@ -33,9 +33,9 @@ function statusBadgeHtml(status: string | null): string {
       <table class="data-table">
         <thead>
           <tr>
-            <th>文件名</th>
+            <th>书名 / 文件名</th>
             <th>类型</th>
-            <th>上传时间</th>
+            <th>创建时间</th>
             <th>解析状态</th>
             <th style="text-align: right">操作</th>
           </tr>
@@ -49,25 +49,26 @@ function statusBadgeHtml(status: string | null): string {
           >
             <td>
               <div class="cell-flex">
-                <div class="file-ico" :class="fileIconCls(f.contentType)">{{ fileExtLabel(f.contentType) }}</div>
+                <div class="file-ico" :class="fileIconCls(f.contentType)">{{ f.hasSource ? fileExtLabel(f.contentType) : '书籍' }}</div>
                 <div>
                   <div class="td-main" style="max-width: 360px">{{ f.fileName }}</div>
                 </div>
               </div>
             </td>
             <td>
-              <span class="mono" style="font-size: 12px; color: var(--text-2)">{{ f.contentType }}</span>
+              <span class="mono" style="font-size: 12px; color: var(--text-2)">{{ f.contentType || '无源文件' }}</span>
             </td>
             <td style="color: var(--text-3); font-size: 12.5px; font-variant-numeric: tabular-nums">
               {{ formatTime(f.createdAt) }}
             </td>
             <td>
-              <span v-html="statusBadgeHtml(f.parseStatus)"></span>
+              <span v-if="!f.hasSource" class="badge gray">仅结构</span>
+              <span v-else v-html="statusBadgeHtml(f.parseStatus)"></span>
             </td>
             <td style="text-align: right; white-space: nowrap" @click.stop
             >
               <template
-                v-if="f.parseStatus === null || f.parseStatus === 'unparsed' || f.parseStatus === 'failed'"
+                v-if="f.hasSource && (f.parseStatus === null || f.parseStatus === 'unparsed' || f.parseStatus === 'failed')"
               >
                 <button class="btn btn-sm" :disabled="props.parsing" @click="emit('parse', f.id, 'vlm')">VLM 解析</button>
                 <button class="btn btn-ghost btn-sm" :disabled="props.parsing" @click="emit('parse', f.id, 'pipeline')">Pipeline</button>
@@ -75,7 +76,7 @@ function statusBadgeHtml(status: string | null): string {
               <template v-else-if="f.parseStatus === 'pending' || f.parseStatus === 'parsing'">
                 <span class="badge blue"><span class="dot pulse"></span>解析中</span>
               </template>
-              <template v-else-if="f.parseStatus === 'parsed'">
+              <template v-else-if="f.hasSource && f.parseStatus === 'parsed'">
                 <button class="btn btn-sm" :disabled="props.parsing" @click="emit('parse', f.id, 'vlm')">重新解析</button>
               </template>
               <button class="btn btn-danger btn-sm" @click="emit('delete', f.id)">

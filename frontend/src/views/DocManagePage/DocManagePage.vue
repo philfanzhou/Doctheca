@@ -1,11 +1,16 @@
 <script setup lang="ts">
+import { ref, inject } from 'vue'
+import BookMetadataForm from '../../components/BookMetadataForm.vue'
 import { iconHtml } from '../../utils/icons'
 import StatusStrip from '../../components/StatusStrip.vue'
 import FileUploadZone from './FileUploadZone.vue'
 import FileListTable from './FileListTable.vue'
 import { useDocManage } from './useDocManage'
 
+const creating = ref(false)
+const openDetail = inject<(id: string) => void>('openDocDetail')
 const {
+  sourceState,
   fileList,
   fileTotal,
   filePage,
@@ -34,10 +39,12 @@ const {
     <div class="page-head">
       <div>
         <div class="page-title">文档管理</div>
-        <div class="page-sub">上传原始文档并启动解析</div>
+        <div class="page-sub">创建书籍、维护章节，或上传文档解析</div>
       </div>
     </div>
 
+    <button class="btn" @click="creating = true">新建书籍</button>
+    <BookMetadataForm v-if="creating" @cancel="creating = false" @saved="id => { creating = false; openDetail?.(id) }" />
     <StatusStrip :items="stripItems" :active="filterStatus" @select="selectStrip" />
 
     <FileUploadZone
@@ -54,6 +61,9 @@ const {
           <div class="card-sub">共 {{ fileTotal }} 份文档</div>
         </div>
         <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap">
+          <select v-model="sourceState" aria-label="源文件状态" class="input" @change="filePage = 1; loadFileList()">
+            <option value="">全部源文件状态</option><option value="structure-only">仅结构</option><option value="with-source">已有源文件</option>
+          </select>
           <div style="position: relative; width: 220px">
             <span
               v-html="iconHtml('search')"

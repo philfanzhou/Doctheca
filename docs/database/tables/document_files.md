@@ -15,10 +15,10 @@ The `document_files` table stores file metadata for the document parsing flow; p
 | `id` | `UUID` | PRIMARY KEY | | File unique identifier |
 | `current_structure_tree_id` | `UUID` | NULL, composite same-document tree FK NO ACTION | | Stable current tree; clear before document deletion |
 | `structure_binding_generation` | `BIGINT` | NOT NULL | `0` | Serialized explicit binding/completion generation |
-| `file_name` | `VARCHAR(500)` | NOT NULL | | File name |
+| `file_name` | `VARCHAR(500)` | NOT NULL | | Logical display title; uploads initialize it with the filename |
 | `file_path` | `VARCHAR(500)` | NULL | | OSS storage path; only for legacy records (original files uploaded before the migration); NULL for new records |
 | `structadoc_document_id` | `UUID` | NULL | | StructaDoc Document ID (required for new uploads; legacy files are back-filled after lazy upload on the first parse trigger) |
-| `content_type` | `VARCHAR(100)` | NOT NULL | | MIME type (e.g. `application/pdf`) |
+| `content_type` | `VARCHAR(100)` | NOT NULL | | MIME type (e.g. `application/pdf`); empty string when no source exists |
 | `created_by` | `UUID` | NULL | | Uploader user ID |
 | `created_at` | `TIMESTAMP WITH TIME ZONE` | NOT NULL | | Creation time |
 | `updated_at` | `TIMESTAMP WITH TIME ZONE` | NULL | | Last update time |
@@ -44,4 +44,4 @@ The `document_files` table stores file metadata for the document parsing flow; p
 - **OSS path convention (legacy only)**: `documents/{year}/{month}/{day}/{file-id}/source.{ext}`
   - The same directory also holds `mineru-output.zip`, `layout.pdf`, and `images/*`
   - When a file is deleted, the entire directory is cleaned up together
-- At least one of `file_path` and `structadoc_document_id` must be non-null; on deletion, the OSS object and the StructaDoc document are each cleaned up best-effort
+- Both `file_path` and `structadoc_document_id` may be null for a source-free logical book; this creates no parse. Administrator `hasSource`/`sourceState` are derived fields, not schema columns; on deletion, the OSS object and the StructaDoc document are each cleaned up best-effort

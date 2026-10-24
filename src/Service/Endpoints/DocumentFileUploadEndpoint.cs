@@ -16,9 +16,9 @@ namespace Doctheca.Service;
 
 internal static class DocumentFileUploadEndpoint
 {
-    private const long MaxFileSize = 200 * 1024 * 1024; // 200MB
+    internal const long MaxFileSize = 200 * 1024 * 1024; // 200MB
 
-    private static readonly string[] DocumentFileMimeTypes =
+    internal static readonly string[] DocumentFileMimeTypes =
     [
         "application/pdf",
         "application/msword",

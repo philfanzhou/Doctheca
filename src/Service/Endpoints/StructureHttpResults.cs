@@ -56,6 +56,7 @@ internal static class StructureHttpResults
             levelId = node.LevelId.ToString(),
             levelName = levelNames.GetValueOrDefault(node.LevelId),
             name = node.Name,
+            parseId = node.ParseId?.ToString(),
             startSequence = node.StartSequence,
             endSequence = node.EndSequence,
             sortOrder = node.SortOrder,
@@ -64,6 +65,7 @@ internal static class StructureHttpResults
 
         return new
         {
+            treeId = tree.TreeId?.ToString(),
             parseId = tree.ParseId?.ToString(),
             documentFileId = tree.DocumentFileId.ToString(),
             fileName = tree.FileName,

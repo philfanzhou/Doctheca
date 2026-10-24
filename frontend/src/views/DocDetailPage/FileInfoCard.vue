@@ -61,8 +61,8 @@ onMounted(async () => {
   <div class="card">
     <div class="card-head">
       <div>
-        <div class="card-title">文件信息</div>
-        <div class="card-sub">原始文档元数据</div>
+        <div class="card-title">书籍信息</div>
+        <div class="card-sub">书名、元数据与结构定义</div>
       </div>
     </div>
     <div class="kv-body">
@@ -72,12 +72,13 @@ onMounted(async () => {
       </div>
       <div class="kv-row">
         <span class="kv-key">类型</span>
-        <span class="kv-val mono">{{ props.detail.contentType }}</span>
+        <span class="kv-val mono">{{ props.detail.contentType || '无源文件' }}</span>
       </div>
       <div class="kv-row">
-        <span class="kv-key">上传时间</span>
+        <span class="kv-key">创建时间</span>
         <span class="kv-val mono">{{ formatTime(props.detail.createdAt) }}</span>
       </div>
+      <div class="kv-row"><span class="kv-key">学科 / 年级 / 年份</span><span class="kv-val">{{ props.detail.subject || '—' }} / {{ props.detail.grade || '—' }} / {{ props.detail.year || '—' }}</span></div>
       <div class="kv-row kv-row-control">
         <span class="kv-key">结构定义</span>
         <el-select

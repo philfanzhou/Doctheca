@@ -802,6 +802,7 @@ public sealed class ServiceMantleProblemDetailsTests : ServiceMantleIntegrationT
         {
             Id = fileId,
             FileName = "problem-in-progress-probe.md",
+            StructaDocDocumentId = Guid.NewGuid(),
             ContentType = "text/markdown"
         });
         db.DocumentParses.Add(new DocumentParseEntity
