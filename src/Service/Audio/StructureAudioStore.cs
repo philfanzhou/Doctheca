@@ -100,25 +100,6 @@ public sealed partial class StructureAudioStore
         return failed;
     }
 
-    /// <summary>
-    /// Deletes every object under the parse's prefix, including any left by an interrupted import;
-    /// returns how many could not be deleted.
-    /// </summary>
-    public async Task<int> DeleteParseAsync(Guid parseId, IEnumerable<string> knownKeys)
-    {
-        var keys = new HashSet<string>(knownKeys, StringComparer.Ordinal);
-        try
-        {
-            foreach (var item in await _ossService.Value.ListObjectsOrThrowAsync(ParsePrefix(parseId)))
-                keys.Add(item.ObjectPath);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning("Listing audio objects of parse {ParseId} failed: {ExceptionType}", parseId, ex.GetType().Name);
-        }
-        return await DeleteManyAsync(keys);
-    }
-
     /// <summary>Every stored audio object, for the orphan sweep.</summary>
     public async Task<List<OssObjectInfo>> ListAllAsync()
     {

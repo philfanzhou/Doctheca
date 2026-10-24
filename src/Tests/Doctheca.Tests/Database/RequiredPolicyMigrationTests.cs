@@ -24,16 +24,16 @@ public sealed class RequiredPolicyMigrationTests(PostgreSqlMigrationFixture fixt
         using var context = fixture.CreateContext(_database);
         await PreviousAsync(context);
         var rows = await RowsAsync(context);
-        var columns = await MigrationGoldenStates.ReadColumnShapeAsync(context, DocthecaMigrationExecutor.AllTableNames);
-        var constraints = await MigrationGoldenStates.ReadConstraintShapeAsync(context, DocthecaMigrationExecutor.AllTableNames);
+        var columns = await MigrationGoldenStates.ReadLegacyColumnShapeAsync(context, DocthecaMigrationExecutor.AllTableNames);
+        var constraints = await MigrationGoldenStates.ReadLegacyConstraintShapeAsync(context, DocthecaMigrationExecutor.AllTableNames);
         var executor = new DocthecaMigrationExecutor(context);
         (await executor.InspectAsync()).Should().Be(DocthecaMigrationExecutor.DatabaseState.PendingMigrations);
         await executor.ExecuteAsync();
         (await RowsAsync(context)).Should().Equal(rows);
-        var after = await MigrationGoldenStates.ReadColumnShapeAsync(context, DocthecaMigrationExecutor.AllTableNames);
+        var after = await MigrationGoldenStates.ReadLegacyColumnShapeAsync(context, DocthecaMigrationExecutor.AllTableNames);
         after.Should().Contain("structure_levels.required:boolean:notnull");
         after.Where(column => !column.StartsWith("structure_levels.required:")).Should().Equal(columns);
-        (await MigrationGoldenStates.ReadConstraintShapeAsync(context, DocthecaMigrationExecutor.AllTableNames)).Should().Equal(constraints);
+        (await MigrationGoldenStates.ReadLegacyConstraintShapeAsync(context, DocthecaMigrationExecutor.AllTableNames)).Should().Equal(constraints);
         (await context.StructureLevels.AsNoTracking().ToListAsync()).Should().NotBeEmpty().And.OnlyContain(level => !level.Required);
         (await MigrationGoldenStates.ReadAppliedHistoryAsync(context)).Should().Equal(MigrationGoldenStates.AllIds);
         (await executor.InspectAsync()).Should().Be(DocthecaMigrationExecutor.DatabaseState.CurrentVersionCompatible);
@@ -68,20 +68,23 @@ public sealed class RequiredPolicyMigrationTests(PostgreSqlMigrationFixture fixt
         using var context = fixture.CreateContext(_database);
         await PreviousAsync(context);
         var rows = await RowsAsync(context);
-        var columns = await MigrationGoldenStates.ReadColumnShapeAsync(context, DocthecaMigrationExecutor.AllTableNames);
-        var constraints = await MigrationGoldenStates.ReadConstraintShapeAsync(context, DocthecaMigrationExecutor.AllTableNames);
+        var columns = await MigrationGoldenStates.ReadLegacyColumnShapeAsync(context, DocthecaMigrationExecutor.AllTableNames);
+        var constraints = await MigrationGoldenStates.ReadLegacyConstraintShapeAsync(context, DocthecaMigrationExecutor.AllTableNames);
         var history = await MigrationGoldenStates.ReadAppliedHistoryAsync(context);
         var executor = new DocthecaMigrationExecutor(context);
         await executor.ExecuteAsync();
         await MigrationGoldenStates.ExecuteRawAsync(context, "UPDATE structure_levels SET required = true");
         (await context.StructureLevels.AsNoTracking().ToListAsync()).Should().OnlyContain(level => level.Required);
         if (documentedSql)
+        {
+            await MigrationGoldenStates.ExecuteRawAsync(context, await File.ReadAllTextAsync(StructureMigrationTests.RollbackScriptPath(DocthecaMigrationExecutor.AddDocumentOwnedStructureMigrationId)));
             await MigrationGoldenStates.ExecuteRawAsync(context, await File.ReadAllTextAsync(StructureMigrationTests.RollbackScriptPath(Current)));
+        }
         else
             await context.GetService<IMigrator>().MigrateAsync(Previous);
         (await RowsAsync(context)).Should().Equal(rows);
-        (await MigrationGoldenStates.ReadColumnShapeAsync(context, DocthecaMigrationExecutor.AllTableNames)).Should().Equal(columns);
-        (await MigrationGoldenStates.ReadConstraintShapeAsync(context, DocthecaMigrationExecutor.AllTableNames)).Should().Equal(constraints);
+        (await MigrationGoldenStates.ReadLegacyColumnShapeAsync(context, DocthecaMigrationExecutor.AllTableNames)).Should().Equal(columns);
+        (await MigrationGoldenStates.ReadLegacyConstraintShapeAsync(context, DocthecaMigrationExecutor.AllTableNames)).Should().Equal(constraints);
         (await MigrationGoldenStates.ReadAppliedHistoryAsync(context)).Should().Equal(history);
         await executor.ExecuteAsync();
         (await RowsAsync(context)).Should().Equal(rows);
@@ -115,14 +118,14 @@ public sealed class RequiredPolicyMigrationTests(PostgreSqlMigrationFixture fixt
             });
         }
         var history = await MigrationGoldenStates.ReadAppliedHistoryAsync(context);
-        var columns = await MigrationGoldenStates.ReadColumnShapeAsync(context, DocthecaMigrationExecutor.AllTableNames);
+        var columns = await MigrationGoldenStates.ReadLegacyColumnShapeAsync(context, DocthecaMigrationExecutor.AllTableNames);
         var rows = await RowsAsync(context);
         var executor = new DocthecaMigrationExecutor(context);
         (await executor.InspectAsync()).Should().Be(scenario == "unknown" ? DocthecaMigrationExecutor.DatabaseState.VersionTooNew
             : DocthecaMigrationExecutor.DatabaseState.InspectionFailed);
         await Assert.ThrowsAsync<InvalidOperationException>(() => executor.ExecuteAsync());
         (await MigrationGoldenStates.ReadAppliedHistoryAsync(context)).Should().Equal(history);
-        (await MigrationGoldenStates.ReadColumnShapeAsync(context, DocthecaMigrationExecutor.AllTableNames)).Should().Equal(columns);
+        (await MigrationGoldenStates.ReadLegacyColumnShapeAsync(context, DocthecaMigrationExecutor.AllTableNames)).Should().Equal(columns);
         (await RowsAsync(context)).Should().Equal(rows);
     }
 
@@ -135,7 +138,7 @@ public sealed class RequiredPolicyMigrationTests(PostgreSqlMigrationFixture fixt
         await PreviousAsync(setup);
         var rows = await RowsAsync(setup);
         var history = await MigrationGoldenStates.ReadAppliedHistoryAsync(setup);
-        var columns = await MigrationGoldenStates.ReadColumnShapeAsync(setup, DocthecaMigrationExecutor.AllTableNames);
+        var columns = await MigrationGoldenStates.ReadLegacyColumnShapeAsync(setup, DocthecaMigrationExecutor.AllTableNames);
         using var cancellation = new CancellationTokenSource();
         using (var attempt = new DocthecaDbContext(new DbContextOptionsBuilder<DocthecaDbContext>()
                    .UseNpgsql(fixture.GetConnectionString(_database)).AddInterceptors(new BeforeCommit(cancellation, cancel)).Options))
@@ -146,7 +149,7 @@ public sealed class RequiredPolicyMigrationTests(PostgreSqlMigrationFixture fixt
         }
         (await RowsAsync(setup)).Should().Equal(rows);
         (await MigrationGoldenStates.ReadAppliedHistoryAsync(setup)).Should().Equal(history);
-        (await MigrationGoldenStates.ReadColumnShapeAsync(setup, DocthecaMigrationExecutor.AllTableNames)).Should().Equal(columns);
+        (await MigrationGoldenStates.ReadLegacyColumnShapeAsync(setup, DocthecaMigrationExecutor.AllTableNames)).Should().Equal(columns);
         await new DocthecaMigrationExecutor(setup).ExecuteAsync();
         (await MigrationGoldenStates.ReadAppliedHistoryAsync(setup)).Should().Equal(MigrationGoldenStates.AllIds);
     }
@@ -189,13 +192,13 @@ public sealed class RequiredPolicyMigrationTests(PostgreSqlMigrationFixture fixt
     private static async Task<List<string>> RowsAsync(DocthecaDbContext context)
     {
         var result = new List<string>();
-        foreach (var table in DocthecaMigrationExecutor.AllTableNames)
+        foreach (var table in DocthecaMigrationExecutor.PreOwnershipTableNames)
         {
             await context.Database.OpenConnectionAsync();
             try
             {
                 await using var command = context.Database.GetDbConnection().CreateCommand();
-                command.CommandText = $"SELECT '{table}:' || (to_jsonb(t) - 'required')::text FROM {table} t ORDER BY 1";
+                command.CommandText = $"SELECT '{table}:' || ({MigrationGoldenStates.LegacyRowJson(table)} - 'required')::text FROM {table} t ORDER BY 1";
                 await using var reader = await command.ExecuteReaderAsync();
                 while (await reader.ReadAsync()) result.Add(reader.GetString(0));
             }

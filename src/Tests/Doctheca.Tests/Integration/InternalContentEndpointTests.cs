@@ -33,6 +33,40 @@ public sealed class InternalContentEndpointTests(PostgreSqlFixture database) : S
         CreateFactory(configureTestServices: services, settings: new Dictionary<string, string?>());
 
     [Fact]
+    public async Task SuccessfulReparse_UnboundContentIsEmpty_AndOldImagesAndRevisionsCannotBeReused()
+    {
+        using var factory = Factory(); using var client = factory.CreateClient();
+        var seed = await SeedAsync(factory);
+        try
+        {
+            using var original = JsonDocument.Parse(await client.GetStringAsync(Url(seed.Node)));
+            var revision = original.RootElement.GetProperty("data").GetProperty("revision").GetString()!;
+            using (var scope = factory.Services.CreateScope())
+            {
+                var context = scope.ServiceProvider.GetRequiredService<DocthecaDbContext>();
+                var parses = new DocumentParseRepository(context);
+                var job = await parses.AddAsync(new() { DocumentFileId = seed.File, Status = DocumentParseStatus.Parsing });
+                await parses.CompleteAsync(job.Id, Guid.NewGuid(), "new content", [], [], []);
+            }
+            using var body = JsonDocument.Parse(await client.GetStringAsync(Url(seed.Node)));
+            var data = body.RootElement.GetProperty("data");
+            Assert.Equal(JsonValueKind.Null, data.GetProperty("parseId").ValueKind);
+            Assert.Empty(data.GetProperty("items").EnumerateArray());
+            Assert.False(data.GetProperty("hasMore").GetBoolean());
+            Assert.Equal(JsonValueKind.Null, data.GetProperty("nextAfterSequence").ValueKind);
+            var detachedRevision = data.GetProperty("revision").GetString()!;
+            Assert.NotEqual(revision, detachedRevision);
+            using var oldCursor = await client.GetAsync(Url(seed.Node) + $"?afterSequence=3&revision={revision}");
+            Assert.Equal(HttpStatusCode.Conflict, oldCursor.StatusCode);
+            using var oldImage = await client.GetAsync(ImageUrl(seed.Node, seed.Image, revision));
+            Assert.Equal(HttpStatusCode.Conflict, oldImage.StatusCode);
+            using var detachedImage = await client.GetAsync(ImageUrl(seed.Node, seed.Image, detachedRevision));
+            Assert.Equal(HttpStatusCode.NotFound, detachedImage.StatusCode);
+        }
+        finally { await CleanupAsync(factory, seed); }
+    }
+
+    [Fact]
     public async Task SmallPages_CoverInclusiveRangeExactlyOnceWithGapsAndAllowListedFields()
     {
         using var factory = Factory();
@@ -167,9 +201,14 @@ public sealed class InternalContentEndpointTests(PostgreSqlFixture database) : S
                     db.DocumentParses.Add(new() { Id = parse, DocumentFileId = seed.File, Status = DocumentParseStatus.Parsed, ParsedAt = DateTimeOffset.UtcNow.AddDays(1) });
                     db.DocumentStructureNodes.Add(new() { ParseId = parse, LevelId = seed.Level, Name = "current", StartSequence = 2, EndSequence = 10 });
                 }
-                if (mutation == "delete") await db.DocumentFiles.Where(item => item.Id == seed.File).ExecuteDeleteAsync();
+                if (mutation == "delete") await new DocumentFileRepository(db).DeleteAsync(seed.File);
                 if (mutation == "definition") await db.DocumentFiles.Where(item => item.Id == seed.File).ExecuteUpdateAsync(set => set.SetProperty(item => item.StructureDefinitionId, (Guid?)null));
-                await db.SaveChangesAsync();
+                await db.SaveOwnedChangesAsync();
+                if (mutation == "current")
+                {
+                    var tree = await db.DocumentStructureTrees.Where(tree => tree.DocumentFileId == seed.File && tree.OriginParseId != seed.Parse).Select(tree => tree.Id).SingleAsync();
+                    await db.DocumentFiles.Where(file => file.Id == seed.File).ExecuteUpdateAsync(set => set.SetProperty(file => file.CurrentStructureTreeId, (Guid?)tree));
+                }
             }
             var absent = mutation is "replace" or "current" or "delete" or "definition";
             foreach (var url in new[] { Url(seed.Node) + $"?afterSequence=3&revision={revision}", ImageUrl(seed.Node, seed.Image, revision) })
@@ -352,7 +391,7 @@ public sealed class InternalContentEndpointTests(PostgreSqlFixture database) : S
             var revision = body.RootElement.GetProperty("data").GetProperty("revision").GetString();
             using var changed = await client.GetAsync(Url(seed.Node) + $"?afterSequence=3&revision={revision}");
             Assert.Equal(HttpStatusCode.Conflict, changed.StatusCode);
-            Assert.True(probe.Reads >= 8);
+            Assert.True(probe.Reads >= 6);
         }
         finally { probe.Resume.TrySetResult(); await CleanupAsync(seedFactory, seed); }
     }
@@ -474,7 +513,7 @@ public sealed class InternalContentEndpointTests(PostgreSqlFixture database) : S
             {
                 var db = scope.ServiceProvider.GetRequiredService<DocthecaDbContext>();
                 db.DocumentStructureNodes.Add(new() { Id = emptyNode, ParseId = seed.Parse, LevelId = seed.Level, Name = "empty", StartSequence = 20, EndSequence = 21 });
-                await db.SaveChangesAsync();
+                await db.SaveOwnedChangesAsync();
             }
             using var empty = JsonDocument.Parse(await client.GetStringAsync(Url(emptyNode)));
             Assert.Equal(0, empty.RootElement.GetProperty("data").GetProperty("items").GetArrayLength());
@@ -576,14 +615,14 @@ public sealed class InternalContentEndpointTests(PostgreSqlFixture database) : S
             if (sequence is >= 2 and <= 10) blocks.Add(block);
         }
         db.DocumentParseBlocks.Add(new() { ParseId = parse, Sequence = null, PageId = 999, BlockType = "text", TextContent = "private-canary/unsequenced" });
-        await db.SaveChangesAsync();
+        await db.SaveOwnedChangesAsync();
         return new(definition, level, file, parse, ids[4], ids[5], ids[6], ids[7], ids[8], ids[9], blocks.ToArray());
     }
     private static async Task CleanupAsync(WebApplicationFactory<Program> factory, Seed seed)
     {
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<DocthecaDbContext>();
-        await db.DocumentFiles.Where(item => item.Id == seed.File).ExecuteDeleteAsync();
+        await new DocumentFileRepository(db).DeleteAsync(seed.File);
         await db.StructureDefinitions.Where(item => item.Id == seed.Definition).ExecuteDeleteAsync();
     }
     private sealed class TrackedStream(byte[] bytes) : MemoryStream(bytes)

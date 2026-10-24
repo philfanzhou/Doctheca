@@ -110,7 +110,7 @@ public sealed class InternalStructureEndpointTests(PostgreSqlFixture database) :
     }
 
     [Fact]
-    public async Task Selection_UsesOnlyParsedNonemptyTreesThenTimestampNullsLastAndUuidDescending()
+    public async Task CurrentTree_RemainsStableWhenParseHistoryStatusOrTimestampsChange()
     {
         using var factory = Factory();
         using var client = factory.CreateClient();
@@ -135,7 +135,7 @@ public sealed class InternalStructureEndpointTests(PostgreSqlFixture database) :
                     { ParseId = id, NodeId = node.Id, SourcePath = Guid.NewGuid() + ".mp3", ObjectKey = "audio-key-canary-" + Guid.NewGuid(), ContentType = "audio/mpeg", MatchStatus = "matched" }));
                 }
                 else counts[id] = 0;
-                await db.SaveChangesAsync();
+                await db.SaveOwnedChangesAsync();
             }
             async Task AssertSelected(Guid expected)
             {
@@ -153,18 +153,18 @@ public sealed class InternalStructureEndpointTests(PostgreSqlFixture database) :
             await Add(ids[7], DocumentParseStatus.Parsing, now.AddDays(1), true);
             await Add(ids[6], DocumentParseStatus.Failed, now.AddDays(1), true);
             await Add(ids[5], DocumentParseStatus.Parsed, now.AddDays(1), false);
-            await AssertSelected(ids[1]);
+            await AssertSelected(seed.Parse);
             // UUID alone cannot hide an older timestamp, or promote a null timestamp over a real one.
             await db.DocumentParses.Where(item => item.Id == ids[9]).ExecuteUpdateAsync(set => set.SetProperty(item => item.ParsedAt, now.AddDays(-2)));
-            await AssertSelected(ids[1]);
+            await AssertSelected(seed.Parse);
             await db.DocumentParses.Where(item => item.Id == ids[9]).ExecuteUpdateAsync(set => set.SetProperty(item => item.ParsedAt, now.AddMinutes(1)));
-            await AssertSelected(ids[9]);
-            // A newly marked parsed parse becomes current on the next request.
+            await AssertSelected(seed.Parse);
+            // Additional historical chapters do not replace the persisted current tree.
             db.DocumentStructureNodes.Add(new DocumentStructureNodeEntity { ParseId = ids[5], LevelId = seed.Levels[0], Name = "promoted", StartSequence = 0, EndSequence = 1 });
-            await db.SaveChangesAsync();
-            await AssertSelected(ids[5]);
+            await db.SaveOwnedChangesAsync();
+            await AssertSelected(seed.Parse);
             await db.DocumentParses.Where(item => item.DocumentFileId == seed.File).ExecuteUpdateAsync(set => set.SetProperty(item => item.ParsedAt, (DateTimeOffset?)null));
-            await AssertSelected(new[] { seed.Parse, ids[0], ids[1], ids[5], ids[9] }.Max());
+            await AssertSelected(seed.Parse);
         }
         finally { await CleanupAsync(factory, seed); }
     }
@@ -206,7 +206,7 @@ public sealed class InternalStructureEndpointTests(PostgreSqlFixture database) :
             using var scope = factory.Services.CreateScope();
             var repository = scope.ServiceProvider.GetRequiredService<IInternalStructureRepository>();
             var node = await repository.ReadCurrentNodeAsync(seed.Nodes[0].Id, default);
-            Assert.Equal(new InternalCurrentStructureNode(seed.File, seed.Parse, seed.Nodes[0].Id, 0, 3), node);
+            Assert.Equal(new InternalCurrentStructureNode(seed.File, seed.Parse, seed.Nodes[0].Id, 0, 3, node!.TreeId), node);
             var foreign = await repository.ReadCurrentNodeAsync(other.Nodes[0].Id, default);
             Assert.Equal(other.File, foreign!.DocumentFileId);
             Assert.Equal(other.Parse, foreign.ParseId);
@@ -216,9 +216,9 @@ public sealed class InternalStructureEndpointTests(PostgreSqlFixture database) :
             var newNode = Guid.NewGuid();
             db.DocumentParses.Add(new DocumentParseEntity { Id = newParse, DocumentFileId = seed.File, Status = DocumentParseStatus.Parsed, ParsedAt = DateTimeOffset.UtcNow.AddDays(1) });
             db.DocumentStructureNodes.Add(new DocumentStructureNodeEntity { Id = newNode, ParseId = newParse, LevelId = seed.Levels[0], Name = "new", StartSequence = 2, EndSequence = 4 });
-            await db.SaveChangesAsync();
-            Assert.Null(await repository.ReadCurrentNodeAsync(seed.Nodes[0].Id, default));
-            Assert.Equal(new InternalCurrentStructureNode(seed.File, newParse, newNode, 2, 4), await repository.ReadCurrentNodeAsync(newNode, default));
+            await db.SaveOwnedChangesAsync();
+            Assert.NotNull(await repository.ReadCurrentNodeAsync(seed.Nodes[0].Id, default));
+            Assert.Null(await repository.ReadCurrentNodeAsync(newNode, default));
             await db.DocumentParses.Where(item => item.Id == newParse).ExecuteUpdateAsync(set => set.SetProperty(item => item.Status, DocumentParseStatus.Failed));
             Assert.Null(await repository.ReadCurrentNodeAsync(newNode, default));
             Assert.NotNull(await repository.ReadCurrentNodeAsync(seed.Nodes[0].Id, default));
@@ -243,7 +243,7 @@ public sealed class InternalStructureEndpointTests(PostgreSqlFixture database) :
                 var db = scope.ServiceProvider.GetRequiredService<DocthecaDbContext>();
                 db.DocumentStructureAudio.Add(new() { ParseId = seed.Parse, NodeId = seed.Nodes[0].Id,
                     SourcePath = "snapshot.mp3", ObjectKey = "audio-key-canary-" + Guid.NewGuid(), ContentType = "audio/mpeg", MatchStatus = "matched" });
-                await db.SaveChangesAsync();
+                await db.SaveOwnedChangesAsync();
             }
             pause.Active = true;
             var reading = client.GetStringAsync(Url(seed.File));
@@ -253,7 +253,7 @@ public sealed class InternalStructureEndpointTests(PostgreSqlFixture database) :
             using (var scope = seedFactory.Services.CreateScope())
             {
                 var db = scope.ServiceProvider.GetRequiredService<DocthecaDbContext>();
-                if (delete) await db.DocumentFiles.Where(item => item.Id == seed.File).ExecuteDeleteAsync().WaitAsync(TimeSpan.FromSeconds(5));
+                if (delete) await new DocumentFileRepository(db).DeleteAsync(seed.File).WaitAsync(TimeSpan.FromSeconds(5));
                 else
                 {
                     var repository = scope.ServiceProvider.GetRequiredService<IDocumentStructureRepository>();
@@ -299,7 +299,7 @@ public sealed class InternalStructureEndpointTests(PostgreSqlFixture database) :
             {
                 var db = scope.ServiceProvider.GetRequiredService<DocthecaDbContext>();
                 db.DocumentStructureNodes.AddRange(ids.Select(id => new DocumentStructureNodeEntity { Id = id, ParseId = seed.Parse, LevelId = seed.Levels[0], Name = "tied", SortOrder = 10, StartSequence = 10, EndSequence = 10 }));
-                await db.SaveChangesAsync();
+                await db.SaveOwnedChangesAsync();
             }
             var probe = new ReadProbe();
             using var factory = Factory(services => services.AddDbContext<DocthecaDbContext>(options => options.AddInterceptors(probe)));
@@ -435,7 +435,7 @@ public sealed class InternalStructureEndpointTests(PostgreSqlFixture database) :
         var pages = new[] { 2, 0, 4, 1, 5, 6, 6, 7 };
         for (var i = 0; i < pages.Length; i++) db.DocumentParseBlocks.Add(new DocumentParseBlockEntity { ParseId = parse, Sequence = i, PageId = pages[i], SortIndex = i, BlockType = "text", TextContent = "content-canary", BlockData = "{\"page_label\":\"printed-page-canary\"}" });
         db.DocumentParseBlocks.Add(new DocumentParseBlockEntity { ParseId = parse, Sequence = null, PageId = 999, BlockType = "text", BlockData = "{}" });
-        await db.SaveChangesAsync();
+        await db.SaveOwnedChangesAsync();
         return new(definition, levels, file, parse, nodes);
     }
 
@@ -443,7 +443,7 @@ public sealed class InternalStructureEndpointTests(PostgreSqlFixture database) :
     {
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<DocthecaDbContext>();
-        await db.DocumentFiles.Where(item => item.Id == seed.File).ExecuteDeleteAsync();
+        await new DocumentFileRepository(db).DeleteAsync(seed.File);
         await db.StructureLevels.Where(item => item.DefinitionId == seed.Definition).ExecuteUpdateAsync(set => set.SetProperty(item => item.ParentLevelId, (Guid?)null));
         await db.StructureDefinitions.Where(item => item.Id == seed.Definition).ExecuteDeleteAsync();
     }

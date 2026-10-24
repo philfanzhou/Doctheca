@@ -87,6 +87,7 @@ const coverage = computed(() => {
   const depthBySequence = new Map<number, number>()
   const startsAt = new Map<number, { node: TreeNode; depth: number }[]>()
   for (const { node, depth } of flatNodes.value) {
+    if (node.startSequence === null || node.endSequence === null) continue
     const list = startsAt.get(node.startSequence) ?? []
     list.push({ node, depth })
     startsAt.set(node.startSequence, list)
@@ -129,6 +130,7 @@ function toTreeNodes(list: StructureNode[]): TreeNode[] {
     id: node.id,
     levelId: node.levelId,
     name: node.name,
+    sortOrder: node.sortOrder,
     startSequence: node.startSequence,
     endSequence: node.endSequence,
     children: toTreeNodes(node.children),
@@ -227,6 +229,7 @@ function rename(node: TreeNode, value: string) {
 }
 
 function selectNodeRange(node: TreeNode) {
+  if (node.startSequence === null || node.endSequence === null) return
   anchor.value = node.startSequence
   focus.value = node.endSequence
   scrollToSequence(node.startSequence)
@@ -258,6 +261,7 @@ function scrollToSequence(sequence: number) {
 }
 
 function focusNode(node: TreeNode) {
+  if (node.startSequence === null) return
   scrollToSequence(node.startSequence)
   activeNodeId.value = node.id
 }
@@ -270,7 +274,7 @@ function describeErrors(errors: StructureFieldError[]): { label: string; reason:
     const pattern = /(nodes|children)\[(\d+)\]/g
     let match: RegExpExecArray | null
     while ((match = pattern.exec(error.field)) !== null) {
-      node = [...list].sort((a, b) => a.startSequence - b.startSequence)[Number(match[2])] ?? list[Number(match[2])]
+      node = [...list].sort((a, b) => (a.startSequence ?? Number.MAX_SAFE_INTEGER) - (b.startSequence ?? Number.MAX_SAFE_INTEGER))[Number(match[2])] ?? list[Number(match[2])]
       if (!node) break
       list = node.children
     }
@@ -286,7 +290,7 @@ async function save() {
     // Siblings are sent in start order so error paths map back to the same positions.
     const payload = JSON.parse(JSON.stringify(nodes.value)) as TreeNode[]
     const sortDeep = (list: TreeNode[]) => {
-      list.sort((a, b) => a.startSequence - b.startSequence)
+      list.sort((a, b) => (a.startSequence ?? Number.MAX_SAFE_INTEGER) - (b.startSequence ?? Number.MAX_SAFE_INTEGER))
       list.forEach((node) => sortDeep(node.children))
     }
     sortDeep(payload)
@@ -401,7 +405,7 @@ onUnmounted(() => {
           <div class="tree-node-head">
             <span class="badge indigo">{{ levelNames.get(node.levelId) ?? '?' }}</span>
             <button class="link-btn mono" :title="'定位到 #' + node.startSequence" @click="focusNode(node)">
-              #{{ node.startSequence }}–#{{ node.endSequence }}
+              {{ node.startSequence === null ? '未绑定正文' : `#${node.startSequence}–#${node.endSequence}` }}
             </button>
           </div>
           <input

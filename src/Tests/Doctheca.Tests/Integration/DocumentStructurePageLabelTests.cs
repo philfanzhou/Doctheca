@@ -239,7 +239,7 @@ public sealed class DocumentStructurePageLabelTests(PostgreSqlFixture database) 
         }).ToArray();
         db.AddRange(definition, level, file, parse, node, image);
         db.DocumentParseBlocks.AddRange(blocks);
-        await db.SaveChangesAsync();
+        await db.SaveOwnedChangesAsync();
         if (pages) await new DocumentParsePageRepository(db).ReplaceAsync(parse.Id,
             [new(parse.Id, 1, label, null), new(parse.Id, 2, label, null), new(parse.Id, 3, "", null),
                 new(parse.Id, 4, null, null), new(parse.Id, 6, "last", null)]);

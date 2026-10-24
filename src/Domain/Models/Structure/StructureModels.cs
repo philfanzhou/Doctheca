@@ -30,13 +30,15 @@ public sealed class StructureLevelModel
 public sealed class DocumentStructureNodeModel
 {
     public Guid Id { get; set; }
-    public Guid ParseId { get; set; }
+    public Guid DocumentFileId { get; set; }
+    public Guid TreeId { get; set; }
+    public Guid? ParseId { get; set; }
     public Guid LevelId { get; set; }
     public Guid? ParentId { get; set; }
     public string Name { get; set; } = string.Empty;
     public int SortOrder { get; set; }
-    public int StartSequence { get; set; }
-    public int EndSequence { get; set; }
+    public int? StartSequence { get; set; }
+    public int? EndSequence { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
 }

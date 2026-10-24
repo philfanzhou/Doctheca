@@ -26,7 +26,7 @@ public class DocumentParseServiceDeleteTests
     }
 
     [Fact]
-    public async Task DeleteParseAsync_DeletesImagesAndParse()
+    public async Task DeleteParseAsync_DelegatesContentCleanupToAtomicParseDeletion()
     {
         // Arrange
         var parseId = Guid.NewGuid();
@@ -40,7 +40,7 @@ public class DocumentParseServiceDeleteTests
 
         // Assert
         result.Should().BeTrue();
-        _imageRepoMock.Verify(r => r.DeleteByParseIdAsync(parseId), Times.Once);
+        _imageRepoMock.Verify(r => r.DeleteByParseIdAsync(parseId), Times.Never);
         _parseRepoMock.Verify(r => r.DeleteAsync(parseId), Times.Once);
     }
 

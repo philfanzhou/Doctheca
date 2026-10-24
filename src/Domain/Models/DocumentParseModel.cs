@@ -4,6 +4,7 @@ public class DocumentParseModel
 {
     public Guid Id { get; set; }
     public Guid DocumentFileId { get; set; }
+    public long ExpectedBindingGeneration { get; set; }
     public string ModelVersion { get; set; } = "vlm";
     public string Status { get; set; } = DocumentParseStatus.Pending;
     public string? ExternalTaskId { get; set; }

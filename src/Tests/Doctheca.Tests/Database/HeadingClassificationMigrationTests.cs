@@ -25,15 +25,15 @@ public sealed class HeadingClassificationMigrationTests(PostgreSqlMigrationFixtu
         var before = await SnapshotAsync(context);
         var expected = await LevelsAsync(context);
         foreach (var row in rows) expected[row.Id] = row.After;
-        var columns = await MigrationGoldenStates.ReadColumnShapeAsync(context, DocthecaMigrationExecutor.AllTableNames);
-        var constraints = await MigrationGoldenStates.ReadConstraintShapeAsync(context, DocthecaMigrationExecutor.AllTableNames);
+        var columns = await MigrationGoldenStates.ReadLegacyColumnShapeAsync(context, DocthecaMigrationExecutor.AllTableNames);
+        var constraints = await MigrationGoldenStates.ReadLegacyConstraintShapeAsync(context, DocthecaMigrationExecutor.AllTableNames);
         var executor = new DocthecaMigrationExecutor(context);
         (await executor.InspectAsync()).Should().Be(DocthecaMigrationExecutor.DatabaseState.PendingMigrations);
         await executor.ExecuteAsync();
         (await LevelsAsync(context)).Should().BeEquivalentTo(expected);
         (await SnapshotAsync(context)).Should().Equal(before);
-        (await MigrationGoldenStates.ReadColumnShapeAsync(context, DocthecaMigrationExecutor.AllTableNames)).Where(column => !column.StartsWith("structure_levels.required:")).Should().Equal(columns);
-        (await MigrationGoldenStates.ReadConstraintShapeAsync(context, DocthecaMigrationExecutor.AllTableNames)).Should().Equal(constraints);
+        (await MigrationGoldenStates.ReadLegacyColumnShapeAsync(context, DocthecaMigrationExecutor.AllTableNames)).Where(column => !column.StartsWith("structure_levels.required:")).Should().Equal(columns);
+        (await MigrationGoldenStates.ReadLegacyConstraintShapeAsync(context, DocthecaMigrationExecutor.AllTableNames)).Should().Equal(constraints);
         (await MigrationGoldenStates.ReadAppliedHistoryAsync(context)).Should().Equal(MigrationGoldenStates.AllIds);
         (await executor.InspectAsync()).Should().Be(DocthecaMigrationExecutor.DatabaseState.CurrentVersionCompatible);
         // C# and SQL consume the same representable stored-input corpus, not separate examples.
@@ -78,6 +78,8 @@ public sealed class HeadingClassificationMigrationTests(PostgreSqlMigrationFixtu
         foreach (var id in titleIds.Where(id => levels[id] == -2)) levels[id] = -1;
         if (documentedSql)
         {
+            await MigrationGoldenStates.ExecuteRawAsync(context, await File.ReadAllTextAsync(
+                StructureMigrationTests.RollbackScriptPath(DocthecaMigrationExecutor.AddDocumentOwnedStructureMigrationId)));
             await MigrationGoldenStates.ExecuteRawAsync(context, await File.ReadAllTextAsync(
                 StructureMigrationTests.RollbackScriptPath(DocthecaMigrationExecutor.AddRequiredStructureLevelsMigrationId)));
             await MigrationGoldenStates.ExecuteRawAsync(context, await File.ReadAllTextAsync(
@@ -200,14 +202,14 @@ public sealed class HeadingClassificationMigrationTests(PostgreSqlMigrationFixtu
     private static async Task<List<string>> SnapshotAsync(DocthecaDbContext context, bool legacy = false)
     {
         var rows = new List<string>();
-        foreach (var table in legacy ? DocthecaMigrationExecutor.KnownTableNames : DocthecaMigrationExecutor.AllTableNames)
+        foreach (var table in legacy ? DocthecaMigrationExecutor.KnownTableNames : DocthecaMigrationExecutor.PreOwnershipTableNames)
         {
             await context.Database.OpenConnectionAsync();
             try
             {
                 await using var command = context.Database.GetDbConnection().CreateCommand();
                 var removed = legacy ? " - 'sequence' - 'structure_definition_id' - 'footnote'" : "";
-                command.CommandText = $"SELECT '{table}:' || (to_jsonb(t) - 'text_level' - 'required'{removed})::text FROM {table} t ORDER BY 1";
+                command.CommandText = $"SELECT '{table}:' || ({MigrationGoldenStates.LegacyRowJson(table)} - 'text_level' - 'required'{removed})::text FROM {table} t ORDER BY 1";
                 await using var reader = await command.ExecuteReaderAsync();
                 while (await reader.ReadAsync()) rows.Add(reader.GetString(0));
             }

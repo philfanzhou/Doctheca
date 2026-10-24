@@ -1,3 +1,4 @@
+using Doctheca.Database.Repositories;
 using System.Collections.Concurrent;
 using System.Data;
 using System.Data.Common;
@@ -45,7 +46,7 @@ public sealed partial class InternalAudioEndpointTests(PostgreSqlFixture databas
             configure?.Invoke(services);
         });
     }
-    internal sealed record Seed(Guid Definition, Guid Level, Guid File, Guid Parse, Guid Node, Guid Child, Guid Empty, Guid Audio);
+    internal sealed record Seed(Guid Definition, Guid Level, Guid File, Guid Parse, Guid Node, Guid Child, Guid Empty, Guid Audio, Guid Tree = default);
     internal static async Task<Seed> SeedAsync(IServiceProvider services, byte[] bytes)
     {
         using var scope = services.CreateScope();
@@ -61,8 +62,9 @@ public sealed partial class InternalAudioEndpointTests(PostgreSqlFixture databas
             Row(s.Audio, s.Parse, s.Node, "folder/声.wav", bytes.Length),
             Row(Guid.NewGuid(), s.Parse, s.Child, "descendant.wav", bytes.Length),
             Row(Guid.NewGuid(), s.Parse, null, "unlinked.wav", bytes.Length));
-        await db.SaveChangesAsync();
-        return s;
+        db.DocumentParseBlocks.AddRange(Enumerable.Range(0, 2).Select(sequence => new DocumentParseBlockEntity { ParseId=s.Parse, Sequence=sequence, SortIndex=sequence, BlockType="text", BlockData="{}" }));
+        await db.SaveOwnedChangesAsync();
+        return s with { Tree = (await db.DocumentFiles.SingleAsync(file => file.Id == s.File)).CurrentStructureTreeId!.Value };
     }
     private static DocumentStructureAudioEntity Row(Guid id, Guid parse, Guid? node, string path, long size) => new()
     { Id = id, ParseId = parse, NodeId = node, SourcePath = path, SizeBytes = size, ContentType = "audio/wav", ObjectKey = Key(parse, id), MatchStatus = "matched" };
@@ -70,7 +72,7 @@ public sealed partial class InternalAudioEndpointTests(PostgreSqlFixture databas
     private static async Task Cleanup(IServiceProvider services, Seed s)
     {
         using var scope = services.CreateScope(); var db = scope.ServiceProvider.GetRequiredService<DocthecaDbContext>();
-        await db.DocumentFiles.Where(x => x.Id == s.File).ExecuteDeleteAsync();
+        await new DocumentFileRepository(db).DeleteAsync(s.File);
         await db.StructureDefinitions.Where(x => x.Id == s.Definition).ExecuteDeleteAsync();
     }
     private static void Keys(JsonElement value, params string[] expected) =>
@@ -161,7 +163,7 @@ public sealed partial class InternalAudioEndpointTests(PostgreSqlFixture databas
         using var client = factory.CreateClient(); var s = await SeedAsync(factory.Services, PlayableWave.Bytes());
         try
         {
-            var binding = new InternalAudioBinding(s.File, s.Parse, s.Node, s.Audio);
+            var binding = new InternalAudioBinding(s.File, s.Tree, s.Node, s.Audio);
             var valid = tokens.Create(binding, DateTimeOffset.UtcNow.AddMinutes(2));
             var expired = tokens.Create(binding, DateTimeOffset.UtcNow.AddSeconds(-1));
             var wrongPurpose = WebEncoders.Base64UrlEncode(provider.CreateProtector("unrelated").ToTimeLimitedDataProtector().Protect(new byte[65], DateTimeOffset.UtcNow.AddMinutes(2)));
@@ -181,7 +183,7 @@ public sealed partial class InternalAudioEndpointTests(PostgreSqlFixture databas
             { using var request = new HttpRequestMessage(method, content + "?token=" + valid); using var response = await client.SendAsync(request); Assert.Equal(HttpStatusCode.NotFound, response.StatusCode); }
             oss.VerifyNoOtherCalls(); Safe(string.Join('\n', logs.Messages), valid, expired, wrongPurpose, fresh);
             var decoded = provider.CreateProtector(InternalAudioTokens.Purpose).ToTimeLimitedDataProtector().Unprotect(WebEncoders.Base64UrlDecode(valid), out var expiry);
-            Assert.Equal(65, decoded.Length); Assert.Equal(1, decoded[0]); Assert.Equal(s.File, new Guid(decoded.AsSpan(1, 16)));
+            Assert.Equal(65, decoded.Length); Assert.Equal(2, decoded[0]); Assert.Equal(s.File, new Guid(decoded.AsSpan(1, 16)));
             Assert.True(expiry > DateTimeOffset.UtcNow);
             Assert.Throws<CryptographicException>(() => provider.CreateProtector(InternalAudioTokens.Purpose).ToTimeLimitedDataProtector().Unprotect(WebEncoders.Base64UrlDecode(expired), out _));
             Assert.False(new InternalAudioTokens(TimeProvider.System).TryRead(valid, s.Node, s.Audio, out _));
@@ -190,7 +192,7 @@ public sealed partial class InternalAudioEndpointTests(PostgreSqlFixture databas
     }
 
     [Theory]
-    [InlineData("unlink")][InlineData("reassign")][InlineData("audio")][InlineData("node")][InlineData("parse")][InlineData("document")][InlineData("current")][InlineData("replace")]
+    [InlineData("unlink")][InlineData("reassign")][InlineData("audio")][InlineData("node")][InlineData("document")][InlineData("current")][InlineData("replace")]
     public async Task CommittedRevocation_IsNotALeaseAndNeverReadsStorage(string mutation)
     {
         var oss = new Mock<IOssService>(MockBehavior.Strict);
@@ -216,20 +218,22 @@ public sealed partial class InternalAudioEndpointTests(PostgreSqlFixture databas
         if (mutation == "type") await selected.ExecuteUpdateAsync(set => set.SetProperty(x => x.ContentType, "audio/mpeg"));
         if (mutation == "audio") await selected.ExecuteDeleteAsync();
         if (mutation == "node") await db.DocumentStructureNodes.Where(x => x.Id == s.Node || x.ParentId == s.Node).ExecuteDeleteAsync();
-        if (mutation == "parse") await db.DocumentParses.Where(x => x.Id == s.Parse).ExecuteDeleteAsync();
-        if (mutation == "document") await db.DocumentFiles.Where(x => x.Id == s.File).ExecuteDeleteAsync();
+        if (mutation == "parse") await new DocumentParseRepository(db).DeleteAsync(s.Parse);
+        if (mutation == "document") await new DocumentFileRepository(db).DeleteAsync(s.File);
         if (mutation == "replace")
             await scope.ServiceProvider.GetRequiredService<IDocumentStructureRepository>().ReplaceAsync(s.Parse,
                 [new() { Id = Guid.NewGuid(), ParseId = s.Parse, LevelId = s.Level, Name = "replacement", StartSequence = 0, EndSequence = 1 }]);
         if (mutation == "current")
         {
             var parse = Guid.NewGuid(); db.DocumentParses.Add(new() { Id = parse, DocumentFileId = s.File, Status = DocumentParseStatus.Parsed, ParsedAt = DateTimeOffset.UtcNow.AddDays(1) });
-            db.DocumentStructureNodes.Add(new() { ParseId = parse, LevelId = s.Level, Name = "current", StartSequence = 0, EndSequence = 1 }); await db.SaveChangesAsync();
+            db.DocumentStructureNodes.Add(new() { ParseId = parse, LevelId = s.Level, Name = "current", StartSequence = 0, EndSequence = 1 }); await db.SaveOwnedChangesAsync();
+            var tree = await db.DocumentStructureTrees.Where(item => item.OriginParseId == parse).Select(item => item.Id).SingleAsync();
+            await db.DocumentFiles.Where(file => file.Id == s.File).ExecuteUpdateAsync(set => set.SetProperty(file => file.CurrentStructureTreeId, (Guid?)tree));
         }
     }
 
     [Theory]
-    [InlineData("unlink")][InlineData("reassign")][InlineData("audio")][InlineData("node")][InlineData("parse")][InlineData("document")][InlineData("current")][InlineData("replace")][InlineData("key")][InlineData("size")][InlineData("type")][InlineData("expiry")]
+    [InlineData("unlink")][InlineData("reassign")][InlineData("audio")][InlineData("node")][InlineData("document")][InlineData("current")][InlineData("replace")][InlineData("key")][InlineData("size")][InlineData("type")][InlineData("expiry")]
     public async Task BufferingRechecksFreshMembershipAndExpiry(string mutation)
     {
         Seed? seed = null; IServiceProvider? services = null; var clock = new Clock(); var scratch = new Scratch();

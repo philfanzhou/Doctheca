@@ -13,4 +13,5 @@ public interface IDocumentFileRepository
     /// <summary>Sets (or clears with null) the structure definition the document uses.</summary>
     Task<bool> SetStructureDefinitionAsync(Guid id, Guid? structureDefinitionId);
     Task<bool> DeleteAsync(Guid id);
+    Task<IReadOnlyList<string>?> DeleteWithAudioAsync(Guid id);
 }

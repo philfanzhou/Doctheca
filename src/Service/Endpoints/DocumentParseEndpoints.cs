@@ -114,12 +114,8 @@ public static class DocumentParseEndpoints
             }
         }
 
-        // Structure audio rows go with the parse; their objects are deleted after the rows (issue #90).
-        var audioKeys = await audioService.GetParseObjectKeysAsync(parseId);
-
-        // Delete parse record (cascade deletes images, blocks, structure nodes and audio rows from DB)
+        // Content bindings are cleared atomically; document-owned chapters and audio survive.
         await parseService.DeleteParseAsync(parseId);
-        await audioService.DeleteParseObjectsAsync(parseId, audioKeys);
 
         // Delete OpenSearch index for this parse (best-effort, does not block deletion)
         try

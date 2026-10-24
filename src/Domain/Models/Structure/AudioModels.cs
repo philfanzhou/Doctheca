@@ -4,7 +4,9 @@ namespace Doctheca.Domain.Models.Structure;
 public sealed class DocumentStructureAudioModel
 {
     public Guid Id { get; set; }
-    public Guid ParseId { get; set; }
+    public Guid DocumentFileId { get; set; }
+    public Guid TreeId { get; set; }
+    public Guid? ParseId { get; set; }
     public Guid? NodeId { get; set; }
 
     /// <summary>Relative path of the file in the import, for example <c>unit1/9s01Unit1SectionA1b.mp3</c>.</summary>

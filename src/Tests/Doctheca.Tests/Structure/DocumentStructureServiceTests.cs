@@ -32,7 +32,7 @@ public class DocumentStructureServiceTests
     public DocumentStructureServiceTests()
     {
         var parses = new Mock<IDocumentParseRepository>();
-        parses.Setup(r => r.GetByIdAsync(ParseId)).ReturnsAsync(new DocumentParseModel { Id = ParseId, DocumentFileId = FileId });
+        parses.Setup(r => r.GetByIdAsync(ParseId)).ReturnsAsync(new DocumentParseModel { Id = ParseId, DocumentFileId = FileId, Status = DocumentParseStatus.Parsed });
         _files.Setup(r => r.GetByIdAsync(FileId)).ReturnsAsync(new DocumentFileModel { Id = FileId, FileName = "book.pdf", StructureDefinitionId = DefinitionId });
         var blocks = new Mock<IDocumentParseBlockRepository>();
         blocks.Setup(r => r.GetSequencesAsync(ParseId)).ReturnsAsync(Enumerable.Range(0, 100).ToHashSet());

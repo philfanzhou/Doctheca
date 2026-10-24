@@ -10,4 +10,5 @@ public interface IDocumentFileService
     Task<DocumentFileModel?> UpdateMetadataAsync(Guid id, string? subject, string? grade, string? year);
     Task<DocumentFileModel?> AttachStructaDocDocumentAsync(Guid id, Guid structaDocDocumentId);
     Task<bool> DeleteAsync(Guid id);
+    Task<IReadOnlyList<string>?> DeleteWithAudioAsync(Guid id);
 }

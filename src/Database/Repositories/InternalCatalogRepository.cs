@@ -41,32 +41,23 @@ public sealed class InternalCatalogRepository(DbContextOptions<DocthecaDbContext
             !await context.StructureDefinitions.AnyAsync(item => item.Id == requested, cancellationToken))
             return new InternalDocumentPage(false, []);
 
-        var documents = context.DocumentFiles.AsNoTracking().Where(file => context.DocumentParses.Any(parse =>
-            parse.DocumentFileId == file.Id && parse.Status == DocumentParseStatus.Parsed &&
-            context.DocumentStructureNodes.Any(node => node.ParseId == parse.Id)));
+        // Only persisted current trees qualify; source deletion must not hide retained audio.
+        var documents = context.DocumentFiles.AsNoTracking().Where(file => file.CurrentStructureTreeId != null &&
+            context.DocumentStructureNodes.Any(node => node.TreeId == file.CurrentStructureTreeId && node.DocumentFileId == file.Id));
         if (query.After is { } after) documents = documents.Where(item => item.Id.CompareTo(after) > 0);
         if (query.StructureDefinitionId is { } definition) documents = documents.Where(item => item.StructureDefinitionId == definition);
         if (query.Subject is { } subject) documents = documents.Where(item => item.Subject == subject);
         if (query.Grade is { } grade) documents = documents.Where(item => item.Grade == grade);
-        var current = documents.Select(file => new
-        {
-            File = file,
-            // Match the tree/audio routes: a timestamped, parsed, nonempty tree wins,
-            // then ParsedAt and UUID descending, with null timestamps last.
-            ParseId = context.DocumentParses.Where(parse => parse.DocumentFileId == file.Id &&
-                    parse.Status == DocumentParseStatus.Parsed && context.DocumentStructureNodes.Any(node => node.ParseId == parse.Id))
-                .OrderByDescending(parse => parse.ParsedAt.HasValue).ThenByDescending(parse => parse.ParsedAt)
-                .ThenByDescending(parse => parse.Id).Select(parse => (Guid?)parse.Id).FirstOrDefault()
-        });
+        var current = documents.Select(file => new { File = file, TreeId = file.CurrentStructureTreeId });
         if (query.HasAudio) current = current.Where(item => context.DocumentStructureAudio.Any(audio =>
-            audio.ParseId == item.ParseId && context.DocumentStructureNodes.Any(node =>
-                node.Id == audio.NodeId && node.ParseId == audio.ParseId && node.Level!.DefinitionId == item.File.StructureDefinitionId)));
+            audio.TreeId == item.TreeId && audio.DocumentFileId == item.File.Id && context.DocumentStructureNodes.Any(node =>
+                node.Id == audio.NodeId && node.TreeId == audio.TreeId && node.DocumentFileId == audio.DocumentFileId && node.Level!.DefinitionId == item.File.StructureDefinitionId)));
         var rows = await current.OrderBy(item => item.File.Id).Take(query.PageSize + 1)
             .Select(item => new InternalDocument(item.File.Id, item.File.FileName, item.File.Subject, item.File.Grade, item.File.StructureDefinitionId,
                 context.StructureDefinitions.Where(definition => definition.Id == item.File.StructureDefinitionId)
                     .Select(definition => definition.Name).FirstOrDefault(),
-                context.DocumentStructureAudio.Count(audio => audio.ParseId == item.ParseId &&
-                    context.DocumentStructureNodes.Any(node => node.Id == audio.NodeId && node.ParseId == audio.ParseId &&
+                context.DocumentStructureAudio.Count(audio => audio.TreeId == item.TreeId && audio.DocumentFileId == item.File.Id &&
+                    context.DocumentStructureNodes.Any(node => node.Id == audio.NodeId && node.TreeId == audio.TreeId && node.DocumentFileId == audio.DocumentFileId &&
                         node.Level!.DefinitionId == item.File.StructureDefinitionId))))
             .ToListAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);

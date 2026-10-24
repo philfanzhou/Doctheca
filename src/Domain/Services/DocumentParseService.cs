@@ -117,12 +117,16 @@ public class DocumentParseService : IDocumentParseService
         return await _parseRepository.GetListAsync(page, size, search);
     }
 
+    public Task<string> CompleteAsync(Guid parseId, Guid runId, string markdown,
+        IReadOnlyCollection<DocumentParsePageModel> pages, IReadOnlyList<DocumentParseImageModel> images,
+        IReadOnlyList<DocumentParseBlockModel> blocks, CancellationToken ct = default) =>
+        _parseRepository.CompleteAsync(parseId, runId, markdown, pages, images, blocks, ct);
+
     public async Task<bool> DeleteParseAsync(Guid parseId)
     {
         var model = await _parseRepository.GetByIdAsync(parseId);
         if (model == null) return false;
 
-        await _imageRepository.DeleteByParseIdAsync(parseId);
         await _parseRepository.DeleteAsync(parseId);
 
         _logger.LogInformation("Document parse deleted: {ParseId}", parseId);

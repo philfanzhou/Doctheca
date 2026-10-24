@@ -10,19 +10,19 @@ namespace Doctheca.Database.Repositories;
 public sealed partial class InternalStructureRepository
 {
     private static IQueryable<DocumentParseBlockEntity> InRange(DocthecaDbContext context, InternalCurrentStructureNode node) =>
-        context.DocumentParseBlocks.AsNoTracking().Where(block => block.ParseId == node.ParseId &&
+        context.DocumentParseBlocks.AsNoTracking().Where(block => node.ParseId != null && node.StartSequence != null && node.EndSequence != null && block.ParseId == node.ParseId &&
             block.Sequence >= node.StartSequence && block.Sequence <= node.EndSequence);
 
     private static async Task<string> RevisionAsync(DocthecaDbContext context, InternalCurrentStructureNode node, CancellationToken cancellationToken)
     {
         // Canonical property and row order; never expose the hash input or use coarse timestamps alone.
-        var tree = await context.DocumentStructureNodes.AsNoTracking().Where(item => item.ParseId == node.ParseId)
-            .OrderBy(item => item.Id).Select(item => new { item.Id, item.LevelId, item.ParentId, item.Name,
+        var tree = await context.DocumentStructureNodes.AsNoTracking().Where(item => item.TreeId == node.TreeId)
+            .OrderBy(item => item.Id).Select(item => new { item.Id, item.ParseId, item.LevelId, item.ParentId, item.Name,
                 item.StartSequence, item.EndSequence, item.SortOrder, item.CreatedAt, item.UpdatedAt,
                 item.Level!.DefinitionId, LevelName = item.Level.Name }).ToListAsync(cancellationToken);
         var blocks = await InRange(context, node).OrderBy(block => block.Sequence)
             .Select(block => new { block.Id, block.Sequence, block.ImageId }).ToListAsync(cancellationToken);
-        return Convert.ToHexStringLower(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(new { node.ParseId, tree, blocks })));
+        return Convert.ToHexStringLower(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(new { node.DocumentFileId, node.TreeId, node.ParseId, tree, blocks })));
     }
 
     public async Task<InternalContentRead> ReadContentAsync(Guid nodeId, InternalContentQuery query, CancellationToken cancellationToken)
@@ -34,7 +34,7 @@ public sealed partial class InternalStructureRepository
         var revision = await RevisionAsync(context, node, cancellationToken);
         if (query.Revision is not null && !string.Equals(query.Revision, revision, StringComparison.OrdinalIgnoreCase))
             return new(InternalContentStatus.Changed);
-        if (query.AfterSequence is { } after && (after < node.StartSequence || after > node.EndSequence))
+        if (query.AfterSequence is { } after && (node.ParseId == null || after < node.StartSequence || after > node.EndSequence))
             return new(InternalContentStatus.InvalidCursor);
         var rows = await InRange(context, node).Where(block => query.AfterSequence == null || block.Sequence > query.AfterSequence)
             .OrderBy(block => block.Sequence).Take(query.Limit + 1)

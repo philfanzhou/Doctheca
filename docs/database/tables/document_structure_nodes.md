@@ -1,47 +1,23 @@
-# document_structure_nodes — Document Structure Node Table
+# document_structure_nodes — Document-Owned Chapters
 
-> This file is the single source of truth for the `document_structure_nodes` table (issue #89).
+A chapter belongs to a [tree](document_structure_trees.md) of a logical document. Its content binding is optional and independent of its name, hierarchy, sibling order and audio links.
 
-## Design Purpose
+| Field | Type | Constraints | Meaning |
+| --- | --- | --- | --- |
+| `id` | UUID | Primary key | Stable chapter ID |
+| `document_file_id` | UUID | NOT NULL, composite tree/parse ownership FKs | Direct document owner |
+| `tree_id` | UUID | NOT NULL, same-document tree FK ON DELETE CASCADE | Lifetime tree owner |
+| `parse_id` | UUID | NULL, same-document parse FK NO ACTION | Optional live content binding |
+| `level_id` | UUID | NOT NULL, level FK RESTRICT | Configured level |
+| `parent_id` | UUID | NULL, node FK CASCADE | Parent; service validates same-tree membership on save |
+| `name` | VARCHAR(500) | NOT NULL | Display name |
+| `sort_order` | INT | NOT NULL | Stable sibling order, retained when content is detached |
+| `start_sequence` | INT | NULL | Inclusive first bound block sequence |
+| `end_sequence` | INT | NULL | Inclusive last bound block sequence |
+| `created_at`, `updated_at` | TIMESTAMPTZ | NOT NULL | Existing chapter timestamps |
 
-A **Structure Node** is a hand-marked part of one [Document Parse](document_parses.md): an inclusive range of block [`sequence`](document_parse_blocks.md) values at one configured [structure level](structure_levels.md), for example "Unit 1 The Changing World" (a Unit) containing "Section A" (a Section). Nodes belong to one parse; a re-parse is marked again.
+`CK_document_structure_nodes_content_binding` requires either all three binding fields null, or all present with start ≤ end. The composite parse FK guarantees the parse belongs to the same document. Indexes cover parse, level, parent, `(document_file_id,parse_id)` and `(document_file_id,tree_id)`.
 
-## Field Inventory
+Existing `PUT /admin/document-parses/{parseId}/structure` remains an explicit complete binding save: validate committed levels, source endpoints, parent containment, sibling non-overlap and same-tree IDs under the document lock. Replacing a tree retains kept IDs and unlinks only explicitly removed chapters' audio in the same transaction. Unbound chapter authoring is delivered separately.
 
-| Field | Type | Constraints | Default | Description |
-|--------|------|------|--------|------|
-| `id` | `UUID` | PRIMARY KEY | | Node identifier; kept stable when the tree is saved again with the same id |
-| `parse_id` | `UUID` | NOT NULL, FK → `document_parses(id)` ON DELETE CASCADE | | Owning parse |
-| `level_id` | `UUID` | NOT NULL, FK → `structure_levels(id)` ON DELETE RESTRICT | | Configured level of the node |
-| `parent_id` | `UUID` | NULL, FK → `document_structure_nodes(id)` ON DELETE CASCADE | | Parent node; NULL for a root node |
-| `name` | `VARCHAR(500)` | NOT NULL | | Display name, for example "Section A" |
-| `sort_order` | `INT` | NOT NULL | | Position among siblings (follows `start_sequence`) |
-| `start_sequence` | `INT` | NOT NULL | | First block `sequence` of the range (inclusive) |
-| `end_sequence` | `INT` | NOT NULL | | Last block `sequence` of the range (inclusive) |
-| `created_at` | `TIMESTAMP WITH TIME ZONE` | NOT NULL | | First save of this node id |
-| `updated_at` | `TIMESTAMP WITH TIME ZONE` | NOT NULL | | Last save of the tree |
-
-## Indexes
-
-| Index | Columns | Description |
-|--------|-----|------|
-| `PK_document_structure_nodes` | `id` | Primary key |
-| `IX_document_structure_nodes_parse_id` | `parse_id` | Tree of a parse |
-| `IX_document_structure_nodes_level_id` | `level_id` | Level usage checks |
-| `IX_document_structure_nodes_parent_id` | `parent_id` | Children |
-
-## Save Rules (enforced by `DocumentStructureService`)
-
-The whole tree of a parse is replaced by one save (`PUT /admin/document-parses/{parseId}/structure`). The save is rejected with 400 and a field-level reason, and nothing changes, unless:
-
-- every start and end sequence exists in that parse, and start ≤ end;
-- a root node uses a top level and a child node uses a level whose parent is its parent node's level;
-- every level belongs to the document's structure definition;
-- children lie inside their parent and siblings do not overlap.
-
-The replacement runs in one transaction that first locks the `document_parses` row (`SELECT … FOR UPDATE`), so concurrent saves of the same tree serialize and **the last complete save wins**; a mixed tree is impossible.
-
-## Special Notes
-
-- Deleting a parse (or its document) deletes its nodes through CASCADE.
-- Nodes reference sequences, not block ids, so a retried synchronization of the same parse run keeps them valid.
+Successful new parse completion conditionally clears the current tree's content triple under persisted generation comparison. It preserves every chapter ID, parent/name/order/timestamp, the current pointer and audio links. Failed/cancelled completion changes none of that committed state. Repeated successful completion does not detach again. Parse deletion explicitly clears every binding to that parse, including history; it does not delete chapters. Document deletion owns lifetime.

@@ -163,3 +163,5 @@ return 410 and old token Cookies are ignored. Missing login configuration permit
 fixed 503 login responses. Before rolling back to the preceding matching API/SPA image, restore
 HTTPS registrations/configuration: it again refuses Production HTTP. Restart requires sign-in
 again. No database migration or SQL/data rollback applies.
+
+Document-owned chapters and audio survive successful reparse and parse deletion. Reparse detaches old content bindings; explicit binding enables new content. Existing short-lived audio playback remains available through current document/tree ownership. See [ownership and backup recovery](docs/database/migrations.md#document-owned-structure-132). Content-free authoring/import interfaces remain separate work.

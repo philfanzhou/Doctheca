@@ -60,7 +60,7 @@ public sealed partial class InternalAudioEndpointTests
                 using var response = await client.GetAsync(ListUrl(seed.Node));
                 Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
                 var token = factory.Services.GetRequiredService<InternalAudioTokens>().Create(
-                    new(seed.File, seed.Parse, seed.Node, seed.Audio), DateTimeOffset.UtcNow.AddMinutes(2));
+                    new(seed.File, seed.Tree, seed.Node, seed.Audio), DateTimeOffset.UtcNow.AddMinutes(2));
                 using var bytes = await client.GetAsync(ListUrl(seed.Node) + $"/{seed.Audio:D}/content?token=" + token);
                 Assert.Equal(HttpStatusCode.ServiceUnavailable, bytes.StatusCode);
                 client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", CreateToken("admin"));
@@ -126,7 +126,7 @@ public sealed partial class InternalAudioEndpointTests
             var timed = Microsoft.AspNetCore.DataProtection.DataProtectionAdvancedExtensions.ToTimeLimitedDataProtector(protector);
             var bytes = timed.Unprotect(Microsoft.AspNetCore.WebUtilities.WebEncoders.Base64UrlDecode(token), out var expiry);
             Assert.Equal(playback.GetProperty("expiresAt").GetDateTimeOffset(), expiry); Assert.Equal(3600, playback.GetProperty("expiresInSeconds").GetInt32());
-            Assert.Equal(65, bytes.Length); Assert.Equal(seed.Parse, new Guid(bytes.AsSpan(17, 16))); Assert.Equal(seed.Node, new Guid(bytes.AsSpan(33, 16))); Assert.Equal(seed.Audio, new Guid(bytes.AsSpan(49, 16)));
+            Assert.Equal(65, bytes.Length); Assert.Equal(seed.Tree, new Guid(bytes.AsSpan(17, 16))); Assert.Equal(seed.Node, new Guid(bytes.AsSpan(33, 16))); Assert.Equal(seed.Audio, new Guid(bytes.AsSpan(49, 16)));
             var context = await factory.Server.SendAsync(c => { c.Request.Method = "GET"; c.Request.PathBase = "/mounted"; c.Request.Path = ListUrl(seed.Node); });
             using var reader = new StreamReader(context.Response.Body); using var mounted = JsonDocument.Parse(await reader.ReadToEndAsync());
             var sameBase = mounted.RootElement.GetProperty("data").GetProperty("items")[0].GetProperty("playback").GetProperty("url").GetString()!.StartsWith("/mounted/internal/", StringComparison.Ordinal);
@@ -147,7 +147,7 @@ public sealed partial class InternalAudioEndpointTests
                 var db = scope.ServiceProvider.GetRequiredService<DocthecaDbContext>();
                 db.DocumentStructureAudio.AddRange(Row(ids[0], seed.Parse, seed.Node, "z.wav", 1), Row(ids[1], seed.Parse, seed.Node, "Z.wav", 1));
                 var other = Guid.NewGuid(); db.DocumentParses.Add(new() { Id = other, DocumentFileId = seed.File, Status = DocumentParseStatus.Parsed, ParsedAt = DateTimeOffset.UtcNow.AddDays(-1) });
-                db.DocumentStructureAudio.Add(Row(ids[2], other, seed.Node, "cross.wav", 1)); await db.SaveChangesAsync();
+                db.DocumentStructureAudio.Add(Row(ids[2], other, seed.Node, "cross.wav", 1)); await db.SaveOwnedChangesAsync();
             }
             using var json = JsonDocument.Parse(await client.GetStringAsync(ListUrl(seed.Node)));
             Assert.Equal(new[] { ids[1], seed.Audio, ids[0] }, json.RootElement.GetProperty("data").GetProperty("items").EnumerateArray().Select(x => x.GetProperty("id").GetGuid()));
@@ -160,7 +160,7 @@ public sealed partial class InternalAudioEndpointTests
     public async Task DatabaseCancellation_BeforeCopyOrDuringAdmissionNeverSucceeds(int cancelledRead)
     {
         var bytes = PlayableWave.Bytes(); var node = Guid.NewGuid(); var audio = Guid.NewGuid(); var parse = Guid.NewGuid(); var file = Guid.NewGuid(); var scratch = new Scratch();
-        var membership = new InternalAudioMembership(new(file, parse, node, 0, 1), [new(audio, parse, node, "file.wav", "audio/wav", bytes.Length, Key(parse, audio))]);
+        var membership = new InternalAudioMembership(new(file, parse, node, 0, 1, parse), [new(audio, parse, node, "file.wav", "audio/wav", bytes.Length, Key(parse, audio))]);
         var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously); var calls = 0;
         var repository = new Mock<IInternalAudioRepository>(MockBehavior.Strict);
         repository.Setup(x => x.ReadAudioAsync(node, audio, It.IsAny<CancellationToken>())).Returns(async (Guid _, Guid? _, CancellationToken cancellation) =>
@@ -191,7 +191,7 @@ public sealed partial class InternalAudioEndpointTests
             using var scope = factory.Services.CreateScope(); var tokens = factory.Services.GetRequiredService<InternalAudioTokens>();
             var context = new DefaultHttpContext { RequestServices = scope.ServiceProvider }; var started = new Started(); var lifetime = new Lifetime(cancellation.Token);
             context.Features.Set<IHttpResponseFeature>(started); context.Features.Set<IHttpRequestLifetimeFeature>(lifetime);
-            context.Request.QueryString = new("?token=" + tokens.Create(new(seed.File, seed.Parse, seed.Node, seed.Audio), DateTimeOffset.UtcNow.AddMinutes(2)));
+            context.Request.QueryString = new("?token=" + tokens.Create(new(seed.File, seed.Tree, seed.Node, seed.Audio), DateTimeOffset.UtcNow.AddMinutes(2)));
             context.Response.Body = new FaultOutput(() => { started.Value = true; if (cancel) cancellation.Cancel(); });
             var execute = InternalAudioEndpoints.Content(seed.Node.ToString("D"), seed.Audio.ToString("D"), context,
                 scope.ServiceProvider.GetRequiredService<IInternalAudioRepository>(), factory.Services.GetRequiredService<InternalAudioSettings>(), tokens,

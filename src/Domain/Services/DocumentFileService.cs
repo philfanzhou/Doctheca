@@ -68,6 +68,8 @@ public class DocumentFileService : IDocumentFileService
         return await _fileRepository.GetByIdAsync(id);
     }
 
+    public Task<IReadOnlyList<string>?> DeleteWithAudioAsync(Guid id) => _fileRepository.DeleteWithAudioAsync(id);
+
     public async Task<bool> DeleteAsync(Guid id)
     {
         return await _fileRepository.DeleteAsync(id);

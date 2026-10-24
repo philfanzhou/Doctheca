@@ -169,7 +169,27 @@ internal static class MigrationGoldenStates
     ];
 
     internal static List<string> ExcludingStructureMigration(IEnumerable<string> shape) =>
-        shape.Where(entry => !StructureMigrationShapeEntries.Any(prefix => entry.StartsWith(prefix, StringComparison.Ordinal))).ToList();
+        shape.Where(entry => !new[] { "document_files.current_structure_tree_id:", "document_files.structure_binding_generation:", "document_parses.expected_binding_generation:", "IX_document_files_id_current_structure_tree_id:", "FK_document_files_document_structure_trees_" }.Any(prefix => entry.StartsWith(prefix, StringComparison.Ordinal)) && !StructureMigrationShapeEntries.Any(prefix => entry.StartsWith(prefix, StringComparison.Ordinal))).ToList();
+
+    // Earlier migration tests compare only their historical contract. Ownership changes have
+    // dedicated full-model, value-preservation and lossless-Down tests.
+    internal static string LegacyRowJson(string table) => "to_jsonb(t) - 'current_structure_tree_id' - 'structure_binding_generation' - 'expected_binding_generation' - 'tree_id'" +
+        (table is "document_structure_nodes" or "document_structure_audio" ? " - 'document_file_id'" : "");
+
+    internal static async Task<List<string>> ReadLegacyColumnShapeAsync(DocthecaDbContext context, IReadOnlyList<string>? tables = null) =>
+        (await ReadColumnShapeAsync(context, tables)).Where(value => !value.StartsWith("document_structure_trees.") &&
+            !new[] { ".current_structure_tree_id:", ".structure_binding_generation:", ".expected_binding_generation:", ".tree_id:" }.Any(value.Contains) &&
+            !value.StartsWith("document_structure_nodes.document_file_id:") && !value.StartsWith("document_structure_audio.document_file_id:"))
+        .Select(value => new[] { "document_structure_nodes.parse_id:", "document_structure_audio.parse_id:", "document_structure_nodes.start_sequence:", "document_structure_nodes.end_sequence:" }
+            .Any(value.StartsWith) ? value.Replace(":null", ":notnull") : value).ToList();
+
+    internal static async Task<List<string>> ReadLegacyConstraintShapeAsync(DocthecaDbContext context, IReadOnlyList<string>? tables = null) =>
+        (await ReadConstraintShapeAsync(context, tables)).Where(value => !value.Contains("document_structure_trees") &&
+            !value.StartsWith("FK_document_structure_nodes_document_parses_") && !value.StartsWith("FK_document_structure_audio_document_parses_") &&
+            !value.StartsWith("IX_document_structure_nodes_document_file_id_") && !value.StartsWith("IX_document_structure_audio_document_file_id_") &&
+            !value.StartsWith("IX_document_files_id_current_structure_tree_id:") &&
+            !value.StartsWith("IX_document_structure_audio_parse_id_source_path:") && !value.StartsWith("IX_document_structure_audio_tree_id_source_path:"))
+        .ToList();
 
     internal static Task ExecuteRawAsync(DocthecaDbContext context, string sql) =>
         context.Database.ExecuteSqlRawAsync(sql);

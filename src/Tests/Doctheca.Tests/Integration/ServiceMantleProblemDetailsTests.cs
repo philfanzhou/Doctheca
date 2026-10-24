@@ -858,6 +858,8 @@ public sealed class ServiceMantleProblemDetailsTests : ServiceMantleIntegrationT
         public Task<bool> SetStructureDefinitionAsync(Guid id, Guid? structureDefinitionId) =>
             Task.FromResult(false);
 
+        public Task<IReadOnlyList<string>?> DeleteWithAudioAsync(Guid id) => throw new NotSupportedException();
+
         public Task<bool> DeleteAsync(Guid id) => Task.FromResult(false);
     }
 

@@ -1,5 +1,6 @@
 using Doctheca.Common.Oss;
 using Doctheca.Database;
+using Doctheca.Database.Repositories;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -35,7 +36,7 @@ public sealed partial class AdminHostedFrontendTests
         finally
         {
             using var scope = h.Factory.Services.CreateScope(); var db = scope.ServiceProvider.GetRequiredService<DocthecaDbContext>();
-            await db.DocumentFiles.Where(x => x.Id == seed.File).ExecuteDeleteAsync();
+            await new DocumentFileRepository(db).DeleteAsync(seed.File);
             await db.StructureDefinitions.Where(x => x.Id == seed.Definition).ExecuteDeleteAsync();
         }
     }

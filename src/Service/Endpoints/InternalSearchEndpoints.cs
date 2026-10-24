@@ -29,6 +29,8 @@ public static class InternalSearchEndpoints
             cancellationToken.ThrowIfCancellationRequested();
             if (node is null) return Results.NotFound(new
                 { success = false, errorCode = "DOCTHECA_INTERNAL_RESOURCE_NOT_FOUND", message = "Internal resource not found." });
+            if (node.ParseId is null)
+                return Results.Ok(new { success = true, data = new InternalSearchPage([], 0, null) });
             // Node/parse ownership is resolved for this request. The derived index can lag a
             // subsequent committed tree edit; this does not create a cross-request lease.
             filter = new SearchFilterModel { StructureNodeId = node.NodeId, ParseId = node.ParseId };

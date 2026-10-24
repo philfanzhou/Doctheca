@@ -46,6 +46,9 @@ public class DocumentFileEntity
     [Column("structure_definition_id")]
     public Guid? StructureDefinitionId { get; set; }
 
+    [Column("current_structure_tree_id")] public Guid? CurrentStructureTreeId { get; set; }
+    [Column("structure_binding_generation")] public long StructureBindingGeneration { get; set; }
+
     [Column("created_at")]
     [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
     public DateTimeOffset CreatedAt { get; set; }

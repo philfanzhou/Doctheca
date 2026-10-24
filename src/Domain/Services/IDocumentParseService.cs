@@ -27,6 +27,10 @@ public interface IDocumentParseService
     Task<List<DocumentParseImageModel>> GetImagesByParseIdAsync(Guid parseId);
     Task<List<DocumentParseImageModel>> GetImagesByFileIdAsync(Guid documentFileId);
     Task<(List<DocumentParseModel> Items, int TotalCount)> GetListAsync(int page, int size, string? search = null);
+    Task<string> CompleteAsync(Guid parseId, Guid runId, string markdown,
+        IReadOnlyCollection<DocumentParsePageModel> pages, IReadOnlyList<DocumentParseImageModel> images,
+        IReadOnlyList<DocumentParseBlockModel> blocks, CancellationToken ct = default);
+
     Task<bool> DeleteParseAsync(Guid parseId);
     Task<List<DocumentParseModel>> GetByFileIdAsync(Guid documentFileId);
 }

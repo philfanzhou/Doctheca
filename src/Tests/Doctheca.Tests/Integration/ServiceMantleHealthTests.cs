@@ -390,7 +390,7 @@ public sealed class ServiceMantleHealthTests : ServiceMantleIntegrationTestBase
             WHERE a.attrelid = $1::regclass
               AND a.attnum > 0
               AND NOT a.attisdropped
-              AND a.attname <> 'id'
+              AND a.attname NOT IN ('id', 'document_file_id')
             ORDER BY a.attnum
             LIMIT 1
             """;
