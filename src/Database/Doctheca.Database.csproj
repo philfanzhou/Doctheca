@@ -14,6 +14,13 @@
     <PackageReference Include="ServiceMantle.Persistence.Relational" Version="0.3.3" />
     <PackageReference Include="ServiceMantle.Database.PostgreSql" Version="0.3.3" />
     <PackageReference Include="ServiceMantle" Version="0.3.3" />
+    <!-- Security pins: ServiceMantle 0.3.3 -> Microsoft.AspNetCore.DataProtection pulls
+         System.Security.Cryptography.{Xml,Pkcs} 10.0.11, which has known DoS advisories
+         (GHSA-r955-8q5j-3h83, GHSA-7hqp-7c5m-4vq6, GHSA-c399-9853-6jmj,
+         GHSA-846f-f764-76mx, GHSA-2fmv-rv2c-59x7) fixed in 10.0.13. Keep these direct
+         references on the latest 10.0.x servicing release until ServiceMantle moves. -->
+    <PackageReference Include="System.Security.Cryptography.Xml" Version="10.0.13" />
+    <PackageReference Include="System.Security.Cryptography.Pkcs" Version="10.0.13" />
   </ItemGroup>
 
   <ItemGroup>
