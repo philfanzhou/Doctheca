@@ -108,3 +108,84 @@ dotnet test src/Doctheca.sln --configuration Release \
 ```
 
 > Doctheca is a standalone repository; verification no longer depends on the Ruoyu.Study monorepo's `tests/integration/scripts/pre-commit.sh`. The commands above are this repository's complete local verification (see also the "Verification" section of the root `AGENTS.md`).
+
+### GitHub-hosted browser test environment
+
+`Build & Test` keeps its 30-minute limit and runs the complete existing Release suite,
+including real Chromium, PostgreSQL, MinIO, OpenSearch and loopback Kestrel/OIDC.
+Checkout, the .NET build, Node 20/frontend checks, the original production Dockerfile
+build and startup/failure-exit verification still run on the disposable hosted runner.
+The C# and JavaScript CodeQL checks and both complete image architectures are unchanged.
+Only `dotnet test --no-build` runs inside the prepared browser environment.
+
+The environment is the official `mcr.microsoft.com/playwright/dotnet:v1.63.0-noble`,
+pinned to OCI index
+`sha256:aa3eaf29a65df8c93fc32ab20cf9359f4d8ecc53e6e89f79378647ace87b46b3`
+(AMD64 manifest
+`sha256:4bb37fb71e75c18b6f8b8e4230139c7654de3dd39e55b66e84392c93933fed4e`).
+It contains Chromium and Linux libraries; setup no longer downloads apt packages.
+The reviewed AMD64 image has 1,382,462,645 compressed layer bytes, so a cold pull has a
+real cost. A fresh hosted runner is not promised a warm Docker cache. The immutable
+digest is the cache identity; there is no mutable browser-cache restore key.
+
+`scripts/ci-test-environment.py prepare` pulls a missing image, verifies its platform
+and digest, and launches an actual Chromium page. `test` repeats the gates and invokes
+the unchanged full solution test command; it never skips tests on a cache hit.
+`probe` checks real Linux tool/package/browser failure paths and nonzero/signal
+propagation. `test-ci-test-environment.py` additionally checks the host wrapper's
+digest/platform rejection, registry failure, phase reporting and exact cleanup boundary.
+These small probes supplement the full application suite.
+
+The wrapper mounts the host build's .NET installation, complete Node 20 installation
+and **only** its NuGet `packages` directory read-only at the same absolute paths.
+Generated MSBuild imports can contain those paths even with `--no-build`. It checks
+the exact host SDK, SDK/runtime lists, Node/npm and Playwright package/driver version.
+The image's own .NET runtime is not selected. Package/image updates must change the
+reviewed version/digest mapping together; missing or mismatched tools, packages or
+browsers fail setup rather than silently installing a different environment.
+
+The repository/reports stay writable as the runner UID/GID. Home, npm/cache and temp
+directories belong only to this invocation. No host environment wholesale, NuGet
+configuration, Docker credentials or production configuration is mounted. The
+test jobs also disable checkout credential persistence before mounting the repository.
+The image pull has a five-minute setup limit and fixed failure diagnostics. Only the
+disposable runner's local Unix Docker socket is used. Linux host networking plus
+`TESTCONTAINERS_HOST_OVERRIDE=127.0.0.1` preserves random fixture ports and loopback
+browser endpoints. Ryuk stays enabled; the wrapper has an init process, 1 GiB shared
+memory and no privileged mode. Termination stops/removes its unique wrapper name;
+it never prunes other containers, networks or caches. Runner disposal is the final
+cleanup boundary after forced job cancellation.
+
+The `Prepare test browser environment`, `Verify test environment failures` and
+`Unit tests` steps separate setup time from test failures. The uploaded
+`reports/ci-test-environment.json` records UTC starts, elapsed seconds, cold/warm
+identity, image/tool/browser versions and failure status, alongside the original TRX.
+Use GitHub job timestamps to measure queue delay and total job duration separately;
+the report does not mistake queue time for installation time.
+
+For an independent warm observation, add the `ci-measure-warm` label to a PR, or
+manually run **Browser environment measurement** after it reaches the default branch.
+This separate opt-in workflow has its own 30-minute limit. An explicitly named
+preparation step first pulls/validates the
+same digest on that runner; the normal prepare step then records a warm hit and the
+complete suite, original Dockerfile and startup verifier still run once. Report the
+prewarming time and complete job time as well as the warm setup/test phases. This
+measures reuse on one isolated daemon, not cache persistence across hosted runners.
+Normal PR checks measure their actual initial cache state without prewarming.
+
+For context, the old PR #126 run 39953119170 attempt 1 spent 13m19s installing
+dependencies: apt downloaded 21.2 MB in 12m54s with retries, whereas browser downloads
+took about six seconds. PR #137 run 40081520374 used the same setup in 25s and completed
+the job in 19m13s. The post-audio-import workload in PR #138 took 22m16s, including
+18m52s of tests. These observations explain the dependency bottleneck and remaining
+network/test variability; they do not establish a fixed percentage improvement.
+Compare the actual post-change cold and warm reports and complete job durations,
+including all 1,415 current tests and the two 58-recording browser scenarios.
+
+This helper is Linux AMD64 CI tooling. On macOS/other local hosts use the native
+verification commands and install the matching browser through
+`pwsh src/Tests/Doctheca.Tests/bin/Release/net10.0/playwright.ps1 install --with-deps chromium`
+when needed. Never mount macOS .NET or Node binaries into a Linux container.
+Rollback reverts the workflow/helper changes and restores that host browser-install
+step plus the original direct `dotnet test` command. No API, schema, data, application
+configuration, production image or deployment rollback is involved.
