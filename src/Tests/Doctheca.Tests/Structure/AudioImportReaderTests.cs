@@ -59,19 +59,19 @@ public sealed class AudioImportReaderTests
     }
 
     [Fact]
-    public void InvalidLimitsAreUnavailableIncludingMultipartOverflow()
+    public void InvalidLimitsAreRejectedIncludingMultipartOverflow()
     {
         foreach (var options in new[]
         {
-            new DocumentAudioOptions { Enabled = true, MaxFileBytes = 0 },
-            new DocumentAudioOptions { Enabled = true, MaxFileBytes = 100, MaxArchiveBytes = 99 },
-            new DocumentAudioOptions { Enabled = true, MaxArchiveBytes = long.MaxValue },
+            new DocumentAudioOptions { MaxFileBytes = 0 },
+            new DocumentAudioOptions { MaxFileBytes = 100, MaxArchiveBytes = 99 },
+            new DocumentAudioOptions { MaxArchiveBytes = long.MaxValue },
         })
-            DocumentAudioStorageStatus.Evaluate(options, false, _ => "configured").Available.Should().BeFalse();
+            options.Validate().Should().NotBeNull();
         var defaults = new DocumentAudioOptions();
         defaults.MaxFileBytes.Should().Be(20971520);
         defaults.MaxArchiveBytes.Should().Be(209715200);
-        DocumentAudioStorageStatus.Evaluate(new() { Enabled = true }, false, key => key == "PublicBaseUrl" ? null : "configured")
+        DocumentAudioStorageStatus.Evaluate(false, key => key == "PublicBaseUrl" ? null : "configured")
             .Available.Should().BeTrue("import only needs the internal S3 settings");
     }
 

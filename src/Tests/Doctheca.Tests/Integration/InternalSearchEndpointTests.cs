@@ -30,7 +30,7 @@ public sealed class InternalSearchEndpointTests(PostgreSqlFixture database) : Se
     private static string Url(string query = "changing", Guid? node = null) => "/internal/v1/search?query=" + Uri.EscapeDataString(query) +
         (node is null ? "" : "&structureNodeId=" + node);
     private static string Token(string json) => Convert.ToBase64String(Encoding.UTF8.GetBytes(json));
-    private WebApplicationFactory<Program> Factory(Action<IServiceCollection>? services = null, string? enabled = "true") =>
+    private WebApplicationFactory<Program> Factory(Action<IServiceCollection>? services = null, string? enabled = null) =>
         CreateFactory(configureTestServices: services, settings: new Dictionary<string, string?> { ["InternalApi:Enabled"] = enabled });
     private static Mock<ISearchDomainService> EmptySearch()
     {
@@ -408,15 +408,14 @@ public sealed class InternalSearchEndpointTests(PostgreSqlFixture database) : Se
     }
 
     [Fact]
-    public async Task DefaultOffAndUnsupportedMethods_Are404AndAdminRemainsProtected()
+    public async Task ObsoleteEnableValuesKeepSearchAvailableAndUnsupportedMethodsAre404()
     {
         foreach (var setting in new string?[] { null, "false", "invalid" })
         {
-            using var disabled = Factory(enabled: setting);
+            using var disabled = Factory(services => ReplaceSearch(services, EmptySearch().Object), enabled: setting);
             using var disabledClient = disabled.CreateClient();
             using var response = await disabledClient.GetAsync(Url());
-            Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
-            Assert.Contains("DOCTHECA_INTERNAL_NOT_FOUND", await response.Content.ReadAsStringAsync());
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         }
         using var factory = Factory();
         using var client = factory.CreateClient();

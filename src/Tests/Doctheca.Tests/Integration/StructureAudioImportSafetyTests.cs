@@ -21,18 +21,12 @@ public sealed partial class StructureAudioEndpointTests
     [InlineData("DocumentAudio:MaxFileBytes", "0")]
     [InlineData("DocumentAudio:MaxArchiveBytes", "1")]
     [InlineData("DocumentAudio:MaxArchiveBytes", "9223372036854775807")]
-    public async Task InvalidLimitsDisableImportsWithoutBreakingHostStartup(string key, string value)
+    public void InvalidLimitsRefuseHostStartup(string key, string value)
     {
         using var factory = Factory(extra: new() { [key] = value });
-        using var client = Admin(factory);
-        var (_, parseId) = await SeedTextbookAsync(factory, client);
-        var list = (await ReadData(await client.GetAsync($"/admin/document-parses/{parseId}/audio")))!;
-        list["storage"]!["available"]!.GetValue<bool>().Should().BeFalse();
-        var response = await client.PostAsync($"/admin/document-parses/{parseId}/audio", Upload(("unit1/SectionA.mp3", Mp3("a"))));
-        response.StatusCode.Should().Be(HttpStatusCode.ServiceUnavailable);
-        AssertNoStorageDetails(await response.Content.ReadAsStringAsync());
-        (await CountAudioAsync(factory, parseId)).Should().Be(0);
-        (await minio.KeysAsync(_bucket)).Should().BeEmpty();
+        var error = Assert.Throws<InvalidOperationException>(() => factory.CreateClient());
+        error.Message.Should().Contain(key);
+        error.InnerException.Should().BeNull();
     }
 
     [Fact]

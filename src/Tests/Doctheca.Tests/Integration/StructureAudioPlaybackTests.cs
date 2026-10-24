@@ -1,7 +1,10 @@
 using System.Net;
+using System.Net.Http.Json;
 using System.Text.Json.Nodes;
 using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
@@ -14,6 +17,38 @@ namespace Doctheca.Tests.Integration;
 
 public sealed partial class StructureAudioEndpointTests
 {
+    [Fact]
+    public async Task NoAudioSection_AllowsImportReviewMetadataAndInternalBytePlayback()
+    {
+        var root = CreateTempContentRoot(true);
+        try
+        {
+            using var factory = CreateFactory(contentRoot: root, settings: minio.Settings(_bucket), configureTestServices: services =>
+            {
+                services.RemoveAll<IOssService>();
+                services.AddScoped<IOssService>(sp => new S3OssService(sp.GetRequiredService<IOptions<OssOptions>>().Value));
+            });
+            using var client = Admin(factory);
+            var (_, parseId) = await SeedTextbookAsync(factory, client);
+            var wave = PlayableWave.Bytes();
+            var imported = await ReadData(await client.PostAsync($"/admin/document-parses/{parseId}/audio", Upload(("sample.wav", wave))));
+            var id = imported!["items"]![0]!["id"]!.GetValue<string>();
+            var tree = await ReadData(await client.GetAsync($"/admin/document-parses/{parseId}/structure"));
+            var node = tree!["nodes"]![0]!["id"]!.GetValue<string>();
+            await ReadData(await client.PutAsJsonAsync($"/admin/document-parses/{parseId}/audio", new { links = new[] { new { id, nodeId = node } }, removeIds = Array.Empty<string>() }));
+            var reloaded = await ReadData(await client.GetAsync($"/admin/document-parses/{parseId}/audio"));
+            reloaded!["storage"]!["available"]!.GetValue<bool>().Should().BeTrue();
+            reloaded["storage"]!["maxFileBytes"]!.GetValue<long>().Should().Be(20971520);
+            reloaded["items"]![0]!["nodeId"]!.GetValue<string>().Should().Be(node);
+            (await ReadData(await client.GetAsync($"/admin/document-parses/{parseId}/structure/nodes/{node}/audio")))!["items"]!.AsArray().Should().ContainSingle();
+            client.DefaultRequestHeaders.Authorization = null;
+            var list = await ReadData(await client.GetAsync($"/internal/v1/structure-nodes/{node}/audio"));
+            var link = list!["items"]![0]!["playback"]!["url"]!.GetValue<string>();
+            (await client.GetByteArrayAsync(link)).Should().Equal(wave);
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
     [Fact]
     public async Task NodeAudioListsOnlyDirectLinksAndChecksOwnership()
     {
@@ -83,12 +118,12 @@ public sealed partial class StructureAudioEndpointTests
             using var legacyBytes = await download.GetAsync(legacy);
             Assert.True(legacyBytes.StatusCode == HttpStatusCode.OK, "Existing S3 presigning behavior changed.");
         }
-        using (var disabled = Factory(extra: new() { ["DocumentAudio:Enabled"] = "false" }))
+        using (var disabled = Factory(extra: new() { ["Oss:PublicBaseUrl"] = "" }))
         using (var disabledClient = Admin(disabled))
         {
             await AssertUnavailable(await disabledClient.GetAsync($"/admin/document-parses/{parseId}/audio/{item["id"]}/playback-link"));
             using var issued = await download.GetAsync(url);
-            Assert.True(issued.StatusCode == HttpStatusCode.OK, "Disabling the API unexpectedly revoked an issued S3 credential.");
+            Assert.True(issued.StatusCode == HttpStatusCode.OK, "Removing the public address unexpectedly revoked an issued S3 credential.");
         }
         var wait = expiry - DateTimeOffset.UtcNow + TimeSpan.FromSeconds(2);
         if (wait > TimeSpan.Zero) await Task.Delay(wait);
@@ -106,9 +141,6 @@ public sealed partial class StructureAudioEndpointTests
     [InlineData("Oss:PublicBaseUrl", "not-a-url")]
     [InlineData("Oss:PublicBaseUrl", "https://user@example.invalid/path")]
     [InlineData("Oss:PublicBaseUrl", "https://example.invalid/path?token=x")]
-    [InlineData("DocumentAudio:PlaybackLinkSeconds", "59")]
-    [InlineData("DocumentAudio:PlaybackLinkSeconds", "3601")]
-    [InlineData("DocumentAudio:PlaybackLinkSeconds", "five")]
     public async Task InvalidPlaybackSettingsLeaveImportAvailable(string key, string value)
     {
         using var factory = Factory(extra: new() { [key] = value });
@@ -157,7 +189,7 @@ public sealed partial class StructureAudioEndpointTests
         var (_, parseId) = await SeedTextbookAsync(factory, client);
         var item = (await ReadData(await client.PostAsync($"/admin/document-parses/{parseId}/audio", Upload(("Unit1.wav", PlayableWave.Bytes())))))!["items"]![0]!;
         var settings = failure switch {
-            "disabled" => new Dictionary<string, string?> { ["DocumentAudio:Enabled"] = "false" },
+            "disabled" => new Dictionary<string, string?> { ["Oss:PublicBaseUrl"] = "" },
             "denied" => new Dictionary<string, string?> { ["Oss:AccessKey"] = "missing-synthetic-key" },
             _ => new Dictionary<string, string?> { ["Oss:InternalEndpoint"] = "127.0.0.1:1" },
         };

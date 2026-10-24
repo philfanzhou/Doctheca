@@ -28,11 +28,11 @@ Doctheca :5012 ─────► SignaCore :5002
 | Caller | Entry | Identity | Purpose |
 |--------|------|------|------|
 | Admin UI | `/`, `/admin/*` | Identity `role=admin` Cookie/JWT | File, parse, metadata, export, and search management |
-| Internal business services (opt-in) | `/internal/v1/structure-definitions`, `/internal/v1/documents`, `/internal/v1/documents/{documentFileId}/structure`, `/internal/v1/structure-nodes/{nodeId}/content`, `/internal/v1/structure-nodes/{nodeId}/images/{imageId}/content`, `/internal/v1/search`, `/internal/v1/structure-nodes/{nodeId}/audio` and its expiring content links | Anonymous; deployer restricts network reachability | Read-only definition and marked-document catalogs, current document trees, revision-checked content pages, owned image bytes and subtree search |
+| Internal business services | `/internal/v1/structure-definitions`, `/internal/v1/documents`, `/internal/v1/documents/{documentFileId}/structure`, `/internal/v1/structure-nodes/{nodeId}/content`, `/internal/v1/structure-nodes/{nodeId}/images/{imageId}/content`, `/internal/v1/search`, `/internal/v1/structure-nodes/{nodeId}/audio` and its expiring content links | Anonymous; deployer restricts network reachability | Read-only definition and marked-document catalogs, current document trees, revision-checked content pages, owned image bytes and subtree search |
 
 Regular Identity users have no administrator role and cannot log in or call the admin API.
-`InternalApi:Enabled` defaults to false; missing or malformed values disable the internal API.
-Only explicit true exposes the implemented GET routes, using downstream field allow-lists.
+The implemented internal GET routes are always mapped, using downstream field allow-lists.
+The obsolete `InternalApi:Enabled` setting is ignored; it grants no protection.
 All other `/internal` paths and unsupported methods return safe 404 instead of static files or
 SPA HTML. This introduces no caller authentication or document-level authorization: deployment
 must make `/internal/*` reachable only from the internal network. It grants no admin permission.

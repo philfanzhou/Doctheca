@@ -11,9 +11,8 @@ namespace Doctheca.Service;
 
 public static class InternalAudioEndpoints
 {
-    public static WebApplication MapInternalAudioEndpoints(this WebApplication app, InternalApiOptions options)
+    public static WebApplication MapInternalAudioEndpoints(this WebApplication app)
     {
-        if (!options.Enabled) return app;
         app.MapGet("/internal/v1/structure-nodes/{nodeId}/audio", List)
             .AllowAnonymous().WithMetadata(new InternalApiEndpointMetadata()).RequireServiceMantleSecurityResponseHeaders();
         // Binary delivery owns pre-start errors and post-start aborts, outside JSON Problem Details middleware.

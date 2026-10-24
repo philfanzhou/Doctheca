@@ -81,9 +81,10 @@ builder.Configuration.AddRuoyuConsulConfiguration(builder.Configuration);
 // Registered after the Consul configuration source so Loki:Uri from Consul KV is visible.
 builder.AddDocthecaLogging();
 
-// Deliberate startup-only opt-in; malformed values disable only the internal API.
-var internalApiOptions = InternalApiOptions.Read(builder.Configuration);
-builder.Services.AddSingleton(internalApiOptions);
+// Validate tunables once after Consul loading, before any initialization or listener.
+var documentAudioOptions = DocumentAudioOptions.Read(key => builder.Configuration[key]);
+var obsoleteAudioKeys = new[] { "InternalApi:Enabled", "DocumentAudio:Enabled" }
+    .Where(key => builder.Configuration[key] is not null).ToArray();
 
 var consulOptions = RuoyuConsulOptions.Bind(builder.Configuration);
 var consulRuntimeState = RuoyuConsulRuntimeState.Instance;
@@ -129,34 +130,19 @@ else
     });
 }
 
-// Structure audio (issue #90): stored through the Oss storage above under audio/, off unless
-// DocumentAudio:Enabled and the internal S3 connection are set. An unusable
-// configuration only disables audio; the rest of Doctheca keeps working.
-DocumentAudioOptions documentAudioOptions;
-DocumentAudioStorageStatus documentAudioStatus;
-try
-{
-    documentAudioOptions = builder.Configuration.GetSection(DocumentAudioOptions.SectionName).Get<DocumentAudioOptions>()
-        ?? new DocumentAudioOptions();
-    documentAudioStatus = DocumentAudioStorageStatus.Evaluate(
-        documentAudioOptions, useLocalOss, key => builder.Configuration[$"Oss:{key}"]);
-}
-catch (InvalidOperationException)
-{
-    // A malformed value (for example a non-boolean enablement flag) disables audio instead of startup.
-    documentAudioOptions = new DocumentAudioOptions();
-    documentAudioStatus = new DocumentAudioStorageStatus(false, "the DocumentAudio settings could not be read");
-}
+// Audio storage follows internal S3 completeness; public addressing is only needed for admin signing.
+var documentAudioStatus = DocumentAudioStorageStatus.Evaluate(
+    useLocalOss, key => builder.Configuration[$"Oss:{key}"]);
 builder.Services.AddSingleton(Options.Create(documentAudioOptions));
 builder.Services.AddSingleton(documentAudioStatus);
 var documentAudioPlayback = DocumentAudioPlaybackSettings.Evaluate(documentAudioStatus,
-    builder.Configuration["DocumentAudio:PlaybackLinkSeconds"], builder.Configuration["Oss:PublicBaseUrl"]);
+    documentAudioOptions.PlaybackLinkSeconds, builder.Configuration["Oss:PublicBaseUrl"]);
 // Do not construct an S3 client just to report disabled/missing audio configuration.
 builder.Services.AddScoped(sp => new StructureAudioStore(
     () => sp.GetRequiredService<IOssService>(), documentAudioStatus,
     sp.GetRequiredService<ILogger<StructureAudioStore>>(), documentAudioPlayback));
 builder.Services.AddScoped<StructureAudioService>();
-builder.Services.AddSingleton(InternalAudioSettings.Evaluate(documentAudioStatus, builder.Configuration["DocumentAudio:PlaybackLinkSeconds"]));
+builder.Services.AddSingleton(InternalAudioSettings.Evaluate(documentAudioStatus, documentAudioOptions.PlaybackLinkSeconds));
 builder.Services.TryAddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<InternalAudioTokens>();
 builder.Services.AddSingleton<AudioScratchSpace>();
@@ -246,8 +232,8 @@ var serviceLogContext = app.Services.GetRequiredService<ServiceMantle.Web.Loggin
 using (serviceLogContext.BeginScope(app.Logger))
 {
     app.Logger.LogInformation("Doctheca Service starting");
-    if (internalApiOptions.Invalid)
-        app.Logger.LogWarning("DOCTHECA_INTERNAL_API_CONFIGURATION_INVALID: InternalApi:Enabled must be a boolean; internal API disabled");
+    if (obsoleteAudioKeys.Length > 0)
+        app.Logger.LogWarning("DOCTHECA_OBSOLETE_CONFIGURATION: Ignored keys: {Keys}", string.Join(", ", obsoleteAudioKeys));
     var oidc = app.Services.GetRequiredService<AdminOidcSettings>();
     if (!oidc.Available)
         app.Logger.LogError("DOCTHECA_OIDC_NOT_CONFIGURED: {MissingKeys}", string.Join(",", oidc.MissingKeys));
@@ -368,11 +354,11 @@ app.UseServiceMantleCorrelationId();
 // contracts are untouched.
 app.UseRouting();
 // Reserve every /internal path before static files and SPA handling, including unknown
-// paths and unsupported methods. Only explicitly enabled, marked endpoints may pass.
-app.UseInternalApiBoundary(internalApiOptions);
+// paths and unsupported methods. Only explicitly marked endpoints may pass.
+app.UseInternalApiBoundary();
 app.UseServiceMantleSecurityResponseHeaders();
 
-// Safe Problem Details boundary for marked JSON admin and enabled internal endpoints: the UseWhen branch
+// Safe Problem Details boundary for marked JSON admin and internal endpoints: the UseWhen branch
 // runs exactly for endpoints carrying the RequireServiceMantleSecurityResponseHeaders marker
 // resolved by the explicit UseRouting above, so static files, the SPA fallback, health, image
 // proxies, and HTML/ZIP exports never enter it (the library swallows exceptions once a
@@ -412,11 +398,11 @@ app.MapDocumentSearchEndpoints();
 app.MapStructureDefinitionEndpoints();
 app.MapDocumentStructureEndpoints();
 app.MapStructureAudioEndpoints();
-app.MapInternalCatalogEndpoints(internalApiOptions);
-app.MapInternalStructureEndpoints(internalApiOptions);
-app.MapInternalContentEndpoints(internalApiOptions);
-app.MapInternalAudioEndpoints(internalApiOptions);
-app.MapInternalSearchEndpoints(internalApiOptions);
+app.MapInternalCatalogEndpoints();
+app.MapInternalStructureEndpoints();
+app.MapInternalContentEndpoints();
+app.MapInternalAudioEndpoints();
+app.MapInternalSearchEndpoints();
 
 // ServiceMantle fixed health endpoints: GET /health/live (liveness, never touches the
 // database), GET /health/ready and the GET /health alias (readiness projection). All three

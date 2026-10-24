@@ -60,7 +60,9 @@ def main(image, rollback_image=None):
     invalid = "synthetic-invalid-" + secrets.token_hex(20)
     app_secret = "synthetic-app-" + secrets.token_hex(20)
     protocol_canaries = tuple("synthetic-protocol-" + secrets.token_hex(20) for _ in range(4))
-    canaries = (password, wrong_password, invalid, app_secret, *protocol_canaries)
+    audio_canary = "synthetic-audio-" + secrets.token_hex(20)
+    obsolete_canary = "synthetic-obsolete-" + secrets.token_hex(20)
+    canaries = (password, wrong_password, invalid, app_secret, audio_canary, obsolete_canary, *protocol_canaries)
     containers = []
     network_created = False
     with tempfile.TemporaryDirectory(prefix=prefix) as temporary:
@@ -122,6 +124,33 @@ def main(image, rollback_image=None):
                 "IdentityService__AppId": "synthetic-startup-app",
                 "IdentityService__AppSecret": app_secret,
             }
+            audio_cases = [
+                ("PlaybackLinkSeconds", value) for value in ("59", "3601", "abc", "", audio_canary, "9223372036854775808")
+            ] + [
+                ("MaxFileBytes", value) for value in ("0", "", audio_canary, "9223372036854775808")
+            ] + [
+                ("MaxArchiveBytes", value) for value in ("1", "9223372036854775807", "", audio_canary, "9223372036854775808")
+            ]
+            for index, (key, value) in enumerate(audio_cases):
+                database = "startup_audio_" + secrets.token_hex(8)
+                name = prefix + "-audio-" + str(index)
+                run(name, image, settings | {
+                    "Database__Name": database, "Database__AllowCreate": "true",
+                    "Oss__InternalEndpoint": "", "DocumentAudio__" + key: value,
+                    # Invalid settings also refuse startup in LocalFile mode.
+                    "USE_LOCAL_OSS": "1" if index == 0 else "0",
+                }, "-p", "127.0.0.1::5012")
+                port = json.loads(docker("inspect", "--format", "{{json .NetworkSettings.Ports}}", name))["5012/tcp"][0]["HostPort"]
+                exit_code = wait_exit(name, f"http://127.0.0.1:{port}/health/live")
+                require(exit_code != 0, "Invalid audio configuration exited successfully")
+                logs = check_logs(name)
+                require("DocumentAudio:" + key in logs, "Audio refusal key missing")
+                require("Now listening on:" not in logs and "Application started." not in logs,
+                        "Invalid audio configuration started HTTP")
+                require("Database startup gate" not in logs and not database_exists(database),
+                        "Invalid audio configuration initialized the database")
+                print(f"PASS audio {index}: {key}, nonzero exit, no listener/database/disclosure", flush=True)
+
             cases = (
                 ("invalid", {"Database__AllowCreate": invalid}, "database_target_preparation.invalid_target"),
                 ("missing", {}, "database_target_preparation.creation_not_allowed"),
@@ -175,6 +204,37 @@ def main(image, rollback_image=None):
             require(get("/health/live") == '{"status":"live"}', "Liveness contract changed")
             require(check_logs(name).count("Database startup gate completed") == 1,
                     "Expected exactly one successful startup gate")
+            # With no InternalApi section, every implemented route reaches its own handler.
+            for path, status in (
+                ("/internal/v1/documents", 200), ("/internal/v1/structure-definitions", 200),
+                ("/internal/v1/documents/invalid/structure", 400),
+                ("/internal/v1/structure-nodes/invalid/content", 400),
+                ("/internal/v1/structure-nodes/invalid/images/invalid/content", 400),
+                ("/internal/v1/structure-nodes/invalid/audio", 400),
+                ("/internal/v1/structure-nodes/invalid/audio/invalid/content", 400),
+                ("/internal/v1/search", 400),
+            ):
+                try:
+                    response = urllib.request.urlopen(f"http://127.0.0.1:{port}{path}", timeout=2)
+                except urllib.error.HTTPError as error:
+                    response = error
+                with response:
+                    require(response.code == status, "Always-mapped internal route contract changed")
+                    require("html" not in response.read().decode().lower(), "Internal route returned HTML")
+            for method, path in (("GET", "/internal"), ("GET", "/INTERNAL/probe.txt"),
+                                 ("POST", "/internal/v1/documents"), ("HEAD", "/internal/v1/documents")):
+                try:
+                    response = urllib.request.urlopen(urllib.request.Request(
+                        f"http://127.0.0.1:{port}{path}", method=method), timeout=2)
+                except urllib.error.HTTPError as error:
+                    response = error
+                with response:
+                    require(response.code == 404, "Reserved internal request changed")
+                    require(response.headers.get("Cache-Control") == "no-store", "Reserved cache header changed")
+                    if method != "HEAD":
+                        require(json.loads(response.read())["errorCode"] == "DOCTHECA_INTERNAL_NOT_FOUND",
+                                "Reserved internal JSON changed")
+            require("DOCTHECA_OBSOLETE_CONFIGURATION" not in check_logs(name), "Absent obsolete keys warned")
             docker("kill", "--signal", "TERM", name)
             require(wait_exit(name) == 0, "SIGTERM did not shut down gracefully")
             check_logs(name)
@@ -183,7 +243,8 @@ def main(image, rollback_image=None):
             run(name, image, settings | {"Database__Name": "startup_existing",
                 "IdentityService__Authority": "", "IdentityService__Issuer": "", "IdentityService__Audience": "",
                 "IdentityService__AppId": "", "IdentityService__AppSecret": "",
-                "Logging__LogLevel__Microsoft.AspNetCore": "Trace"},
+                "Logging__LogLevel__Microsoft.AspNetCore": "Trace",
+                "InternalApi__Enabled": obsolete_canary, "DocumentAudio__Enabled": "false"},
                 "-p", "127.0.0.1::5012")
             port = json.loads(docker("inspect", "--format", "{{json .NetworkSettings.Ports}}", name))["5012/tcp"][0]["HostPort"]
             deadline = time.monotonic() + 45
@@ -212,6 +273,13 @@ def main(image, rollback_image=None):
                         require(response.read().decode() == expected_body, "Missing-login JSON contract changed")
                     require(not response.headers.get("Set-Cookie"), "Unconfigured or retired route wrote a Cookie")
 
+            request_status("/internal/v1/documents", 200)
+            obsolete_logs = check_logs(name)
+            require(obsolete_logs.count("DOCTHECA_OBSOLETE_CONFIGURATION") == 1,
+                    "Obsolete configuration must warn once")
+            warning = next(line for line in obsolete_logs.splitlines() if "DOCTHECA_OBSOLETE_CONFIGURATION" in line)
+            require("InternalApi:Enabled" in warning and "DocumentAudio:Enabled" in warning,
+                    "Obsolete warning did not list key names")
             for path in ("start", "callback", "csrf", "session", "logout/return", "logout"):
                 request_status("/admin/auth/oidc/" + path, 503,
                     '{"success":false,"message":"Hosted sign-in is not configured."}',

@@ -36,7 +36,6 @@ public sealed partial class InternalAudioEndpointTests(PostgreSqlFixture databas
         Dictionary<string, string?>? extra = null)
     {
         var settings = minio.Settings(_bucket);
-        settings["InternalApi:Enabled"] = "true";
         settings["Oss:PublicBaseUrl"] = "invalid-public-url";
         foreach (var (key, value) in extra ?? []) settings[key] = value;
         return CreateFactory(settings: settings, configureTestServices: services =>
@@ -134,10 +133,6 @@ public sealed partial class InternalAudioEndpointTests(PostgreSqlFixture databas
     }
 
     [Theory]
-    [InlineData("DocumentAudio:Enabled", "false")]
-    [InlineData("DocumentAudio:PlaybackLinkSeconds", "59")]
-    [InlineData("DocumentAudio:PlaybackLinkSeconds", "3601")]
-    [InlineData("DocumentAudio:PlaybackLinkSeconds", "bad")]
     [InlineData("Oss:InternalEndpoint", "")]
     [InlineData("Oss:AccessKey", "")]
     [InlineData("Oss:SecretKey", "")]

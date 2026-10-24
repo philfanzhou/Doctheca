@@ -24,7 +24,7 @@ public sealed partial class InternalCatalogEndpointTests(PostgreSqlFixture datab
     private const string Documents = "/internal/v1/documents";
     private const string Definitions = "/internal/v1/structure-definitions";
 
-    private WebApplicationFactory<Program> Factory(string? enabled = "true", string? contentRoot = null,
+    private WebApplicationFactory<Program> Factory(string? enabled = null, string? contentRoot = null,
         Action<IServiceCollection>? services = null) => CreateFactory(contentRoot, services,
         new Dictionary<string, string?> { ["InternalApi:Enabled"] = enabled });
 
@@ -50,9 +50,9 @@ public sealed partial class InternalCatalogEndpointTests(PostgreSqlFixture datab
             {
                 using var request = new HttpRequestMessage(new HttpMethod(method), path + "?enabled=true");
                 request.Headers.TryAddWithoutValidation("Cookie", "InternalApi.Enabled=true");
-                // Known GETs reject the unknown query; no request input can enable routes.
+                // Known GETs reject the unknown query, regardless of the obsolete setting.
                 using var response = await client.SendAsync(request);
-                var knownEnabledGet = enabled == "true" && method == "GET" &&
+                var knownEnabledGet = method == "GET" &&
                     (path is Documents or Definitions || path.EndsWith("/structure", StringComparison.Ordinal) || path.EndsWith("/content", StringComparison.Ordinal));
                 Assert.Equal(knownEnabledGet ? HttpStatusCode.BadRequest : HttpStatusCode.NotFound, response.StatusCode);
                 var body = await response.Content.ReadAsStringAsync();
@@ -63,7 +63,7 @@ public sealed partial class InternalCatalogEndpointTests(PostgreSqlFixture datab
             foreach (var path in new[] { Documents, Definitions })
             {
                 using var response = await client.GetAsync(path);
-                Assert.Equal(enabled == "true" ? HttpStatusCode.OK : HttpStatusCode.NotFound, response.StatusCode);
+                Assert.Equal(HttpStatusCode.OK, response.StatusCode);
             }
             Assert.Contains("doctheca-stub-index-marker", await client.GetStringAsync("/internalized"));
             Assert.Equal("doctheca-static-probe", await client.GetStringAsync("/probe.txt"));

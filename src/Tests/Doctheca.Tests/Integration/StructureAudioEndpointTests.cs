@@ -40,7 +40,7 @@ public sealed partial class StructureAudioEndpointTests(PostgreSqlFixture databa
         Dictionary<string, string?>? extra = null,
         TimeProvider? audioTime = null, ILoggerProvider? logs = null)
     {
-        var settings = storage ? minio.Settings(_bucket) : new Dictionary<string, string?>();
+        var settings = storage ? minio.Settings(_bucket) : new Dictionary<string, string?> { ["Oss:InternalEndpoint"] = "" };
         settings["DocumentAudio:MaxFileBytes"] = MaxFileBytes.ToString();
         settings["DocumentAudio:MaxArchiveBytes"] = MaxArchiveBytes.ToString();
         foreach (var (key, value) in extra ?? []) settings[key] = value;
@@ -97,7 +97,7 @@ public sealed partial class StructureAudioEndpointTests(PostgreSqlFixture databa
     [Fact]
     public async Task OfficialTextbookAudio_IsPreLinkedReviewedChangedAndProtected()
     {
-        using var factory = Factory(extra: new() { ["InternalApi:Enabled"] = "true" });
+        using var factory = Factory(extra: new());
         using var client = Admin(factory);
         var (fileId, parseId) = await SeedTextbookAsync(factory, client);
 
@@ -336,7 +336,7 @@ public sealed partial class StructureAudioEndpointTests(PostgreSqlFixture databa
         refused.StatusCode.Should().Be(HttpStatusCode.ServiceUnavailable);
         var body = JsonNode.Parse(await refused.Content.ReadAsStringAsync())!;
         body["errorCode"]!.GetValue<string>().Should().Be("DOCTHECA_AUDIO_STORAGE_NOT_CONFIGURED");
-        body["message"]!.GetValue<string>().Should().Contain("DocumentAudio:Enabled");
+        body["message"]!.GetValue<string>().Should().Contain("Oss:InternalEndpoint");
 
         var list = (await ReadData(await client.GetAsync($"/admin/document-parses/{parseId}/audio")))!;
         list["storage"]!["available"]!.GetValue<bool>().Should().BeFalse();
@@ -358,21 +358,6 @@ public sealed partial class StructureAudioEndpointTests(PostgreSqlFixture databa
         var body = await refused.Content.ReadAsStringAsync();
         body.Should().Contain("Oss:InternalEndpoint");
         AssertNoStorageDetails(body);
-    }
-
-    [Fact]
-    public async Task MalformedAudioSettings_DisableAudioWithoutStoppingStartup()
-    {
-        using var factory = Factory(extra: new() { ["DocumentAudio:MaxFileBytes"] = "twenty" });
-        using var client = Admin(factory);
-        var (_, parseId) = await SeedTextbookAsync(factory, client);
-
-        var list = (await ReadData(await client.GetAsync($"/admin/document-parses/{parseId}/audio")))!;
-        list["storage"]!["available"]!.GetValue<bool>().Should().BeFalse();
-        list["storage"]!["reason"]!.GetValue<string>().Should().Be("the DocumentAudio settings could not be read");
-        (await client.PostAsync($"/admin/document-parses/{parseId}/audio", Upload(("unit1/a.mp3", Mp3("a")))))
-            .StatusCode.Should().Be(HttpStatusCode.ServiceUnavailable);
-        (await client.GetAsync("/admin/document-files")).StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
     [Fact]
