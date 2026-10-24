@@ -66,7 +66,7 @@ public class DocumentStructureRepository : IDocumentStructureRepository
             var ordered = siblings.OrderBy(node => node.StartSequence).ToArray();
             if (ordered.Zip(ordered.Skip(1)).Any(pair => pair.First.EndSequence >= pair.Second.StartSequence)) return false;
         }
-        file.StructureBindingGeneration++;
+        if (treeId == file.CurrentStructureTreeId) file.StructureBindingGeneration++;
 
         // Audio linked to a node that the new tree no longer contains is unlinked (issue #90);
         // nodes kept by id keep their audio across the delete and re-insert below.

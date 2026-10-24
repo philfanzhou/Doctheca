@@ -193,6 +193,60 @@ public sealed class DocumentOwnedStructureTests(PostgreSqlMigrationFixture fixtu
     }
 
     [Theory]
+    [InlineData("history-delete", false)] [InlineData("history-save", false)]
+    [InlineData("history-delete", true)] [InlineData("history-save", true)]
+    public async Task CompletionBlockedBeforeOwnerLock_HistoryChangesDoNotHideCurrentBindingChanges(string mutation, bool rebind)
+    {
+        var seed = await SeedAsync();
+        using var setup = fixture.CreateContext(_database);
+        var structures = new DocumentStructureRepository(setup);
+        var before = (await structures.GetByParseIdAsync(seed.Parse)).Single();
+        var audio = await setup.DocumentStructureAudio.AsNoTracking().SingleAsync();
+        var history = await new DocumentParseRepository(setup).AddAsync(new() { DocumentFileId = seed.File, Status = DocumentParseStatus.Parsed });
+        var historyTree = new DocumentStructureTreeEntity { DocumentFileId = seed.File, OriginParseId = history.Id };
+        setup.DocumentStructureTrees.Add(historyTree); await setup.SaveChangesAsync();
+        var historyNode = new DocumentStructureNodeEntity {
+            DocumentFileId = seed.File, TreeId = historyTree.Id, ParseId = history.Id, LevelId = before.LevelId,
+            Name = "Historical chapter", StartSequence = 0, EndSequence = 0 };
+        setup.DocumentStructureNodes.Add(historyNode);
+        setup.DocumentParseBlocks.Add(new() { ParseId = history.Id, Sequence = 0, BlockType = "text", TextContent = "Historical text", BlockData = "{}" });
+        await setup.SaveChangesAsync(); setup.ChangeTracker.Clear();
+        var currentTree = (await setup.DocumentFiles.AsNoTracking().SingleAsync()).CurrentStructureTreeId;
+        var job = await new DocumentParseRepository(setup).AddAsync(new() { DocumentFileId = seed.File, Status = DocumentParseStatus.Parsing });
+        var barrier = new OwnerBarrier(); using var delayed = Context(barrier);
+        var completion = new DocumentParseRepository(delayed).CompleteAsync(job.Id, Guid.NewGuid(), "new result", [], [], []);
+        await barrier.Entered.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        try
+        {
+            if (mutation == "history-delete") await new DocumentParseRepository(setup).DeleteAsync(history.Id);
+            else (await structures.ReplaceAsync(history.Id, await structures.GetByParseIdAsync(history.Id))).Should().BeTrue();
+            // A real current-tree edit still protects its newer binding from the waiting completion.
+            if (rebind) (await structures.ReplaceAsync(seed.Parse, [before])).Should().BeTrue();
+        }
+        finally { barrier.Resume.TrySetResult(); }
+        await completion;
+
+        (await setup.DocumentParses.AsNoTracking().SingleAsync(parse => parse.Id == job.Id)).Status.Should().Be(DocumentParseStatus.Parsed);
+        (await setup.DocumentFiles.AsNoTracking().SingleAsync()).CurrentStructureTreeId.Should().Be(currentTree);
+        var retained = await setup.DocumentStructureNodes.AsNoTracking().SingleAsync(node => node.Id == seed.Node);
+        retained.Should().BeEquivalentTo(before, options => options.ExcludingMissingMembers()
+            .Excluding(node => node.ParseId).Excluding(node => node.StartSequence).Excluding(node => node.EndSequence));
+        retained.ParseId.Should().Be(rebind ? seed.Parse : null);
+        retained.StartSequence.Should().Be(rebind ? before.StartSequence : null);
+        retained.EndSequence.Should().Be(rebind ? before.EndSequence : null);
+        JsonSerializer.Serialize(await setup.DocumentStructureAudio.AsNoTracking().SingleAsync()).Should().Be(JsonSerializer.Serialize(audio));
+        var content = await new InternalStructureRepository(setup.Options()).ReadContentAsync(seed.Node, new(null, 10, null), default);
+        content.Page!.Items.Should().HaveCount(rebind ? 1 : 0);
+        content.Page.HasMore.Should().BeFalse();
+        var retainedHistory = await setup.DocumentStructureNodes.AsNoTracking().SingleAsync(node => node.Id == historyNode.Id);
+        retainedHistory.ParseId.Should().Be(mutation == "history-delete" ? null : history.Id);
+        retainedHistory.TreeId.Should().Be(historyTree.Id);
+        // A retry of the successful result cannot remove the subsequently protected binding either.
+        await new DocumentParseRepository(setup).CompleteAsync(job.Id, Guid.NewGuid(), "replayed", [], [], []);
+        (await setup.DocumentStructureNodes.AsNoTracking().SingleAsync(node => node.Id == seed.Node)).ParseId.Should().Be(rebind ? seed.Parse : null);
+    }
+
+    [Theory]
     [InlineData("rebind")] [InlineData("completion")] [InlineData("parse-delete")]
     public async Task CompletionBlockedBeforeOwnerLock_RespectsLaterCommittedGeneration(string earlier)
     {

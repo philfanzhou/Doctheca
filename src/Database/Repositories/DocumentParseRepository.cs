@@ -118,10 +118,12 @@ public class DocumentParseRepository : IDocumentParseRepository
         await using var transaction = await _context.Database.BeginTransactionAsync();
         var file = await StructureOwnership.LockParseOwnerAsync(_context, id);
         if (file is null) return;
+        var changesCurrentBinding = await _context.DocumentStructureNodes
+            .AnyAsync(node => node.ParseId == id && node.TreeId == file.CurrentStructureTreeId);
         await _context.DocumentStructureNodes.Where(node => node.ParseId == id).ExecuteUpdateAsync(setters => setters
             .SetProperty(node => node.ParseId, (Guid?)null).SetProperty(node => node.StartSequence, (int?)null)
             .SetProperty(node => node.EndSequence, (int?)null));
-        file.StructureBindingGeneration++;
+        if (changesCurrentBinding) file.StructureBindingGeneration++;
         await _context.DocumentParses.Where(parse => parse.Id == id).ExecuteDeleteAsync();
         await _context.SaveChangesAsync();
         await transaction.CommitAsync();

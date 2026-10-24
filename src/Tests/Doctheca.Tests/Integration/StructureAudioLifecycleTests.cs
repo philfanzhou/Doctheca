@@ -284,22 +284,35 @@ public sealed class StructureAudioLifecycleTests(PostgreSqlFixture database, Min
         (await minio.KeysAsync(_bucket)).Should().BeEmpty();
     }
 
-    [Fact]
-    public async Task SuccessfulReparseAndParseDeletion_KeepCurrentChaptersAudioLinksAndActualPlaybackBytes()
+    [Theory]
+    [InlineData("none")] [InlineData("history-delete")] [InlineData("history-save")]
+    public async Task SuccessfulReparseAndParseDeletion_KeepCurrentChaptersAudioLinksAndActualPlaybackBytes(string mutation)
     {
         using var factory = Factory(); using var client = Admin(factory);
         var (file, parse, nodes) = await SeedStructureAsync(factory, client);
         var audio = await StoreAsync(factory, parse, nodes[0].Id);
+        var history = await SeedParseAsync(factory, file);
         Guid tree; Guid job;
         using (var scope = factory.Services.CreateScope())
         {
             var context = scope.ServiceProvider.GetRequiredService<DocthecaDbContext>();
             tree = (await context.DocumentFiles.SingleAsync(item => item.Id == file)).CurrentStructureTreeId!.Value;
+            var historyTree = new DocumentStructureTreeEntity { DocumentFileId=file, OriginParseId=history };
+            context.DocumentStructureTrees.Add(historyTree); await context.SaveChangesAsync();
+            context.DocumentStructureNodes.Add(new() { DocumentFileId=file, TreeId=historyTree.Id, ParseId=history,
+                LevelId=nodes[0].LevelId, Name="Historical chapter", StartSequence=0, EndSequence=0 });
+            await context.SaveChangesAsync(); context.ChangeTracker.Clear();
             var repository = new DocumentParseRepository(context);
             var failed = await repository.AddAsync(new() { DocumentFileId=file, Status=DocumentParseStatus.Parsing });
             failed.Status = DocumentParseStatus.Failed; await repository.UpdateAsync(failed);
             (await context.DocumentStructureNodes.AsNoTracking().Where(node => node.Id == nodes[0].Id).SingleAsync()).ParseId.Should().Be(parse);
             var pending = await repository.AddAsync(new() { DocumentFileId=file, Status=DocumentParseStatus.Parsing }); job=pending.Id;
+            if (mutation == "history-delete") await repository.DeleteAsync(history);
+            if (mutation == "history-save")
+            {
+                var structures = new DocumentStructureRepository(context);
+                (await structures.ReplaceAsync(history, await structures.GetByParseIdAsync(history))).Should().BeTrue();
+            }
             await repository.CompleteAsync(job, Guid.NewGuid(), "reparsed", [], [], []);
         }
         async Task CheckAsync()
