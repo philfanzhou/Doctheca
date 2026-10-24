@@ -174,6 +174,7 @@ if (llmSection.Exists() && !string.IsNullOrEmpty(llmSection["ApiKey"]))
 
 // Repositories
 builder.Services.AddScoped<IDocumentFileRepository, DocumentFileRepository>();
+builder.Services.AddScoped<IDocumentAuthoringRepository, DocumentAuthoringRepository>();
 builder.Services.AddScoped<IDocumentParseRepository, DocumentParseRepository>();
 builder.Services.AddScoped<IDocumentParseImageRepository, DocumentParseImageRepository>();
 builder.Services.AddScoped<IDocumentParseBlockRepository, DocumentParseBlockRepository>();

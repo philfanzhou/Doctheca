@@ -9,6 +9,7 @@ using Doctheca.Domain.Repositories;
 using Doctheca.Domain.Services;
 using Doctheca.Domain.Services.Structure;
 using Doctheca.Service.Endpoints.Models;
+using Doctheca.Service.Parsing;
 
 namespace Doctheca.Service;
 
@@ -22,9 +23,10 @@ internal static class DocumentFileMetadataEndpoint
     private static async Task<IResult> UpdateDocumentFileMetadata(
         Guid id,
         HttpRequest request,
-        IDocumentFileService fileService,
-        IDocumentStructureService structureService,
+        IDocumentAuthoringRepository repository,
         ISearchIndexService searchIndexService,
+        IDocumentParseService parseService,
+        ParseSearchIndexer searchIndexer,
         [FromServices] ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(DocumentFileMetadataEndpoint));
@@ -34,9 +36,9 @@ internal static class DocumentFileMetadataEndpoint
         {
             body = await request.ReadFromJsonAsync<UpdateMetadataRequest>();
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            logger.LogWarning(ex, "Failed to parse metadata update request for file {FileId}", id);
+            logger.LogWarning("Failed to parse metadata update request for file {FileId}", id);
             return Results.BadRequest(new { success = false, message = "Invalid request body" });
         }
 
@@ -45,42 +47,26 @@ internal static class DocumentFileMetadataEndpoint
             return Results.BadRequest(new { success = false, message = "Request body is required" });
         }
 
-        // The structure definition is validated and applied first, so a rejected choice leaves
-        // every other metadata field untouched.
-        if (body.StructureDefinitionId != null)
-        {
-            Guid? definitionId = null;
-            if (body.StructureDefinitionId.Length > 0)
-            {
-                if (!Guid.TryParse(body.StructureDefinitionId, out var parsed))
-                {
-                    return StructureHttpResults.Invalid(
-                        [new StructureFieldError("structureDefinitionId", "must be a structure definition id or an empty string")]);
-                }
-                definitionId = parsed;
-            }
-
-            var assigned = await structureService.SetDocumentDefinitionAsync(id, definitionId);
-            if (assigned.Status != StructureResultStatus.Ok)
-            {
-                return StructureHttpResults.From(assigned, _ => new { });
-            }
-        }
-
-        var updated = await fileService.UpdateMetadataAsync(id, body.Subject, body.Grade, body.Year);
-        if (updated == null)
-        {
-            return Results.NotFound(new { success = false, message = "File not found", errorCode = "DOCTHECA_FILE_NOT_FOUND" });
-        }
+        if (!DocumentAuthoringEndpoints.TryMetadata(new(body.FileName, body.Subject, body.Grade, body.Year, body.StructureDefinitionId), out var input))
+            return DocumentAuthoringEndpoints.InvalidDefinition();
+        var result = await repository.UpdateAsync(id, input!, request.HttpContext.RequestAborted);
+        if (result.Status != StructureResultStatus.Ok) return StructureHttpResults.From(result, DocumentAuthoringEndpoints.Project);
+        var updated = result.Value!;
 
         // Best-effort: sync OpenSearch index with new metadata
         try
         {
-            await searchIndexService.UpdateDocumentFileMetadataAsync(id, updated.Subject, updated.Grade, updated.Year);
+            if (updated.HasSource)
+            {
+                await searchIndexService.UpdateDocumentFileMetadataAsync(id, updated.Subject, updated.Grade, updated.Year);
+                if (body.FileName is not null)
+                    foreach (var parse in (await parseService.GetByFileIdAsync(id)).Where(p => p.Status == Doctheca.Domain.Models.DocumentParseStatus.Parsed))
+                        await searchIndexer.ReindexAsync(parse.Id);
+            }
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            logger.LogWarning(ex, "Failed to sync OpenSearch metadata for file {FileId}", id);
+            logger.LogWarning("Failed to sync OpenSearch metadata for file {FileId}", id);
         }
 
         return Results.Ok(new

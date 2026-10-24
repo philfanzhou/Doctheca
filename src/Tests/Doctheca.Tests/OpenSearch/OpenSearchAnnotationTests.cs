@@ -145,7 +145,7 @@ public sealed class OpenSearchAnnotationTests(OpenSearchFixture fixture)
         repository.Setup(value => value.GetByParseIdAsync(It.IsAny<Guid>()))
             .ReturnsAsync((Guid parse) => blocks.Where(block => block.ParseId == parse).ToList());
         var structure = new Mock<IDocumentStructureRepository>();
-        structure.Setup(value => value.GetByParseIdAsync(It.IsAny<Guid>())).ReturnsAsync([]);
+        structure.Setup(value => value.GetCurrentBindingsAsync(It.IsAny<Guid>())).ReturnsAsync([]);
         return new ServiceCollection().AddSingleton(repository.Object).AddSingleton(structure.Object).BuildServiceProvider();
     }
 

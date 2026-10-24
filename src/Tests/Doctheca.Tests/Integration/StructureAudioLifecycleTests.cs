@@ -302,6 +302,8 @@ public sealed class StructureAudioLifecycleTests(PostgreSqlFixture database, Min
             context.DocumentStructureNodes.Add(new() { DocumentFileId=file, TreeId=historyTree.Id, ParseId=history,
                 LevelId=nodes[0].LevelId, Name="Historical chapter", StartSequence=0, EndSequence=0 });
             await context.SaveChangesAsync(); context.ChangeTracker.Clear();
+            // This lifecycle fixture represents an uploaded book; enqueue now enforces that invariant.
+            await context.DocumentFiles.Where(item => item.Id == file).ExecuteUpdateAsync(set => set.SetProperty(item => item.StructaDocDocumentId, (Guid?)Guid.NewGuid()));
             var repository = new DocumentParseRepository(context);
             var failed = await repository.AddAsync(new() { DocumentFileId=file, Status=DocumentParseStatus.Parsing });
             failed.Status = DocumentParseStatus.Failed; await repository.UpdateAsync(failed);

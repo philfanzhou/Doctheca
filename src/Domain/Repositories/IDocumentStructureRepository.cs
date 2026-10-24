@@ -4,6 +4,9 @@ namespace Doctheca.Domain.Repositories;
 
 public interface IDocumentStructureRepository
 {
+    /// <summary>Only current-tree nodes explicitly bound to this parse; history is not an index source.</summary>
+    Task<List<DocumentStructureNodeModel>> GetCurrentBindingsAsync(Guid parseId);
+
     /// <summary>All nodes of a parse ordered by start sequence (parents before children).</summary>
     Task<List<DocumentStructureNodeModel>> GetByParseIdAsync(Guid parseId);
 

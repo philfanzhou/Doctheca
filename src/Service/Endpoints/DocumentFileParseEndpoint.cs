@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Doctheca.Domain.Models;
+using Doctheca.Domain.Repositories;
 using Doctheca.Domain.Services;
 using Doctheca.Service.StructaDoc;
 
@@ -17,6 +18,8 @@ internal static class DocumentFileParseEndpoint
     {
         return group.MapPost("/{id:guid}/parse", ParseDocumentFile);
     }
+
+    private static IResult SourceRequired() => Results.Conflict(new { success = false, message = "Attach a source before parsing", errorCode = "DOCTHECA_DOCUMENT_SOURCE_REQUIRED" });
 
     private static async Task<IResult> ParseDocumentFile(
         Guid id,
@@ -36,6 +39,8 @@ internal static class DocumentFileParseEndpoint
         if (file == null)
             return Results.NotFound(new { success = false, message = "File not found", errorCode = "DOCTHECA_FILE_NOT_FOUND" });
 
+        if (!file.HasSource) return SourceRequired();
+
         // Check in-progress per model version
         var latestParse = await parseService.GetLatestByFileIdAndModelAsync(id, modelVersion);
         if (latestParse != null && (latestParse.Status == DocumentParseStatus.Pending || latestParse.Status == DocumentParseStatus.Parsing))
@@ -44,7 +49,10 @@ internal static class DocumentFileParseEndpoint
         if (!structaDocOptions.Value.IsConfigured)
             return Results.Json(new { success = false, message = "StructaDoc service is not configured", errorCode = "DOCTHECA_STRUCTADOC_NOT_CONFIGURED" }, statusCode: StatusCodes.Status503ServiceUnavailable);
 
-        var parse = await parseService.CreateAsync(id, modelVersion);
+        DocumentParseModel parse;
+        try { parse = await parseService.CreateAsync(id, modelVersion); }
+        catch (DocumentSourceRequiredException) { return SourceRequired(); }
+        catch (KeyNotFoundException) { return Results.NotFound(new { success = false, message = "File not found", errorCode = "DOCTHECA_FILE_NOT_FOUND" }); }
         logger.LogInformation("Document file parse requested: {Id}, ParseId={ParseId}, ModelVersion={ModelVersion}", id, parse.Id, modelVersion);
 
         return Results.Ok(new

@@ -12,6 +12,7 @@ public static class DocumentFileEndpoints
         var group = app.MapGroup("/admin/document-files")
             .RequireAuthorization(DocthecaAuthorizationPolicies.Admin)
             .RequireServiceMantleSecurityResponseHeaders();
+        group.MapAuthoring();
         group.MapUpload();
         group.MapList();
         group.MapDetail();

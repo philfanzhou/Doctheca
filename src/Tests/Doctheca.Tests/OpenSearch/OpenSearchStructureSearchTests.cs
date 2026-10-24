@@ -137,6 +137,7 @@ public sealed class OpenSearchStructureSearchTests(OpenSearchFixture fixture)
         : IDocumentParseBlockRepository, IDocumentStructureRepository
     {
         public Task<List<DocumentParseBlockModel>> GetByParseIdAsync(Guid parseId) => Task.FromResult(blocks.ToList());
+        public Task<List<DocumentStructureNodeModel>> GetCurrentBindingsAsync(Guid parseId) => Task.FromResult(nodes.Where(n => n.ParseId == parseId).ToList());
         Task<List<DocumentStructureNodeModel>> IDocumentStructureRepository.GetByParseIdAsync(Guid parseId) => Task.FromResult(nodes.ToList());
         public Task AddBlocksAsync(Guid parseId, IEnumerable<DocumentParseBlockModel> items) => throw new NotSupportedException();
         public Task<List<DocumentParseBlockModel>> GetByParseAndPageAsync(Guid parseId, int pageId) => throw new NotSupportedException();

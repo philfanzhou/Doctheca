@@ -5,7 +5,7 @@ Document Library defines educational documents and their searchable parse result
 ## Language
 
 **Document File**:
-A complete document that enters the document library and serves as the source for parsing.
+A logical book or document with a display title and metadata. It may exist without a source file; only an attached real source can be parsed.
 _Avoid_: Question, Upload Record
 
 **Document Parse**:
@@ -33,11 +33,11 @@ One configured level of a Structure Definition, such as "Unit" or "Section", opt
 _Avoid_: Heading Level, Text Level
 
 **Structure Node**:
-A hand-marked part of one Document Parse: a contiguous range of Block Sequences at one Structure Level, inside its parent node, such as "Unit 1 The Changing World" or "Section A".
+A custom chapter in a document-owned structure tree, at one configured Structure Level. It may explicitly bind a contiguous range of Block Sequences from one same-document Parse, or remain unbound. Node identity, sibling order and audio links survive parsing and reparsing.
 _Avoid_: Chapter, Heading, Outline Item
 
 **Structure Audio**:
-An audio file imported for one Document Parse, such as an official textbook recording, optionally linked to one Structure Node of that parse.
+An audio file owned by a document and its structure tree, optionally linked to one Structure Node. Legacy parse IDs are immutable storage provenance; content binding does not own the audio. Existing parse-scoped import remains a compatibility entry point until document audio authoring is available.
 _Avoid_: Attachment, Media File, Track
 
 **Audio Link**:

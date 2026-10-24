@@ -40,6 +40,11 @@ export interface DocumentFile {
   id: string
   fileName: string
   contentType: string
+  hasSource: boolean
+  sourceState: 'structure-only' | 'with-source'
+  subject: string | null
+  grade: string | null
+  year: string | null
   createdAt: string
   createdBy: string | null
   parseStatus: string | null
@@ -50,6 +55,11 @@ export interface DocumentFileDetail {
   id: string
   fileName: string
   contentType: string
+  hasSource: boolean
+  sourceState: 'structure-only' | 'with-source'
+  subject: string | null
+  grade: string | null
+  year: string | null
   createdAt: string
   // The runtime structure definition chosen for this document (null when none)
   structureDefinitionId?: string | null

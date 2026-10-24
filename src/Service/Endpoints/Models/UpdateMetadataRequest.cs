@@ -6,6 +6,7 @@ namespace Doctheca.Service.Endpoints.Models;
 /// </summary>
 public record UpdateMetadataRequest
 {
+    public string? FileName { get; init; }
     public string? Subject { get; init; }
     public string? Grade { get; init; }
     public string? Year { get; init; }

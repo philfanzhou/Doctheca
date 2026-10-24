@@ -14,6 +14,7 @@ declare module 'vue' {
     AppDrawer: typeof import('./src/components/AppDrawer.vue')['default']
     AppModal: typeof import('./src/components/AppModal.vue')['default']
     AppToast: typeof import('./src/components/AppToast.vue')['default']
+    BookMetadataForm: typeof import('./src/components/BookMetadataForm.vue')['default']
     ChartDonut: typeof import('./src/components/ChartDonut.vue')['default']
     ChartLine: typeof import('./src/components/ChartLine.vue')['default']
     ElInput: typeof import('element-plus/es')['ElInput']

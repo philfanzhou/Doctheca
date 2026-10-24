@@ -6,6 +6,8 @@ public class DocumentFileModel
     public string FileName { get; set; } = string.Empty;
     public string? FilePath { get; set; }
     public Guid? StructaDocDocumentId { get; set; }
+    public bool HasSource => StructaDocDocumentId.HasValue || !string.IsNullOrWhiteSpace(FilePath);
+    public string SourceState => HasSource ? "with-source" : "structure-only";
     public string ContentType { get; set; } = string.Empty;
     public Guid? CreatedBy { get; set; }
     public string? Subject { get; set; }

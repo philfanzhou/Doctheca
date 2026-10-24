@@ -143,3 +143,27 @@ refusal, failure/cancellation, concurrent startup and both down paths), `Require
 Migration [20261024053658](../database/migrations.md#document-owned-structure-132) preserves every legacy tree separately and initializes one current pointer. Chapters, their order and audio links survive successful reparse and parse deletion. Successful parse completion detaches only current content bindings when its captured document generation is still current; a late/repeated completion cannot erase a newer explicit binding. Upstream fetch, best-effort indexing and metadata analysis run outside that atomic local transition. Historical parse routes resolve preserved origin trees; a new parse's explicit tree save binds the existing current tree, without replacing its identity.
 
 When content is absent, `parseId`, sequence bounds and page bounds are nullable. Existing bound field names/routes stay. Internal content returns an empty terminal page; images and node-filtered search cannot return a former binding's content. The existing editor displays unbound ranges without highlighting unrelated blocks. New no-file book creation and unbound authoring/import interfaces remain separate work under #128.
+
+## Document current-tree authoring (#133)
+
+`GET /admin/document-files/{documentFileId}/structure` reads the persisted current tree directly. A real book without a tree returns its definition, `treeId: null`, `parseId: null` and empty nodes, without creating state; an unknown book returns 404. `PUT` explicitly creates its first real tree with null origin provenance, or replaces only that same current tree. It never promotes a historical parse tree. The request is `{ "nodes": [...] }`, with nested nodes:
+
+```json
+{
+  "id": null,
+  "levelId": "<configured level UUID>",
+  "name": "Unit 1",
+  "parseId": null,
+  "startSequence": null,
+  "endSequence": null,
+  "children": []
+}
+```
+
+New IDs are returned by the server when omitted. Existing IDs and creation times survive; names/parents and sibling array position determine the saved tree and `SortOrder`, independently of ranges. Rename, move up/down, subtree removal and clear-all use one complete atomic save. Kept audio links remain exact; explicitly removed nodes unlink audio without deleting rows or bytes. IDs from another book or any historical tree are rejected. Definition hierarchy, names (1–500), a maximum of 5000 nodes, and all ownership are checked under the existing document-first/definition-share boundary.
+
+An unbound node has all three binding fields absent/null. Otherwise all three are required: one Parsed parse of this book, existing global sequence endpoints and start <= end. A current tree cannot mix nonnull parse identities. Bound children require the same bound parent and a contained range; bound siblings cannot overlap. Unbound children are allowed under bound parents. Bind/unbind does not reorder chapters or change their IDs/audio. The definition hierarchy has no fixed level names. Current saves advance the existing binding generation, protecting newer explicit saves from late completion; parse deletion and completion keep their established transaction rules.
+
+After commit, the union of previous and new bound parses is reindexed best-effort; unbind/rebind removes stale node memberships after successful indexing. The index reads only current-tree nodes bound to that parse, even if it has a distinct historical origin tree. The historical administrator parse read route remains origin-first. Source-free edits without prior bindings make no engine call. Provider failure cannot undo a valid save; search remains eventually consistent.
+
+The console route is `#document-structure/{documentFileId}`. The existing `#structure/{parseId}` editor and parse routes keep their parse/range sorting semantics. Select a parent and configured child level to add chapters without blocks; move siblings explicitly; select a real successful parse only when binding content. Unbound ranges display as absent. Unsaved navigation/browser-close protection applies. New document IDs are never passed to parse audio routes; audio authoring is a later capability. See [book creation and first source](DocumentManagement.md#books-authored-before-a-source-exists-133).

@@ -19,6 +19,9 @@ public class DocumentParseRepository : IDocumentParseRepository
         await using var transaction = await _context.Database.BeginTransactionAsync();
         var file = await StructureOwnership.LockDocumentAsync(_context, model.DocumentFileId)
             ?? throw new KeyNotFoundException("Document file not found.");
+        if (model.Status is DocumentParseStatus.Pending or DocumentParseStatus.Parsing &&
+            file.StructaDocDocumentId is null && string.IsNullOrWhiteSpace(file.FilePath))
+            throw new DocumentSourceRequiredException();
         model.ExpectedBindingGeneration = file.StructureBindingGeneration;
         var entity = MapToEntity(model);
         _context.DocumentParses.Add(entity);

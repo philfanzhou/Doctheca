@@ -57,6 +57,8 @@ public sealed class InternalSearchEndpointTests(PostgreSqlFixture database) : Se
             using (var scope = factory.Services.CreateScope())
             {
                 var context = scope.ServiceProvider.GetRequiredService<DocthecaDbContext>();
+                // Reparse exercises an uploaded source, not a source-free book.
+                await context.DocumentFiles.Where(file => file.Id == seed.File).ExecuteUpdateAsync(set => set.SetProperty(file => file.StructaDocDocumentId, (Guid?)Guid.NewGuid()));
                 var parses = new DocumentParseRepository(context);
                 var job = await parses.AddAsync(new() { DocumentFileId = seed.File, Status = DocumentParseStatus.Parsing });
                 await parses.CompleteAsync(job.Id, Guid.NewGuid(), "new content", [], [], []);

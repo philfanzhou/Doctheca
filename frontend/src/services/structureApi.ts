@@ -27,6 +27,7 @@ export interface StructureLevelInput {
 }
 
 export interface StructureNode {
+  parseId?: string | null
   id: string
   levelId: string
   levelName: string | null
@@ -180,4 +181,15 @@ export function newId(): string {
   bytes[8] = (bytes[8] & 0x3f) | 0x80
   const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`
+}
+
+export interface DocumentNodeInput extends StructureNodeInput {
+  parseId: string | null
+  children: DocumentNodeInput[]
+}
+export async function getDocumentStructure(documentId: string): Promise<ApiResponse<StructureTree>> {
+  return (await httpClient.get(`/admin/document-files/${documentId}/structure`)).data
+}
+export async function saveDocumentStructure(documentId: string, nodes: DocumentNodeInput[]): Promise<ApiResponse<StructureTree> & { searchIndexUpdated: boolean }> {
+  return (await httpClient.put(`/admin/document-files/${documentId}/structure`, { nodes })).data
 }

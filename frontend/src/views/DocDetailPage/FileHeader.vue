@@ -18,19 +18,19 @@ const emit = defineEmits<{
 <template>
   <div class="page-head">
     <div style="display: flex; align-items: center; gap: 14px">
-      <div class="file-ico" :class="fileIconCls(props.detail.contentType)">{{ fileExtLabel(props.detail.contentType) }}</div>
+      <div class="file-ico" :class="fileIconCls(props.detail.contentType)">{{ props.detail.hasSource ? fileExtLabel(props.detail.contentType) : '书籍' }}</div>
       <div>
         <div class="page-title">{{ props.detail.fileName }}</div>
         <div class="page-sub">
-          {{ props.detail.contentType }} · 上传于 {{ formatTime(props.detail.createdAt) }}
+          {{ props.detail.contentType || '仅结构 · 无源文件' }} · 创建于 {{ formatTime(props.detail.createdAt) }}
         </div>
       </div>
     </div>
     <div class="page-actions">
-      <button class="btn btn-sm" :disabled="props.parsing" @click="emit('parse', 'vlm')">
+      <button v-if="props.detail.hasSource" class="btn btn-sm" :disabled="props.parsing" @click="emit('parse', 'vlm')">
         <span v-html="iconHtml('zap')"></span>VLM 解析
       </button>
-      <button class="btn btn-ghost btn-sm" :disabled="props.parsing" @click="emit('parse', 'pipeline')">
+      <button v-if="props.detail.hasSource" class="btn btn-ghost btn-sm" :disabled="props.parsing" @click="emit('parse', 'pipeline')">
         <span v-html="iconHtml('refresh')"></span>Pipeline
       </button>
       <button class="btn btn-danger btn-sm" @click="emit('delete')">

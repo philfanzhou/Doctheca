@@ -24,8 +24,11 @@ internal static class DocumentFileListEndpoint
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 20,
         [FromQuery] string? parseStatus = null,
-        [FromQuery] string? fileName = null)
+        [FromQuery] string? fileName = null,
+        [FromQuery] string? sourceState = null)
     {
+        if (sourceState is not null && sourceState is not "structure-only" and not "with-source")
+            return Results.BadRequest(new { success = false, message = "Invalid sourceState" });
         // Fetch a larger set to allow in-memory filtering by parseStatus
         var fetchPage = 1;
         var fetchSize = string.IsNullOrEmpty(parseStatus) ? pageSize : 200;
@@ -48,11 +51,12 @@ internal static class DocumentFileListEndpoint
         if (!string.IsNullOrEmpty(parseStatus))
         {
             if (parseStatus == "unparsed")
-                filtered = allEnriched.Where(x => x.ParseStatus == null);
+                filtered = filtered.Where(x => x.ParseStatus == null);
             else
-                filtered = allEnriched.Where(x => x.ParseStatus == parseStatus);
+                filtered = filtered.Where(x => x.ParseStatus == parseStatus);
         }
 
+        if (sourceState is not null) filtered = filtered.Where(x => x.File.SourceState == sourceState);
         var totalFiltered = filtered.Count();
         var paged = filtered.Skip((page - 1) * pageSize).Take(pageSize).ToList();
 
@@ -61,6 +65,9 @@ internal static class DocumentFileListEndpoint
             id = f.File.Id.ToString(),
             fileName = f.File.FileName,
             contentType = f.File.ContentType,
+            subject = f.File.Subject, grade = f.File.Grade, year = f.File.Year,
+            structureDefinitionId = f.File.StructureDefinitionId,
+            hasSource = f.File.HasSource, sourceState = f.File.SourceState,
             parseStatus = f.ParseStatus,
             errorMessage = f.ErrorMessage,
             createdBy = f.File.CreatedBy?.ToString(),

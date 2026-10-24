@@ -19,6 +19,7 @@ export function useDocManage() {
   const parseFileParsing = ref(false)
   const pollTimer = ref<number | null>(null)
   const listLoading = ref(false)
+  const sourceState = ref('')
   const filterStatus = ref<string>('all')
 
   async function loadFileList() {
@@ -28,7 +29,8 @@ export function useDocManage() {
         filePage.value,
         filePageSize.value,
         filterStatus.value === 'all' ? undefined : filterStatus.value,
-        fileNameSearch.value || undefined
+        fileNameSearch.value || undefined,
+        sourceState.value || undefined
       )
       fileList.value = response.data as DocumentFile[]
       fileTotal.value = response.total
@@ -143,7 +145,7 @@ export function useDocManage() {
     const failed = fileList.value.filter((f) => f.parseStatus === 'failed').length
     return [
       { key: 'all', label: '全部文档', count: all, color: '#4F46E5' },
-      { key: 'unparsed', label: '待解析', count: unparsed, color: '#9AA0B6' },
+      { key: 'unparsed', label: '未解析', count: unparsed, color: '#9AA0B6' },
       { key: 'parsing', label: '解析中', count: parsing, color: '#0EA5E9' },
       { key: 'failed', label: '解析失败', count: failed, color: '#EF4444' },
     ]
@@ -183,6 +185,7 @@ export function useDocManage() {
   })
 
   return {
+    sourceState,
     fileList,
     fileTotal,
     filePage,
