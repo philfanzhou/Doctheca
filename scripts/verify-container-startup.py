@@ -202,6 +202,11 @@ def main(image, rollback_image=None):
                 raise RuntimeError("Successful startup did not become ready")
             require(get("/health") == expected, "Readiness alias changed")
             require(get("/health/live") == '{"status":"live"}', "Liveness contract changed")
+            history = docker("exec", postgres, "psql", "-v", "ON_ERROR_STOP=1", "-U", "startup_test",
+                             "-d", "startup_existing", "-tAc",
+                             'SELECT "MigrationId" FROM "__EFMigrationsHistory" ORDER BY "MigrationId"')
+            require(history.splitlines()[-1] == "20261024021500_AddRequiredStructureLevels",
+                    "Startup did not reach required-level policy migration")
             require(check_logs(name).count("Database startup gate completed") == 1,
                     "Expected exactly one successful startup gate")
             # With no InternalApi section, every implemented route reaches its own handler.
@@ -342,11 +347,13 @@ def main(image, rollback_image=None):
                             / (migration_id + ".down.sql")).read_text()
 
                 # Optional destructive maintenance, separate from backup-based version recovery.
-                # This isolated test collapses only level-less title classification, then
-                # verifies that the previous image accepts its exact annotation-version database.
+                # Drop required-level policy before the existing classification down, then
+                # verify the previous image still accepts its exact annotation-version database.
+                psql(down_script("20261024021500_AddRequiredStructureLevels"))
                 psql(down_script("20261022194526_ClassifyLevelLessTitles"))
                 before = fingerprint()
-                require("20261022194526_ClassifyLevelLessTitles" not in before, "rollback left the migration history row")
+                require("20261024021500_AddRequiredStructureLevels" not in before, "rollback left the policy migration history row")
+                require("20261022194526_ClassifyLevelLessTitles" not in before, "rollback left the classification history row")
                 start_until_ready("rollback", rollback_image)
                 require(fingerprint() == before, "rollback image changed schema/history/data")
                 print("PASS destructive down maintenance: previous image accepted the downgraded test database", flush=True)
@@ -367,7 +374,8 @@ def main(image, rollback_image=None):
                 require(all(migration in after for migration in (
                             "20260930161548_InitialCreate", "20261021094612_AddDocumentStructure",
                             "20261021153535_AddStructureAudio", "20261022160829_AddDocumentParsePages",
-                            "20261022184348_AddBlockFootnotes", "20261022194526_ClassifyLevelLessTitles")),
+                            "20261022184348_AddBlockFootnotes", "20261022194526_ClassifyLevelLessTitles",
+                            "20261024021500_AddRequiredStructureLevels")),
                         "legacy takeover did not reach the current version")
                 require(after.splitlines()[-1] == before.splitlines()[-1], "legacy takeover changed business rows")
                 print("PASS legacy: baseline taken over and migrated forward; business rows unchanged", flush=True)

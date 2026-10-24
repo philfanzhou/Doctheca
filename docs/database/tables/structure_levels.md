@@ -14,6 +14,7 @@ A **Structure Level** is one configured level of a [structure definition](struct
 | `definition_id` | `UUID` | NOT NULL, FK → `structure_definitions(id)` ON DELETE CASCADE | | Owning definition |
 | `name` | `VARCHAR(100)` | NOT NULL | | Display name, for example "Unit" |
 | `parent_level_id` | `UUID` | NULL, FK → `structure_levels(id)` ON DELETE RESTRICT | | Parent level; NULL for a top level |
+| `required` | `BOOLEAN` | NOT NULL | `false` | Recorded audio requirement policy; all ancestors of a required level must also be required |
 | `sort_order` | `INT` | NOT NULL | | Display order within the definition (0-based) |
 
 ## Indexes
@@ -30,3 +31,13 @@ A **Structure Level** is one configured level of a [structure definition](struct
 - Every definition has at least one level and at least one top level.
 - A level used by marked nodes may be renamed or reordered, but deleting it or changing its parent answers `409 DOCTHECA_STRUCTURE_LEVEL_IN_USE`.
 - Referenced by `document_structure_nodes.level_id` (ON DELETE RESTRICT) as a last line of defense behind the 409 rule.
+
+## Required-level policy (#129)
+
+`20261024021500_AddRequiredStructureLevels` adds `required` with database default false, including
+for all existing rows. The administrator API exposes it as `required`; it does not grant permissions
+or enforce audio links. Optional descendants and separate all-optional root branches are valid.
+The service rejects a required level with an optional ancestor at `levels[i].required`, after
+validating IDs, parents and cycles. A complete PUT that omits the boolean replaces it with false.
+Definition replacements lock the definition row before reading its levels and commit atomically.
+See [migration and recovery](../migrations.md#required-level-policy-issue-129) before upgrading or reverting.

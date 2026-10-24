@@ -91,6 +91,8 @@ public sealed class StructureMigrationTests(PostgreSqlMigrationFixture fixture) 
 
             // Apply the documented down scripts newest first.
             await MigrationGoldenStates.ExecuteRawAsync(context, await File.ReadAllTextAsync(
+                RollbackScriptPath(DocthecaMigrationExecutor.AddRequiredStructureLevelsMigrationId)));
+            await MigrationGoldenStates.ExecuteRawAsync(context, await File.ReadAllTextAsync(
                 RollbackScriptPath(DocthecaMigrationExecutor.ClassifyLevelLessTitlesMigrationId)));
             await MigrationGoldenStates.ExecuteRawAsync(context, await File.ReadAllTextAsync(
                 RollbackScriptPath(DocthecaMigrationExecutor.AddBlockFootnotesMigrationId)));

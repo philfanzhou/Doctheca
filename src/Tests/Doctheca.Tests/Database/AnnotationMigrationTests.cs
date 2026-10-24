@@ -31,7 +31,7 @@ public sealed class AnnotationMigrationTests(PostgreSqlMigrationFixture fixture)
         (await ExistingRowsAsync(context)).Should().Equal(before);
         var afterColumns = await MigrationGoldenStates.ReadColumnShapeAsync(context, DocthecaMigrationExecutor.AllTableNames);
         afterColumns.Should().Contain("document_parse_blocks.footnote:text:null");
-        afterColumns.Where(column => !column.StartsWith("document_parse_blocks.footnote:")).Should().Equal(columns);
+        afterColumns.Where(column => !column.StartsWith("document_parse_blocks.footnote:") && !column.StartsWith("structure_levels.required:")).Should().Equal(columns);
         (await MigrationGoldenStates.ReadConstraintShapeAsync(context, DocthecaMigrationExecutor.AllTableNames)).Should().Equal(constraints);
         (await context.DocumentParseBlocks.SingleAsync()).Footnote.Should().BeNull();
     }
@@ -53,6 +53,8 @@ public sealed class AnnotationMigrationTests(PostgreSqlMigrationFixture fixture)
             var before = await ExistingRowsAsync(context);
             if (documentedSql)
             {
+                await MigrationGoldenStates.ExecuteRawAsync(context, await File.ReadAllTextAsync(
+                    StructureMigrationTests.RollbackScriptPath(DocthecaMigrationExecutor.AddRequiredStructureLevelsMigrationId)));
                 await MigrationGoldenStates.ExecuteRawAsync(context, await File.ReadAllTextAsync(
                     StructureMigrationTests.RollbackScriptPath(DocthecaMigrationExecutor.ClassifyLevelLessTitlesMigrationId)));
                 await MigrationGoldenStates.ExecuteRawAsync(context, await File.ReadAllTextAsync(
@@ -125,7 +127,7 @@ public sealed class AnnotationMigrationTests(PostgreSqlMigrationFixture fixture)
             try
             {
                 await using var command = context.Database.GetDbConnection().CreateCommand();
-                command.CommandText = $"SELECT '{table}:' || (to_jsonb(t) - 'footnote')::text FROM {table} t ORDER BY 1";
+                command.CommandText = $"SELECT '{table}:' || (to_jsonb(t) - 'footnote' - 'required')::text FROM {table} t ORDER BY 1";
                 await using var reader = await command.ExecuteReaderAsync();
                 while (await reader.ReadAsync()) rows.Add(reader.GetString(0));
             }

@@ -170,6 +170,7 @@ public sealed class StructureDefinitionService : IStructureDefinitionService
                 Name = levelName ?? string.Empty,
                 ParentLevelId = level.ParentLevelId,
                 SortOrder = i,
+                Required = level.Required,
             });
         }
 
@@ -201,6 +202,24 @@ public sealed class StructureDefinitionService : IStructureDefinitionService
 
             if (levels.All(level => level.ParentLevelId != null))
                 errors.Add(new("levels", "at least one top level (without a parent) is required"));
+        }
+
+        // Required policy is checked only after the complete graph is structurally valid.
+        if (errors.Count == 0)
+        {
+            var byId = levels.ToDictionary(level => level.Id);
+            for (var i = 0; i < levels.Count; i++)
+            {
+                if (!levels[i].Required) continue;
+                for (var parent = levels[i].ParentLevelId; parent is { } p; parent = byId[p].ParentLevelId)
+                {
+                    if (!byId[p].Required)
+                    {
+                        errors.Add(new($"levels[{i}].required", "all ancestors of a required level must also be required"));
+                        break;
+                    }
+                }
+            }
         }
 
         return (levels, errors);

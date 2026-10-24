@@ -441,7 +441,7 @@ public sealed partial class StructureAudioEndpointTests(PostgreSqlFixture databa
         var definitionId = (await ReadData(await client.PostAsJsonAsync("/admin/structure-definitions", new
         {
             name = "Audio textbook " + Guid.NewGuid().ToString("N")[..6],
-            levels = new object[] { new { id = unit, name = "Unit", parentLevelId = (Guid?)null }, new { id = section, name = "Section", parentLevelId = unit } },
+            levels = new object[] { new { id = unit, name = "Unit", parentLevelId = (Guid?)null, required = true }, new { id = section, name = "Section", parentLevelId = unit, required = true } },
         })))!["id"]!.GetValue<string>();
         var (fileId, parseId) = await SeedParseAsync(factory, 400);
         (await client.PutAsJsonAsync($"/admin/document-files/{fileId}/metadata", new { structureDefinitionId = definitionId }))

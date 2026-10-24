@@ -8,6 +8,7 @@ export interface StructureLevel {
   name: string
   parentLevelId: string | null
   sortOrder: number
+  required: boolean
 }
 
 export interface StructureDefinition {
@@ -22,6 +23,7 @@ export interface StructureLevelInput {
   id: string
   name: string
   parentLevelId: string | null
+  required: boolean
 }
 
 export interface StructureNode {

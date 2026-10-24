@@ -47,7 +47,7 @@ async function load() {
 function startCreate() {
   editingId.value = null
   draftName.value = ''
-  draftLevels.value = [{ id: newId(), name: '', parentLevelId: null }]
+  draftLevels.value = [{ id: newId(), name: '', parentLevelId: null, required: false }]
   fieldErrors.value = []
   editorOpen.value = true
 }
@@ -59,6 +59,7 @@ function startEdit(definition: StructureDefinition) {
     id: level.id,
     name: level.name,
     parentLevelId: level.parentLevelId,
+    required: level.required,
   }))
   fieldErrors.value = []
   editorOpen.value = true
@@ -67,7 +68,7 @@ function startEdit(definition: StructureDefinition) {
 function addLevel() {
   const last = draftLevels.value[draftLevels.value.length - 1]
   // A new level defaults to a child of the last one, the common "next level down" case.
-  draftLevels.value.push({ id: newId(), name: '', parentLevelId: last ? last.id : null })
+  draftLevels.value.push({ id: newId(), name: '', parentLevelId: last ? last.id : null, required: false })
 }
 
 function removeLevel(index: number) {
@@ -124,6 +125,7 @@ async function save() {
     id: level.id,
     name: level.name.trim(),
     parentLevelId: level.parentLevelId,
+    required: level.required,
   }))
   try {
     if (editingId.value) {
@@ -163,11 +165,11 @@ async function remove(definition: StructureDefinition) {
   }
 }
 
-function levelTree(definition: StructureDefinition): { name: string; depth: number }[] {
-  const rows: { name: string; depth: number }[] = []
+function levelTree(definition: StructureDefinition): { name: string; depth: number; required: boolean }[] {
+  const rows: { name: string; depth: number; required: boolean }[] = []
   const visit = (parent: string | null, depth: number) => {
     for (const level of definition.levels.filter((l) => l.parentLevelId === parent)) {
-      rows.push({ name: level.name, depth })
+      rows.push({ name: level.name, depth, required: level.required })
       visit(level.id, depth + 1)
     }
   }
@@ -234,6 +236,7 @@ onMounted(load)
                 :style="{ marginLeft: row.depth * 18 + 'px' }"
               >
                 <span class="badge indigo">{{ row.depth + 1 }}</span>{{ row.name }}
+                <span v-if="row.required" class="badge amber">音频必需策略</span>
               </span>
             </div>
           </div>
@@ -245,6 +248,7 @@ onMounted(load)
           <div>
             <div class="card-title">{{ editingId ? '编辑结构定义' : '新建结构定义' }}</div>
             <div class="card-sub">层级的顺序决定显示顺序；上级为空表示顶层</div>
+            <div class="card-sub">音频必需仅记录策略，音频校验尚未启用；必需层级的所有上级也必须设为必需。</div>
           </div>
         </div>
 
@@ -282,6 +286,7 @@ onMounted(load)
             >
               <el-option v-for="option in parentOptions(level)" :key="option.id" :label="option.name || '（未命名层级）'" :value="option.id" />
             </el-select>
+            <label><input v-model="level.required" type="checkbox" :aria-label="`层级 ${index + 1} 音频必需`" /> 音频必需</label>
             <button class="btn btn-ghost btn-sm" :disabled="index === 0" title="上移" @click="moveLevel(index, -1)">↑</button>
             <button class="btn btn-ghost btn-sm" :disabled="index === draftLevels.length - 1" title="下移" @click="moveLevel(index, 1)">↓</button>
             <button class="btn btn-danger btn-sm" :disabled="draftLevels.length === 1" title="删除层级" @click="removeLevel(index)">
@@ -289,7 +294,7 @@ onMounted(load)
             </button>
           </div>
           <div class="td-sub">{{ level.parentLevelId ? `上级：${levelLabel(level.parentLevelId)}` : '顶层' }}</div>
-          <div v-for="field in ['name', 'id', 'parentLevelId']" :key="field">
+          <div v-for="field in ['name', 'id', 'parentLevelId', 'required']" :key="field">
             <div v-if="errorFor(`levels[${index}].${field}`)" class="field-error">{{ errorFor(`levels[${index}].${field}`) }}</div>
           </div>
         </div>

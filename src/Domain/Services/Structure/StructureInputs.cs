@@ -7,7 +7,7 @@ public sealed record StructureDefinitionInput(string? Name, IReadOnlyList<Struct
 /// One level of a definition payload. <see cref="Id"/> is optional for a new level, but a level
 /// referenced as <see cref="ParentLevelId"/> must carry an id in the same payload.
 /// </summary>
-public sealed record StructureLevelInput(Guid? Id, string? Name, Guid? ParentLevelId);
+public sealed record StructureLevelInput(Guid? Id, string? Name, Guid? ParentLevelId, bool Required = false);
 
 /// <summary>
 /// One node of a tree save. Children are nested; sibling order follows <see cref="StartSequence"/>.

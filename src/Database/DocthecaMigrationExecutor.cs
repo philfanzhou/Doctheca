@@ -68,13 +68,14 @@ public sealed class DocthecaMigrationExecutor : IDatabaseMigrationExecutor
     internal const string AddDocumentParsePagesMigrationId = "20261022160829_AddDocumentParsePages";
     internal const string AddBlockFootnotesMigrationId = "20261022184348_AddBlockFootnotes";
     internal const string ClassifyLevelLessTitlesMigrationId = "20261022194526_ClassifyLevelLessTitles";
+    internal const string AddRequiredStructureLevelsMigrationId = "20261024021500_AddRequiredStructureLevels";
     internal const string HistoryTableName = "__EFMigrationsHistory";
     internal const string IncompatibleErrorCode = "DOCTHECA_DB_SCHEMA_INCOMPATIBLE";
     internal const string UpdatedAtTriggerName = "set_document_files_updated_at";
 
     /// <summary>The ordered migration contract this executor supports.</summary>
     internal static readonly IReadOnlyList<string> KnownMigrationIds =
-        [InitialCreateMigrationId, AddDocumentStructureMigrationId, AddStructureAudioMigrationId, AddDocumentParsePagesMigrationId, AddBlockFootnotesMigrationId, ClassifyLevelLessTitlesMigrationId];
+        [InitialCreateMigrationId, AddDocumentStructureMigrationId, AddStructureAudioMigrationId, AddDocumentParsePagesMigrationId, AddBlockFootnotesMigrationId, ClassifyLevelLessTitlesMigrationId, AddRequiredStructureLevelsMigrationId];
 
     /// <summary>The four business tables of the baseline.</summary>
     internal static readonly IReadOnlyList<string> KnownTableNames =
@@ -107,6 +108,7 @@ public sealed class DocthecaMigrationExecutor : IDatabaseMigrationExecutor
             [AddDocumentParsePagesMigrationId] = PageVersionTableNames,
             [AddBlockFootnotesMigrationId] = AllTableNames,
             [ClassifyLevelLessTitlesMigrationId] = AllTableNames,
+            [AddRequiredStructureLevelsMigrationId] = AllTableNames,
         };
 
     private const string SchemaName = "public";

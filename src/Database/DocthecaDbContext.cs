@@ -107,6 +107,7 @@ public class DocthecaDbContext : DbContext
 
         modelBuilder.Entity<StructureLevelEntity>(entity =>
         {
+            entity.Property(e => e.Required).HasDefaultValue(false);
             entity.HasIndex(e => e.DefinitionId);
             entity.HasIndex(e => e.ParentLevelId);
 

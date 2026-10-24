@@ -49,7 +49,7 @@ public class StructureDefinitionServiceTests
             { "unnamed level", new("D", [new(null, "", null)]), "levels[0].name" },
             { "unknown parent", new("D", [new(null, "L", Guid.NewGuid())]), "levels[0].parentLevelId" },
             { "self parent", new("D", [new(a, "L", a)]), "levels[0].parentLevelId" },
-            { "cycle", new("D", [new(a, "A", b), new(b, "B", a)]), "levels[0].parentLevelId" },
+            { "cycle", new("D", [new(a, "A", b, true), new(b, "B", a, true)]), "levels[0].parentLevelId" },
             { "duplicate id", new("D", [new(a, "A", null), new(a, "B", null)]), "levels[1].id" },
         };
     }

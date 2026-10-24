@@ -511,6 +511,12 @@ namespace Doctheca.Database.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("parent_level_id");
 
+                    b.Property<bool>("Required")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("required");
+
                     b.Property<int>("SortOrder")
                         .HasColumnType("integer")
                         .HasColumnName("sort_order");

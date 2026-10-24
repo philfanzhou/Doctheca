@@ -30,6 +30,9 @@ public class StructureLevelEntity
     [Required]
     public int SortOrder { get; set; }
 
+    [Column("required")]
+    public bool Required { get; set; }
+
     [ForeignKey(nameof(DefinitionId))]
     public StructureDefinitionEntity? Definition { get; set; }
 

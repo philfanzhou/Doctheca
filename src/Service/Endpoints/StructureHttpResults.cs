@@ -42,6 +42,7 @@ internal static class StructureHttpResults
             name = level.Name,
             parentLevelId = level.ParentLevelId?.ToString(),
             sortOrder = level.SortOrder,
+            required = level.Required,
         }),
     };
 
