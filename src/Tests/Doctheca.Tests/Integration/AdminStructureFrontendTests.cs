@@ -22,7 +22,7 @@ public sealed partial class AdminHostedFrontendTests
         await h.Page.Locator("#structure-definition-name").FillAsync(definitionName);
         await h.Page.GetByLabel("层级 1 名称").FillAsync("Root <script>window.__pwned=2</script>");
         await Assertions.Expect(h.Page.GetByLabel("层级 1 音频必需")).Not.ToBeCheckedAsync();
-        await Assertions.Expect(h.Page.GetByText("音频必需仅记录策略", new() { Exact = false })).ToBeVisibleAsync();
+        await Assertions.Expect(h.Page.GetByText("保存音频时须满足必需层级", new() { Exact = false })).ToBeVisibleAsync();
         await h.Page.GetByRole(AriaRole.Button, new() { Name = "添加层级" }).ClickAsync();
         await h.Page.GetByLabel("层级 2 名称").FillAsync("Child");
         await Assertions.Expect(h.Page.GetByLabel("层级 2 音频必需")).Not.ToBeCheckedAsync();

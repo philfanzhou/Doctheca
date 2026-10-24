@@ -67,7 +67,7 @@ const {
         <label>附加首个源文件 <input aria-label="附加首个源文件" type="file" :disabled="attaching" accept=".pdf,.doc,.docx,.ppt,.pptx" @change="attach" /></label>
         <p role="alert">{{ attachmentError }}</p>
       </template>
-      <p>无解析音频创作将在后续功能中提供。</p>
+      <button class="btn" @click="navigate?.('document-audio', detail.id)">管理书籍音频</button>
     </div>
     <BookMetadataForm v-if="detail && editing" :detail="detail" @cancel="editing = false" @saved="() => { editing = false; loadDetail() }" />
     <div v-if="detail" class="grid-2r" style="margin-bottom: 16px">

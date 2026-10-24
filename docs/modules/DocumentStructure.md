@@ -56,10 +56,7 @@ reading tracked levels; concurrent complete saves serialize and the later comple
 A pre-commit failure rolls back all name, hierarchy and flag changes. Existing definition APIs do
 not accept cancellation tokens; disconnecting is not a guarantee that a valid save is undone.
 
-This is recorded policy only: audio import/review, unlinked audio, playback, nodes, storage objects
-and search remain usable independently of flags. Policy changes are allowed even with existing
-nodes/audio. The internal v1 API does not expose `required`. Administrator/CSRF boundaries remain
-unchanged; callers must await the later #128 enforcement work before relying on audio validation.
+Audio import/review now enforces the committed graph for every retained file in one atomic save (#134). Policy changes retain existing nodes/audio/bytes and may mark recordings for review; reads/playback remain available. A later audio Save must fix/remove all violations, while explicit single-file DELETE remains recovery. The internal v1 API does not expose `required`; administrator/CSRF boundaries remain unchanged.
 See [upgrade and recovery](../database/migrations.md#required-level-policy-issue-129).
 
 ### Choosing a document's definition
@@ -121,7 +118,7 @@ field and leaves stored labels intact.
 
 ## Admin Console
 
-- **结构定义** (sidebar, `#structures`): list, create, edit and delete definitions; each level has a name, optional parent and default-false 音频必需 checkbox, can be reordered, and the hierarchy is previewed. Saved required levels carry a visible policy indicator; errors appear beside the level. The editor explains that audio enforcement is not active yet.
+- **结构定义** (sidebar, `#structures`): list, create, edit and delete definitions; each level has a name, optional parent and default-false 音频必需 checkbox, can be reordered, and the hierarchy is previewed. Saved required levels carry a visible policy indicator; errors appear beside the level. The editor explains that audio saves enforce this policy and policy edits retain existing recordings for review.
 - **Document detail** (`#detail/:fileId`): the file info card has a 结构定义 select (clearing it removes the choice).
 - **结构标注** (button on a parsed parse record, `#structure/:parseId`): all blocks of the parse in one continuous view (headings, text, tables, images, with sequence and page). Select a range by clicking a start block and shift-clicking the end block, or by dragging; the selection bar offers only the levels allowed at that position (the child levels of the deepest node containing the range, or the top levels) and pre-fills the name from the first block. The tree panel edits names, selects or replaces a node's range, deletes nodes, and scrolls to each range. 保存 sends the whole tree; 重新加载 discards local edits; 重建索引 re-indexes the parse.
 - **Untrusted content:** table HTML from parse results is never inserted into the page. It is parsed into an inert `DOMParser` document (no scripts run, no resources load), `script`/`style`/`template`/`noscript` elements are dropped, and only cell text (with row/column spans) is rendered by Vue as escaped text. No sanitizer dependency was added.
@@ -166,4 +163,4 @@ An unbound node has all three binding fields absent/null. Otherwise all three ar
 
 After commit, the union of previous and new bound parses is reindexed best-effort; unbind/rebind removes stale node memberships after successful indexing. The index reads only current-tree nodes bound to that parse, even if it has a distinct historical origin tree. The historical administrator parse read route remains origin-first. Source-free edits without prior bindings make no engine call. Provider failure cannot undo a valid save; search remains eventually consistent.
 
-The console route is `#document-structure/{documentFileId}`. The existing `#structure/{parseId}` editor and parse routes keep their parse/range sorting semantics. Select a parent and configured child level to add chapters without blocks; move siblings explicitly; select a real successful parse only when binding content. Unbound ranges display as absent. Unsaved navigation/browser-close protection applies. New document IDs are never passed to parse audio routes; audio authoring is a later capability. See [book creation and first source](DocumentManagement.md#books-authored-before-a-source-exists-133).
+The console route is `#document-structure/{documentFileId}`. The existing `#structure/{parseId}` editor and parse routes keep their parse/range sorting semantics. Select a parent and configured child level to add chapters without blocks; move siblings explicitly; select a real successful parse only when binding content. Unbound ranges display as absent. Unsaved navigation/browser-close protection applies. New document IDs are never passed to parse audio routes; the separate `#document-audio/{documentFileId}` entry uses the same audio page for source-free books with explicit targets and one mixed Save. See [book creation and first source](DocumentManagement.md#books-authored-before-a-source-exists-133).

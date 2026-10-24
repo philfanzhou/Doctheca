@@ -248,7 +248,7 @@ onMounted(load)
           <div>
             <div class="card-title">{{ editingId ? '编辑结构定义' : '新建结构定义' }}</div>
             <div class="card-sub">层级的顺序决定显示顺序；上级为空表示顶层</div>
-            <div class="card-sub">音频必需仅记录策略，音频校验尚未启用；必需层级的所有上级也必须设为必需。</div>
+            <div class="card-sub">保存音频时须满足必需层级；所有上级也必须设为必需。更改策略会保留已有音频，待下次保存时修正关联。</div>
           </div>
         </div>
 

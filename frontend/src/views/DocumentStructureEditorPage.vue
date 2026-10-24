@@ -97,8 +97,9 @@ watch(() => props.docId, load)
 <template>
   <div class="document-editor" v-loading="loading">
     <button class="btn btn-ghost" @click="docId && navigate?.('detail', docId)">返回书籍详情</button>
+    <button class="btn" @click="docId && navigate?.('document-audio', docId)">管理书籍音频</button>
     <h2>{{ detail?.fileName }} · 书籍章节</h2>
-    <p>章节顺序由上下移动决定。正文绑定单独保存；无源文件时可直接创建章节。音频创作尚未在此入口提供。</p>
+    <p>章节顺序由上下移动决定。正文绑定单独保存；无源文件时可直接创建章节。音频关联独立于正文绑定保存。</p>
     <p v-if="!tree?.definition">请先在书籍详情选择结构定义。</p>
     <form v-else class="card authoring-controls" @submit.prevent="add">
       <label>上级章节 <select v-model="parentId" class="input" aria-label="上级章节"><option value="">书籍根目录</option><option v-for="r in rows" :key="r.node.id" :value="r.node.id">{{ '　'.repeat(r.depth) }}{{ r.node.name }}</option></select></label>

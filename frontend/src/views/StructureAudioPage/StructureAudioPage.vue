@@ -3,23 +3,25 @@ import { computed, inject, nextTick, onBeforeUnmount, onMounted, ref, watch } fr
 import { ElMessageBox } from 'element-plus'
 import { iconHtml } from '../../utils/icons'
 import { useToast } from '../../composables/useToast'
-import { getApiMessage, getParseStructure, type StructureTree } from '../../services/structureApi'
+import { getApiMessage, getParseStructure, getDocumentStructure, type StructureTree } from '../../services/structureApi'
 import {
   getAudioFileErrors,
-  getAudioPlaybackLink,
-  importParseAudio,
-  listParseAudio,
-  saveParseAudio,
+  getOwnerAudioPlaybackLink,
+  previewAudio,
+  commitAudio,
+  listAudio,
+  saveAudio,
+  type AudioFiles,
   type AudioFileError,
   type AudioStorageInfo,
   type StructureAudio,
 } from '../../services/audioApi'
 import { formatBytes, isSystemFile, linkState, nodeOptions, savePayload } from '../../utils/audioLinks'
 
-// Official audio of one parse (issue #90): import a folder, files or a ZIP, review the
-// pre-filled node of every file, change or clear links, remove files, and save.
+// One in-memory audio draft for a document current tree or a compatible real-parse entry.
+// Preview proposes targets; one explicit Save commits new files and existing edits/removals.
 
-const props = defineProps<{ docId?: string | null }>()
+const props = defineProps<{ docId?: string | null; documentMode?: boolean }>()
 const navigate = inject<(page: string, id?: string | null) => void>('navigate')
 const { success: toastSuccess, error: toastError } = useToast()
 
@@ -28,6 +30,12 @@ type Filter = 'all' | 'flagged' | 'linked'
 const parseId = computed(() => props.docId ?? '')
 const tree = ref<StructureTree | null>(null)
 const items = ref<StructureAudio[]>([])
+const draftItems = ref<StructureAudio[]>([])
+const selectedFiles = ref<AudioFiles>([])
+const commonTarget = ref<string | null>()
+let draftAbort: AbortController | null = null
+const allItems = computed(() => [...items.value, ...draftItems.value])
+const newIds = computed(() => new Set(draftItems.value.map(item => item.id)))
 const storage = ref<AudioStorageInfo | null>(null)
 const edited = ref<Record<string, string | null>>({})
 const removed = ref<string[]>([])
@@ -79,7 +87,7 @@ async function play(item: StructureAudio) {
   const controller = new AbortController()
   playbackAbort = controller
   try {
-    const response = await getAudioPlaybackLink(parseId.value, item.id, controller.signal)
+    const response = await getOwnerAudioPlaybackLink(parseId.value, !!props.documentMode, item.id, controller.signal)
     if (request !== playbackRequest) return
     playbackExpiry = Date.parse(response.data.expiresAt)
     if (!Number.isFinite(playbackExpiry) || Date.now() >= playbackExpiry) {
@@ -103,16 +111,17 @@ async function play(item: StructureAudio) {
 }
 
 const options = computed(() => nodeOptions(tree.value?.nodes ?? []))
+const policyText = computed(() => tree.value?.definition?.levels.map(level => `${level.name}：${level.required ? '必需' : '可选'}`).join('；') ?? '')
 const hasNodes = computed(() => options.value.length > 0)
 const removedSet = computed(() => new Set(removed.value))
 const payload = computed(() => savePayload(items.value, edited.value, removedSet.value))
-const dirty = computed(() => payload.value.links.length > 0 || payload.value.removeIds.length > 0)
-const flaggedCount = computed(() => items.value.filter((item) => linkState(item).flagged).length)
-const linkedCount = computed(() => items.value.filter((item) => item.nodeId).length)
+const dirty = computed(() => draftItems.value.length > 0 || payload.value.links.length > 0 || payload.value.removeIds.length > 0)
+const flaggedCount = computed(() => allItems.value.filter((item) => linkState(item).flagged || item.requiresReview).length)
+const linkedCount = computed(() => allItems.value.filter((item) => edited.value[item.id]).length)
 const visible = computed(() =>
-  items.value.filter((item) => {
-    if (filter.value === 'flagged') return linkState(item).flagged
-    if (filter.value === 'linked') return !!item.nodeId
+  allItems.value.filter((item) => {
+    if (filter.value === 'flagged') return linkState(item).flagged || item.requiresReview
+    if (filter.value === 'linked') return !!edited.value[item.id]
     return true
   })
 )
@@ -129,21 +138,25 @@ function applyItems(list: StructureAudio[], keepEdits: boolean) {
   removed.value = keepEdits ? removed.value.filter((id) => list.some((item) => item.id === id)) : []
 }
 
+let loadVersion = 0
 async function load() {
+  const version = ++loadVersion
   if (!parseId.value) return
   stopPlayback()
   playbackError.value = ''
   loading.value = true
   importErrors.value = []
   try {
-    const [structure, audio] = await Promise.all([getParseStructure(parseId.value), listParseAudio(parseId.value)])
+    const [structure, audio] = await Promise.all([props.documentMode ? getDocumentStructure(parseId.value) : getParseStructure(parseId.value), listAudio(parseId.value, !!props.documentMode)])
+    if (version !== loadVersion) return
     tree.value = structure.data
     storage.value = audio.data.storage
+    clearPicked()
     applyItems(audio.data.items, false)
   } catch (e) {
-    toastError(getApiMessage(e, '加载官方音频失败'))
+    if (version === loadVersion) toastError(getApiMessage(e, '加载官方音频失败'))
   } finally {
-    loading.value = false
+    if (version === loadVersion) loading.value = false
   }
 }
 
@@ -180,23 +193,44 @@ async function onPicked(event: Event) {
   uploading.value = true
   progress.value = 0
   importErrors.value = []
+  const controller = new AbortController()
+  draftAbort = controller
   try {
-    const response = await importParseAudio(parseId.value, picked, (event) => {
+    const response = await previewAudio(parseId.value, !!props.documentMode, picked, controller.signal, (event) => {
       if (event.total) progress.value = Math.round((event.loaded / event.total) * 100)
     })
-    const result = response.data
-    const known = new Set(items.value.map((item) => item.id))
-    const merged = [...items.value, ...result.items.filter((item) => !known.has(item.id))]
-    merged.sort((a, b) => (a.sourcePath < b.sourcePath ? -1 : a.sourcePath > b.sourcePath ? 1 : 0))
-    applyItems(merged, true)
-    toastSuccess(`已导入 ${result.imported} 个文件：${result.linked} 个已自动关联，${result.flagged} 个待处理`)
-    if (result.flagged > 0) filter.value = 'flagged'
+    if (controller.signal.aborted) return
+    const existing = new Set(allItems.value.filter(item => !removedSet.value.has(item.id)).map(item => item.sourcePath))
+    if (response.data.items.some(item => existing.has(item.sourcePath))) {
+      toastError('所选文件包含已保存或已选择的路径，请先取消重复文件。')
+      return
+    }
+    selectedFiles.value.push(...picked)
+    for (const item of response.data.items) {
+      const id = 'draft:' + item.sourcePath
+      draftItems.value.push({ id, sourcePath: item.sourcePath, folder: item.sourcePath.includes('/') ? item.sourcePath.slice(0, item.sourcePath.lastIndexOf('/')) : '',
+        fileName: item.sourcePath.slice(item.sourcePath.lastIndexOf('/') + 1), contentType: item.contentType, sizeBytes: item.sizeBytes,
+        nodeId: item.suggestedNodeId, nodePath: item.suggestedNodePath, matchStatus: item.matchStatus, linkSource: null, createdAt: '', updatedAt: '' })
+      edited.value[id] = commonTarget.value === undefined ? item.suggestedNodeId : commonTarget.value
+    }
+    toastSuccess(`已选择 ${response.data.items.length} 个文件，确认目标后点击保存`)
   } catch (e) {
     importErrors.value = getAudioFileErrors(e)
-    toastError(getApiMessage(e, '导入失败'))
+    if (!controller.signal.aborted) toastError(getApiMessage(e, '读取文件失败'))
   } finally {
     uploading.value = false
   }
+}
+
+function clearPicked() {
+  draftAbort?.abort()
+  for (const item of draftItems.value) delete edited.value[item.id]
+  draftItems.value = []
+  selectedFiles.value = []
+}
+function setCommonTarget(nodeId: string | null) {
+  commonTarget.value = nodeId
+  for (const item of draftItems.value) edited.value[item.id] = nodeId
 }
 
 function updateNode(id: string, nodeId: string | null) {
@@ -218,10 +252,23 @@ async function save() {
   stopPlayback()
   try {
     if (payload.value.removeIds.length && !(await confirm(`删除 ${payload.value.removeIds.length} 个音频文件？删除后需重新导入。`))) return
-    const response = await saveParseAudio(parseId.value, payload.value.links, payload.value.removeIds)
-    applyItems(response.data.items, false)
+    importErrors.value = []
+    draftAbort = new AbortController()
+    if (draftItems.value.length) {
+      await commitAudio(parseId.value, !!props.documentMode, selectedFiles.value,
+        draftItems.value.map(item => ({ sourcePath: item.sourcePath, nodeId: edited.value[item.id] ?? null })),
+        payload.value.links, payload.value.removeIds, draftAbort.signal, event => { if (event.total) progress.value = Math.round(event.loaded / event.total * 100) })
+      // The single commit also changed old rows; reload the complete committed set.
+      const response = await listAudio(parseId.value, !!props.documentMode)
+      clearPicked()
+      applyItems(response.data.items, false)
+    } else {
+      const response = await saveAudio(parseId.value, !!props.documentMode, payload.value.links, payload.value.removeIds, draftAbort.signal)
+      applyItems(response.data.items, false)
+    }
     toastSuccess('音频关联已保存')
   } catch (e) {
+    importErrors.value = getAudioFileErrors(e)
     toastError(getApiMessage(e, '保存失败'))
   } finally {
     saving.value = false
@@ -229,7 +276,7 @@ async function save() {
 }
 
 function back() {
-  navigate?.('structure', parseId.value)
+  navigate?.(props.documentMode ? 'document-structure' : 'structure', parseId.value)
 }
 
 function beforeUnload(event: BeforeUnloadEvent) {
@@ -241,7 +288,7 @@ async function canLeave(): Promise<boolean> {
   if (uploading.value || saving.value) return false
   return !dirty.value || await confirm('音频有未保存的修改，离开后将丢失。继续？')
 }
-watch(parseId, load)
+watch([parseId, () => props.documentMode], load)
 
 onMounted(() => {
   setNavigationGuard?.(canLeave)
@@ -250,6 +297,8 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  loadVersion++
+  draftAbort?.abort()
   stopPlayback()
   setNavigationGuard?.(null)
   window.removeEventListener('beforeunload', beforeUnload)
@@ -267,7 +316,7 @@ onBeforeUnmount(() => {
       <div>
         <div class="page-title">官方音频</div>
         <div class="page-sub">
-          {{ tree?.fileName }} · {{ items.length }} 个文件 · 已关联 {{ linkedCount }} · 待处理 {{ flaggedCount }}
+          {{ tree?.fileName }} · {{ allItems.length }} 个文件 · 已关联 {{ linkedCount }} · 待处理 {{ flaggedCount }}
         </div>
       </div>
       <div class="page-actions">
@@ -287,14 +336,18 @@ onBeforeUnmount(() => {
     </div>
     <div v-if="tree && !hasNodes" class="error-box audio-warning" role="status">
       <span v-html="iconHtml('warnTri')"></span>
-      <span>该解析还没有标注结构节点。请先在“结构标注”中标注节点，再导入音频。</span>
+      <span>这本书还没有保存章节。请先在“结构标注”中添加章节，再选择音频。</span>
     </div>
 
     <div class="card audio-import">
       <div class="card-title">导入音频</div>
       <p class="td-sub">
-        选择整个文件夹、多个文件或 ZIP 压缩包。系统会按文件夹名和文件名匹配结构节点并自动关联到最深的节点；文件夹与文件名不一致、匹配不唯一或没有匹配的文件会标记为待处理。{{ limitsText }}
+        选择整个文件夹、多个文件或 ZIP 压缩包。系统按文件夹名和文件名建议章节；请在下表检查或修改每个目标。选文件不会保存，点击“保存”才一次提交全部修改。{{ limitsText }}
       </p>
+      <p v-if="policyText" class="td-sub" data-testid="audio-policy">{{ policyText }}。必需层级改变后，已有文件会保留；保存时须修正或删除全部待复核文件。</p>
+      <el-select :model-value="commonTarget" @update:model-value="setCommonTarget" clearable :value-on-clear="null" placeholder="统一指定新文件目标（可逐项修改）" aria-label="新文件统一目标" :disabled="saving || uploading" style="width: 100%">
+        <el-option v-for="option in options" :key="option.id" :label="option.label" :value="option.id" />
+      </el-select>
       <div class="audio-import-actions">
         <button class="btn btn-sm" :disabled="saving || uploading || loading || !hasNodes || !storage?.available" @click="pick('folder')">
           <span v-html="iconHtml('upload')"></span>选择文件夹
@@ -302,7 +355,8 @@ onBeforeUnmount(() => {
         <button class="btn btn-ghost btn-sm" :disabled="saving || uploading || loading || !hasNodes || !storage?.available" @click="pick('files')">
           <span v-html="iconHtml('file')"></span>选择文件或 ZIP
         </button>
-        <span v-if="uploading" class="td-sub mono">上传中 {{ progress }}%</span>
+        <span v-if="uploading || saving" class="td-sub mono">处理中 {{ progress }}%</span>
+        <button v-if="draftItems.length || uploading" class="btn btn-ghost btn-sm" :disabled="saving" @click="clearPicked">取消所选文件</button>
         <input ref="folderInput" type="file" webkitdirectory multiple hidden data-testid="audio-folder-input" @change="onPicked" />
         <input
           ref="fileInput"
@@ -315,7 +369,7 @@ onBeforeUnmount(() => {
         />
       </div>
       <div v-if="importErrors.length" class="error-box audio-errors" role="alert">
-        <div>以下文件无法导入，本次没有保存任何文件：</div>
+        <div>以下文件需要处理，本次没有提交修改：</div>
         <div v-for="(error, i) in importErrors" :key="i">{{ error.file || '导入' }}：{{ error.reason }}</div>
       </div>
     </div>
@@ -331,7 +385,7 @@ onBeforeUnmount(() => {
     <div class="card">
       <div class="audio-filter" role="tablist" aria-label="筛选">
         <button class="btn btn-sm" :class="filter === 'all' ? '' : 'btn-ghost'" role="tab" :aria-selected="filter === 'all'" @click="filter = 'all'">
-          全部 {{ items.length }}
+          全部 {{ allItems.length }}
         </button>
         <button class="btn btn-sm" :class="filter === 'flagged' ? '' : 'btn-ghost'" role="tab" :aria-selected="filter === 'flagged'" @click="filter = 'flagged'">
           待处理 {{ flaggedCount }}
@@ -375,13 +429,16 @@ onBeforeUnmount(() => {
                 </el-select>
               </td>
               <td>
-                <span class="badge" :class="linkState(item).tone"><span class="dot"></span>{{ linkState(item).label }}</span>
+                <span class="badge" :class="linkState(item).tone"><span class="dot"></span>{{ newIds.has(item.id) && item.nodeId ? '建议章节' : linkState(item).label }}</span>
+                <span v-if="newIds.has(item.id)" class="badge amber audio-pending">待保存新文件</span>
+                <span v-if="item.requiresReview" class="badge amber">需要复核：{{ item.reviewReason }}</span>
                 <span v-if="removedSet.has(item.id)" class="badge red audio-pending">待删除</span>
                 <span v-else-if="edited[item.id] !== item.nodeId" class="badge amber audio-pending">未保存</span>
               </td>
               <td class="audio-actions">
-                <button class="btn btn-ghost btn-sm" :disabled="saving || removedSet.has(item.id)" :aria-label="`播放 ${item.sourcePath}`" @click="play(item)">播放</button>
+                <button class="btn btn-ghost btn-sm" :disabled="saving || newIds.has(item.id) || removedSet.has(item.id)" :aria-label="`播放 ${item.sourcePath}`" @click="play(item)">播放</button>
                 <button
+                  v-if="!newIds.has(item.id)"
                   class="btn btn-sm"
                   :class="removedSet.has(item.id) ? 'btn-ghost' : 'btn-danger'"
                   :aria-label="`${removedSet.has(item.id) ? '撤销删除' : '删除'} ${item.sourcePath}`"
@@ -395,7 +452,7 @@ onBeforeUnmount(() => {
           </tbody>
         </table>
         <div v-if="!visible.length && !loading" class="empty">
-          {{ items.length ? '没有符合筛选条件的文件' : '还没有导入音频' }}
+          {{ allItems.length ? '没有符合筛选条件的文件' : '还没有导入音频' }}
         </div>
       </div>
     </div>

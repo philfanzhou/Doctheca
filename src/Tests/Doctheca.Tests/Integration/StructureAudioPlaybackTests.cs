@@ -60,6 +60,8 @@ public sealed partial class StructureAudioEndpointTests
         var nodes = (await ReadData(await client.GetAsync($"/admin/document-parses/{parseId}/structure")))!["nodes"]!;
         var root = nodes[0]!["id"]!.GetValue<string>();
         var child = nodes[0]!["children"]![0]!["id"]!.GetValue<string>();
+        await ReadData(await client.PutAsJsonAsync($"/admin/document-parses/{parseId}/audio", new { links = imported!["items"]!.AsArray()
+            .Where(a => a!["sourcePath"]!.GetValue<string>() != "unlinked.wav").Select(a => new { id = a!["id"]!.GetValue<string>(), nodeId = a["sourcePath"]!.GetValue<string>().Contains("Vocabulary") ? root : child }) }));
         foreach (var (node, expected) in new[] { (root, "unit1/VocabularyUnit1.wav"), (child, "unit1/Unit1SectionA.wav") })
         {
             var response = await client.GetAsync($"/admin/document-parses/{parseId}/structure/nodes/{node}/audio");
@@ -80,7 +82,7 @@ public sealed partial class StructureAudioEndpointTests
             if (path.EndsWith("playback-link")) response.Headers.CacheControl!.NoStore.Should().BeTrue();
         }
         // Unlinked rows can be previewed by an administrator, too.
-        var unlinked = imported!["items"]!.AsArray().Single(item => item!["nodeId"] == null)!;
+        var unlinked = imported!["items"]!.AsArray().Single(item => item!["sourcePath"]!.GetValue<string>() == "unlinked.wav")!;
         (await client.GetAsync($"/admin/document-parses/{parseId}/audio/{unlinked["id"]}/playback-link")).StatusCode.Should().Be(HttpStatusCode.OK);
     }
 

@@ -253,6 +253,25 @@ public sealed partial class InternalAudioEndpointTests
         Assert.NotNull(scratch.Name); Assert.False(File.Exists(scratch.Name));
     }
 
+    [Theory]
+    [InlineData("valid")] [InlineData("foreign-document")] [InlineData("foreign-audio")] [InlineData("wrong-type")] [InlineData("unproven-legacy")]
+    public async Task DocumentPrefixBuffer_UsesOnlyVerifiedServerOwnerAndAudioIdentity(string mutation)
+    {
+        var document = Guid.NewGuid(); var id = Guid.NewGuid(); var scratch = new Scratch(); var oss = new Mock<IOssService>(MockBehavior.Strict);
+        var key = $"audio/documents/{document:N}/{id:N}.wav";
+        if (mutation == "foreign-document") key = $"audio/documents/{Guid.NewGuid():N}/{id:N}.wav";
+        if (mutation == "foreign-audio") key = $"audio/documents/{document:N}/{Guid.NewGuid():N}.wav";
+        if (mutation == "unproven-legacy") key = $"audio/{Guid.NewGuid():N}/{id:N}.wav";
+        var row = new InternalAudioObject(id, null, Guid.NewGuid(), "generated.wav", mutation == "wrong-type" ? "audio/mpeg" : "audio/wav", 1, key, document);
+        var store = new StructureAudioStore(() => oss.Object, new(true, null), NullLogger<StructureAudioStore>.Instance);
+        if (mutation == "valid")
+        {
+            oss.Setup(x => x.CopyToAsync(key, It.IsAny<Stream>(), It.IsAny<CancellationToken>())).Returns((string _, Stream stream, CancellationToken ct) => stream.WriteAsync(new byte[1], ct).AsTask());
+            await using var bytes = await store.BufferAsync(row, 10, scratch, default); Assert.Equal(1, bytes.Length);
+        }
+        else { await Assert.ThrowsAsync<AudioStorageException>(() => store.BufferAsync(row, 10, scratch, default)); oss.VerifyNoOtherCalls(); Assert.Null(scratch.Last); }
+    }
+
     [Fact]
     public async Task DatabaseErrors_UseSafeJsonAndByteFailuresWithoutProviderDiagnostics()
     {

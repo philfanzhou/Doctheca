@@ -197,21 +197,22 @@ public sealed partial class StructureAudioEndpointTests
                 ? Task.FromException<HashSet<string>>(new IOException("synthetic reference outage"))
                 : actual.GetReferencedObjectKeysAsync(keys));
         using var cancellation = new CancellationTokenSource();
-        repo.Setup(r => r.GetByParseIdAsync(parseId)).Returns(async () =>
+        repo.Setup(r => r.GetScopeAsync(It.IsAny<AudioOwner>(), It.IsAny<CancellationToken>())).Returns((AudioOwner owner, CancellationToken token) => actual.GetScopeAsync(owner, token));
+        repo.Setup(r => r.AcquireObjectKeyLeaseAsync(It.IsAny<IReadOnlyCollection<string>>(), It.IsAny<CancellationToken>())).Returns((IReadOnlyCollection<string> keys, CancellationToken token) => actual.AcquireObjectKeyLeaseAsync(keys, token));
+        repo.Setup(r => r.GetByOwnerAsync(It.IsAny<AudioOwner>(), It.IsAny<CancellationToken>())).Returns(async (AudioOwner owner, CancellationToken token) =>
         {
-            var rows = await actual.GetByParseIdAsync(parseId);
-            if (failure == "cancel-during-reload") cancellation.Cancel();
+            var rows = await actual.GetByOwnerAsync(owner, token);
+            if (failure == "cancel-during-reload") { cancellation.Cancel(); token.ThrowIfCancellationRequested(); }
             return rows;
         });
-        repo.Setup(r => r.InsertAsync(parseId, It.IsAny<IReadOnlyList<DocumentStructureAudioModel>>(), It.IsAny<CancellationToken>()))
-            .Returns(async (Guid id, IReadOnlyList<DocumentStructureAudioModel> rows, CancellationToken token) =>
+        repo.Setup(r => r.CommitAsync(It.IsAny<AudioOwner>(), It.IsAny<IReadOnlyList<DocumentStructureAudioModel>>(), It.IsAny<IReadOnlyList<AudioLinkChange>>(), It.IsAny<IReadOnlyCollection<Guid>>(), It.IsAny<DateTimeOffset>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
+            .Returns(async (AudioOwner owner, IReadOnlyList<DocumentStructureAudioModel> rows, IReadOnlyList<AudioLinkChange> links, IReadOnlyCollection<Guid> remove, DateTimeOffset now, bool deleteOnly, CancellationToken token) =>
             {
-                if (failure == "parse-removed")
-                    (await client.DeleteAsync($"/admin/document-parses/{parseId}")).StatusCode.Should().Be(HttpStatusCode.OK);
+                if (failure == "parse-removed") (await client.DeleteAsync($"/admin/document-parses/{parseId}")).StatusCode.Should().Be(HttpStatusCode.OK);
                 if (failure == "unknown-reference-before-commit") throw new IOException("synthetic database outage");
                 if (failure == "database") throw new Microsoft.EntityFrameworkCore.DbUpdateException("synthetic non-unique failure");
                 if (failure == "cancel-before-commit") { cancellation.Cancel(); token.ThrowIfCancellationRequested(); }
-                var committed = await actual.InsertAsync(id, rows, token);
+                var committed = await actual.CommitAsync(owner, rows, links, remove, now, deleteOnly, token);
                 if (failure == "cancel-after-commit") { cancellation.Cancel(); token.ThrowIfCancellationRequested(); }
                 if (failure == "unknown-commit") throw new IOException("synthetic lost commit acknowledgement");
                 return committed;

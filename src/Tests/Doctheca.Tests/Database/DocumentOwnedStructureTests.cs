@@ -293,9 +293,9 @@ public sealed class DocumentOwnedStructureTests(PostgreSqlMigrationFixture fixtu
             if (earlier == "document-delete") (await new DocumentFileRepository(setup).DeleteWithAudioAsync(seed.File))!.Should().ContainSingle();
         }
         finally { barrier.Resume.TrySetResult(); }
-        (await insert).Should().Be(earlier == "tree-save");
-        if (earlier == "tree-save") (await setup.DocumentStructureAudio.AsNoTracking().SingleAsync(audio => audio.Id == item.Id)).NodeId.Should().BeNull();
-        else (await setup.DocumentStructureAudio.AnyAsync(audio => audio.Id == item.Id)).Should().BeFalse();
+        // New imports require current nodes at commit as well as preflight; a removed whole tree now rejects the insert.
+        (await insert).Should().BeFalse();
+        (await setup.DocumentStructureAudio.AnyAsync(audio => audio.Id == item.Id)).Should().BeFalse();
     }
 
     [Theory]

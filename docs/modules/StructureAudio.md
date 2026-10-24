@@ -1,18 +1,18 @@
 # Structure Audio Import, Review and Playback
 
-Administrators can import official audio for one parse, review pre-filled node links, clear or change them, and save removals atomically (#107/#108). The audio page is reached from the structure editor at `#audio/:parseId`. Administrators can preview imported audio and list a node’s direct audio through the authenticated APIs below (#109). Downstream current-node audio uses expiring same-origin proxy links (#101), described below.
+Administrators can select recordings for a logical book, review suggested chapter targets, edit existing links/removals, and commit the complete draft with one Save (#134). A source-free book needs no parse, content binding or source file. Open `#document-audio/:documentFileId` from book details/current chapters; the compatible `#audio/:parseId` entry keeps its real parse identity. Administrators can preview imported audio and list a node’s direct audio through the authenticated APIs below (#109). Downstream current-node audio uses expiring same-origin proxy links (#101), described below.
 
 ## Authority and transactions
 
 PostgreSQL [document_structure_audio](../database/tables/document_structure_audio.md) owns metadata,
 the current node link and the internal object key. `document_structure_nodes` owns the tree. S3 owns
-the bytes under `audio/{parseId:N}/{audioId:N}{extension}`; it is not a second metadata authority.
+the bytes under `audio/documents/{documentFileId:N}/{audioId:N}{extension}` for new document imports, or the unchanged legacy `audio/{parseId:N}/{audioId:N}{extension}` for parse imports. The parse prefix is immutable provenance, not a live parse dependency.
 
-Internal insert/link repository operations and whole-tree replacement hold the same document-row
-lock. An inserted link whose node was removed is stored unlinked (`node_removed`). Invalid link
-batches commit nothing. Tree replacement unlinks removed IDs in the same transaction, preserving
-retained node IDs even though the tree is deleted and reinserted. `node_id` deliberately has no
-foreign key for that replacement model; the repository checks same-document/tree membership.
+Audio commits and whole-tree replacement lock the document row first. Audio commits then take a shared lock on the definition row before reading the current tree, configured levels and **all retained audio**, including unchanged rows. Definition replacement takes the definition row exclusively and never then acquires a document lock. No audio commit advances content-binding generation.
+
+The commit applies additions, explicit link changes and removals in memory and validates that final set before changing metadata. With no required levels, valid links and unlinked files are allowed. Otherwise every retained file must be linked; a target above any required descendant on its selected definition branch is rejected, even if that descendant has no current node. Names/depth are not policy. Policy/tree edits retain bytes and metadata; GET derives `requiresReview`/`reviewReason`. A later import/review Save must fix or remove every violation. Explicit single-file DELETE is a recovery exception and can remove one file while other violations remain.
+
+Whole-tree saves unlink only removed nodes and preserve kept IDs/audio. Successful reparse clears old content bindings, while source attachment/parse deletion preserve chapter and recording identities, links and bytes. Unknown/foreign explicit nodes are rejected; a stale suggestion is never silently persisted to a different chapter. Historical trees remain isolated and cannot receive new imports or be promoted through a parse adapter.
 
 ## Storage boundary and configuration
 
@@ -68,13 +68,13 @@ Supported extensions/signatures: `.mp3` (ID3 or MPEG frame sync), `.m4a` (ftyp),
 
 Paths use NFC Unicode and `/` separators, at most 1000 characters and 255 per segment. Absolute/drive paths, control characters, invalid Unicode, empty/whitespace segments and `.`/`..` segments are refused. Path equality is ordinal and case-sensitive, matching the existing database unique index. A multipart `paths` value for each file preserves browser folder names; otherwise multipart filenames are used.
 
-Every batch is validated before any object or row write. Uploads are followed by one insert transaction under the document lock. The unique tree/path index rejects concurrent duplicates; nodes deleted since matching become unlinked (`node_removed`), and a missing parse cannot insert. Reading, uploading and pre-commit boundaries observe request cancellation. Failed or cancelled imports compensate only objects confirmed unreferenced. Unknown commit/reference outcomes retain recoverable objects for the grace sweep; committed rows/bytes survive a cancelled response and are visible on reload. No cancelled operation is reported as successful.
+The bounded reader validates file formats/paths before storage. Preview performs no row/object/index/source writes and reserves nothing. Save re-reads the same files, uploads outside document locks under sorted exact-key leases on the metadata connection, then revalidates targets and the complete final set in one document/definition-locked transaction. Missing owners/removed targets or changed Required policy reject the batch; the unique tree/path index rejects concurrent duplicates. Reading, uploading and pre-commit boundaries observe request cancellation. Failed or cancelled imports compensate only objects confirmed unreferenced. Unknown commit/reference outcomes retain recoverable objects for the grace sweep; committed rows/bytes survive a cancelled response and are visible on reload. No cancelled operation is reported as successful.
 
 ## Matching
 
-Folder and filename are compared separately against marked node names at every tree level. Case, spaces, punctuation and leading zeroes are ignored; labels match at token boundaries. No level name is hard-coded. The deepest agreed node is pre-filled; sibling ambiguity or folder/name conflicts stay unlinked. A child without its ancestor is not independently matched.
+Folder and filename are compared separately against marked node names at every tree level. Case, spaces, punctuation and leading zeroes are ignored; labels match at token boundaries. No level name is hard-coded. The deepest agreed node is suggested; sibling ambiguity or folder/name conflicts stay unlinked. A child without its ancestor is not independently matched.
 
-The 58 PEP Grade 9 fixture paths yield 49 Section links, 8 Unit vocabulary links and exactly one `unit3/9s04Unit4SectionA1e.mp3` conflict. `unit1/SectionB.mp3` links to B; `unit1/sectiona/SectionB.mp3`, `unit1/sectiona/Unit1SectionB.mp3` and `sectiona/Unit1SectionB.mp3` stay unlinked as `folder_name_mismatch`. Isolated `SectionB.mp3` is `no_match`.
+The 58 PEP Grade 9 fixture paths yield 49 Section suggestions, 8 Unit vocabulary suggestions and exactly one `unit3/9s04Unit4SectionA1e.mp3` conflict. `unit1/SectionB.mp3` links to B; `unit1/sectiona/SectionB.mp3`, `unit1/sectiona/Unit1SectionB.mp3` and `sectiona/Unit1SectionB.mp3` stay unlinked as `folder_name_mismatch`. Isolated `SectionB.mp3` is `no_match`.
 
 ## Administrator API
 
@@ -82,30 +82,34 @@ All routes require `DocthecaAdmin`, existing Cookie CSRF protection for writes a
 
 | Method and path | Body / behavior |
 | --- | --- |
-| `GET /admin/document-parses/{parseId}/audio` | Safe metadata, storage availability/reason and exact import limits/extensions |
-| `POST /admin/document-parses/{parseId}/audio` | Multipart `files` (audio/ZIP), optional one `paths` value per file; validates all, imports once |
-| `PUT /admin/document-parses/{parseId}/audio` | `{ "links": [{ "id": "UUID", "nodeId": null }], "removeIds": ["UUID"] }`; validates all IDs before one transaction |
-| `DELETE /admin/document-parses/{parseId}/audio/{audioId}` | Removes one file using the same atomic save path |
-| `POST /admin/structure-audio/orphan-sweep` | Recovery described above |
-| `GET /admin/document-parses/{parseId}/structure/nodes/{nodeId}/audio` | `{parseId,nodeId,items}` containing only direct links, with the same safe item projection; no descendants |
-| `GET /admin/document-parses/{parseId}/audio/{audioId}/playback-link` | `{url,expiresAt,expiresInSeconds}` in the existing success envelope; no-store on success/failure |
+| `GET /admin/document-files/{documentFileId}/audio` | Current-tree safe metadata, `documentFileId`, nullable `parseId`, `treeId`, storage availability/limits and items |
+| `POST /admin/document-files/{documentFileId}/audio?preview=true` | Bounded read-only multipart proposal: `items` contain sourcePath/contentType/sizeBytes/matchStatus/suggestedNodeId/suggestedNodePath, plus skipped paths; no durable staging |
+| `POST /admin/document-files/{documentFileId}/audio` | Multipart `files`, optional one `paths` per upload, optional `targetNodeId`, `targets`, `links`, `removeIds`; one mixed metadata commit |
+| `PUT /admin/document-files/{documentFileId}/audio` | `{ "links": [{ "id": "UUID", "nodeId": null }], "removeIds": ["UUID"] }`; shared complete-set policy validation |
+| `DELETE /admin/document-files/{documentFileId}/audio/{audioId}` | Explicit single-file removal, including recovery from invalid retained policy |
+| `GET /admin/document-files/{documentFileId}/structure/nodes/{nodeId}/audio` | Direct current-node audio only |
+| `GET /admin/document-files/{documentFileId}/audio/{audioId}/playback-link` | Existing temporary administrator signing; no-store |
+| The corresponding `/admin/document-parses/{parseId}/audio` GET/POST/PUT/DELETE and node/playback paths | Existing parse identity and historical reads; same limits, preview/explicit targets and Required enforcement; new historical-only imports return structure-required 409 |
+| `POST /admin/structure-audio/orphan-sweep` | Existing recovery described above |
 
-Responses use `{ "success": true, "data": ... }`; errors use `{ "success": false, "message": "...", "errorCode": "..." }` and optional `{file,reason}` errors. The metadata allow-list is `id`, `sourcePath`, `folder`, `fileName`, `contentType`, `sizeBytes`, `nodeId`, `nodePath`, `matchStatus`, `linkSource`, `createdAt`, `updatedAt`. The parse-audio metadata GET contains `parseId`, `storage` and `items`. POST adds `imported`, `linked`, `flagged`, `skipped`; PUT returns `parseId`/`items`, and DELETE returns `id`/`deleted`. Storage contains only `available`, key-name-only `reason`, `maxFileBytes`, `maxArchiveBytes`, `maxFiles`, `maxArchiveEntries`, `maxPathLength`, `maxSegmentLength`, `multipartOverheadBytes`, and `extensions`. No object key, bucket, internal/public endpoint or storage credential appears in these responses or logs.
+`targets` is a JSON array `[{ "sourcePath": "unit1/track.wav", "nodeId": "UUID" }]`. Normalize each expanded path exactly as the reader does; duplicate/unknown paths reject the batch. An explicit per-path null overrides a common target and clears the selection. Omitted targets mean unlinked, never automatic confirmation of filename matching. `links` and `removeIds` are JSON arrays with the same meaning as PUT. A single Save can replace a removed path with new bytes atomically. Each selection form field appears at most once. Preview does not assert policy validity or reserve paths; all commit validation runs again after upload.
+
+Responses use `{ "success": true, "data": ... }`; errors use `{ "success": false, "message": "...", "errorCode": "..." }` and optional `{file,reason}` errors. The metadata allow-list is `id`, `sourcePath`, `folder`, `fileName`, `contentType`, `sizeBytes`, `nodeId`, `nodePath`, `matchStatus`, `linkSource`, `createdAt`, `updatedAt`, `requiresReview`, `reviewReason`. The parse-audio metadata GET retains `parseId`, `storage` and `items`, with additive `documentFileId`/`treeId`. POST adds `imported`, `linked`, `flagged`, `skipped`; PUT returns `parseId`/`items`, and DELETE returns `id`/`deleted`. Storage contains only `available`, key-name-only `reason`, `maxFileBytes`, `maxArchiveBytes`, `maxFiles`, `maxArchiveEntries`, `maxPathLength`, `maxSegmentLength`, `multipartOverheadBytes`, and `extensions`. No object key, bucket, internal/public endpoint or storage credential appears in these responses or logs.
 
 | Failure | HTTP / error code |
 | --- | --- |
-| Unknown parse, audio or node (including IDs belonging to another parse) | 404 / `DOCTHECA_PARSE_NOT_FOUND`, `DOCTHECA_AUDIO_NOT_FOUND`, `DOCTHECA_STRUCTURE_NODE_NOT_FOUND` |
+| Unknown document, parse, audio or node (including foreign/historical targets) | 404 / `DOCTHECA_FILE_NOT_FOUND`, `DOCTHECA_PARSE_NOT_FOUND`, `DOCTHECA_AUDIO_NOT_FOUND`, `DOCTHECA_STRUCTURE_NODE_NOT_FOUND` |
 | Malformed/unsupported batch | 400 / `DOCTHECA_AUDIO_IMPORT_INVALID` |
-| Invalid save, including duplicate link IDs | 400 / `DOCTHECA_AUDIO_INVALID` |
+| Invalid targets or complete-set Required policy, including duplicate link IDs; file policy errors list exact paths | 400 / `DOCTHECA_AUDIO_INVALID` |
 | Request or expanded total over limit | 413 / `DOCTHECA_AUDIO_IMPORT_TOO_LARGE` |
 | Existing source path / no structure nodes | 409 / `DOCTHECA_AUDIO_ALREADY_IMPORTED`, `DOCTHECA_AUDIO_STRUCTURE_REQUIRED` |
 | Unconfigured or unavailable storage | 503 / `DOCTHECA_AUDIO_STORAGE_NOT_CONFIGURED`, `DOCTHECA_AUDIO_STORAGE_UNAVAILABLE` |
 
-Missing parse or unconfigured storage is refused before buffering uploads. Removal commits before best-effort object deletion, with sweep recovery for cleanup outages. The last complete valid save wins; invalid review batches change nothing. This adds no database schema or dependency. The foundation upgrade/backup recovery procedure above still applies; rollback may lose post-backup work and does not promise old-image/new-schema compatibility.
+Missing owner, unavailable storage or missing/current-empty/historical-only structure is refused before reading the multipart body. Removal commits before best-effort object deletion, with sweep recovery for cleanup outages. The last complete valid save wins; invalid review batches change nothing. This adds no database schema or dependency. The foundation upgrade/backup recovery procedure above still applies; rollback may lose post-backup work and does not promise old-image/new-schema compatibility.
 
 ## Console workflow
 
-Choose a folder, multiple files or ZIPs, then review flagged files or all files. Change/clear links and mark removals, then save once and reload persisted results. Import merges new rows while keeping an existing unsaved draft. Reload, sidebar/back/hash navigation and logout require discard confirmation for a dirty draft; tab close uses the browser's unload confirmation. In-flight import/save prevents navigation and duplicate writes. Saving also disables node selection/clearing and removal/undo from the deletion confirmation until the request finishes; cancelling confirmation or a failed request keeps the draft editable. Paths/node names render as escaped text. Drafts stay in memory; neither payloads nor credentials are persisted in browser storage. Authentication failures never replay a write automatically. Each play click obtains a fresh link, including an unlinked imported file. The player handles missing files, expired links, storage/network and decoding failures with fixed messages. Switching, closing, reloading the list, saving, or leaving releases the media resource (pause, remove src, load); pending link requests are aborted and late responses ignored. URLs stay in component memory/DOM only. Text/exercise alignment and transcripts remain excluded from the administrator UI.
+Choose a folder, multiple files or ZIPs. File selection invokes only read-only preview and keeps files/proposals in memory. Check suggested targets in the same table, optionally set one common target and override individual rows, then press Save once. Existing link edits/removals and new files commit together; no import-then-fix step or extra approval dialog is used. Cancel selected files or leave/discard to store nothing. Failures retain the editable draft and per-file policy errors. Reload displays only committed rows. Configured level names and Required flags appear as data. Reload, sidebar/back/hash navigation and logout require discard confirmation for a dirty draft; tab close uses the browser's unload confirmation. In-flight import/save prevents navigation and duplicate writes. Saving also disables node selection/clearing and removal/undo from the deletion confirmation until the request finishes; cancelling confirmation or a failed request keeps the draft editable. Paths/node names render as escaped text. Drafts stay in memory; neither payloads nor credentials are persisted in browser storage. Authentication failures never replay a write automatically. Each play click obtains a fresh link, including an unlinked imported file. The player handles missing files, expired links, storage/network and decoding failures with fixed messages. Switching, closing, reloading the list, saving, or leaving releases the media resource (pause, remove src, load); pending link requests are aborted and late responses ignored. URLs stay in component memory/DOM only. Text/exercise alignment and transcripts remain excluded from the administrator UI.
 
 ## Temporary administrator playback
 
@@ -140,7 +144,7 @@ audio lists during concurrent changes. The next request reflects committed relin
 deletions and tree replacement. The ownership migration is required; restoring a verified matching backup and previous image removes
 the additive filter/counts, so consumers must tolerate their absence (#122).
 
-The optional [internal API](../Integration/InternalApi.md#direct-node-audio-and-temporary-playback)
+The [internal API](../Integration/InternalApi.md#direct-node-audio-and-temporary-playback)
 provides anonymous direct-node metadata and same-origin expiring byte links. It reuses the
 persisted current tree in read-only repeatable-read snapshots, independently of administrator
 preview (which may play unlinked audio). Proxy links require internal S3 and a valid existing
@@ -178,3 +182,11 @@ restrictions retained. See [deployment](../development/Deployment.md#upgrade-and
 Audio lifetime belongs to its document/tree, independently of the node's optional content parse. Stored `parse_id` is immutable key provenance; a missing original parse does not invalidate playback. Successful reparse preserves node/audio IDs, links, metadata and exact object bytes. Internal capabilities use v2 document/tree/node/audio identity and both admission snapshots; their public `parseId` may be null. Existing process-local expiry, 30-second bounded scratch, cancellation/ranges/disposal and fixed diagnostics remain.
 
 Imports generate immutable random keys and obtain PostgreSQL advisory session leases on the same connection used for metadata in ordinal key order before upload. The lease remains through metadata outcome and compensation; a backend identity check refuses a reconnected metadata writer, and uncertain reference checks defer cleanup. Removal, document cleanup and sweep use the same exact-key lease and recheck all current/historical references immediately before deletion. No document row lock waits for a key lease: metadata deletion commits first. An uncertain reference query defers cleanup; the one-hour grace sweep repairs recoverable orphans and is additional protection, not the concurrency proof. No parse deletion enumerates an origin prefix. Backup/matching-image recovery, including refusal of nonrepresentable Down, is documented in [migrations](../database/migrations.md#document-owned-structure-132).
+
+## Document import compatibility and verification (#134)
+
+No migration, backfill, key rewrite, dependency, setting, port or deployment change is required: #132 already represents null immutable provenance. Old rows/keys remain byte-for-byte unchanged. New document keys are checked against the actual server-owned document ID and recording ID in signing/buffering; legacy keys use immutable parse provenance even after parse deletion. Internal v2 tokens and both membership snapshots remain unchanged and never carry storage identity.
+
+An older image cannot validate the new document prefix. Preserve these bytes and use a compatible image, or stop writers and restore a verified backup with its matching image/configuration and storage set. Image-only downgrade is not a data conversion. Ownership Down still refuses unrepresentable state before writes; never synthesize a parse or rewrite keys for recovery.
+
+`DocumentAudioEndpointTests` verifies separate folder/ZIP books with 58 original generated 3-second WAV tones, explicit targets/manual provenance, zero parses, exact MinIO/downloaded hashes, 200/206/416 and direct counts/lists. Original official MP3 filenames remain separate matcher assertions; generated WAVs are not the copyrighted recordings. `DocumentAudioUploadRaceTests` and `DocumentAudioConcurrencyTests` use controlled uploads/PostgreSQL barriers for policy, tree, duplicate, full-save, deletion and parse transitions. Hosted Chromium verifies one-save drafts, all 58 real internal URLs decoding/playing/currentTime without public S3 addressing, then same-book source/explicit parse/bind/search/reparse while retaining chapters and audio. Existing import, legacy lifecycle and capability/scratch/cancellation safety remain required coverage.

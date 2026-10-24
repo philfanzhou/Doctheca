@@ -41,5 +41,5 @@ An audio file owned by a document and its structure tree, optionally linked to o
 _Avoid_: Attachment, Media File, Track
 
 **Audio Link**:
-The association of a Structure Audio file with one Structure Node; pre-filled from the file's folder and file name and confirmed or changed by an administrator (#108). It is correct at node level only, never at text or exercise level.
+The association of a Structure Audio file with one Structure Node; suggested from the file's folder and file name, then explicitly confirmed or changed by an administrator in one atomic Required-policy save (#134). It is correct at node level only, never at text or exercise level.
 _Avoid_: Alignment, Timestamp

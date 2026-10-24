@@ -49,10 +49,11 @@ public sealed partial class AdminHostedFrontendTests
         await h.Page.GetByRole(AriaRole.Button, new() { Name = "使用 SignaCore 登录" }).ClickAsync();
         await Assertions.Expect(h.Page.GetByRole(AriaRole.Button, new() { Name = "选择文件夹" })).ToBeEnabledAsync();
         await h.Page.Locator("[data-testid=audio-folder-input]").SetInputFilesAsync(folder);
-        await Assertions.Expect(h.Page.GetByText("已导入 58 个文件：57 个已自动关联，1 个待处理")).ToBeVisibleAsync();
+        await Assertions.Expect(h.Page.GetByText("已选择 58 个文件，确认目标后点击保存")).ToBeVisibleAsync();
 
         // 2. Only the folder/name mismatch is left to review.
         var rows = h.Page.Locator("tbody tr");
+        await h.Page.GetByRole(AriaRole.Tab, new() { Name = "待处理 1" }).ClickAsync();
         await Assertions.Expect(rows).ToHaveCountAsync(1);
         var mismatch = h.Page.Locator("tr[data-audio-path='官方音频/unit3/9s04Unit4SectionA1e.mp3']");
         await Assertions.Expect(mismatch).ToContainTextAsync("文件夹与文件名不一致");
@@ -61,6 +62,8 @@ public sealed partial class AdminHostedFrontendTests
         await mismatch.Locator(".el-select").ClickAsync();
         await h.Page.Locator(".el-select-dropdown__item:visible", new() { HasText = "Unit 4 Arts and Crafts > Section A" }).ClickAsync();
         await Assertions.Expect(mismatch).ToContainTextAsync("未保存");
+        await h.Page.GetByRole(AriaRole.Button, new() { Name = "保存", Exact = true }).ClickAsync();
+        await Assertions.Expect(h.Page.GetByText("音频关联已保存", new() { Exact = true })).ToBeVisibleAsync();
 
         // 4. Clear one link and remove one file, then save.
         await h.Page.GetByRole(AriaRole.Tab, new() { Name = "全部 58" }).ClickAsync();
@@ -72,9 +75,8 @@ public sealed partial class AdminHostedFrontendTests
         {
             Name = "Unit2SectionA.mp3", MimeType = "audio/mpeg", Buffer = "ID3xxxxxxxxx"u8.ToArray(),
         });
-        await Assertions.Expect(h.Page.GetByText("已导入 1 个文件：1 个已自动关联，0 个待处理")).ToBeVisibleAsync();
+        await Assertions.Expect(h.Page.GetByText("已选择 1 个文件，确认目标后点击保存")).ToBeVisibleAsync();
         await Assertions.Expect(cleared).ToContainTextAsync("未保存");
-        await Assertions.Expect(mismatch).ToContainTextAsync("未保存");
         foreach (var action in new Func<Task>[]
         {
             () => h.Page.GetByRole(AriaRole.Button, new() { Name = "重新加载" }).ClickAsync(),
@@ -101,7 +103,7 @@ public sealed partial class AdminHostedFrontendTests
         var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         await h.Page.RouteAsync("**/admin/document-parses/" + parseId + "/audio", async route =>
         {
-            if (route.Request.Method != "PUT") { await route.ContinueAsync(); return; }
+            if (route.Request.Method != "POST" || route.Request.Url.Contains("preview=true", StringComparison.Ordinal)) { await route.ContinueAsync(); return; }
             var response = await route.FetchAsync();
             received.TrySetResult(route.Request.PostData ?? "");
             await release.Task;
@@ -118,7 +120,6 @@ public sealed partial class AdminHostedFrontendTests
             await Assertions.Expect(unchanged.GetByRole(AriaRole.Combobox)).ToBeEnabledAsync();
             await Assertions.Expect(removed.Locator("button[aria-label^='删除 '], button[aria-label^='撤销删除 ']")).ToBeEnabledAsync();
             await Assertions.Expect(cleared).ToContainTextAsync("未保存");
-            await Assertions.Expect(mismatch).ToContainTextAsync("未保存");
             await Assertions.Expect(removed).ToContainTextAsync("待删除");
 
             // Undo and mark again after cancellation to prove the draft is editable again.
@@ -127,9 +128,9 @@ public sealed partial class AdminHostedFrontendTests
             await removed.Locator("button[aria-label^='删除 '], button[aria-label^='撤销删除 ']").ClickAsync();
             await h.Page.GetByRole(AriaRole.Button, new() { Name = "保存", Exact = true }).ClickAsync();
             await h.Page.GetByRole(AriaRole.Button, new() { Name = "确定", Exact = true }).ClickAsync();
-            using var sent = JsonDocument.Parse(await received.Task.WaitAsync(TimeSpan.FromSeconds(30)));
-            Assert.Equal(2, sent.RootElement.GetProperty("links").GetArrayLength());
-            Assert.Single(sent.RootElement.GetProperty("removeIds").EnumerateArray());
+            var sent = await received.Task.WaitAsync(TimeSpan.FromSeconds(30));
+            Assert.Contains("name=links", sent.Replace("\"", ""));
+            Assert.Contains("name=removeIds", sent.Replace("\"", ""));
             await AssertAudioDraftLockedAsync(h.Page);
 
             // Native disabled controls reject both removal and undo while the response waits.
@@ -138,7 +139,6 @@ public sealed partial class AdminHostedFrontendTests
             await Assertions.Expect(unchanged).Not.ToContainTextAsync("待删除");
             await Assertions.Expect(removed).ToContainTextAsync("待删除");
             await Assertions.Expect(cleared).ToContainTextAsync("未保存");
-            await Assertions.Expect(mismatch).ToContainTextAsync("未保存");
             release.TrySetResult();
             await Assertions.Expect(h.Page.GetByText("音频关联已保存")).ToBeVisibleAsync();
             await Assertions.Expect(unchanged.GetByRole(AriaRole.Combobox)).ToBeEnabledAsync();

@@ -13,12 +13,12 @@ A **Structure Audio** file is an audio file owned by a logical [document](docume
 | `id` | `UUID` | PRIMARY KEY | | Audio file identifier |
 | `document_file_id` | `UUID` | NOT NULL, same-document composite tree FK | | Direct document owner |
 | `tree_id` | `UUID` | NOT NULL, tree FK ON DELETE CASCADE | | Lifetime tree owner |
-| `parse_id` | `UUID` | NULL, no live-parse FK | | Immutable legacy stored object-key provenance, retained after parse deletion; nullable for later document-key imports without a fake parse |
+| `parse_id` | `UUID` | NULL, no live-parse FK | | Immutable legacy stored object-key provenance, retained after parse deletion; null for document-key imports without a fake parse |
 | `node_id` | `UUID` | NULL, no foreign key (see below) | | Linked structure node of the same document/tree; NULL when unlinked |
 | `source_path` | `VARCHAR(1000)` | NOT NULL, unique with `tree_id` | | Relative path of the file in the import, for example `unit1/9s01Unit1SectionA1b.mp3` (`/` separators, Unicode NFC) |
 | `content_type` | `VARCHAR(100)` | NOT NULL | | `audio/mpeg`, `audio/mp4`, `audio/wav`, `audio/ogg` or `audio/flac` |
 | `size_bytes` | `BIGINT` | NOT NULL | | Stored size |
-| `object_key` | `VARCHAR(500)` | NOT NULL, unique | | Storage key `audio/{parseId:N}/{id:N}{extension}`; internal metadata; appears only inside an authorized temporary playback URL, never as a separate response field |
+| `object_key` | `VARCHAR(500)` | NOT NULL, unique | | New document key `audio/documents/{documentFileId:N}/{id:N}{extension}` or unchanged legacy `audio/{parseId:N}/{id:N}{extension}`; internal metadata; appears only inside an authorized temporary playback URL, never as a separate response field |
 | `match_status` | `VARCHAR(32)` | NOT NULL | | Pre-fill outcome: `matched`, `folder_name_mismatch`, `no_match`, `ambiguous`, or `node_removed` (the linked node was removed by a later structure save) |
 | `link_source` | `VARCHAR(16)` | NULL | | Who set the current link: `prefill`, `manual`, or NULL when nobody did |
 | `created_at` | `TIMESTAMP WITH TIME ZONE` | NOT NULL | | Import time |
@@ -39,3 +39,5 @@ A **Structure Audio** file is an audio file owned by a logical [document](docume
 - **No foreign key on `node_id`.** A structure save replaces the tree's complete node set (delete and re-insert, keeping the ids it is sent), which an `ON DELETE` rule would see as removing every node. Instead the tree save (`DocumentStructureRepository.ReplaceAsync`) unlinks, in the same transaction, the audio of nodes the new tree no longer contains (`node_id` NULL, `match_status` `node_removed`, `link_source` NULL). Internal repository insert/link writes take the same `document_files` row lock and check that every linked node exists.
 - Parse deletion retains rows, links and bytes. Document deletion gathers exact owned keys across all current/historical trees in its metadata transaction, then cleans only keys confirmed unreferenced under per-key advisory leases. Explicit removal, upload compensation and orphan recovery share those leases/reference checks. No parse-prefix sweep is used.
 - Object keys contain no file name, so `source_path` never reaches the storage. Import/review calculates match status and link source. Read-only playback and node listing change no rows and persist no URLs.
+
+- Document audio saves lock document then definition and validate every retained file against the committed Required-level graph before any metadata mutation. `requiresReview` is derived, not a stored column. Preview writes nothing; new document rows have null `parse_id`. No migration or key rewrite is added by #134. Older key validators require a compatible image or verified matching backup; retain stored bytes during recovery.

@@ -61,14 +61,14 @@ const currentNavKey = computed(() => {
   if (state.value.page === 'detail') return 'docs'
   // Separate document and parse editors retain their identifier meanings.
   if (['structure', 'document-structure'].includes(state.value.page)) return 'docs'
-  if (state.value.page === 'audio') return 'docs'
+  if (['audio', 'document-audio'].includes(state.value.page)) return 'docs'
   return state.value.page
 })
 
 const currentCrumb = computed(() => {
   if (state.value.page === 'detail') return '文档管理 / 文档详情'
   if (['structure', 'document-structure'].includes(state.value.page)) return '文档管理 / 结构标注'
-  if (state.value.page === 'audio') return '文档管理 / 官方音频'
+  if (['audio', 'document-audio'].includes(state.value.page)) return '文档管理 / 官方音频'
   return navItems.find((n) => n.key === state.value.page)?.label ?? ''
 })
 
@@ -111,10 +111,10 @@ function syncHash() {
 }
 
 function parseHash() {
-  const m = location.hash.match(/^#(overview|docs|results|search|detail|structures|structure|document-structure|audio)(?:\/([A-Za-z0-9_-]+))?$/)
+  const m = location.hash.match(/^#(overview|docs|results|search|detail|structures|structure|document-structure|document-audio|audio)(?:\/([A-Za-z0-9_-]+))?$/)
   if (m) {
     // detail/document-structure use file IDs; structure/audio use real parse IDs.
-    state.value = { page: m[1], docId: ['detail', 'structure', 'document-structure', 'audio'].includes(m[1]) ? m[2] || null : null }
+    state.value = { page: m[1], docId: ['detail', 'structure', 'document-structure', 'document-audio', 'audio'].includes(m[1]) ? m[2] || null : null }
   } else {
     state.value = { page: 'overview', docId: null }
   }
@@ -130,6 +130,7 @@ const componentMap: Record<string, typeof OverviewPage> = {
   structure: StructureEditorPage,
   'document-structure': DocumentStructureEditorPage,
   audio: StructureAudioPage,
+  'document-audio': StructureAudioPage,
 }
 
 const currentComponent = computed(() => componentMap[state.value.page] || OverviewPage)
@@ -216,7 +217,7 @@ provide('backToDocs', backToDocs)
         @logout="handleLogout"
       />
       <main class="view" ref="viewRef">
-        <component :is="currentComponent" :doc-id="state.docId" />
+        <component :is="currentComponent" :doc-id="state.docId" :document-mode="state.page === 'document-audio'" />
       </main>
     </div>
   </div>

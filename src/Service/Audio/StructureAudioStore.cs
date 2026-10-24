@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging;
 using Doctheca.Common.Oss;
 using Doctheca.Domain.Models;
+using Doctheca.Domain.Models.Structure;
 
 namespace Doctheca.Service.Audio;
 
@@ -10,7 +11,7 @@ public sealed class AudioStorageException() : Exception("Audio storage is unavai
 /// <summary>
 /// Structure audio objects in the existing S3-compatible storage (<see cref="IOssService"/>),
 /// always under <see cref="DocumentAudioOptions.ObjectPrefix"/> as
-/// <c>audio/{parseId}/{audioId}{extension}</c>. Keys are exposed only inside an authorized short-lived public playback URL.
+/// <c>audio/documents/{documentId}/{audioId}{extension}</c> or the retained legacy parse prefix. Keys are exposed only inside an authorized short-lived public playback URL.
 /// </summary>
 public sealed partial class StructureAudioStore
 {
@@ -62,16 +63,39 @@ public sealed partial class StructureAudioStore
     }
 
     internal static string ParsePrefix(Guid parseId) => $"{DocumentAudioOptions.ObjectPrefix}{parseId:N}/";
+    internal static string DocumentPrefix(Guid documentId) => $"{DocumentAudioOptions.ObjectPrefix}documents/{documentId:N}/";
+
+    public Task<AudioPlaybackLink> GetPlaybackLinkAsync(DocumentStructureAudioModel item, TimeProvider clock, CancellationToken ct)
+    {
+        if (!MatchesIdentity(item.DocumentFileId, item.ParseId, item.Id, item.ObjectKey, item.ContentType)) throw new AudioStorageException();
+        return GetPlaybackLinkAsync(item.ObjectKey, clock, ct);
+    }
+
+    internal static bool MatchesIdentity(Guid documentId, Guid? originParseId, Guid audioId, string key, string contentType)
+    {
+        var extension = Path.GetExtension(key);
+        var type = extension switch { ".mp3" => "audio/mpeg", ".m4a" => "audio/mp4", ".wav" => "audio/wav",
+            ".ogg" => "audio/ogg", ".flac" => "audio/flac", _ => null };
+        return type is not null && contentType == type &&
+            (key == $"{DocumentPrefix(documentId)}{audioId:N}{extension}" ||
+             originParseId is { } parseId && key == $"{ParsePrefix(parseId)}{audioId:N}{extension}");
+    }
+
+    public Task<string> PutDocumentAsync(Guid documentId, Guid audioId, string extension, Stream content, string contentType, CancellationToken ct = default) =>
+        PutCoreAsync($"documents/{documentId:N}", DocumentPrefix(documentId), audioId, extension, content, contentType, ct);
 
     /// <summary>Stores one file and returns its object key.</summary>
     public async Task<string> PutAsync(Guid parseId, Guid audioId, string extension, Stream content, string contentType, CancellationToken cancellationToken = default)
+        => await PutCoreAsync($"{parseId:N}", ParsePrefix(parseId), audioId, extension, content, contentType, cancellationToken);
+
+    private async Task<string> PutCoreAsync(string folder, string prefix, Guid audioId, string extension, Stream content, string contentType, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
         if (!Status.Available) throw new AudioStorageException();
         string key;
         try
         {
-            key = await _ossService.Value.UploadAsync(content, $"{audioId:N}{extension}", contentType, OssBucket.Audio, $"{parseId:N}", cancellationToken);
+            key = await _ossService.Value.UploadAsync(content, $"{audioId:N}{extension}", contentType, OssBucket.Audio, folder, cancellationToken);
         }
         catch (OperationCanceledException) { throw; }
         catch (Exception ex)
@@ -81,7 +105,7 @@ public sealed partial class StructureAudioStore
             throw new AudioStorageException();
         }
 
-        if (key != $"{ParsePrefix(parseId)}{audioId:N}{extension}")
+        if (key != $"{prefix}{audioId:N}{extension}")
         {
             // An unexpected key may belong to another row. Only the service can confirm references.
             throw new InvalidOperationException("The storage returned an object key outside the audio prefix.");

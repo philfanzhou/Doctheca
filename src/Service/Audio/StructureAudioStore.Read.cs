@@ -15,14 +15,8 @@ public sealed partial class StructureAudioStore
         deadline.CancelAfter(TimeSpan.FromSeconds(30));
         try
         {
-            var extension = Path.GetExtension(audio.ObjectKey);
-            var expectedType = extension switch
-            {
-                ".mp3" => "audio/mpeg", ".m4a" => "audio/mp4", ".wav" => "audio/wav",
-                ".ogg" => "audio/ogg", ".flac" => "audio/flac", _ => null,
-            };
-            if (!Status.Available || audio.SizeBytes <= 0 || audio.SizeBytes > maxBytes || expectedType is null ||
-                audio.ContentType != expectedType || audio.ParseId is not { } originParseId || audio.ObjectKey != $"{ParsePrefix(originParseId)}{audio.Id:N}{extension}")
+            if (!Status.Available || audio.SizeBytes <= 0 || audio.SizeBytes > maxBytes ||
+                !MatchesIdentity(audio.DocumentFileId, audio.ParseId, audio.Id, audio.ObjectKey, audio.ContentType))
                 throw new AudioStorageException();
             stream = scratch.Open();
             if (!stream.CanRead || !stream.CanWrite || !stream.CanSeek || stream.Length != 0) throw new AudioStorageException();

@@ -13,7 +13,7 @@ using Xunit;
 namespace Doctheca.Tests.Database;
 
 [Collection(MigrationIntegrationCollection.Name)]
-public sealed class DocumentAuthoringConcurrencyTests(PostgreSqlMigrationFixture fixture) : IAsyncLifetime
+public sealed partial class DocumentAuthoringConcurrencyTests(PostgreSqlMigrationFixture fixture) : IAsyncLifetime
 {
     private string _database = null!;
     public async Task InitializeAsync() { _database = await fixture.CreateDatabaseAsync(); using var db = fixture.CreateContext(_database); await db.Database.EnsureCreatedAsync(); }
