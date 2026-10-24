@@ -194,18 +194,18 @@ public sealed partial class AdminHostedFrontendTests
                 BlockType = "text", TextFormat = "plain", TextContent = $"Paragraph {i}", BlockData = "{}",
             });
         }
-        await context.SaveChangesAsync();
+        await context.SaveOwnedChangesAsync();
 
         var titles = new[] { "The Changing World", "Saying Thank You", "Exploring the World", "Arts and Crafts", "Look Into Science!", "Sports and Health", "Making Our World a Better Place", "Media and You" };
         for (var u = 0; u < 8; u++)
         {
             var unitNode = Node(parse.Id, unit.Id, null, $"Unit {u + 1} {titles[u]}", u, u * 50, u * 50 + 49, now);
             context.DocumentStructureNodes.Add(unitNode);
-            await context.SaveChangesAsync();
+            await context.SaveOwnedChangesAsync();
             context.DocumentStructureNodes.AddRange(
                 Node(parse.Id, section.Id, unitNode.Id, "Section A", 0, u * 50, u * 50 + 19, now),
                 Node(parse.Id, section.Id, unitNode.Id, "Section B", 1, u * 50 + 20, u * 50 + 39, now));
-            await context.SaveChangesAsync();
+            await context.SaveOwnedChangesAsync();
         }
         return parse.Id.ToString();
     }

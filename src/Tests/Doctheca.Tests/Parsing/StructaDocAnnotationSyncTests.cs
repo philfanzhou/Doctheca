@@ -185,8 +185,7 @@ public sealed class StructaDocAnnotationSyncTests(PostgreSqlMigrationFixture fix
         new(new DocumentParseRepository(context), new DocumentParseImageRepository(context), loggerFactory.CreateLogger<DocumentParseService>());
 
     private static StructaDocParseResultSync Sync(DocthecaDbContext context, IStructaDocClient client, ILoggerFactory loggerFactory) =>
-        new(client, ParseService(context, loggerFactory), new DocumentParseBlockRepository(context),
-            new DocumentParseImageRepository(context), new DocumentParsePageRepository(context), loggerFactory.CreateLogger<StructaDocParseResultSync>());
+        new(client, ParseService(context, loggerFactory), loggerFactory.CreateLogger<StructaDocParseResultSync>());
 
     private IStructaDocClient Client(ILoggerFactory loggerFactory, Func<CancellationToken, Task<HttpResponseMessage>> blocks) =>
         new StructaDocClient(new HttpClient(new Handler((request, token) =>

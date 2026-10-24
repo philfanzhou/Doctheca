@@ -205,8 +205,8 @@ def main(image, rollback_image=None):
             history = docker("exec", postgres, "psql", "-v", "ON_ERROR_STOP=1", "-U", "startup_test",
                              "-d", "startup_existing", "-tAc",
                              'SELECT "MigrationId" FROM "__EFMigrationsHistory" ORDER BY "MigrationId"')
-            require(history.splitlines()[-1] == "20261024021500_AddRequiredStructureLevels",
-                    "Startup did not reach required-level policy migration")
+            require(history.splitlines()[-1] == "20261024053658_AddDocumentOwnedStructure",
+                    "Startup did not reach document-owned structure migration")
             require(check_logs(name).count("Database startup gate completed") == 1,
                     "Expected exactly one successful startup gate")
             # With no InternalApi section, every implemented route reaches its own handler.
@@ -349,6 +349,7 @@ def main(image, rollback_image=None):
                 # Optional destructive maintenance, separate from backup-based version recovery.
                 # Drop required-level policy before the existing classification down, then
                 # verify the previous image still accepts its exact annotation-version database.
+                psql(down_script("20261024053658_AddDocumentOwnedStructure"))
                 psql(down_script("20261024021500_AddRequiredStructureLevels"))
                 psql(down_script("20261022194526_ClassifyLevelLessTitles"))
                 before = fingerprint()
@@ -375,7 +376,7 @@ def main(image, rollback_image=None):
                             "20260930161548_InitialCreate", "20261021094612_AddDocumentStructure",
                             "20261021153535_AddStructureAudio", "20261022160829_AddDocumentParsePages",
                             "20261022184348_AddBlockFootnotes", "20261022194526_ClassifyLevelLessTitles",
-                            "20261024021500_AddRequiredStructureLevels")),
+                            "20261024021500_AddRequiredStructureLevels", "20261024053658_AddDocumentOwnedStructure")),
                         "legacy takeover did not reach the current version")
                 require(after.splitlines()[-1] == before.splitlines()[-1], "legacy takeover changed business rows")
                 print("PASS legacy: baseline taken over and migrated forward; business rows unchanged", flush=True)

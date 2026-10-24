@@ -64,7 +64,7 @@ public sealed record AudioSweepOutcome(int Scanned, int Deleted, int Failed);
 /// </summary>
 public sealed class StructureAudioService
 {
-    /// <summary>Objects younger than this are never swept, so imports in flight are safe.</summary>
+    /// <summary>Recovery grace period, in addition to exact-key leases and reference checks.</summary>
     internal static readonly TimeSpan OrphanGracePeriod = TimeSpan.FromHours(1);
 
     private readonly IDocumentParseRepository _parseRepository;
@@ -170,12 +170,15 @@ public sealed class StructureAudioService
         var matcher = new StructureAudioMatcher(nodes);
         var now = _timeProvider.GetUtcNow();
         var stored = new List<DocumentStructureAudioModel>();
+        var plannedIds = batch.Entries.ToDictionary(entry => entry.SourcePath, _ => Guid.NewGuid());
+        var plannedKeys = batch.Entries.Select(entry => $"{StructureAudioStore.ParsePrefix(parseId)}{plannedIds[entry.SourcePath]:N}{entry.Format.Extension}").ToArray();
+        await using var lease = await _audioRepository.AcquireObjectKeyLeaseAsync(plannedKeys, cancellationToken);
         try
         {
             foreach (var entry in batch.Entries)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                var id = Guid.NewGuid();
+                var id = plannedIds[entry.SourcePath];
                 using var buffer = new MemoryStream();
                 await using (var source = entry.Open())
                 {
@@ -219,7 +222,7 @@ public sealed class StructureAudioService
             throw;
         }
         catch (DbUpdateException ex) when (ex.InnerException is PostgresException
-            { SqlState: PostgresErrorCodes.UniqueViolation, ConstraintName: "IX_document_structure_audio_parse_id_source_path" })
+            { SqlState: PostgresErrorCodes.UniqueViolation, ConstraintName: "IX_document_structure_audio_tree_id_source_path" })
         {
             await DiscardAsync(parseId, stored);
             return AudioResult<AudioImportOutcome>.Fail(AudioResultStatus.Conflict, AudioErrorCodes.AlreadyImported,
@@ -262,7 +265,7 @@ public sealed class StructureAudioService
 
         if (result.RemovedObjectKeys.Count > 0)
         {
-            var failed = await _store.DeleteManyAsync(result.RemovedObjectKeys);
+            var failed = await DeleteUnreferencedObjectsAsync(result.RemovedObjectKeys);
             if (failed > 0)
                 _logger.LogWarning("Removed {Count} audio files of parse {ParseId}; {Failed} objects could not be deleted", result.RemovedObjectKeys.Count, parseId, failed);
         }
@@ -272,22 +275,33 @@ public sealed class StructureAudioService
         return AudioResult<ParseAudio>.Ok(reloaded);
     }
 
-    /// <summary>The object keys to delete once the parse rows are gone (read before deleting them).</summary>
     public Task<List<string>> GetParseObjectKeysAsync(Guid parseId) => _audioRepository.GetObjectKeysByParseIdAsync(parseId);
+    public Task<List<string>> GetDocumentObjectKeysAsync(Guid documentId) => _audioRepository.GetObjectKeysByDocumentFileIdAsync(documentId);
 
-    /// <summary>
-    /// Deletes a deleted parse's audio objects: the keys its rows referenced and, when storage is
-    /// available, anything else under its prefix. Best-effort; returns the number of failures.
-    /// </summary>
-    public async Task<int> DeleteParseObjectsAsync(Guid parseId, IReadOnlyCollection<string> keys)
+    // Compatibility helper; never enumerate an origin prefix or delete a referenced key.
+    public Task<int> DeleteParseObjectsAsync(Guid parseId, IReadOnlyCollection<string> keys) => DeleteUnreferencedObjectsAsync(keys);
+
+    public async Task<int> DeleteUnreferencedObjectsAsync(IReadOnlyCollection<string> keys) =>
+        (await CleanupAsync(keys)).Failed;
+
+    private async Task<(int Deleted, int Failed)> CleanupAsync(IReadOnlyCollection<string> keys)
     {
-        if (keys.Count == 0 && !_store.Status.Available) return 0;
-        var failed = _store.Status.Available
-            ? await _store.DeleteParseAsync(parseId, keys)
-            : await _store.DeleteManyAsync(keys);
-        if (failed > 0)
-            _logger.LogWarning("Parse {ParseId} deleted but {Failed} audio objects remain; run the audio orphan sweep", parseId, failed);
-        return failed;
+        var deleted = 0;
+        var failed = 0;
+        foreach (var key in keys.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal))
+        {
+            try
+            {
+                await using var lease = await _audioRepository.AcquireObjectKeyLeaseAsync([key]);
+                // The lease spans the final reference query and actual object deletion.
+                if ((await _audioRepository.GetReferencedObjectKeysAsync([key])).Contains(key)) continue;
+                var failures = await _store.DeleteManyAsync([key]);
+                failed += failures;
+                deleted += 1 - failures;
+            }
+            catch (Exception) { failed++; _logger.LogWarning("Audio object cleanup deferred."); }
+        }
+        return (deleted, failed);
     }
 
     /// <summary>
@@ -309,17 +323,10 @@ public sealed class StructureAudioService
 
         var cutoff = _timeProvider.GetUtcNow() - OrphanGracePeriod;
         var candidates = objects.Where(item => item.LastModified is { } modified && modified < cutoff).Select(item => item.ObjectPath).ToList();
-        var orphans = new List<string>();
-        foreach (var chunk in candidates.Chunk(500))
-        {
-            var referenced = await _audioRepository.GetReferencedObjectKeysAsync(chunk);
-            orphans.AddRange(chunk.Where(key => !referenced.Contains(key)));
-        }
-
-        var failed = await _store.DeleteManyAsync(orphans);
+        var cleaned = await CleanupAsync(candidates);
         _logger.LogInformation("Audio orphan sweep: {Scanned} objects scanned, {Deleted} orphans deleted, {Failed} failed",
-            objects.Count, orphans.Count - failed, failed);
-        return AudioResult<AudioSweepOutcome>.Ok(new AudioSweepOutcome(objects.Count, orphans.Count - failed, failed));
+            objects.Count, cleaned.Deleted, cleaned.Failed);
+        return AudioResult<AudioSweepOutcome>.Ok(new AudioSweepOutcome(objects.Count, cleaned.Deleted, cleaned.Failed));
     }
 
     private async Task DiscardAsync(Guid parseId, IReadOnlyCollection<DocumentStructureAudioModel> stored)

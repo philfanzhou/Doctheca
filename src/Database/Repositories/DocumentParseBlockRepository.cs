@@ -81,7 +81,7 @@ public class DocumentParseBlockRepository : IDocumentParseBlockRepository
         return [.. sequences];
     }
 
-    private static DocumentParseBlockEntity MapToEntity(DocumentParseBlockModel model) => new()
+    internal static DocumentParseBlockEntity MapToEntity(DocumentParseBlockModel model) => new()
     {
         Id = model.Id,
         ParseId = model.ParseId,

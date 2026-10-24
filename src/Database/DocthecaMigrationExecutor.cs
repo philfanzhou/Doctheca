@@ -69,13 +69,14 @@ public sealed class DocthecaMigrationExecutor : IDatabaseMigrationExecutor
     internal const string AddBlockFootnotesMigrationId = "20261022184348_AddBlockFootnotes";
     internal const string ClassifyLevelLessTitlesMigrationId = "20261022194526_ClassifyLevelLessTitles";
     internal const string AddRequiredStructureLevelsMigrationId = "20261024021500_AddRequiredStructureLevels";
+    internal const string AddDocumentOwnedStructureMigrationId = "20261024053658_AddDocumentOwnedStructure";
     internal const string HistoryTableName = "__EFMigrationsHistory";
     internal const string IncompatibleErrorCode = "DOCTHECA_DB_SCHEMA_INCOMPATIBLE";
     internal const string UpdatedAtTriggerName = "set_document_files_updated_at";
 
     /// <summary>The ordered migration contract this executor supports.</summary>
     internal static readonly IReadOnlyList<string> KnownMigrationIds =
-        [InitialCreateMigrationId, AddDocumentStructureMigrationId, AddStructureAudioMigrationId, AddDocumentParsePagesMigrationId, AddBlockFootnotesMigrationId, ClassifyLevelLessTitlesMigrationId, AddRequiredStructureLevelsMigrationId];
+        [InitialCreateMigrationId, AddDocumentStructureMigrationId, AddStructureAudioMigrationId, AddDocumentParsePagesMigrationId, AddBlockFootnotesMigrationId, ClassifyLevelLessTitlesMigrationId, AddRequiredStructureLevelsMigrationId, AddDocumentOwnedStructureMigrationId];
 
     /// <summary>The four business tables of the baseline.</summary>
     internal static readonly IReadOnlyList<string> KnownTableNames =
@@ -96,7 +97,8 @@ public sealed class DocthecaMigrationExecutor : IDatabaseMigrationExecutor
     internal static readonly IReadOnlyList<string> PageVersionTableNames = [.. AudioVersionTableNames, "document_parse_pages"];
 
     /// <summary>Every business table of the current model, in migration order.</summary>
-    internal static readonly IReadOnlyList<string> AllTableNames = [.. PageVersionTableNames];
+    internal static readonly IReadOnlyList<string> PreOwnershipTableNames = [.. PageVersionTableNames];
+    internal static readonly IReadOnlyList<string> AllTableNames = [.. PreOwnershipTableNames, "document_structure_trees"];
 
     /// <summary>The business tables each known migration leaves in place, by migration id.</summary>
     private static readonly IReadOnlyDictionary<string, IReadOnlyList<string>> TablesAfterMigration =
@@ -106,9 +108,10 @@ public sealed class DocthecaMigrationExecutor : IDatabaseMigrationExecutor
             [AddDocumentStructureMigrationId] = StructureVersionTableNames,
             [AddStructureAudioMigrationId] = AudioVersionTableNames,
             [AddDocumentParsePagesMigrationId] = PageVersionTableNames,
-            [AddBlockFootnotesMigrationId] = AllTableNames,
-            [ClassifyLevelLessTitlesMigrationId] = AllTableNames,
-            [AddRequiredStructureLevelsMigrationId] = AllTableNames,
+            [AddBlockFootnotesMigrationId] = PreOwnershipTableNames,
+            [ClassifyLevelLessTitlesMigrationId] = PreOwnershipTableNames,
+            [AddRequiredStructureLevelsMigrationId] = PreOwnershipTableNames,
+            [AddDocumentOwnedStructureMigrationId] = AllTableNames,
         };
 
     private const string SchemaName = "public";
@@ -369,6 +372,8 @@ public sealed class DocthecaMigrationExecutor : IDatabaseMigrationExecutor
             if (applied.Count == KnownMigrationIds.Count)
             {
                 // The history claims the current version; the complete current schema must verify.
+                if (mismatch is null && !await VerifyBindingCheckAsync(connection, cancellationToken))
+                    return DatabaseInspection.Failed("the content binding check constraint is missing or incompatible");
                 return mismatch is null
                     ? DatabaseInspection.Of(
                         DatabaseState.CurrentVersionCompatible,
@@ -453,6 +458,22 @@ public sealed class DocthecaMigrationExecutor : IDatabaseMigrationExecutor
             "a verified legacy database without migration history requires the safe backfills and the baseline registration",
             backfills,
             requiresHistoryStamp: true);
+    }
+
+    private static async Task<bool> VerifyBindingCheckAsync(DbConnection connection, CancellationToken ct)
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT pg_get_constraintdef(c.oid), c.convalidated FROM pg_constraint c
+            JOIN pg_class t ON t.oid = c.conrelid JOIN pg_namespace n ON n.oid = t.relnamespace
+            WHERE n.nspname = 'public' AND t.relname = 'document_structure_nodes'
+              AND c.conname = 'CK_document_structure_nodes_content_binding' AND c.contype = 'c'
+            """;
+        await using var reader = await command.ExecuteReaderAsync(ct);
+        if (!await reader.ReadAsync(ct) || !reader.GetBoolean(1)) return false;
+        static string Normalize(string value) => string.Concat(value.Where(character => !char.IsWhiteSpace(character))).ToLowerInvariant();
+        const string expected = "CHECK ((((parse_id IS NULL) AND (start_sequence IS NULL) AND (end_sequence IS NULL)) OR ((parse_id IS NOT NULL) AND (start_sequence IS NOT NULL) AND (end_sequence IS NOT NULL) AND (start_sequence <= end_sequence))))";
+        return Normalize(reader.GetString(0)) == Normalize(expected);
     }
 
     private void EnsureMigrationContract()

@@ -4,9 +4,8 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace Doctheca.Database.Entities;
 
 /// <summary>
-/// An imported audio file of one parse, optionally linked to one of the parse's structure nodes
-/// (issue #90). The bytes live in object storage under <c>object_key</c>; deleting the parse
-/// deletes its rows, and the application deletes the objects.
+/// A document/tree-owned imported audio file, independently linked to a chapter.
+/// The immutable parse_id records storage provenance; parse deletion retains its row and bytes.
 /// </summary>
 /// <remarks>
 /// <c>node_id</c> has no foreign key on purpose: a structure save replaces the whole node tree
@@ -20,14 +19,16 @@ public class DocumentStructureAudioEntity
     [Column("id")]
     public Guid Id { get; set; } = Guid.NewGuid();
 
+    [Column("document_file_id")] public Guid DocumentFileId { get; set; }
+    [Column("tree_id")] public Guid TreeId { get; set; }
+
     [Column("parse_id")]
-    [Required]
-    public Guid ParseId { get; set; }
+    public Guid? ParseId { get; set; }
 
     [Column("node_id")]
     public Guid? NodeId { get; set; }
 
-    /// <summary>The file's relative path in the import (folders and name), unique per parse.</summary>
+    /// <summary>The file's relative path in the import (folders and name), unique per tree.</summary>
     [Column("source_path")]
     [Required]
     [MaxLength(1000)]
@@ -63,6 +64,5 @@ public class DocumentStructureAudioEntity
     [Column("updated_at")]
     public DateTimeOffset UpdatedAt { get; set; }
 
-    [ForeignKey(nameof(ParseId))]
-    public DocumentParseEntity? Parse { get; set; }
+    // parse_id is immutable object-key provenance, deliberately not a live parse FK.
 }

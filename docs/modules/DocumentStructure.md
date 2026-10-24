@@ -6,9 +6,9 @@
 
 - **Structure Definitions** (for example "English textbook" with the levels Unit → Section, or "Paper" with Chapter → Section → Subsection) are created and edited in the admin console after the system starts. See [structure_definitions](../database/tables/structure_definitions.md) and [structure_levels](../database/tables/structure_levels.md).
 - A **Document File** chooses one definition (`document_files.structure_definition_id`) through the existing metadata update.
-- A **Structure Node** marks an inclusive range of block `sequence` values of one parse at one configured level; children lie inside their parent and siblings do not overlap. See [document_structure_nodes](../database/tables/document_structure_nodes.md).
+- A **Structure Node** belongs to a document-owned tree and may bind an inclusive range of block `sequence` values of one same-document parse at one configured level; children lie inside their parent and siblings do not overlap. See [document_structure_nodes](../database/tables/document_structure_nodes.md).
 - Each block's node and its ancestors (`structure_node_ids`) and the readable path (`structure_path`, for example "Unit 3 > Section B") are indexed in OpenSearch, so search can be narrowed to a node and its whole subtree.
-- Out of scope: automatic detection, carrying nodes over to a re-parse (a re-parse is marked again), audio (#90, see [StructureAudio](StructureAudio.md)), the internal read API (#91), and StructaDoc changes.
+- Out of scope: automatic detection, automatic content binding, audio (#90, see [StructureAudio](StructureAudio.md)), the internal read API (#91), and StructaDoc changes.
 
 ## Global Block Order
 
@@ -109,9 +109,9 @@ field and leaves stored labels intact.
 - `PUT /admin/document-parses/{parseId}/structure` replaces the whole tree. Body: `{ "nodes": [ { "id"?, "levelId", "name", "startSequence", "endSequence", "children": [ … ] } ] }`. Node ids are kept when sent, so a node keeps its id across saves; nodes without an id get a new one. The response is the saved tree plus `searchIndexUpdated` (false when the OpenSearch write failed — the save itself still succeeded).
 - `GET /admin/document-parses/{parseId}/structure/nodes/{nodeId}/blocks?afterSequence=&limit=` pages through exactly the blocks between the node's start and end sequence; 404 `DOCTHECA_STRUCTURE_NODE_NOT_FOUND` for a node of another parse.
 
-**Validation on save** (a failed save changes nothing): every start/end sequence exists in the parse; start ≤ end; a root node uses a top level and a child node a level whose parent is its parent node's level; every level belongs to the document's definition (a document without a definition accepts only an empty tree); children lie inside their parent; siblings do not overlap (siblings are stored ordered by `start_sequence`); node names are required (≤ 500); ids are unique and not owned by another parse; at most 5000 nodes.
+**Validation on save** (a failed save changes nothing): every start/end sequence exists in the parse; start ≤ end; a root node uses a top level and a child node a level whose parent is its parent node's level; every level belongs to the document's definition (a document without a definition accepts only an empty tree); children lie inside their parent; siblings do not overlap (siblings are stored ordered by `start_sequence`); node names are required (≤ 500); ids are unique and not owned by another tree; at most 5000 nodes.
 
-**Concurrency:** the replacement runs in one transaction that locks the parse row first, so two saves of the same tree serialize and **the last complete save wins**; a mixed tree cannot be stored.
+**Concurrency:** the replacement runs in one transaction that locks the document row first, then validates committed ownership/levels/ranges, so two saves of the same tree serialize and **the last complete save wins**; a mixed tree cannot be stored.
 
 ### Search
 
@@ -137,3 +137,9 @@ Required-policy acceptance is exercised by `RequiredPolicyMigrationTests` (popul
 refusal, failure/cancellation, concurrent startup and both down paths), `RequiredPolicyRepositoryTests`
 (controlled real PostgreSQL replacement locking/rollback), and the policy cases in
 `DocumentStructureEndpointTests` and `AdminHostedFrontendTests`.
+
+## Ownership and reparse (#132)
+
+Migration [20261024053658](../database/migrations.md#document-owned-structure-132) preserves every legacy tree separately and initializes one current pointer. Chapters, their order and audio links survive successful reparse and parse deletion. Successful parse completion detaches only current content bindings when its captured document generation is still current; a late/repeated completion cannot erase a newer explicit binding. Upstream fetch, best-effort indexing and metadata analysis run outside that atomic local transition. Historical parse routes resolve preserved origin trees; a new parse's explicit tree save binds the existing current tree, without replacing its identity.
+
+When content is absent, `parseId`, sequence bounds and page bounds are nullable. Existing bound field names/routes stay. Internal content returns an empty terminal page; images and node-filtered search cannot return a former binding's content. The existing editor displays unbound ranges without highlighting unrelated blocks. New no-file book creation and unbound authoring/import interfaces remain separate work under #128.

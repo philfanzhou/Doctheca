@@ -13,5 +13,9 @@ public interface IDocumentParseRepository
     Task<List<DocumentParseModel>> GetByStatusAsync(string status);
     Task<List<DocumentParseModel>> GetByStatusesAsync(IReadOnlyCollection<string> statuses);
     Task<(List<DocumentParseModel> Items, int TotalCount)> GetListAsync(int page, int size, string? search = null);
+    Task<string> CompleteAsync(Guid parseId, Guid runId, string markdown,
+        IReadOnlyCollection<DocumentParsePageModel> pages, IReadOnlyList<DocumentParseImageModel> images,
+        IReadOnlyList<DocumentParseBlockModel> blocks, CancellationToken ct = default);
+
     Task DeleteAsync(Guid id);
 }

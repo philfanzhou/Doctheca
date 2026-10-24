@@ -1,3 +1,4 @@
+using Doctheca.Database.Repositories;
 using System.Collections.Concurrent;
 using System.Data.Common;
 using System.Net;
@@ -43,6 +44,33 @@ public sealed class InternalSearchEndpointTests(PostgreSqlFixture database) : Se
     {
         services.RemoveAll<ISearchDomainService>();
         services.AddSingleton(search);
+    }
+
+    [Fact]
+    public async Task SuccessfulReparse_UnboundNodeSearchReturnsEmptyWithoutCallingTheEngine()
+    {
+        var search = new Mock<ISearchDomainService>(MockBehavior.Strict);
+        using var factory = Factory(services => ReplaceSearch(services, search.Object));
+        using var client = factory.CreateClient(); var seed = await SeedAsync(factory);
+        try
+        {
+            using (var scope = factory.Services.CreateScope())
+            {
+                var context = scope.ServiceProvider.GetRequiredService<DocthecaDbContext>();
+                var parses = new DocumentParseRepository(context);
+                var job = await parses.AddAsync(new() { DocumentFileId = seed.File, Status = DocumentParseStatus.Parsing });
+                await parses.CompleteAsync(job.Id, Guid.NewGuid(), "new content", [], [], []);
+            }
+            using var response = await client.GetAsync(Url(node: seed.Unit));
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            var data = body.RootElement.GetProperty("data");
+            Assert.Empty(data.GetProperty("results").EnumerateArray());
+            Assert.Equal(0, data.GetProperty("totalCount").GetInt32());
+            Assert.Equal(JsonValueKind.Null, data.GetProperty("nextPageToken").ValueKind);
+            search.VerifyNoOtherCalls();
+        }
+        finally { await CleanupAsync(factory, seed); }
     }
 
     [Fact]
@@ -279,9 +307,11 @@ public sealed class InternalSearchEndpointTests(PostgreSqlFixture database) : Se
             var newestNode = Guid.NewGuid();
             db.DocumentParses.Add(new DocumentParseEntity { Id = newer, DocumentFileId = seed.File, Status = DocumentParseStatus.Parsed, ParsedAt = DateTimeOffset.UtcNow.AddDays(1) });
             db.DocumentStructureNodes.Add(new DocumentStructureNodeEntity { Id = newestNode, ParseId = newer, LevelId = seed.Level, Name = "new", StartSequence = 0, EndSequence = 5 });
-            await db.SaveChangesAsync();
+            await db.SaveOwnedChangesAsync();
+            var selectedTree = await db.DocumentStructureTrees.Where(tree => tree.OriginParseId == newer).Select(tree => tree.Id).SingleAsync();
+            await db.DocumentFiles.Where(file => file.Id == seed.File).ExecuteUpdateAsync(set => set.SetProperty(file => file.CurrentStructureTreeId, (Guid?)selectedTree));
             await Missing(seed.Unit);
-            await db.DocumentParses.Where(item => item.Id == newer).ExecuteUpdateAsync(set => set.SetProperty(item => item.Status, DocumentParseStatus.Failed));
+            await db.DocumentFiles.Where(file => file.Id == seed.File).ExecuteUpdateAsync(set => set.SetProperty(file => file.CurrentStructureTreeId, (Guid?)null));
             await Missing(newestNode);
             await db.DocumentFiles.Where(item => item.Id == seed.File).ExecuteUpdateAsync(set => set.SetProperty(item => item.StructureDefinitionId, (Guid?)null));
             await Missing(seed.Unit);
@@ -454,14 +484,14 @@ public sealed class InternalSearchEndpointTests(PostgreSqlFixture database) : Se
             BlockData = "{\"provider\":\"raw-provider-canary\"}"
         }).ToArray();
         db.DocumentParseBlocks.AddRange(blocks);
-        await db.SaveChangesAsync();
+        await db.SaveOwnedChangesAsync();
         return new(file, parse, definition, level, unit, section, blocks.Select(item => item.Id).ToArray());
     }
     private static async Task CleanupAsync(WebApplicationFactory<Program> factory, Seed seed)
     {
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<DocthecaDbContext>();
-        await db.DocumentFiles.Where(item => item.Id == seed.File).ExecuteDeleteAsync();
+        await new DocumentFileRepository(db).DeleteAsync(seed.File);
         await db.StructureLevels.Where(item => item.DefinitionId == seed.Definition).ExecuteUpdateAsync(set => set.SetProperty(item => item.ParentLevelId, (Guid?)null));
         await db.StructureDefinitions.Where(item => item.Id == seed.Definition).ExecuteDeleteAsync();
     }

@@ -64,7 +64,7 @@ internal static class StructureHttpResults
 
         return new
         {
-            parseId = tree.ParseId.ToString(),
+            parseId = tree.ParseId?.ToString(),
             documentFileId = tree.DocumentFileId.ToString(),
             fileName = tree.FileName,
             definition = tree.Definition is null ? null : Definition(tree.Definition),

@@ -65,16 +65,13 @@ are never rewritten. A valid UUID for an unknown definition returns the fixed 40
 
 `hasAudio` optionally accepts exactly `true` or `false`, case insensitively, without whitespace.
 Empty, padded, non-boolean or duplicate values return the fixed 400. `true` selects documents
-with linked audio in their current parse; `false` or omission applies no audio filter. It combines
+with linked audio in their current tree; `false` or omission applies no audio filter. It combines
 with all metadata filters before keyset paging. Definitions do not accept `hasAudio`.
 The original v1 page-token identity is unchanged for false/omitted, so existing tokens remain
 valid and those forms are interchangeable. A true-filter token cannot be reused without that
 filter, or vice versa; a mismatch returns the fixed 400.
 
-Only documents with at least one **parsed** parse containing saved structure nodes qualify.
-An older marked parsed parse remains sufficient when a newer parse is unmarked or pending.
-Unmarked documents and trees on failed/pending parses alone are excluded. Filtering is applied
-in SQL using an existence predicate, without loading full documents/parses for each row.
+Documents qualify through their persisted nonempty current tree. Migration initializes that pointer once from parsed/nonempty history; subsequent reparse or parse deletion cannot hide retained chapters/audio. Filtering stays in SQL without loading full documents for each row.
 Definition metadata is the document's currently selected definition. Each item contains exactly:
 
 ```json
@@ -90,9 +87,9 @@ Definition metadata is the document's currently selected definition. Each item c
 ```
 
 `audioCount` is a non-negative integer counting audio rows directly linked to existing nodes of
-the selected current parse (using the current-tree rule below), whose levels belong to the
-file's selected definition. Both the audio row and node must belong to that same parse.
-Unlinked, dangling/cross-parse node references and audio of older parses do not count.
+the persisted current tree (using the current-tree rule below), whose levels belong to the
+file's selected definition. Both the audio row and node must belong to that same document/tree.
+Unlinked, dangling/cross-parse node references and audio of historical trees do not count.
 Historical match status does not override a current node link. Counts use relational metadata
 only: no playback tokens, object-storage calls or search index are involved. They remain
 available when internal S3 is incomplete or LocalFile is selected; the audio route still reports its existing
@@ -136,13 +133,9 @@ The response contains exactly the following fields, recursively for every node:
 }
 ```
 
-The selected current parse has `status=parsed` and at least one saved structure node. Order
-by `ParsedAt` descending with null timestamps last, then UUID descending. When every timestamp
-is null, the greatest UUID wins. A newer unmarked, pending, parsing or failed parse does not
-hide a marked parsed parse. A newer qualifying tree becomes current on the next request;
-`parseId` identifies the actual selected parse. There is no inferred tree or mixing of parses.
+The document owns a stable current tree. The migration's one-time selector uses parsed/nonempty legacy trees, ParsedAt descending with nulls last, then UUID descending. Later successful parses leave the current tree and its node/audio IDs unchanged and detach old content bindings. A tree's `parseId` is null when unbound; each node's sequence/page bounds are nullable. Binding new content is a separate explicit operation. Historical trees do not enter current counts.
 
-Each node's `audioCount` counts only that node's direct current-parse audio using the catalog
+Each node's `audioCount` counts only that node's direct current-tree audio using the catalog
 membership rule. It equals the direct audio list length for the same unchanged dataset;
 a Unit's count excludes audio on its Sections. Counts, nodes and physical ranges share the
 same read snapshot and perform no object-storage I/O, token issuance or database writes.
@@ -157,8 +150,8 @@ when there are none. They are physical page numbers, not printed page labels or 
 Document existence, parse selection, levels, nodes, direct audio counts and page aggregation share one PostgreSQL
 repeatable-read transaction. A concurrent complete tree replacement or deletion returns one
 committed pre- or post-change snapshot, or the documented 404; it never mixes trees. Readers
-do not take the writer's parse-row update lock. The shared typed node lookup also rejects nodes
-outside their owning document's selected current parse; that ownership is valid for its read
+do not take the writer's document-row update lock. The shared typed node lookup also rejects nodes
+outside their owning document's selected current tree; that ownership is valid for its read
 snapshot and must be resolved again by later requests. Cancellation aborts reads and cannot
 produce a partial successful response. The endpoint writes no data or external objects.
 No file name, administrative timestamps, raw Block/provider JSON or storage identity is included.
@@ -207,7 +200,7 @@ on the initial request too. Hexadecimal input is case insensitive. Missing requi
 malformed revisions return 400; a different revision returns 409
 `DOCTHECA_INTERNAL_STRUCTURE_CHANGED`. Discard previous pages and restart without a cursor.
 Do not silently retry an old cursor without its revision. A deleted/replaced node or a node
-outside the selected current parse returns 404. Empty ranges return an empty page; a cursor
+outside the persisted current tree returns 404. Empty ranges return an empty page; a cursor
 at the inclusive end returns an empty terminal page.
 
 Each request resolves current-node/parse/definition ownership, revision and blocks inside
@@ -217,7 +210,7 @@ and ordered in-range block IDs, sequences and image IDs. Synced blocks receive n
 tree replacement, current-parse changes or changed block membership cannot silently complete
 an old traversal. It does not keep a server-side snapshot alive across HTTP requests or hash
 document text; arbitrary direct database edits to text with unchanged IDs are outside the
-supported synchronization contract. A current-parse switch normally makes old node IDs 404.
+supported synchronization contract. An explicit current-tree switch makes old node IDs 404; reparse leaves their IDs current and clears their content binding.
 Physical `pageNumber` is `PageId + 1`. Empty formats become null. Content includes text/table
 strings as data: consumers must not execute HTML. Raw `blockData`, provider JSON, administrative
 metadata and storage references are excluded. Optional Markdown is not supplied.
@@ -260,7 +253,7 @@ uses the existing full-text search service. `query` is required, trimmed, nonemp
 (case insensitive, without whitespace). False uses the existing English stemming analyzer;
 true uses the existing exact phrase analyzer. No filter preserves the existing unfiltered
 search semantics. `structureNodeId` is optional and must be a canonical hyphenated UUID.
-It must resolve to a node in its document's current structured parse, with a level in the
+It must resolve to a node in its document's current tree, with a level in the
 document's selected definition, before the search engine is called. Missing, stale or
 incompatible nodes return the fixed resource 404. PostgreSQL resolves ownership in one
 repeatable-read snapshot; the search filter combines that parse ID and the node ID. Ancestor
@@ -355,8 +348,8 @@ This API does not implement network isolation or guarantee a snapshot across lis
 Its success envelope contains exactly `data: {documentFileId,parseId,nodeId,items}`. Each item
 contains exactly `id,fileName,contentType,sizeBytes,playback`, where `fileName` is the imported
 basename and `playback` contains exactly `url,expiresAt,expiresInSeconds`. Items are ordered by
-source path ordinal, then UUID. Only audio directly associated with this current node/parse
-is included; descendants, unlinked rows and other parses are excluded. An empty node returns
+source path ordinal, then UUID. Only audio directly associated with this current node/tree
+is included; descendants, unlinked rows and other trees are excluded. An empty node returns
 an empty list. Issuance performs no object probe and does not promise future availability.
 
 The byte route accepts node/audio UUIDs and exactly one `token`; unknown or duplicate query
@@ -365,7 +358,7 @@ noncanonical-base64url, invalid, tampered, expired, wrong-purpose or route-misma
 return the same 404 `DOCTHECA_INTERNAL_AUDIO_NOT_FOUND` without storage access. Links are relative
 to the application's PathBase, never derived from Host, and never redirect to storage or admin.
 Treat links as opaque, short-lived playback capabilities. They contain only protected versioned
-document/parse/node/audio IDs, no storage identity or application credential. The singleton
+document/tree/node/audio IDs, no storage identity or application credential. The singleton
 purpose-specific ephemeral protector is separate from the admin key ring; no token cache,
 database row or object is created. Restart invalidates old links; callers re-list after expiry
 or restart. `expiresAt` is the protector's exact expiry. Existing `DocumentAudio:PlaybackLinkSeconds`
@@ -377,7 +370,7 @@ public S3 signing retains its independent public-address requirement. LocalFile 
 An existing node with unavailable audio returns 503 `DOCTHECA_INTERNAL_AUDIO_UNAVAILABLE` /
 `Audio is unavailable.`; an absent/stale list node returns 404 `DOCTHECA_INTERNAL_NODE_NOT_FOUND`.
 
-Listing and each byte admission resolve the owning document's current parsed tree, node and
+Listing and each byte admission resolve the owning document's persisted current tree, node and
 direct audio membership in one read-only PostgreSQL repeatable-read transaction. No writer
 locks or state writes are made. Every request rechecks ownership; a token is not a lease.
 Before any response bytes, the store validates exact deterministic key, imported media type,
@@ -389,7 +382,7 @@ short, missing, denied, unreachable, timed-out or throwing reads and scratch fai
 the fixed audio 503, without upstream headers/messages or partial success.
 
 After buffering, expiry and current node/audio membership are re-read in a fresh snapshot,
-including the same object key/size/media identity. Committed revocation before admission is
+including the same immutable object key/provenance/size/media identity. Committed revocation before admission is
 refused with the safe audio 404. A removal after the final admission snapshot may race an
 already-admitted stream; the next request rechecks and fails. Relinking can make a still-valid
 capability usable again. Neither revocation nor expiry retracts already-admitted/client-buffered
@@ -420,3 +413,9 @@ The #90 backup/restore rules are unchanged.
 The audio discovery additions (#122) require no schema, configuration or data migration.
 Restoring the previous image removes `hasAudio` and `audioCount`; downstream callers must
 tolerate their absence. The existing audio-list and playback contracts are unchanged.
+
+### Optional content binding and retained audio (#132)
+
+The node's nullable parse/start/end triple is either fully valid for its own document or fully absent. Unbound content returns `parseId:null`, `items:[]`, `nextAfterSequence:null`, `hasMore:false` with the normal revision. Old cursor/revision conflicts retain 409/reload behavior. Unbound images return safe 404 and node-filtered search returns an empty page without sending a null parse filter to the engine. Revision input includes the real tree, binding and block membership.
+
+Audio does not require a live content parse. Direct membership validates document/tree/node/audio in both read-only repeatable-read snapshots; v2 capabilities carry those four identities and expire/process-restart as before. Exact legacy storage provenance is compared before/after bounded scratch buffering. Parse deletion does not revoke retained audio; chapter/audio unlink or document/current-tree removal does. No storage identity is added to anonymous responses/logs. New no-file authoring and import protocols remain independent work; this change adds no anonymous writes or caller authentication.

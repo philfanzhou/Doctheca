@@ -87,6 +87,13 @@ public static class DocumentStructureEndpoints
         if (node == null)
             return Results.NotFound(new { success = false, message = "Structure node not found", errorCode = StructureErrorCodes.NodeNotFound });
 
+        if (node.ParseId is null)
+            return Results.Ok(new { success = true, data = new { items = Array.Empty<object>(), nextAfterSequence = (int?)null, hasMore = false } });
+        if (node.ParseId != parse.Id)
+        {
+            parse = await parseService.GetByIdAsync(node.ParseId.Value);
+            if (parse is null) return StructureHttpResults.ParseNotFound();
+        }
         return Results.Ok(new
         {
             success = true,

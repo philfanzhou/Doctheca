@@ -22,7 +22,7 @@ public sealed partial class StructureAudioStore
                 ".ogg" => "audio/ogg", ".flac" => "audio/flac", _ => null,
             };
             if (!Status.Available || audio.SizeBytes <= 0 || audio.SizeBytes > maxBytes || expectedType is null ||
-                audio.ContentType != expectedType || audio.ObjectKey != $"{ParsePrefix(audio.ParseId)}{audio.Id:N}{extension}")
+                audio.ContentType != expectedType || audio.ParseId is not { } originParseId || audio.ObjectKey != $"{ParsePrefix(originParseId)}{audio.Id:N}{extension}")
                 throw new AudioStorageException();
             stream = scratch.Open();
             if (!stream.CanRead || !stream.CanWrite || !stream.CanSeek || stream.Length != 0) throw new AudioStorageException();

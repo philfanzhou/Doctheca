@@ -48,7 +48,7 @@ public class DocumentParseImageRepository : IDocumentParseImageRepository
         await _context.SaveChangesAsync();
     }
 
-    private static DocumentParseImageEntity MapToEntity(DocumentParseImageModel model) => new()
+    internal static DocumentParseImageEntity MapToEntity(DocumentParseImageModel model) => new()
     {
         Id = model.Id,
         ParseId = model.ParseId,

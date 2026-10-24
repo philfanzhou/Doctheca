@@ -8,7 +8,7 @@ namespace Doctheca.Domain.Services.Structure;
 /// <summary>The marked structure of one parse together with the definition it was marked against.</summary>
 public sealed class DocumentStructureTree
 {
-    public Guid ParseId { get; init; }
+    public Guid? ParseId { get; init; }
     public Guid DocumentFileId { get; init; }
     public string FileName { get; init; } = string.Empty;
     public StructureDefinitionModel? Definition { get; init; }
@@ -75,13 +75,15 @@ public sealed class DocumentStructureService : IDocumentStructureService
         var definition = file?.StructureDefinitionId is { } definitionId
             ? await _definitionRepository.GetByIdAsync(definitionId)
             : null;
+        var nodes = OrderParentsFirst(await _structureRepository.GetByParseIdAsync(parseId));
+        var bindings = nodes.Select(node => node.ParseId).Distinct().ToArray();
         return new DocumentStructureTree
         {
-            ParseId = parse.Id,
+            ParseId = bindings.Length == 1 ? bindings[0] : null,
             DocumentFileId = parse.DocumentFileId,
             FileName = file?.FileName ?? string.Empty,
             Definition = definition,
-            Nodes = OrderParentsFirst(await _structureRepository.GetByParseIdAsync(parseId)),
+            Nodes = nodes,
         };
     }
 
@@ -91,6 +93,9 @@ public sealed class DocumentStructureService : IDocumentStructureService
         var parse = await _parseRepository.GetByIdAsync(parseId);
         if (parse == null)
             return StructureResult<DocumentStructureTree>.NotFound(StructureErrorCodes.ParseNotFound, "Parse record not found");
+
+        if (parse.Status != DocumentParseStatus.Parsed)
+            return StructureResult<DocumentStructureTree>.Invalid([new("parseId", "must reference a completed parse")]);
 
         var file = await _fileRepository.GetByIdAsync(parse.DocumentFileId);
         var definition = file?.StructureDefinitionId is { } definitionId
@@ -156,7 +161,9 @@ public sealed class DocumentStructureService : IDocumentStructureService
                 "The document has marked structure nodes; clear them before changing its structure definition");
         }
 
-        await _fileRepository.SetStructureDefinitionAsync(documentFileId, structureDefinitionId);
+        if (!await _fileRepository.SetStructureDefinitionAsync(documentFileId, structureDefinitionId))
+            return StructureResult<DocumentFileModel>.Conflict(StructureErrorCodes.DocumentStructureInUse,
+                "The document changed while choosing its structure definition; reload and retry");
         _logger.LogInformation("Document file {FileId} structure definition set to {DefinitionId}",
             documentFileId, structureDefinitionId?.ToString() ?? "(none)");
         return StructureResult<DocumentFileModel>.Ok((await _fileRepository.GetByIdAsync(documentFileId))!);
@@ -196,7 +203,7 @@ public sealed class DocumentStructureService : IDocumentStructureService
         }
 
         // Siblings are ordered by start sequence and must not overlap.
-        accepted.Sort((left, right) => left.Node.StartSequence.CompareTo(right.Node.StartSequence));
+        accepted.Sort((left, right) => Nullable.Compare(left.Node.StartSequence, right.Node.StartSequence));
         for (var i = 1; i < accepted.Count; i++)
         {
             var previous = accepted[i - 1].Node;

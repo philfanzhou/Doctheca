@@ -1,3 +1,4 @@
+using Doctheca.Database.Repositories;
 using System.Data.Common;
 using System.Net;
 using System.Net.Http.Headers;
@@ -331,15 +332,20 @@ public sealed partial class InternalCatalogEndpointTests(PostgreSqlFixture datab
                 Name = "Unit", StartSequence = 0, EndSequence = 1 });
             if (i == 0) db.DocumentParses.Add(new DocumentParseEntity { DocumentFileId = files[i], Status = DocumentParseStatus.Pending });
         }
-        await db.SaveChangesAsync();
+        await db.SaveOwnedChangesAsync();
         return new Seed(definitions, files, files.Take(6).ToArray(), files.Take(3).ToArray(), files.Skip(6).ToArray());
+    }
+
+    private static async Task DeleteFilesAsync(DocthecaDbContext db, IEnumerable<Guid> ids)
+    {
+        foreach (var id in ids) await new DocumentFileRepository(db).DeleteAsync(id);
     }
 
     private static async Task CleanupAsync(WebApplicationFactory<Program> factory, Seed seed)
     {
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<DocthecaDbContext>();
-        await db.DocumentFiles.Where(item => seed.Files.Contains(item.Id)).ExecuteDeleteAsync();
+        await DeleteFilesAsync(db, seed.Files);
         await db.StructureLevels.Where(item => seed.Definitions.Contains(item.DefinitionId)).ExecuteUpdateAsync(item => item.SetProperty(level => level.ParentLevelId, (Guid?)null));
         await db.StructureDefinitions.Where(item => seed.Definitions.Contains(item.Id)).ExecuteDeleteAsync();
     }
@@ -392,7 +398,7 @@ public sealed partial class InternalCatalogEndpointTests(PostgreSqlFixture datab
         public override ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(DbCommand command, CommandEventData eventData,
             InterceptionResult<DbDataReader> result, CancellationToken cancellationToken = default)
         {
-            if (Active && command.CommandText.Contains("WHERE EXISTS", StringComparison.Ordinal))
+            if (Active && command.CommandText.Contains("document_structure_nodes", StringComparison.Ordinal))
                 throw new InvalidOperationException("provider-detail-canary");
             return base.ReaderExecutingAsync(command, eventData, result, cancellationToken);
         }

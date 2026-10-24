@@ -54,25 +54,25 @@ public sealed partial class InternalCatalogEndpointTests
                 var db = scope.ServiceProvider.GetRequiredService<DocthecaDbContext>();
                 var nodes = await db.DocumentStructureNodes.Where(n => seed.Files.Contains(n.Parse!.DocumentFileId)).ToListAsync();
                 var first = nodes.Single(n => n.ParseId == db.DocumentParses.Where(p => p.DocumentFileId == seed.Files[0] && p.Status == DocumentParseStatus.Parsed).Select(p => p.Id).Single());
-                parse = first.ParseId; node = first.Id; child = Guid.NewGuid();
+                parse = first.ParseId!.Value; node = first.Id; child = Guid.NewGuid();
                 db.DocumentStructureNodes.Add(new() { Id = child, ParseId = parse, LevelId = first.LevelId, ParentId = node, Name = "child" });
                 var childAudio = Audio(parse, child, "folder_name_mismatch"); moved = childAudio.Id;
                 db.DocumentStructureAudio.AddRange(Audio(parse, node), childAudio, Audio(parse, null), Audio(parse, Guid.NewGuid(), "node_removed"));
                 var second = nodes.Single(n => n.ParseId == db.DocumentParses.Where(p => p.DocumentFileId == seed.Files[1]).Select(p => p.Id).Single());
-                db.DocumentStructureAudio.Add(Audio(second.ParseId, second.Id));
+                db.DocumentStructureAudio.Add(Audio(second.ParseId!.Value, second.Id));
                 var third = nodes.Single(n => n.ParseId == db.DocumentParses.Where(p => p.DocumentFileId == seed.Files[2]).Select(p => p.Id).Single());
                 var foreignLevel = await db.StructureLevels.Where(l => l.DefinitionId == seed.Definitions[1]).Select(l => l.Id).FirstAsync();
                 var foreignDefinitionNode = new DocumentStructureNodeEntity { ParseId = third.ParseId, LevelId = foreignLevel, Name = "foreign-definition" };
                 db.DocumentStructureNodes.Add(foreignDefinitionNode);
-                db.DocumentStructureAudio.Add(Audio(third.ParseId, foreignDefinitionNode.Id));
+                db.DocumentStructureAudio.Add(Audio(third.ParseId!.Value, foreignDefinitionNode.Id));
                 var old = Guid.NewGuid();
                 db.DocumentParses.Add(new() { Id = old, DocumentFileId = seed.Files[2], Status = DocumentParseStatus.Parsed, ParsedAt = null });
                 await db.DocumentParses.Where(p => p.Id == third.ParseId).ExecuteUpdateAsync(set => set.SetProperty(p => p.ParsedAt, DateTimeOffset.UtcNow));
                 var oldNode = new DocumentStructureNodeEntity { ParseId = old, LevelId = first.LevelId, Name = "old" };
                 db.DocumentStructureNodes.Add(oldNode);
-                db.DocumentStructureAudio.AddRange(Audio(third.ParseId, null), Audio(third.ParseId, Guid.NewGuid(), "node_removed"),
-                    Audio(third.ParseId, node), Audio(old, oldNode.Id));
-                await db.SaveChangesAsync();
+                db.DocumentStructureAudio.AddRange(Audio(third.ParseId!.Value, null), Audio(third.ParseId!.Value, Guid.NewGuid(), "node_removed"),
+                    Audio(third.ParseId!.Value, node), Audio(old, oldNode.Id));
+                await db.SaveOwnedChangesAsync();
             }
             var prefix = $"{Documents}?structureDefinitionId={seed.Definitions[0]}";
             sql.Active = true;
@@ -138,8 +138,8 @@ public sealed partial class InternalCatalogEndpointTests
             {
                 var db = scope.ServiceProvider.GetRequiredService<DocthecaDbContext>();
                 foreach (var node in await db.DocumentStructureNodes.Where(n => seed.Matching.Contains(n.Parse!.DocumentFileId)).ToListAsync())
-                    db.DocumentStructureAudio.Add(Audio(node.ParseId, node.Id));
-                await db.SaveChangesAsync();
+                    db.DocumentStructureAudio.Add(Audio(node.ParseId!.Value, node.Id));
+                await db.SaveOwnedChangesAsync();
             }
             var prefix = $"{Documents}?structureDefinitionId={seed.Definitions[0]}&pageSize=1";
             var firstId = seed.Files.Take(5).Min();
@@ -183,7 +183,7 @@ public sealed partial class InternalCatalogEndpointTests
             {
                 var db = scope.ServiceProvider.GetRequiredService<DocthecaDbContext>();
                 var node = await db.DocumentStructureNodes.FirstAsync(n => n.Parse!.DocumentFileId == seed.Files[0]);
-                db.DocumentStructureAudio.Add(Audio(node.ParseId, node.Id)); await db.SaveChangesAsync();
+                db.DocumentStructureAudio.Add(Audio(node.ParseId!.Value, node.Id)); await db.SaveOwnedChangesAsync();
             }
             pause.Resume.TrySetResult();
             using var before = JsonDocument.Parse(await reading);

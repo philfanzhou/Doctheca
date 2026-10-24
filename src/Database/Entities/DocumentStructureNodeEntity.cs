@@ -4,8 +4,8 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace Doctheca.Database.Entities;
 
 /// <summary>
-/// A hand-marked structure node of one parse: a contiguous, inclusive range of block
-/// <c>sequence</c> values at one configured level. Deleting the parse deletes its nodes.
+/// A document-owned chapter with an optional same-document inclusive content binding.
+/// Parse deletion clears the binding and retains the chapter.
 /// </summary>
 [Table("document_structure_nodes")]
 public class DocumentStructureNodeEntity
@@ -14,9 +14,11 @@ public class DocumentStructureNodeEntity
     [Column("id")]
     public Guid Id { get; set; } = Guid.NewGuid();
 
+    [Column("document_file_id")] public Guid DocumentFileId { get; set; }
+    [Column("tree_id")] public Guid TreeId { get; set; }
+
     [Column("parse_id")]
-    [Required]
-    public Guid ParseId { get; set; }
+    public Guid? ParseId { get; set; }
 
     [Column("level_id")]
     [Required]
@@ -35,12 +37,10 @@ public class DocumentStructureNodeEntity
     public int SortOrder { get; set; }
 
     [Column("start_sequence")]
-    [Required]
-    public int StartSequence { get; set; }
+    public int? StartSequence { get; set; }
 
     [Column("end_sequence")]
-    [Required]
-    public int EndSequence { get; set; }
+    public int? EndSequence { get; set; }
 
     [Column("created_at")]
     public DateTimeOffset CreatedAt { get; set; }

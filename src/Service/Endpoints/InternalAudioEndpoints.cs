@@ -47,7 +47,7 @@ public static class InternalAudioEndpoints
         var items = read.Items.Select(audio => new InternalAudioItem(audio.Id,
             Path.GetFileName(audio.SourcePath.Replace('\\', '/')), audio.ContentType, audio.SizeBytes,
             new(context.Request.PathBase.ToUriComponent().TrimEnd('/') + $"/internal/v1/structure-nodes/{node:D}/audio/{audio.Id:D}/content" +
-                QueryString.Create("token", tokens.Create(new(read.Node.DocumentFileId, read.Node.ParseId, node, audio.Id), expiry)),
+                QueryString.Create("token", tokens.Create(new(read.Node.DocumentFileId, read.Node.TreeId, node, audio.Id), expiry)),
                 expiry, settings.LinkSeconds))).ToArray();
         return Results.Ok(new { success = true, data = new InternalAudioList(read.Node.DocumentFileId, read.Node.ParseId, node, items) });
     }
@@ -95,6 +95,6 @@ public static class InternalAudioEndpoints
         }
     }
     private static InternalAudioObject? Match(InternalAudioMembership? read, InternalAudioBinding binding) =>
-        read?.Node.DocumentFileId == binding.DocumentFileId && read.Node.ParseId == binding.ParseId && read.Node.NodeId == binding.NodeId
-            ? read.Items.SingleOrDefault(audio => audio.Id == binding.AudioId && audio.ParseId == binding.ParseId && audio.NodeId == binding.NodeId) : null;
+        read?.Node.DocumentFileId == binding.DocumentFileId && read.Node.TreeId == binding.TreeId && read.Node.NodeId == binding.NodeId
+            ? read.Items.SingleOrDefault(audio => audio.Id == binding.AudioId && audio.NodeId == binding.NodeId) : null;
 }

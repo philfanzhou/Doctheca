@@ -12,8 +12,9 @@ export interface TreeNode {
   id: string
   levelId: string
   name: string
-  startSequence: number
-  endSequence: number
+  startSequence: number | null
+  endSequence: number | null
+  sortOrder?: number
   children: TreeNode[]
 }
 
@@ -28,12 +29,13 @@ export interface NewNode {
 }
 
 const contains = (node: TreeNode, start: number, end: number) =>
-  node.startSequence <= start && end <= node.endSequence
+  node.startSequence !== null && node.endSequence !== null && node.startSequence <= start && end <= node.endSequence
 
 const overlaps = (node: TreeNode, start: number, end: number) =>
-  node.startSequence <= end && start <= node.endSequence
+  node.startSequence !== null && node.endSequence !== null && node.startSequence <= end && start <= node.endSequence
 
-const byStart = (a: TreeNode, b: TreeNode) => a.startSequence - b.startSequence
+export const byStart = (a: TreeNode, b: TreeNode) => a.startSequence !== null && b.startSequence !== null
+  ? a.startSequence - b.startSequence : (a.sortOrder ?? 0) - (b.sortOrder ?? 0)
 
 /** Deep copy so edits never mutate the caller's reactive state. */
 export function cloneTree(nodes: TreeNode[]): TreeNode[] {
@@ -126,7 +128,7 @@ export function setNodeRange(nodes: TreeNode[], id: string, start: number, end: 
   if (parent && !contains(parent, start, end)) {
     return { ok: false, reason: `范围必须位于上级节点「${parent.name}」之内` }
   }
-  const outside = node.children.find((child) => !(start <= child.startSequence && child.endSequence <= end))
+  const outside = node.children.find((child) => child.startSequence !== null && child.endSequence !== null && !(start <= child.startSequence && child.endSequence <= end))
   if (outside) return { ok: false, reason: `范围必须包含下级节点「${outside.name}」` }
   const clash = siblings.find((sibling) => sibling !== node && overlaps(sibling, start, end))
   if (clash) return { ok: false, reason: `与同级节点「${clash.name}」重叠` }

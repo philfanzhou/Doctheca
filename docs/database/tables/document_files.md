@@ -13,6 +13,8 @@ The `document_files` table stores file metadata for the document parsing flow; p
 | Field | Type | Constraints | Default | Description |
 |--------|------|------|--------|------|
 | `id` | `UUID` | PRIMARY KEY | | File unique identifier |
+| `current_structure_tree_id` | `UUID` | NULL, composite same-document tree FK NO ACTION | | Stable current tree; clear before document deletion |
+| `structure_binding_generation` | `BIGINT` | NOT NULL | `0` | Serialized explicit binding/completion generation |
 | `file_name` | `VARCHAR(500)` | NOT NULL | | File name |
 | `file_path` | `VARCHAR(500)` | NULL | | OSS storage path; only for legacy records (original files uploaded before the migration); NULL for new records |
 | `structadoc_document_id` | `UUID` | NULL | | StructaDoc Document ID (required for new uploads; legacy files are back-filled after lazy upload on the first parse trigger) |

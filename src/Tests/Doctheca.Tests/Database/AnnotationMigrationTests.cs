@@ -21,18 +21,18 @@ public sealed class AnnotationMigrationTests(PostgreSqlMigrationFixture fixture)
         await context.GetService<IMigrator>().MigrateAsync(DocthecaMigrationExecutor.AddDocumentParsePagesMigrationId);
         await SeedAsync(context);
         var before = await ExistingRowsAsync(context);
-        var columns = await MigrationGoldenStates.ReadColumnShapeAsync(context, DocthecaMigrationExecutor.AllTableNames);
-        var constraints = await MigrationGoldenStates.ReadConstraintShapeAsync(context, DocthecaMigrationExecutor.AllTableNames);
+        var columns = await MigrationGoldenStates.ReadLegacyColumnShapeAsync(context, DocthecaMigrationExecutor.AllTableNames);
+        var constraints = await MigrationGoldenStates.ReadLegacyConstraintShapeAsync(context, DocthecaMigrationExecutor.AllTableNames);
         var executor = new DocthecaMigrationExecutor(context);
         (await executor.InspectAsync()).Should().Be(DocthecaMigrationExecutor.DatabaseState.PendingMigrations);
         await executor.ExecuteAsync();
         (await executor.InspectAsync()).Should().Be(DocthecaMigrationExecutor.DatabaseState.CurrentVersionCompatible);
         (await MigrationGoldenStates.ReadAppliedHistoryAsync(context)).Should().Equal(MigrationGoldenStates.AllIds);
         (await ExistingRowsAsync(context)).Should().Equal(before);
-        var afterColumns = await MigrationGoldenStates.ReadColumnShapeAsync(context, DocthecaMigrationExecutor.AllTableNames);
+        var afterColumns = await MigrationGoldenStates.ReadLegacyColumnShapeAsync(context, DocthecaMigrationExecutor.AllTableNames);
         afterColumns.Should().Contain("document_parse_blocks.footnote:text:null");
         afterColumns.Where(column => !column.StartsWith("document_parse_blocks.footnote:") && !column.StartsWith("structure_levels.required:")).Should().Equal(columns);
-        (await MigrationGoldenStates.ReadConstraintShapeAsync(context, DocthecaMigrationExecutor.AllTableNames)).Should().Equal(constraints);
+        (await MigrationGoldenStates.ReadLegacyConstraintShapeAsync(context, DocthecaMigrationExecutor.AllTableNames)).Should().Equal(constraints);
         (await context.DocumentParseBlocks.SingleAsync()).Footnote.Should().BeNull();
     }
 
@@ -54,6 +54,8 @@ public sealed class AnnotationMigrationTests(PostgreSqlMigrationFixture fixture)
             if (documentedSql)
             {
                 await MigrationGoldenStates.ExecuteRawAsync(context, await File.ReadAllTextAsync(
+                    StructureMigrationTests.RollbackScriptPath(DocthecaMigrationExecutor.AddDocumentOwnedStructureMigrationId)));
+                await MigrationGoldenStates.ExecuteRawAsync(context, await File.ReadAllTextAsync(
                     StructureMigrationTests.RollbackScriptPath(DocthecaMigrationExecutor.AddRequiredStructureLevelsMigrationId)));
                 await MigrationGoldenStates.ExecuteRawAsync(context, await File.ReadAllTextAsync(
                     StructureMigrationTests.RollbackScriptPath(DocthecaMigrationExecutor.ClassifyLevelLessTitlesMigrationId)));
@@ -64,10 +66,10 @@ public sealed class AnnotationMigrationTests(PostgreSqlMigrationFixture fixture)
                 await context.GetService<IMigrator>().MigrateAsync(DocthecaMigrationExecutor.AddDocumentParsePagesMigrationId);
             (await ExistingRowsAsync(context)).Should().Equal(before);
             (await MigrationGoldenStates.ReadAppliedHistoryAsync(context)).Should().Equal(MigrationGoldenStates.AllIds.Take(4));
-            (await MigrationGoldenStates.ReadColumnShapeAsync(context, DocthecaMigrationExecutor.AllTableNames)).Should()
-                .Equal(await MigrationGoldenStates.ReadColumnShapeAsync(previous, DocthecaMigrationExecutor.AllTableNames));
-            (await MigrationGoldenStates.ReadConstraintShapeAsync(context, DocthecaMigrationExecutor.AllTableNames)).Should()
-                .Equal(await MigrationGoldenStates.ReadConstraintShapeAsync(previous, DocthecaMigrationExecutor.AllTableNames));
+            (await MigrationGoldenStates.ReadLegacyColumnShapeAsync(context, DocthecaMigrationExecutor.AllTableNames)).Should()
+                .Equal(await MigrationGoldenStates.ReadLegacyColumnShapeAsync(previous, DocthecaMigrationExecutor.AllTableNames));
+            (await MigrationGoldenStates.ReadLegacyConstraintShapeAsync(context, DocthecaMigrationExecutor.AllTableNames)).Should()
+                .Equal(await MigrationGoldenStates.ReadLegacyConstraintShapeAsync(previous, DocthecaMigrationExecutor.AllTableNames));
             var executor = new DocthecaMigrationExecutor(context);
             (await executor.InspectAsync()).Should().Be(DocthecaMigrationExecutor.DatabaseState.PendingMigrations);
             await executor.ExecuteAsync();
@@ -102,13 +104,13 @@ public sealed class AnnotationMigrationTests(PostgreSqlMigrationFixture fixture)
             });
         }
         var history = await MigrationGoldenStates.ReadAppliedHistoryAsync(context);
-        var columns = await MigrationGoldenStates.ReadColumnShapeAsync(context, DocthecaMigrationExecutor.AllTableNames);
+        var columns = await MigrationGoldenStates.ReadLegacyColumnShapeAsync(context, DocthecaMigrationExecutor.AllTableNames);
         var executor = new DocthecaMigrationExecutor(context);
         (await executor.InspectAsync()).Should().Be(scenario == "unknown-history"
             ? DocthecaMigrationExecutor.DatabaseState.VersionTooNew : DocthecaMigrationExecutor.DatabaseState.InspectionFailed);
         await Assert.ThrowsAsync<InvalidOperationException>(() => executor.ExecuteAsync());
         (await MigrationGoldenStates.ReadAppliedHistoryAsync(context)).Should().Equal(history);
-        (await MigrationGoldenStates.ReadColumnShapeAsync(context, DocthecaMigrationExecutor.AllTableNames)).Should().Equal(columns);
+        (await MigrationGoldenStates.ReadLegacyColumnShapeAsync(context, DocthecaMigrationExecutor.AllTableNames)).Should().Equal(columns);
     }
 
     private static async Task SeedAsync(DocthecaDbContext context)
@@ -121,13 +123,13 @@ public sealed class AnnotationMigrationTests(PostgreSqlMigrationFixture fixture)
     private static async Task<List<string>> ExistingRowsAsync(DocthecaDbContext context)
     {
         var rows = new List<string>();
-        foreach (var table in DocthecaMigrationExecutor.AllTableNames)
+        foreach (var table in DocthecaMigrationExecutor.PreOwnershipTableNames)
         {
             await context.Database.OpenConnectionAsync();
             try
             {
                 await using var command = context.Database.GetDbConnection().CreateCommand();
-                command.CommandText = $"SELECT '{table}:' || (to_jsonb(t) - 'footnote' - 'required')::text FROM {table} t ORDER BY 1";
+                command.CommandText = $"SELECT '{table}:' || ({MigrationGoldenStates.LegacyRowJson(table)} - 'footnote' - 'required')::text FROM {table} t ORDER BY 1";
                 await using var reader = await command.ExecuteReaderAsync();
                 while (await reader.ReadAsync()) rows.Add(reader.GetString(0));
             }

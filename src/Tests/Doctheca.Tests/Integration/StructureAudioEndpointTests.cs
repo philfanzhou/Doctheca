@@ -217,11 +217,14 @@ public sealed partial class StructureAudioEndpointTests(PostgreSqlFixture databa
         again.StatusCode.Should().Be(HttpStatusCode.Conflict);
         (await minio.KeysAsync(_bucket)).Should().HaveCount(57);
 
-        // 8. Deleting the parse deletes every row and object, including one an interrupted import left.
+        // 8. Parse deletion retains document-owned audio; document deletion cleans exact referenced keys.
         await minio.PutAsync(_bucket, $"audio/{Guid.Parse(parseId):N}/{Guid.NewGuid():N}.mp3", Mp3("left"));
         (await client.DeleteAsync($"/admin/document-parses/{parseId}")).StatusCode.Should().Be(HttpStatusCode.OK);
+        (await CountAudioAsync(factory, parseId)).Should().Be(57);
+        (await minio.KeysAsync(_bucket)).Should().HaveCount(58);
+        (await client.DeleteAsync($"/admin/document-files/{fileId}")).StatusCode.Should().Be(HttpStatusCode.OK);
         (await CountAudioAsync(factory, parseId)).Should().Be(0);
-        (await minio.KeysAsync(_bucket)).Should().BeEmpty();
+        (await minio.KeysAsync(_bucket)).Should().ContainSingle();
         (await client.GetAsync($"/admin/document-parses/{parseId}/audio")).StatusCode.Should().Be(HttpStatusCode.NotFound);
         _ = fileId;
     }

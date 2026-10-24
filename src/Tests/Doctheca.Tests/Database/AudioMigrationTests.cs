@@ -63,12 +63,14 @@ public sealed class AudioMigrationTests(PostgreSqlMigrationFixture fixture) : IA
             await SeedStructureAsync(context);
             var before = await SnapshotAsync(context);
             await MigrationGoldenStates.ExecuteRawAsync(context, $"""
-                INSERT INTO document_structure_audio (id, parse_id, node_id, source_path, content_type, size_bytes,
+                INSERT INTO document_structure_audio (document_file_id, tree_id, id, parse_id, node_id, source_path, content_type, size_bytes,
                                                       object_key, match_status, link_source, created_at, updated_at)
-                VALUES ('{Guid.NewGuid()}', '{MigrationGoldenStates.ParseId}', NULL, 'unit1/a.mp3', 'audio/mpeg', 10,
-                        'audio/x/y.mp3', 'no_match', NULL, NOW(), NOW());
+                SELECT document_file_id,id,'{Guid.NewGuid()}','{MigrationGoldenStates.ParseId}',NULL,'unit1/a.mp3','audio/mpeg',10,
+                       'audio/x/y.mp3','no_match',NULL,NOW(),NOW() FROM document_structure_trees WHERE origin_parse_id='{MigrationGoldenStates.ParseId}';
                 """);
 
+            await MigrationGoldenStates.ExecuteRawAsync(context, await File.ReadAllTextAsync(
+                StructureMigrationTests.RollbackScriptPath(DocthecaMigrationExecutor.AddDocumentOwnedStructureMigrationId)));
             await MigrationGoldenStates.ExecuteRawAsync(context, await File.ReadAllTextAsync(
                 StructureMigrationTests.RollbackScriptPath(DocthecaMigrationExecutor.AddRequiredStructureLevelsMigrationId)));
             await MigrationGoldenStates.ExecuteRawAsync(context, await File.ReadAllTextAsync(
@@ -81,8 +83,8 @@ public sealed class AudioMigrationTests(PostgreSqlMigrationFixture fixture) : IA
 
             (await MigrationGoldenStates.ReadAppliedHistoryAsync(context)).Should().Equal(MigrationGoldenStates.InitialId, StructureId);
             var tables = DocthecaMigrationExecutor.StructureVersionTableNames;
-            (await MigrationGoldenStates.ReadColumnShapeAsync(context, tables)).Should().Equal(await MigrationGoldenStates.ReadColumnShapeAsync(referenceContext, tables));
-            (await MigrationGoldenStates.ReadConstraintShapeAsync(context, tables)).Should().Equal(await MigrationGoldenStates.ReadConstraintShapeAsync(referenceContext, tables));
+            (await MigrationGoldenStates.ReadLegacyColumnShapeAsync(context, tables)).Should().Equal(await MigrationGoldenStates.ReadLegacyColumnShapeAsync(referenceContext, tables));
+            (await MigrationGoldenStates.ReadLegacyConstraintShapeAsync(context, tables)).Should().Equal(await MigrationGoldenStates.ReadLegacyConstraintShapeAsync(referenceContext, tables));
             (await MigrationGoldenStates.ScalarAsync<bool>(context, "SELECT to_regclass('public.document_structure_audio') IS NULL")).Should().BeTrue();
             (await SnapshotAsync(context)).Should().Equal(before);
             // The previous version verifies exactly; this application migrates it forward again.
@@ -129,8 +131,16 @@ public sealed class AudioMigrationTests(PostgreSqlMigrationFixture fixture) : IA
             INSERT INTO structure_levels (id, definition_id, name, parent_level_id, sort_order) VALUES ('{level}', '{definition}', 'Unit', NULL, 0);
             UPDATE document_files SET structure_definition_id = '{definition}' WHERE id = '{MigrationGoldenStates.FileId}';
             UPDATE document_parse_blocks SET sequence = 0 WHERE id = '{MigrationGoldenStates.BlockId}';
-            INSERT INTO document_structure_nodes (id, parse_id, level_id, parent_id, name, sort_order, start_sequence, end_sequence, created_at, updated_at)
-            VALUES ('{Guid.NewGuid()}', '{MigrationGoldenStates.ParseId}', '{level}', NULL, 'Unit 1', 0, 0, 0, '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z');
+            """);
+        if (await MigrationGoldenStates.ScalarAsync<bool>(context, "SELECT to_regclass('public.document_structure_trees') IS NOT NULL"))
+        {
+            context.DocumentStructureNodes.Add(new Doctheca.Database.Entities.DocumentStructureNodeEntity { ParseId=MigrationGoldenStates.ParseId, LevelId=level, Name="Unit 1", StartSequence=0, EndSequence=0,
+                CreatedAt=DateTimeOffset.Parse("2026-01-01T00:00:00Z"), UpdatedAt=DateTimeOffset.Parse("2026-01-01T00:00:00Z") });
+            await context.SaveOwnedChangesAsync();
+        }
+        else await MigrationGoldenStates.ExecuteRawAsync(context, $"""
+            INSERT INTO document_structure_nodes (id,parse_id,level_id,name,sort_order,start_sequence,end_sequence,created_at,updated_at)
+            VALUES ('{Guid.NewGuid()}','{MigrationGoldenStates.ParseId}','{level}','Unit 1',0,0,0,'2026-01-01T00:00:00Z','2026-01-01T00:00:00Z');
             """);
     }
 
@@ -146,7 +156,7 @@ public sealed class AudioMigrationTests(PostgreSqlMigrationFixture fixture) : IA
             {
                 await using var command = connection.CreateCommand();
                 // Compare the historical row fields across the later additive nullable column.
-                command.CommandText = $"SELECT '{table}:' || (to_jsonb(t) - 'footnote' - 'required')::text FROM {table} t ORDER BY 1";
+                command.CommandText = $"SELECT '{table}:' || ({MigrationGoldenStates.LegacyRowJson(table)} - 'footnote' - 'required')::text FROM {table} t ORDER BY 1";
                 await using var reader = await command.ExecuteReaderAsync();
                 while (await reader.ReadAsync()) rows.Add(reader.GetString(0));
             }

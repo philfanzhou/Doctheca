@@ -48,7 +48,8 @@ public class DocumentFileRepository : IDocumentFileRepository
 
     public async Task<bool> UpdateAsync(DocumentFileModel model)
     {
-        var entity = await _context.DocumentFiles.FindAsync(model.Id);
+        await using var transaction = await _context.Database.BeginTransactionAsync();
+        var entity = await StructureOwnership.LockDocumentAsync(_context, model.Id);
         if (entity == null) return false;
 
         entity.FileName = model.FileName;
@@ -57,12 +58,14 @@ public class DocumentFileRepository : IDocumentFileRepository
         entity.UpdatedAt = DateTimeOffset.UtcNow;
 
         await _context.SaveChangesAsync();
+        await transaction.CommitAsync();
         return true;
     }
 
     public async Task<bool> UpdateMetadataAsync(Guid id, string? subject, string? grade, string? year)
     {
-        var entity = await _context.DocumentFiles.FindAsync(id);
+        await using var transaction = await _context.Database.BeginTransactionAsync();
+        var entity = await StructureOwnership.LockDocumentAsync(_context, id);
         if (entity == null) return false;
 
         // Only update fields that are non-null (null = no change)
@@ -72,40 +75,59 @@ public class DocumentFileRepository : IDocumentFileRepository
         entity.UpdatedAt = DateTimeOffset.UtcNow;
 
         await _context.SaveChangesAsync();
+        await transaction.CommitAsync();
         return true;
     }
 
     public async Task<bool> AttachStructaDocDocumentAsync(Guid id, Guid structaDocDocumentId)
     {
-        var entity = await _context.DocumentFiles.FindAsync(id);
+        await using var transaction = await _context.Database.BeginTransactionAsync();
+        var entity = await StructureOwnership.LockDocumentAsync(_context, id);
         if (entity == null) return false;
 
         entity.StructaDocDocumentId = structaDocDocumentId;
         entity.UpdatedAt = DateTimeOffset.UtcNow;
 
         await _context.SaveChangesAsync();
+        await transaction.CommitAsync();
         return true;
     }
 
     public async Task<bool> SetStructureDefinitionAsync(Guid id, Guid? structureDefinitionId)
     {
-        var entity = await _context.DocumentFiles.FindAsync(id);
+        await using var transaction = await _context.Database.BeginTransactionAsync();
+        var entity = await StructureOwnership.LockDocumentAsync(_context, id);
         if (entity == null) return false;
 
+        if (entity.StructureDefinitionId != structureDefinitionId && await _context.DocumentStructureNodes.AnyAsync(node => node.DocumentFileId == id)) return false;
         entity.StructureDefinitionId = structureDefinitionId;
         entity.UpdatedAt = DateTimeOffset.UtcNow;
 
         await _context.SaveChangesAsync();
+        await transaction.CommitAsync();
         return true;
     }
 
-    public async Task<bool> DeleteAsync(Guid id)
+    public async Task<bool> DeleteAsync(Guid id) => await DeleteWithAudioAsync(id) is not null;
+
+    public async Task<IReadOnlyList<string>?> DeleteWithAudioAsync(Guid id)
     {
-        var entity = await _context.DocumentFiles.FindAsync(id);
-        if (entity == null) return false;
-        _context.DocumentFiles.Remove(entity);
+        await using var transaction = await _context.Database.BeginTransactionAsync();
+        var file = await StructureOwnership.LockDocumentAsync(_context, id);
+        if (file is null) return null;
+        var keys = await _context.DocumentStructureAudio.Where(audio => audio.DocumentFileId == id)
+            .Select(audio => audio.ObjectKey).ToListAsync();
+        file.CurrentStructureTreeId = null;
         await _context.SaveChangesAsync();
-        return true;
+        // Clear optional parse references before the document's parses and trees cascade.
+        await _context.DocumentStructureNodes.Where(node => node.DocumentFileId == id).ExecuteUpdateAsync(setters => setters
+            .SetProperty(node => node.ParseId, (Guid?)null).SetProperty(node => node.StartSequence, (int?)null)
+            .SetProperty(node => node.EndSequence, (int?)null));
+        _context.DocumentFiles.Remove(file);
+        await _context.SaveChangesAsync();
+        await transaction.CommitAsync();
+        _context.ChangeTracker.Clear();
+        return keys;
     }
 
     private static DocumentFileEntity MapToEntity(DocumentFileModel model) => new()

@@ -30,24 +30,15 @@ public sealed class StructaDocParseResultSync : IStructaDocParseResultSync
 
     private readonly IStructaDocClient _client;
     private readonly IDocumentParseService _parseService;
-    private readonly IDocumentParseBlockRepository _blockRepository;
-    private readonly IDocumentParseImageRepository _imageRepository;
-    private readonly IDocumentParsePageRepository _pageRepository;
     private readonly ILogger<StructaDocParseResultSync> _logger;
 
     public StructaDocParseResultSync(
         IStructaDocClient client,
         IDocumentParseService parseService,
-        IDocumentParseBlockRepository blockRepository,
-        IDocumentParseImageRepository imageRepository,
-        IDocumentParsePageRepository pageRepository,
         ILogger<StructaDocParseResultSync> logger)
     {
         _client = client;
         _parseService = parseService;
-        _blockRepository = blockRepository;
-        _imageRepository = imageRepository;
-        _pageRepository = pageRepository;
         _logger = logger;
     }
 
@@ -58,23 +49,8 @@ public sealed class StructaDocParseResultSync : IStructaDocParseResultSync
         var markdown = await _client.GetMarkdownAsync(parseRunId, ct);
         var pages = await ReadOptionalPagesAsync(parse.Id, parseRunId, ct);
         ct.ThrowIfCancellationRequested();
-        // Local replacement failure must escape; stale labels cannot accompany parsed success.
-        try
-        {
-            await _pageRepository.ReplaceAsync(parse.Id, pages, ct);
-        }
-        catch (Exception)
-        {
-            ct.ThrowIfCancellationRequested();
-            // Reuse the worker's retry boundary without exposing provider/row diagnostics.
-            throw new StructaDocException("Local page replacement failed; synchronization must retry.", 0, isTransient: true);
-        }
-        ct.ThrowIfCancellationRequested();
-
-        // Replace previous sync artifacts so a retried sync does not duplicate rows.
-        await _imageRepository.DeleteByParseIdAsync(parse.Id);
-
         var assetIdToImageId = new Dictionary<Guid, Guid>(assets.Count);
+        var images = new List<DocumentParseImageModel>();
         foreach (var asset in assets)
         {
             var image = new DocumentParseImageModel
@@ -86,20 +62,20 @@ public sealed class StructaDocParseResultSync : IStructaDocParseResultSync
                 ImagePath = asset.Id.ToString("D"),
                 ContentType = string.IsNullOrWhiteSpace(asset.MediaType) ? "image/jpeg" : asset.MediaType,
             };
-            await _parseService.AddImageAsync(image);
+            images.Add(image);
             assetIdToImageId[asset.Id] = image.Id;
         }
 
         var blockModels = MapBlocks(parse.Id, blocks, assetIdToImageId);
-        await _blockRepository.AddBlocksAsync(parse.Id, blockModels);
-
-        ct.ThrowIfCancellationRequested();
-
-        await _parseService.UpdateStatusAsync(
-            parse.Id,
-            DocumentParseStatus.Parsed,
-            markdownContent: markdown,
-            structaDocParseRunId: parseRunId);
+        try
+        {
+            markdown = await _parseService.CompleteAsync(parse.Id, parseRunId, markdown, pages, images, blockModels, ct);
+        }
+        catch (Exception)
+        {
+            ct.ThrowIfCancellationRequested();
+            throw new StructaDocException("Local result replacement failed; synchronization must retry.", 0, isTransient: true);
+        }
 
         _logger.LogInformation(
             "Synced StructaDoc parse run {ParseRunId} into parse {ParseId}: {BlockCount} blocks, {AssetCount} assets",

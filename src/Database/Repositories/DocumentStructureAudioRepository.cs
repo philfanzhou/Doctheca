@@ -8,17 +8,75 @@ namespace Doctheca.Database.Repositories;
 public class DocumentStructureAudioRepository : IDocumentStructureAudioRepository
 {
     private readonly DocthecaDbContext _context;
+    private int? _leaseBackendPid;
 
     public DocumentStructureAudioRepository(DocthecaDbContext context)
     {
         _context = context;
     }
 
+    public async Task<IAsyncDisposable> AcquireObjectKeyLeaseAsync(IReadOnlyCollection<string> keys, CancellationToken ct = default)
+    {
+        if (_leaseBackendPid is not null) throw new InvalidOperationException("An audio key lease is already active.");
+        await _context.Database.OpenConnectionAsync(ct);
+        var connection = (Npgsql.NpgsqlConnection)_context.Database.GetDbConnection();
+        var backend = connection.ProcessID;
+        var ordered = keys.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+        try
+        {
+            foreach (var key in ordered)
+            {
+                await using var command = new Npgsql.NpgsqlCommand("SELECT pg_advisory_lock(hashtextextended(@key, 132))", connection);
+                command.Parameters.AddWithValue("key", key);
+                await command.ExecuteNonQueryAsync(ct);
+            }
+            // Metadata uses this same open session. A lost session cannot commit a new import.
+            _leaseBackendPid = backend;
+            return new KeyLease(() => ReleaseLeaseAsync(connection, backend, ordered));
+        }
+        catch { await ReleaseLeaseAsync(connection, backend, ordered); throw; }
+    }
+
+    private async ValueTask ReleaseLeaseAsync(Npgsql.NpgsqlConnection connection, int backend, IReadOnlyList<string> keys)
+    {
+        try
+        {
+            if (connection.State != System.Data.ConnectionState.Open || connection.ProcessID != backend)
+                Npgsql.NpgsqlConnection.ClearPool(connection);
+            else foreach (var key in keys.Reverse())
+            {
+                await using var command = new Npgsql.NpgsqlCommand("SELECT pg_advisory_unlock(hashtextextended(@key, 132))", connection);
+                command.Parameters.AddWithValue("key", key);
+                await command.ExecuteNonQueryAsync();
+            }
+        }
+        catch { Npgsql.NpgsqlConnection.ClearPool(connection); }
+        finally
+        {
+            _leaseBackendPid = null;
+            try { await _context.Database.CloseConnectionAsync(); }
+            catch { Npgsql.NpgsqlConnection.ClearPool(connection); }
+        }
+    }
+
+    private void EnsureLeaseSession()
+    {
+        if (_leaseBackendPid is { } backend && ((Npgsql.NpgsqlConnection)_context.Database.GetDbConnection()).ProcessID != backend)
+            throw new InvalidOperationException("The audio key lease was lost; recovery must be deferred.");
+    }
+
+    private sealed class KeyLease(Func<ValueTask> release) : IAsyncDisposable
+    {
+        private int _disposed;
+        public ValueTask DisposeAsync() => Interlocked.Exchange(ref _disposed, 1) == 0 ? release() : ValueTask.CompletedTask;
+    }
+
     public async Task<List<DocumentStructureAudioModel>> GetByParseIdAsync(Guid parseId)
     {
+        var treeId = await StructureOwnership.TreeForParseAsync(_context, parseId);
         return await _context.DocumentStructureAudio
             .AsNoTracking()
-            .Where(audio => audio.ParseId == parseId)
+            .Where(audio => audio.TreeId == treeId)
             .OrderBy(audio => audio.SourcePath)
             .Select(audio => MapToModel(audio))
             .ToListAsync();
@@ -26,9 +84,10 @@ public class DocumentStructureAudioRepository : IDocumentStructureAudioRepositor
 
     public async Task<List<DocumentStructureAudioModel>> GetByNodeIdAsync(Guid parseId, Guid nodeId)
     {
+        var treeId = await StructureOwnership.TreeForParseAsync(_context, parseId);
         return await _context.DocumentStructureAudio
             .AsNoTracking()
-            .Where(audio => audio.ParseId == parseId && audio.NodeId == nodeId)
+            .Where(audio => audio.TreeId == treeId && audio.NodeId == nodeId)
             .OrderBy(audio => audio.SourcePath)
             .Select(audio => MapToModel(audio))
             .ToListAsync();
@@ -36,18 +95,20 @@ public class DocumentStructureAudioRepository : IDocumentStructureAudioRepositor
 
     public async Task<DocumentStructureAudioModel?> GetByIdAsync(Guid parseId, Guid audioId)
     {
+        var treeId = await StructureOwnership.TreeForParseAsync(_context, parseId);
         var entity = await _context.DocumentStructureAudio
             .AsNoTracking()
-            .FirstOrDefaultAsync(audio => audio.ParseId == parseId && audio.Id == audioId);
+            .FirstOrDefaultAsync(audio => audio.TreeId == treeId && audio.Id == audioId);
         return entity == null ? null : MapToModel(entity);
     }
 
     public async Task<HashSet<string>> GetExistingSourcePathsAsync(Guid parseId, IReadOnlyCollection<string> sourcePaths)
     {
         if (sourcePaths.Count == 0) return [];
+        var treeId = await StructureOwnership.TreeForParseAsync(_context, parseId);
         var paths = sourcePaths.ToList();
         var existing = await _context.DocumentStructureAudio
-            .Where(audio => audio.ParseId == parseId && paths.Contains(audio.SourcePath))
+            .Where(audio => audio.TreeId == treeId && paths.Contains(audio.SourcePath))
             .Select(audio => audio.SourcePath)
             .ToListAsync();
         return [.. existing];
@@ -56,10 +117,14 @@ public class DocumentStructureAudioRepository : IDocumentStructureAudioRepositor
     public async Task<bool> InsertAsync(Guid parseId, IReadOnlyList<DocumentStructureAudioModel> items, CancellationToken cancellationToken = default)
     {
         await using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
-        if (!await LockParseAsync(parseId, cancellationToken)) return false;
+        EnsureLeaseSession();
+        var file = await StructureOwnership.LockParseOwnerAsync(_context, parseId, cancellationToken);
+        if (file is null) return false;
+        var treeId = await StructureOwnership.TreeForParseAsync(_context, parseId, cancellationToken);
+        if (treeId is null) return false;
 
         // A structure save that ran after the links were computed may have removed a node.
-        var nodeIds = await NodeIdsAsync(parseId, cancellationToken);
+        var nodeIds = await NodeIdsAsync(treeId, cancellationToken);
         foreach (var item in items)
         {
             var linked = item.NodeId is { } nodeId && nodeIds.Contains(nodeId);
@@ -67,6 +132,8 @@ public class DocumentStructureAudioRepository : IDocumentStructureAudioRepositor
             {
                 Id = item.Id,
                 ParseId = parseId,
+                DocumentFileId = file.Id,
+                TreeId = treeId.Value,
                 NodeId = linked ? item.NodeId : null,
                 SourcePath = item.SourcePath,
                 ContentType = item.ContentType,
@@ -90,17 +157,20 @@ public class DocumentStructureAudioRepository : IDocumentStructureAudioRepositor
         IReadOnlyCollection<Guid> removeIds, DateTimeOffset now, CancellationToken cancellationToken = default)
     {
         await using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
-        if (!await LockParseAsync(parseId, cancellationToken)) return new(AudioLinkUpdateStatus.ParseNotFound, []);
+        EnsureLeaseSession();
+        var file = await StructureOwnership.LockParseOwnerAsync(_context, parseId, cancellationToken);
+        if (file is null) return new(AudioLinkUpdateStatus.ParseNotFound, []);
+        var treeId = await StructureOwnership.TreeForParseAsync(_context, parseId, cancellationToken);
 
         var audio = await _context.DocumentStructureAudio
-            .Where(item => item.ParseId == parseId)
+            .Where(item => item.TreeId == treeId)
             .ToDictionaryAsync(item => item.Id, cancellationToken);
         foreach (var id in changes.Select(change => change.AudioId).Concat(removeIds))
         {
             if (!audio.ContainsKey(id)) return new(AudioLinkUpdateStatus.AudioNotFound, [], id);
         }
 
-        var nodeIds = await NodeIdsAsync(parseId, cancellationToken);
+        var nodeIds = await NodeIdsAsync(treeId, cancellationToken);
         foreach (var change in changes)
         {
             if (change.NodeId is { } nodeId && !nodeIds.Contains(nodeId))
@@ -133,8 +203,9 @@ public class DocumentStructureAudioRepository : IDocumentStructureAudioRepositor
 
     public async Task<List<string>> GetObjectKeysByParseIdAsync(Guid parseId)
     {
+        var treeId = await StructureOwnership.TreeForParseAsync(_context, parseId);
         return await _context.DocumentStructureAudio
-            .Where(audio => audio.ParseId == parseId)
+            .Where(audio => audio.TreeId == treeId)
             .Select(audio => audio.ObjectKey)
             .ToListAsync();
     }
@@ -142,8 +213,7 @@ public class DocumentStructureAudioRepository : IDocumentStructureAudioRepositor
     public async Task<List<string>> GetObjectKeysByDocumentFileIdAsync(Guid documentFileId)
     {
         return await _context.DocumentStructureAudio
-            .Where(audio => _context.DocumentParses
-                .Any(parse => parse.Id == audio.ParseId && parse.DocumentFileId == documentFileId))
+            .Where(audio => audio.DocumentFileId == documentFileId)
             .Select(audio => audio.ObjectKey)
             .ToListAsync();
     }
@@ -152,27 +222,22 @@ public class DocumentStructureAudioRepository : IDocumentStructureAudioRepositor
     {
         if (objectKeys.Count == 0) return [];
         var keys = objectKeys.ToList();
-        var referenced = await _context.DocumentStructureAudio
-            .Where(audio => keys.Contains(audio.ObjectKey))
-            .Select(audio => audio.ObjectKey)
-            .ToListAsync();
-        return [.. referenced];
+        await _context.Database.OpenConnectionAsync();
+        try
+        {
+            EnsureLeaseSession();
+            var referenced = await _context.DocumentStructureAudio
+                .Where(audio => keys.Contains(audio.ObjectKey)).Select(audio => audio.ObjectKey).ToListAsync();
+            return [.. referenced];
+        }
+        finally { await _context.Database.CloseConnectionAsync(); }
     }
 
-    // The same parse row lock as DocumentStructureRepository.ReplaceAsync, so links and the
-    // node tree they point into never change concurrently.
-    private async Task<bool> LockParseAsync(Guid parseId, CancellationToken cancellationToken)
-    {
-        var locked = await _context.Database
-            .SqlQuery<Guid>($"SELECT id AS \"Value\" FROM document_parses WHERE id = {parseId} FOR UPDATE")
-            .ToListAsync(cancellationToken);
-        return locked.Count > 0;
-    }
 
-    private async Task<HashSet<Guid>> NodeIdsAsync(Guid parseId, CancellationToken cancellationToken)
+    private async Task<HashSet<Guid>> NodeIdsAsync(Guid? treeId, CancellationToken cancellationToken)
     {
         var ids = await _context.DocumentStructureNodes
-            .Where(node => node.ParseId == parseId)
+            .Where(node => node.TreeId == treeId)
             .Select(node => node.Id)
             .ToListAsync(cancellationToken);
         return [.. ids];
@@ -182,6 +247,8 @@ public class DocumentStructureAudioRepository : IDocumentStructureAudioRepositor
     {
         Id = entity.Id,
         ParseId = entity.ParseId,
+        DocumentFileId = entity.DocumentFileId,
+        TreeId = entity.TreeId,
         NodeId = entity.NodeId,
         SourcePath = entity.SourcePath,
         ContentType = entity.ContentType,

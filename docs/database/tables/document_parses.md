@@ -7,6 +7,7 @@
 | Field | Type | Constraints | Default | Description |
 |--------|------|------|--------|------|
 | `id` | `UUID` | PRIMARY KEY | | Parse record unique identifier |
+| `expected_binding_generation` | `BIGINT` | NOT NULL | `0` | Document generation captured under the owner lock when the real parse job is created |
 | `document_file_id` | `UUID` | NOT NULL, FK → `document_files(id)` ON DELETE CASCADE | | Associated file |
 | `model_version` | `VARCHAR(20)` | NOT NULL | `'vlm'` | Parse model version: `vlm` / `pipeline` |
 | `status` | `VARCHAR(30)` | NOT NULL | `'pending'` | Parse status: `pending` / `parsing` / `parsed` / `failed` |

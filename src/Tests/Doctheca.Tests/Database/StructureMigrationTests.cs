@@ -38,7 +38,7 @@ public sealed class StructureMigrationTests(PostgreSqlMigrationFixture fixture) 
         await SeedParsesAsync(context);
         var blocksBefore = await RowsAsync(context, "SELECT to_jsonb(b)::text FROM document_parse_blocks b ORDER BY id");
         var filesBefore = await RowsAsync(context, "SELECT to_jsonb(f)::text FROM document_files f ORDER BY id");
-        var parsesBefore = await RowsAsync(context, "SELECT to_jsonb(p)::text FROM document_parses p ORDER BY id");
+        var parsesBefore = await RowsAsync(context, "SELECT (to_jsonb(p) - 'expected_binding_generation')::text FROM document_parses p ORDER BY id");
 
         var inspection = await Executor(context).InspectDetailedAsync(default);
         inspection.State.Should().Be(DocthecaMigrationExecutor.DatabaseState.PendingMigrations);
@@ -52,8 +52,8 @@ public sealed class StructureMigrationTests(PostgreSqlMigrationFixture fixture) 
 
         // Every existing row is unchanged apart from the new nullable columns.
         (await RowsAsync(context, "SELECT (to_jsonb(b) - 'sequence' - 'footnote')::text FROM document_parse_blocks b ORDER BY id")).Should().Equal(blocksBefore);
-        (await RowsAsync(context, "SELECT (to_jsonb(f) - 'structure_definition_id')::text FROM document_files f ORDER BY id")).Should().Equal(filesBefore);
-        (await RowsAsync(context, "SELECT to_jsonb(p)::text FROM document_parses p ORDER BY id")).Should().Equal(parsesBefore);
+        (await RowsAsync(context, "SELECT (to_jsonb(f) - 'structure_definition_id' - 'current_structure_tree_id' - 'structure_binding_generation')::text FROM document_files f ORDER BY id")).Should().Equal(filesBefore);
+        (await RowsAsync(context, "SELECT (to_jsonb(p) - 'expected_binding_generation')::text FROM document_parses p ORDER BY id")).Should().Equal(parsesBefore);
         (await MigrationGoldenStates.ScalarAsync<long>(context, "SELECT count(*) FROM document_files WHERE structure_definition_id IS NOT NULL")).Should().Be(0);
 
         // Every block is numbered.
@@ -91,6 +91,8 @@ public sealed class StructureMigrationTests(PostgreSqlMigrationFixture fixture) 
 
             // Apply the documented down scripts newest first.
             await MigrationGoldenStates.ExecuteRawAsync(context, await File.ReadAllTextAsync(
+                RollbackScriptPath(DocthecaMigrationExecutor.AddDocumentOwnedStructureMigrationId)));
+            await MigrationGoldenStates.ExecuteRawAsync(context, await File.ReadAllTextAsync(
                 RollbackScriptPath(DocthecaMigrationExecutor.AddRequiredStructureLevelsMigrationId)));
             await MigrationGoldenStates.ExecuteRawAsync(context, await File.ReadAllTextAsync(
                 RollbackScriptPath(DocthecaMigrationExecutor.ClassifyLevelLessTitlesMigrationId)));
@@ -104,8 +106,8 @@ public sealed class StructureMigrationTests(PostgreSqlMigrationFixture fixture) 
                 RollbackScriptPath(DocthecaMigrationExecutor.AddDocumentStructureMigrationId)));
 
             (await MigrationGoldenStates.ReadAppliedHistoryAsync(context)).Should().Equal(MigrationGoldenStates.InitialId);
-            (await MigrationGoldenStates.ReadColumnShapeAsync(context)).Should().Equal(await MigrationGoldenStates.ReadColumnShapeAsync(reference));
-            (await MigrationGoldenStates.ReadConstraintShapeAsync(context)).Should().Equal(await MigrationGoldenStates.ReadConstraintShapeAsync(reference));
+            (await MigrationGoldenStates.ReadLegacyColumnShapeAsync(context)).Should().Equal(await MigrationGoldenStates.ReadLegacyColumnShapeAsync(reference));
+            (await MigrationGoldenStates.ReadLegacyConstraintShapeAsync(context)).Should().Equal(await MigrationGoldenStates.ReadLegacyConstraintShapeAsync(reference));
             (await MigrationGoldenStates.ScalarAsync<bool>(context, "SELECT to_regclass('public.structure_definitions') IS NULL")).Should().BeTrue();
             (await MigrationGoldenStates.CountRowsAsync(context, "document_parse_blocks")).Should().Be(1);
             // The baseline verifies exactly (the previous image's own current-version check);

@@ -15,6 +15,8 @@ public class DocumentParseEntity
     [Required]
     public Guid DocumentFileId { get; set; }
 
+    [Column("expected_binding_generation")] public long ExpectedBindingGeneration { get; set; }
+
     [Column("model_version")]
     [Required]
     [MaxLength(20)]

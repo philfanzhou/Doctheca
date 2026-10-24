@@ -201,11 +201,13 @@ public sealed partial class DocumentStructureEndpointTests(PostgreSqlFixture dat
             },
         })).StatusCode.Should().Be(HttpStatusCode.OK);
 
-        // 8. Deleting the parse deletes its nodes; then the definition is free again.
+        // 8. Parse deletion detaches content but retained chapters still protect their definition.
         (await client.DeleteAsync($"/admin/document-parses/{parseId}")).StatusCode.Should().Be(HttpStatusCode.OK);
         (await CountNodesAsync(factory, parseId)).Should().Be(0);
+        (await client.DeleteAsync($"/admin/structure-definitions/{definitionId}")).StatusCode.Should().Be(HttpStatusCode.Conflict);
+        (await client.DeleteAsync($"/admin/document-files/{fileId}")).StatusCode.Should().Be(HttpStatusCode.OK);
         (await client.DeleteAsync($"/admin/structure-definitions/{definitionId}")).StatusCode.Should().Be(HttpStatusCode.OK);
-        (await ReadData(await client.GetAsync($"/admin/document-files/{fileId}")))!["structureDefinitionId"].Should().BeNull();
+        (await client.GetAsync($"/admin/document-files/{fileId}")).StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
     [Fact]

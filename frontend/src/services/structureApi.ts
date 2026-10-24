@@ -31,14 +31,14 @@ export interface StructureNode {
   levelId: string
   levelName: string | null
   name: string
-  startSequence: number
-  endSequence: number
+  startSequence: number | null
+  endSequence: number | null
   sortOrder: number
   children: StructureNode[]
 }
 
 export interface StructureTree {
-  parseId: string
+  parseId: string | null
   documentFileId: string
   fileName: string
   definition: StructureDefinition | null
@@ -49,8 +49,8 @@ export interface StructureNodeInput {
   id: string
   levelId: string
   name: string
-  startSequence: number
-  endSequence: number
+  startSequence: number | null
+  endSequence: number | null
   children: StructureNodeInput[]
 }
 

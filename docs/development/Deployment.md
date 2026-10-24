@@ -500,3 +500,9 @@ process can invalidate links early; clients must re-list. There is no cross-inst
 sharing requirement or configuration. No database/object write, migration, package, port or
 container topology change is introduced. Internal routes are always mapped; see the
 [configuration upgrade and rollback](#upgrade-and-rollback-127) notes. Existing audio backup/recovery rules remain.
+
+### Document-owned chapter/audio upgrade (#132)
+
+Stop mixed-version writers and verify a consistent database backup before deploying migration `20261024053658_AddDocumentOwnedStructure`. Retain the matching previous image/configuration and existing object bytes. Chapters/audio survive parse deletion and successful reparse; only old content binding is detached, and new binding is explicit. Existing HTTP fields/routes remain with nullable unbound parse/range/page fields. Ephemeral internal audio capability v2 invalidates old process-local links consistently with restart; request fresh links. No dependency, key, port or container topology changes.
+
+An old image cannot run against the new schema/history. Standard rollback restores the verified backup with its matching image/configuration and loses subsequent database writes. The optional EF/[SQL Down](../database/rollback/20261024053658_AddDocumentOwnedStructure.down.sql) refuses unbound, parse-deleted, rebound or otherwise unrepresentable ownership before writes; it never creates fake parses or deletes retained history/audio. Follow [the complete recovery contract](../database/migrations.md#document-owned-structure-132), applying later Down scripts first. Container maintenance verification now reverses ownership before required-policy/classification and earlier migrations.

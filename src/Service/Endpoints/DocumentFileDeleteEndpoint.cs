@@ -59,19 +59,9 @@ internal static class DocumentFileDeleteEndpoint
             }
         }
 
-        // Structure audio objects of every parse (issue #90), read before the rows cascade away.
-        var audioKeys = new Dictionary<Guid, List<string>>();
-        foreach (var parse in allParses)
-        {
-            audioKeys[parse.Id] = await audioService.GetParseObjectKeysAsync(parse.Id);
-        }
-
-        // Step 2: Delete database records (cascade: parses → blocks + images + structure + audio, then file)
-        await fileService.DeleteAsync(id);
-        foreach (var (parseId, keys) in audioKeys)
-        {
-            await audioService.DeleteParseObjectsAsync(parseId, keys);
-        }
+        // Include historical audio even when its origin parse has already been deleted.
+        var audioKeys = await fileService.DeleteWithAudioAsync(id);
+        if (audioKeys is not null) await audioService.DeleteUnreferencedObjectsAsync(audioKeys);
 
         // Step 3: Best-effort OSS cleanup (legacy artifacts only)
         var failedPaths = new List<string>();

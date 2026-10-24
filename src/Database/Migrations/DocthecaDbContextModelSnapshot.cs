@@ -25,7 +25,6 @@ namespace Doctheca.Database.Migrations
             modelBuilder.Entity("Doctheca.Database.Entities.DocumentFileEntity", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
@@ -44,6 +43,10 @@ namespace Doctheca.Database.Migrations
                     b.Property<Guid?>("CreatedBy")
                         .HasColumnType("uuid")
                         .HasColumnName("created_by");
+
+                    b.Property<Guid?>("CurrentStructureTreeId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("current_structure_tree_id");
 
                     b.Property<string>("FileName")
                         .IsRequired()
@@ -64,6 +67,12 @@ namespace Doctheca.Database.Migrations
                     b.Property<Guid?>("StructaDocDocumentId")
                         .HasColumnType("uuid")
                         .HasColumnName("structadoc_document_id");
+
+                    b.Property<long>("StructureBindingGeneration")
+                        .ValueGeneratedOnAdd()
+                        .HasDefaultValue(0L)
+                        .HasColumnType("bigint")
+                        .HasColumnName("structure_binding_generation");
 
                     b.Property<Guid?>("StructureDefinitionId")
                         .HasColumnType("uuid")
@@ -91,6 +100,8 @@ namespace Doctheca.Database.Migrations
                     b.HasIndex("FileName");
 
                     b.HasIndex("StructureDefinitionId");
+
+                    b.HasIndex("Id", "CurrentStructureTreeId");
 
                     b.ToTable("document_files", t =>
                         {
@@ -224,6 +235,12 @@ namespace Doctheca.Database.Migrations
                         .HasColumnType("text")
                         .HasColumnName("error_message");
 
+                    b.Property<long>("ExpectedBindingGeneration")
+                        .ValueGeneratedOnAdd()
+                        .HasDefaultValue(0L)
+                        .HasColumnType("bigint")
+                        .HasColumnName("expected_binding_generation");
+
                     b.Property<string>("ExternalTaskId")
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)")
@@ -356,6 +373,10 @@ namespace Doctheca.Database.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
 
+                    b.Property<Guid>("DocumentFileId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("document_file_id");
+
                     b.Property<string>("LinkSource")
                         .HasMaxLength(16)
                         .HasColumnType("character varying(16)")
@@ -377,7 +398,7 @@ namespace Doctheca.Database.Migrations
                         .HasColumnType("character varying(500)")
                         .HasColumnName("object_key");
 
-                    b.Property<Guid>("ParseId")
+                    b.Property<Guid?>("ParseId")
                         .HasColumnType("uuid")
                         .HasColumnName("parse_id");
 
@@ -391,6 +412,10 @@ namespace Doctheca.Database.Migrations
                         .HasColumnType("character varying(1000)")
                         .HasColumnName("source_path");
 
+                    b.Property<Guid>("TreeId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tree_id");
+
                     b.Property<DateTimeOffset>("UpdatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("updated_at");
@@ -402,7 +427,9 @@ namespace Doctheca.Database.Migrations
                     b.HasIndex("ObjectKey")
                         .IsUnique();
 
-                    b.HasIndex("ParseId", "SourcePath")
+                    b.HasIndex("DocumentFileId", "TreeId");
+
+                    b.HasIndex("TreeId", "SourcePath")
                         .IsUnique();
 
                     b.ToTable("document_structure_audio");
@@ -419,7 +446,11 @@ namespace Doctheca.Database.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
 
-                    b.Property<int>("EndSequence")
+                    b.Property<Guid>("DocumentFileId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("document_file_id");
+
+                    b.Property<int?>("EndSequence")
                         .HasColumnType("integer")
                         .HasColumnName("end_sequence");
 
@@ -437,7 +468,7 @@ namespace Doctheca.Database.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("parent_id");
 
-                    b.Property<Guid>("ParseId")
+                    b.Property<Guid?>("ParseId")
                         .HasColumnType("uuid")
                         .HasColumnName("parse_id");
 
@@ -445,9 +476,13 @@ namespace Doctheca.Database.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("sort_order");
 
-                    b.Property<int>("StartSequence")
+                    b.Property<int?>("StartSequence")
                         .HasColumnType("integer")
                         .HasColumnName("start_sequence");
+
+                    b.Property<Guid>("TreeId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tree_id");
 
                     b.Property<DateTimeOffset>("UpdatedAt")
                         .HasColumnType("timestamp with time zone")
@@ -461,7 +496,37 @@ namespace Doctheca.Database.Migrations
 
                     b.HasIndex("ParseId");
 
-                    b.ToTable("document_structure_nodes");
+                    b.HasIndex("DocumentFileId", "ParseId");
+
+                    b.HasIndex("DocumentFileId", "TreeId");
+
+                    b.ToTable("document_structure_nodes", t =>
+                        {
+                            t.HasCheckConstraint("CK_document_structure_nodes_content_binding", "(parse_id IS NULL AND start_sequence IS NULL AND end_sequence IS NULL) OR (parse_id IS NOT NULL AND start_sequence IS NOT NULL AND end_sequence IS NOT NULL AND start_sequence <= end_sequence)");
+                        });
+                });
+
+            modelBuilder.Entity("Doctheca.Database.Entities.DocumentStructureTreeEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("DocumentFileId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("document_file_id");
+
+                    b.Property<Guid?>("OriginParseId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("origin_parse_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OriginParseId")
+                        .IsUnique();
+
+                    b.ToTable("document_structure_trees");
                 });
 
             modelBuilder.Entity("Doctheca.Database.Entities.StructureDefinitionEntity", b =>
@@ -536,6 +601,12 @@ namespace Doctheca.Database.Migrations
                         .WithMany()
                         .HasForeignKey("StructureDefinitionId")
                         .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("Doctheca.Database.Entities.DocumentStructureTreeEntity", null)
+                        .WithMany()
+                        .HasForeignKey("Id", "CurrentStructureTreeId")
+                        .HasPrincipalKey("DocumentFileId", "Id")
+                        .OnDelete(DeleteBehavior.NoAction);
                 });
 
             modelBuilder.Entity("Doctheca.Database.Entities.DocumentParseBlockEntity", b =>
@@ -589,13 +660,12 @@ namespace Doctheca.Database.Migrations
 
             modelBuilder.Entity("Doctheca.Database.Entities.DocumentStructureAudioEntity", b =>
                 {
-                    b.HasOne("Doctheca.Database.Entities.DocumentParseEntity", "Parse")
+                    b.HasOne("Doctheca.Database.Entities.DocumentStructureTreeEntity", null)
                         .WithMany()
-                        .HasForeignKey("ParseId")
+                        .HasForeignKey("DocumentFileId", "TreeId")
+                        .HasPrincipalKey("DocumentFileId", "Id")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
-
-                    b.Navigation("Parse");
                 });
 
             modelBuilder.Entity("Doctheca.Database.Entities.DocumentStructureNodeEntity", b =>
@@ -613,7 +683,14 @@ namespace Doctheca.Database.Migrations
 
                     b.HasOne("Doctheca.Database.Entities.DocumentParseEntity", "Parse")
                         .WithMany()
-                        .HasForeignKey("ParseId")
+                        .HasForeignKey("DocumentFileId", "ParseId")
+                        .HasPrincipalKey("DocumentFileId", "Id")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("Doctheca.Database.Entities.DocumentStructureTreeEntity", null)
+                        .WithMany()
+                        .HasForeignKey("DocumentFileId", "TreeId")
+                        .HasPrincipalKey("DocumentFileId", "Id")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
@@ -622,6 +699,15 @@ namespace Doctheca.Database.Migrations
                     b.Navigation("Parent");
 
                     b.Navigation("Parse");
+                });
+
+            modelBuilder.Entity("Doctheca.Database.Entities.DocumentStructureTreeEntity", b =>
+                {
+                    b.HasOne("Doctheca.Database.Entities.DocumentFileEntity", null)
+                        .WithMany()
+                        .HasForeignKey("DocumentFileId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Doctheca.Database.Entities.StructureLevelEntity", b =>

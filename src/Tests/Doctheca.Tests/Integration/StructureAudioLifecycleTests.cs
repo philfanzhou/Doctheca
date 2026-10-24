@@ -8,11 +8,15 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Configuration;
+using Moq;
 using Microsoft.Extensions.Options;
 using Minio.DataModel.Args;
 using Doctheca.Common.Oss;
 using Doctheca.Database;
 using Doctheca.Database.Entities;
+using Doctheca.Database.Repositories;
+using Doctheca.Domain.Models;
 using Doctheca.Domain.Models.Structure;
 using Doctheca.Domain.Repositories;
 using Doctheca.Service.Audio;
@@ -29,7 +33,7 @@ public sealed class StructureAudioLifecycleTests(PostgreSqlFixture database, Min
     private readonly string _bucket = "audio-lifecycle-" + Guid.NewGuid().ToString("N")[..12];
 
     private WebApplicationFactory<Program> Factory(Dictionary<string, string?>? extra = null,
-        TimeProvider? time = null, ILoggerProvider? logs = null)
+        TimeProvider? time = null, ILoggerProvider? logs = null, Action<IServiceCollection>? configure = null)
     {
         var settings = minio.Settings(_bucket);
         foreach (var (key, value) in extra ?? []) settings[key] = value;
@@ -37,6 +41,7 @@ public sealed class StructureAudioLifecycleTests(PostgreSqlFixture database, Min
         {
             services.RemoveAll<IOssService>();
             services.AddScoped<IOssService>(sp => new S3OssService(sp.GetRequiredService<IOptions<OssOptions>>().Value));
+            configure?.Invoke(services);
             if (logs != null) services.AddSingleton(logs);
             if (time != null)
             {
@@ -69,7 +74,7 @@ public sealed class StructureAudioLifecycleTests(PostgreSqlFixture database, Min
     {
         using var factory = Factory();
         using var client = Admin(factory);
-        var (_, parseId, nodes) = await SeedStructureAsync(factory, client);
+        var (fileId, parseId, nodes) = await SeedStructureAsync(factory, client);
         var kept = await StoreAsync(factory, parseId, nodes[0].Id);
         var removed = await StoreAsync(factory, parseId, nodes[1].Id);
 
@@ -88,6 +93,8 @@ public sealed class StructureAudioLifecycleTests(PostgreSqlFixture database, Min
         }
         (await minio.KeysAsync(_bucket)).Should().HaveCount(2);
         (await client.DeleteAsync($"/admin/document-parses/{parseId}")).StatusCode.Should().Be(HttpStatusCode.OK);
+        (await minio.KeysAsync(_bucket)).Should().HaveCount(2);
+        (await client.DeleteAsync($"/admin/document-files/{fileId}")).StatusCode.Should().Be(HttpStatusCode.OK);
         (await minio.KeysAsync(_bucket)).Should().BeEmpty();
     }
 
@@ -131,7 +138,7 @@ public sealed class StructureAudioLifecycleTests(PostgreSqlFixture database, Min
     }
 
     [Fact]
-    public async Task ParseAndDocumentDeletionCleanEveryOwnedObjectIncludingInterruptedWrites()
+    public async Task ParseDeletionRetainsOwnedObjects_DocumentDeletionCleansExactKeys_AndSweepRecoversInterruptedWrites()
     {
         using var factory = Factory();
         using var client = Admin(factory);
@@ -144,10 +151,14 @@ public sealed class StructureAudioLifecycleTests(PostgreSqlFixture database, Min
         await minio.PutAsync(_bucket, legacy, "legacy"u8.ToArray());
 
         (await client.DeleteAsync($"/admin/document-parses/{parseId}")).StatusCode.Should().Be(HttpStatusCode.OK);
-        (await RowsAsync(factory, parseId)).Should().BeEmpty();
-        (await minio.KeysAsync(_bucket)).Should().HaveCount(2);
+        (await RowsAsync(factory, parseId)).Should().HaveCount(2);
+        (await minio.KeysAsync(_bucket)).Should().HaveCount(4);
         (await client.DeleteAsync($"/admin/document-files/{fileId}")).StatusCode.Should().Be(HttpStatusCode.OK);
         (await RowsAsync(factory, otherParse)).Should().BeEmpty();
+        (await minio.KeysAsync(_bucket)).Should().HaveCount(2);
+        using var recovery = Factory(time: new ShiftedTime { Shift = TimeSpan.FromHours(2) });
+        using var recoverClient = Admin(recovery);
+        (await ReadData(await recoverClient.PostAsync(Sweep, null)))!["deleted"]!.GetValue<int>().Should().Be(1);
         (await minio.KeysAsync(_bucket)).Should().Equal(legacy);
     }
 
@@ -202,8 +213,7 @@ public sealed class StructureAudioLifecycleTests(PostgreSqlFixture database, Min
             // Legacy deletion already resolves its own S3 client on main. A missing global S3
             // endpoint does not redefine that baseline; remove only this fixture's database row.
             using var scope = factory.Services.CreateScope();
-            await scope.ServiceProvider.GetRequiredService<DocthecaDbContext>().DocumentParses
-                .Where(parse => parse.Id == parseId).ExecuteDeleteAsync();
+            await new DocumentParseRepository(scope.ServiceProvider.GetRequiredService<DocthecaDbContext>()).DeleteAsync(parseId);
         }
     }
 
@@ -252,12 +262,12 @@ public sealed class StructureAudioLifecycleTests(PostgreSqlFixture database, Min
     {
         using var working = Factory();
         using var client = Admin(working);
-        var (_, parseId, nodes) = await SeedStructureAsync(working, client);
+        var (fileId, parseId, nodes) = await SeedStructureAsync(working, client);
         await StoreAsync(working, parseId, nodes[0].Id);
         using (var failing = Factory(new() { ["Oss:AccessKey"] = "missing" + Guid.NewGuid().ToString("N") }))
         using (var failedClient = Admin(failing))
         {
-            var deletion = await failedClient.DeleteAsync($"/admin/document-parses/{parseId}");
+            var deletion = await failedClient.DeleteAsync($"/admin/document-files/{fileId}");
             deletion.StatusCode.Should().Be(HttpStatusCode.OK);
             AssertSafe(await deletion.Content.ReadAsStringAsync());
             var sweep = await failedClient.PostAsync(Sweep, null);
@@ -272,6 +282,122 @@ public sealed class StructureAudioLifecycleTests(PostgreSqlFixture database, Min
         using var recoveredClient = Admin(recovered);
         (await ReadData(await recoveredClient.PostAsync(Sweep, null)))!["deleted"]!.GetValue<int>().Should().Be(1);
         (await minio.KeysAsync(_bucket)).Should().BeEmpty();
+    }
+
+    [Theory]
+    [InlineData("none")] [InlineData("history-delete")] [InlineData("history-save")]
+    public async Task SuccessfulReparseAndParseDeletion_KeepCurrentChaptersAudioLinksAndActualPlaybackBytes(string mutation)
+    {
+        using var factory = Factory(); using var client = Admin(factory);
+        var (file, parse, nodes) = await SeedStructureAsync(factory, client);
+        var audio = await StoreAsync(factory, parse, nodes[0].Id);
+        var history = await SeedParseAsync(factory, file);
+        Guid tree; Guid job;
+        using (var scope = factory.Services.CreateScope())
+        {
+            var context = scope.ServiceProvider.GetRequiredService<DocthecaDbContext>();
+            tree = (await context.DocumentFiles.SingleAsync(item => item.Id == file)).CurrentStructureTreeId!.Value;
+            var historyTree = new DocumentStructureTreeEntity { DocumentFileId=file, OriginParseId=history };
+            context.DocumentStructureTrees.Add(historyTree); await context.SaveChangesAsync();
+            context.DocumentStructureNodes.Add(new() { DocumentFileId=file, TreeId=historyTree.Id, ParseId=history,
+                LevelId=nodes[0].LevelId, Name="Historical chapter", StartSequence=0, EndSequence=0 });
+            await context.SaveChangesAsync(); context.ChangeTracker.Clear();
+            var repository = new DocumentParseRepository(context);
+            var failed = await repository.AddAsync(new() { DocumentFileId=file, Status=DocumentParseStatus.Parsing });
+            failed.Status = DocumentParseStatus.Failed; await repository.UpdateAsync(failed);
+            (await context.DocumentStructureNodes.AsNoTracking().Where(node => node.Id == nodes[0].Id).SingleAsync()).ParseId.Should().Be(parse);
+            var pending = await repository.AddAsync(new() { DocumentFileId=file, Status=DocumentParseStatus.Parsing }); job=pending.Id;
+            if (mutation == "history-delete") await repository.DeleteAsync(history);
+            if (mutation == "history-save")
+            {
+                var structures = new DocumentStructureRepository(context);
+                (await structures.ReplaceAsync(history, await structures.GetByParseIdAsync(history))).Should().BeTrue();
+            }
+            await repository.CompleteAsync(job, Guid.NewGuid(), "reparsed", [], [], []);
+        }
+        async Task CheckAsync()
+        {
+            var data = (await ReadData(await client.GetAsync($"/internal/v1/documents/{file}/structure")))!;
+            data["parseId"].Should().BeNull();
+            var root = data["nodes"]!.AsArray().Single(item => item!["id"]!.GetValue<Guid>() == nodes[0].Id)!;
+            root["startSequence"].Should().BeNull(); root["audioCount"]!.GetValue<int>().Should().Be(1);
+            var listed = (await ReadData(await client.GetAsync($"/internal/v1/structure-nodes/{nodes[0].Id}/audio")))!;
+            listed["parseId"].Should().BeNull();
+            var link = listed["items"]!.AsArray().Single()!["playback"]!["url"]!.GetValue<string>();
+            using var response = await client.GetAsync(link);
+            response.StatusCode.Should().Be(HttpStatusCode.OK);
+            (await response.Content.ReadAsByteArrayAsync()).Should().Equal("synthetic-audio"u8.ToArray());
+            using var range = new HttpRequestMessage(HttpMethod.Get, link); range.Headers.Range = new RangeHeaderValue(2, 5);
+            using var ranged = await client.SendAsync(range); ranged.StatusCode.Should().Be(HttpStatusCode.PartialContent);
+            (await ranged.Content.ReadAsByteArrayAsync()).Should().Equal("synthetic-audio"u8.ToArray()[2..6]);
+            using var scope = factory.Services.CreateScope(); var context = scope.ServiceProvider.GetRequiredService<DocthecaDbContext>();
+            (await context.DocumentFiles.AsNoTracking().SingleAsync(item => item.Id == file)).CurrentStructureTreeId.Should().Be(tree);
+            var kept = await context.DocumentStructureAudio.AsNoTracking().SingleAsync(item => item.Id == audio.Id);
+            kept.NodeId.Should().Be(nodes[0].Id); kept.ObjectKey.Should().Be(audio.ObjectKey); kept.SourcePath.Should().Be(audio.SourcePath);
+            kept.ParseId.Should().Be(parse); kept.TreeId.Should().Be(tree);
+            (await context.DocumentStructureNodes.Where(node => node.TreeId == tree).OrderBy(node => node.SortOrder).Select(node => node.Id).ToListAsync())
+                .Should().Equal(nodes.Select(node => node.Id));
+        }
+        await CheckAsync();
+        (await client.DeleteAsync($"/admin/document-parses/{parse}")).StatusCode.Should().Be(HttpStatusCode.OK);
+        (await client.DeleteAsync($"/admin/document-parses/{job}")).StatusCode.Should().Be(HttpStatusCode.OK);
+        await CheckAsync();
+        (await minio.KeysAsync(_bucket)).Should().Equal(audio.ObjectKey);
+        (await client.DeleteAsync($"/admin/document-files/{file}")).StatusCode.Should().Be(HttpStatusCode.OK);
+        (await minio.KeysAsync(_bucket)).Should().BeEmpty();
+    }
+
+    [Theory]
+    [InlineData(false)] [InlineData(true)]
+    public async Task InFlightRealUpload_IsProtectedFromSweep_AndCompensatedAfterDocumentDeletion(bool deleteDocument)
+    {
+        var settings = new ConfigurationBuilder().AddInMemoryCollection(minio.Settings(_bucket)).Build();
+        var real = new S3OssService(settings.GetSection("Oss").Get<OssOptions>()!);
+        var uploaded = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var resume = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var proxy = new Mock<IOssService>(MockBehavior.Strict);
+        proxy.Setup(storage => storage.UploadAsync(It.IsAny<Stream>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<OssBucket>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .Returns(async (Stream source, string name, string type, OssBucket bucket, string? folder, CancellationToken ct) =>
+            {
+                var key = await real.UploadAsync(source, name, type, bucket, folder, ct);
+                uploaded.TrySetResult(); await resume.Task.WaitAsync(ct); return key;
+            });
+        proxy.Setup(storage => storage.DeleteAsync(It.IsAny<string>())).Returns((string key) => real.DeleteAsync(key));
+        using var factory = Factory(configure: services => { services.RemoveAll<IOssService>(); services.AddSingleton(proxy.Object); });
+        using var client = Admin(factory); var (file, parse, _) = await SeedStructureAsync(factory, client);
+        using var body = new MultipartFormDataContent(); body.Add(new ByteArrayContent(PlayableWave.Bytes()), "files", "Node 0.wav");
+        var importing = client.PostAsync($"/admin/document-parses/{parse}/audio", body);
+        await uploaded.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        Task<HttpResponseMessage>? sweeping = null;
+        using var recovery = Factory(time: new ShiftedTime { Shift=TimeSpan.FromHours(2) }); using var recoveryClient = Admin(recovery);
+        try
+        {
+            if (deleteDocument)
+                (await client.DeleteAsync($"/admin/document-files/{file}").WaitAsync(TimeSpan.FromSeconds(5))).StatusCode.Should().Be(HttpStatusCode.OK);
+            else
+            {
+                sweeping = recoveryClient.PostAsync(Sweep, null);
+                using var scope = factory.Services.CreateScope(); var context = scope.ServiceProvider.GetRequiredService<DocthecaDbContext>();
+                var waiting = false;
+                var observation = System.Diagnostics.Stopwatch.StartNew();
+                while (!waiting && !sweeping.IsCompleted && observation.Elapsed < TimeSpan.FromSeconds(10))
+                {
+                    waiting = await context.Database.SqlQuery<bool>($"SELECT EXISTS (SELECT 1 FROM pg_locks WHERE locktype='advisory' AND NOT granted) AS \"Value\"").SingleAsync();
+                    if (!waiting) await Task.Yield();
+                }
+                waiting.Should().BeTrue(); sweeping.IsCompleted.Should().BeFalse();
+            }
+        }
+        finally { resume.TrySetResult(); }
+        (await importing).StatusCode.Should().Be(deleteDocument ? HttpStatusCode.NotFound : HttpStatusCode.OK);
+        if (sweeping is not null) (await ReadData(await sweeping))!["deleted"]!.GetValue<int>().Should().Be(0);
+        using (var scope = factory.Services.CreateScope())
+        {
+            var context = scope.ServiceProvider.GetRequiredService<DocthecaDbContext>();
+            (await context.DocumentStructureAudio.CountAsync(audio => audio.DocumentFileId == file)).Should().Be(deleteDocument ? 0 : 1);
+        }
+        (await minio.KeysAsync(_bucket)).Should().HaveCount(deleteDocument ? 0 : 1);
+        if (!deleteDocument) (await recoveryClient.DeleteAsync($"/admin/document-files/{file}")).StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
     private void AssertSafe(string body)

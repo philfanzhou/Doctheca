@@ -4,6 +4,9 @@ namespace Doctheca.Domain.Repositories;
 
 public interface IDocumentStructureAudioRepository
 {
+    /// <summary>Leases immutable keys in ordinal order across uploads and reference-safe cleanup.</summary>
+    Task<IAsyncDisposable> AcquireObjectKeyLeaseAsync(IReadOnlyCollection<string> keys, CancellationToken ct = default);
+
     /// <summary>All audio of a parse ordered by source path.</summary>
     Task<List<DocumentStructureAudioModel>> GetByParseIdAsync(Guid parseId);
 

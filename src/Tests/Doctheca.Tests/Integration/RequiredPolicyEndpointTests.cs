@@ -46,7 +46,7 @@ public sealed partial class DocumentStructureEndpointTests
                 ContentType = "audio/wav", SizeBytes = 10, ObjectKey = "audio/synthetic/test.wav",
                 MatchStatus = "matched", LinkSource = "manual"
             });
-            await db.SaveChangesAsync();
+            await db.SaveOwnedChangesAsync();
             (await db.StructureLevels.AsNoTracking().Where(level => level.DefinitionId == Guid.Parse(id)).OrderBy(level => level.SortOrder)
                 .Select(level => level.Required).ToListAsync()).Should().Equal(expected);
         }

@@ -143,22 +143,24 @@ public sealed class StructaDocPagesSyncTests(PostgreSqlMigrationFixture fixture)
     }
 
     [Fact]
-    public async Task CancellationAfterCommittedReplacement_DoesNotPublishParsedStatus()
+    public async Task CancellationDuringLocalReplacement_RollsBackPagesBlocksAndStatusTogether()
     {
-        using var context = fixture.CreateContext(_database);
+        using var setup = fixture.CreateContext(_database);
+        await new DocumentParsePageRepository(setup).ReplaceAsync(Parse, [new(Parse, 1, "old", null)]);
         using var cancellation = new CancellationTokenSource();
-        var repository = new DocumentParsePageRepository(context);
-        var sync = Sync(context, _ => Task.FromResult(Json("[{\"number\":1,\"label\":\"committed\"}]")), new(),
-            new CancelAfterReplace(repository, cancellation));
+        using var context = new DocthecaDbContext(new DbContextOptionsBuilder<DocthecaDbContext>()
+            .UseNpgsql(fixture.GetConnectionString(_database)).AddInterceptors(new CancelReplacement(cancellation)).Options);
+        var sync = Sync(context, _ => Task.FromResult(Json("[{\"number\":1,\"label\":\"new\"}]")), new());
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => sync.SyncAsync(Model(), _run, cancellation.Token));
-        (await repository.ReadBatchAsync([new(Parse, 1)])).Values.Single().Label.Should().Be("committed");
-        (await new DocumentParseRepository(context).GetByIdAsync(Parse))!.Status.Should().Be(DocumentParseStatus.Parsing);
+        (await new DocumentParsePageRepository(setup).ReadBatchAsync([new(Parse, 1)])).Values.Single().Label.Should().Be("old");
+        (await new DocumentParseRepository(setup).GetByIdAsync(Parse))!.Status.Should().Be(DocumentParseStatus.Parsing);
+        (await setup.DocumentParseBlocks.SingleAsync()).TextContent.Should().Be("legacy text");
     }
 
     private DocumentParseModel Model() => new() { Id = Parse, DocumentFileId = MigrationGoldenStates.FileId, Status = DocumentParseStatus.Parsing, StructaDocParseRunId = _run };
 
     private StructaDocParseResultSync Sync(DocthecaDbContext context,
-        Func<CancellationToken, Task<HttpResponseMessage>> pages, CaptureLogger logger, IDocumentParsePageRepository? pageRepository = null)
+        Func<CancellationToken, Task<HttpResponseMessage>> pages, CaptureLogger logger)
     {
         var client = new StructaDocClient(new HttpClient(new Handler((request, token) =>
         {
@@ -174,8 +176,7 @@ public sealed class StructaDocPagesSyncTests(PostgreSqlMigrationFixture fixture)
         })) { BaseAddress = new Uri("http://pages.test/") }, Options.Create(new StructaDocOptions()), NullLogger<StructaDocClient>.Instance);
         var imageRepository = new DocumentParseImageRepository(context);
         var parseService = new DocumentParseService(new DocumentParseRepository(context), imageRepository, NullLogger<DocumentParseService>.Instance);
-        return new(client, parseService, new DocumentParseBlockRepository(context), imageRepository,
-            pageRepository ?? new DocumentParsePageRepository(context), logger);
+        return new(client, parseService, logger);
     }
 
     private static HttpResponseMessage Json(string value, HttpStatusCode status = HttpStatusCode.OK) =>
@@ -186,11 +187,14 @@ public sealed class StructaDocPagesSyncTests(PostgreSqlMigrationFixture fixture)
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) => handler(request, cancellationToken);
     }
 
-    private sealed class CancelAfterReplace(IDocumentParsePageRepository inner, CancellationTokenSource cancellation) : IDocumentParsePageRepository
+    private sealed class CancelReplacement(CancellationTokenSource cancellation) : Microsoft.EntityFrameworkCore.Diagnostics.DbCommandInterceptor
     {
-        public async Task ReplaceAsync(Guid parseId, IReadOnlyCollection<DocumentParsePageModel> pages, CancellationToken ct = default)
-        { await inner.ReplaceAsync(parseId, pages, ct); cancellation.Cancel(); }
-        public Task<IReadOnlyDictionary<DocumentParsePageKey, DocumentParsePageModel>> ReadBatchAsync(IReadOnlyCollection<DocumentParsePageKey> keys, CancellationToken ct = default) => inner.ReadBatchAsync(keys, ct);
+        public override ValueTask<int> NonQueryExecutedAsync(System.Data.Common.DbCommand command,
+            Microsoft.EntityFrameworkCore.Diagnostics.CommandExecutedEventData eventData, int result, CancellationToken cancellationToken = default)
+        {
+            if (command.CommandText.StartsWith("DELETE FROM document_parse_pages", StringComparison.Ordinal)) cancellation.Cancel();
+            return ValueTask.FromResult(result);
+        }
     }
 
     private sealed class CaptureLogger : ILogger<StructaDocParseResultSync>

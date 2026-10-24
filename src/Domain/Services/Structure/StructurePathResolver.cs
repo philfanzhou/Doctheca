@@ -17,7 +17,7 @@ public sealed class StructurePathResolver
     {
         _byId = nodes.ToDictionary(node => node.Id);
         // Deeper nodes are narrower: check the narrowest ranges first.
-        _nodes = nodes
+        _nodes = nodes.Where(node => node.ParseId != null || (node.StartSequence != null && node.EndSequence != null))
             .OrderBy(node => node.EndSequence - node.StartSequence)
             .ThenByDescending(node => Depth(node))
             .ToList();

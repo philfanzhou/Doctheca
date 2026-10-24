@@ -8,11 +8,11 @@ PostgreSQL [document_structure_audio](../database/tables/document_structure_audi
 the current node link and the internal object key. `document_structure_nodes` owns the tree. S3 owns
 the bytes under `audio/{parseId:N}/{audioId:N}{extension}`; it is not a second metadata authority.
 
-Internal insert/link repository operations and whole-tree replacement hold the same parse-row
+Internal insert/link repository operations and whole-tree replacement hold the same document-row
 lock. An inserted link whose node was removed is stored unlinked (`node_removed`). Invalid link
 batches commit nothing. Tree replacement unlinks removed IDs in the same transaction, preserving
 retained node IDs even though the tree is deleted and reinserted. `node_id` deliberately has no
-foreign key for that replacement model; the repository checks same-parse membership.
+foreign key for that replacement model; the repository checks same-document/tree membership.
 
 ## Storage boundary and configuration
 
@@ -29,8 +29,8 @@ keep their existing S3 configuration requirements. See
 | Event | Database | Object storage |
 | --- | --- | --- |
 | A node disappears during tree replacement | Keep metadata, clear its link, mark `node_removed` | Keep bytes |
-| Parse deletion | Cascade-delete its metadata | After commit, delete known keys and all objects under its exact parse prefix |
-| Document deletion | Cascade-delete metadata for every parse | Same cleanup, per parse |
+| Parse deletion | Clear content bindings; retain chapters/audio metadata | Keep all referenced bytes, including legacy origin prefixes |
+| Document deletion | Atomically gather exact keys across every owned historical/current tree, then delete metadata | After commit, lease each exact key and recheck all references before cleanup |
 | Object cleanup fails | The successful database deletion stays committed | Safe Warning records failure counts/types; recover with orphan sweep |
 
 `POST /admin/structure-audio/orphan-sweep` performs administrator recovery. It requires `DocthecaAdmin`, uses
@@ -68,7 +68,7 @@ Supported extensions/signatures: `.mp3` (ID3 or MPEG frame sync), `.m4a` (ftyp),
 
 Paths use NFC Unicode and `/` separators, at most 1000 characters and 255 per segment. Absolute/drive paths, control characters, invalid Unicode, empty/whitespace segments and `.`/`..` segments are refused. Path equality is ordinal and case-sensitive, matching the existing database unique index. A multipart `paths` value for each file preserves browser folder names; otherwise multipart filenames are used.
 
-Every batch is validated before any object or row write. Uploads are followed by one insert transaction under the parse lock. The unique parse/path index rejects concurrent duplicates; nodes deleted since matching become unlinked (`node_removed`), and a missing parse cannot insert. Reading, uploading and pre-commit boundaries observe request cancellation. Failed or cancelled imports compensate only objects confirmed unreferenced. Unknown commit/reference outcomes retain recoverable objects for the grace sweep; committed rows/bytes survive a cancelled response and are visible on reload. No cancelled operation is reported as successful.
+Every batch is validated before any object or row write. Uploads are followed by one insert transaction under the document lock. The unique tree/path index rejects concurrent duplicates; nodes deleted since matching become unlinked (`node_removed`), and a missing parse cannot insert. Reading, uploading and pre-commit boundaries observe request cancellation. Failed or cancelled imports compensate only objects confirmed unreferenced. Unknown commit/reference outcomes retain recoverable objects for the grace sweep; committed rows/bytes survive a cancelled response and are visible on reload. No cancelled operation is reported as successful.
 
 ## Matching
 
@@ -127,9 +127,9 @@ No schema, package, port or deployment topology change is introduced. Reverting 
 
 For a recording directory, first read `GET /internal/v1/documents?hasAudio=true`, then the opened
 document's `/internal/v1/documents/{documentFileId}/structure`. Every document and tree node
-has an integer `audioCount`; document totals count current-parse links, while node counts are
-direct and exclude descendants. Links require an existing node in that parse and the file's
-selected definition. Unlinked/removed/dangling references and old-parse rows are excluded;
+has an integer `audioCount`; document totals count current-tree links, while node counts are
+direct and exclude descendants. Links require an existing node in that tree and the file's
+selected definition. Unlinked/removed/dangling references and historical-tree rows are excluded;
 historical match status does not suppress a real current link. False/omitted `hasAudio` retains
 the unfiltered catalog and old v1 cursors; true uses a distinct cursor identity.
 
@@ -137,12 +137,12 @@ These reads query relational metadata only, without playback tokens or S3 access
 storage is unavailable. Counts are not playback availability guarantees. Each response has its
 own repeatable-read snapshot; there is no shared snapshot across catalog pages, tree reads or
 audio lists during concurrent changes. The next request reflects committed relinks, unlinks,
-deletions and tree replacement. No migration is needed; restoring the previous image removes
+deletions and tree replacement. The ownership migration is required; restoring a verified matching backup and previous image removes
 the additive filter/counts, so consumers must tolerate their absence (#122).
 
 The optional [internal API](../Integration/InternalApi.md#direct-node-audio-and-temporary-playback)
 provides anonymous direct-node metadata and same-origin expiring byte links. It reuses the
-current parsed tree rule in read-only repeatable-read snapshots, independently of administrator
+persisted current tree in read-only repeatable-read snapshots, independently of administrator
 preview (which may play unlinked audio). Proxy links require internal S3 and a valid existing
 TTL, but no public S3 address. They expose no key, endpoint, bucket or storage credential.
 A process-local purpose-specific protector contains IDs only; restart invalidates links early.
@@ -172,3 +172,9 @@ counts retain their existing behavior and missing-resource precedence. The optio
 address controls administrator preview only. No schema/data migration is required. Rollback to
 the previous image needs both old switches set to `true` for the same behavior, with ingress
 restrictions retained. See [deployment](../development/Deployment.md#upgrade-and-rollback-127).
+
+## Retained bytes and exact-key concurrency (#132)
+
+Audio lifetime belongs to its document/tree, independently of the node's optional content parse. Stored `parse_id` is immutable key provenance; a missing original parse does not invalidate playback. Successful reparse preserves node/audio IDs, links, metadata and exact object bytes. Internal capabilities use v2 document/tree/node/audio identity and both admission snapshots; their public `parseId` may be null. Existing process-local expiry, 30-second bounded scratch, cancellation/ranges/disposal and fixed diagnostics remain.
+
+Imports generate immutable random keys and obtain PostgreSQL advisory session leases on the same connection used for metadata in ordinal key order before upload. The lease remains through metadata outcome and compensation; a backend identity check refuses a reconnected metadata writer, and uncertain reference checks defer cleanup. Removal, document cleanup and sweep use the same exact-key lease and recheck all current/historical references immediately before deletion. No document row lock waits for a key lease: metadata deletion commits first. An uncertain reference query defers cleanup; the one-hour grace sweep repairs recoverable orphans and is additional protection, not the concurrency proof. No parse deletion enumerates an origin prefix. Backup/matching-image recovery, including refusal of nonrepresentable Down, is documented in [migrations](../database/migrations.md#document-owned-structure-132).

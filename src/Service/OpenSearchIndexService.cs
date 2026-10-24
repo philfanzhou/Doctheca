@@ -69,7 +69,7 @@ public sealed class OpenSearchIndexService : ISearchIndexService
         }
 
         // Hand-marked structure (issue #89): each block carries its deepest node and ancestors.
-        var structure = new StructurePathResolver(await structureRepository.GetByParseIdAsync(parseId));
+        var structure = new StructurePathResolver((await structureRepository.GetByParseIdAsync(parseId)).Where(node => node.ParseId == parseId).ToList());
 
         var bulkOps = new List<object>();
         foreach (var block in blocks)
