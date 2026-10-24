@@ -16,7 +16,7 @@ A self-hosted **document library & full-text retrieval** service for educational
 | **DocumentStructure** | Runtime-configured structure definitions and levels (for example Unit → Section), hand-marked structure nodes on a continuous view of a parse, and search narrowed to a node's subtree |
 | **StructureAudio** | Bounded ZIP/folder/file import, hierarchical matching and administrator link review, metadata persistence, deletion/orphan recovery and administrator playback using fresh expiring public S3 links |
 | **AdminAuthentication** | SignaCore hosted admin login via the official `SignaCore.Client.AspNetCore` client: `role=admin` pre-sign-in gate, server sessions, CSRF and prepared logout; legacy Bearer compatibility |
-| **InternalCatalog** | Optional anonymous read-only structure definition and marked-document catalogs, current document trees with direct audio counts and audio-filtered discovery, node content pages, owned image bytes, subtree search and expiring same-origin direct-node audio; disabled by default and restricted to the internal network by the deployer |
+| **InternalCatalog** | Anonymous read-only structure definition and marked-document catalogs, current document trees with direct audio counts and audio-filtered discovery, node content pages, owned image bytes, subtree search and expiring same-origin direct-node audio; always mapped and restricted to the internal network by the deployer |
 
 ## Tech Stack
 
@@ -25,7 +25,7 @@ A self-hosted **document library & full-text retrieval** service for educational
 - **Database**: PostgreSQL (EF Core 10 + Npgsql)
 - **Search**: OpenSearch
 - **Parsing**: external StructaDoc service (HTTP + scoped API key)
-- **Object storage**: S3-compatible (SeaweedFS/MinIO) — legacy objects read-compat & deletion only; new originals/artifacts are owned by StructaDoc; structure audio is written under the `audio/` prefix (optional, `DocumentAudio:Enabled`)
+- **Object storage**: S3-compatible (SeaweedFS/MinIO) — legacy objects read-compat & deletion only; new originals/artifacts are owned by StructaDoc; structure audio is written under the `audio/` prefix (when internal S3 is configured)
 - **Auth**: SignaCore or any OIDC discovery/JWKS-compatible issuer (RS256)
 - **Optional**: OpenAI-compatible LLM for metadata analysis
 
@@ -69,13 +69,29 @@ IDENTITY_APP_ID=<appid> IDENTITY_APP_SECRET=<secret> ./start.sh
 
 `start.sh` reads shared configuration (PostgreSQL, OSS, OpenSearch, Loki, StructaDoc) from Consul KV; environment variables can override. See [`docs/development/Deployment.md`](docs/development/Deployment.md).
 
-`InternalApi:Enabled` defaults to `false`. Explicitly enabling it exposes anonymous
-catalog, current tree, node content, owned-image, subtree-search and direct-node audio GET routes under `/internal/v1/`; restrict `/internal/*` to trusted internal callers at
-the network/reverse proxy before enabling. It adds no caller authentication or document-level
-authorization. Unknown or disabled internal paths always return JSON 404, never the SPA.
-Audio proxy delivery needs configured internal S3 and a valid existing playback TTL, without a public S3 address. Links expire and are invalidated on restart; provide bounded scratch capacity and exclude token-bearing URLs from access logs.
-See the [internal API contract](docs/Integration/InternalApi.md). No schema/storage migration is
-needed; disable the setting and restart, or restore the previous image, to roll back.
+Anonymous catalog, current tree, node content, owned-image, subtree-search and direct-node audio GET routes
+are always mapped under `/internal/v1/`. Restrict the entire case-insensitive `/internal` path segment
+to trusted internal callers at the network/reverse proxy before deployment, and prevent direct public
+access to port 5012. These routes have no caller authentication or document-level authorization.
+Unknown internal paths and unsupported methods return JSON 404, never the SPA.
+Audio storage is available with complete internal S3 configuration; LocalFile cannot store audio.
+Audio proxy delivery uses the existing playback TTL without a public S3 address. Links expire and
+are invalidated on restart; provide bounded scratch capacity and exclude token URLs from access logs.
+See the [internal API contract](docs/Integration/InternalApi.md).
+
+| Configuration key | Default | Requirement |
+| --- | --- | --- |
+| `DocumentAudio:MaxFileBytes` | `20971520` (20 MiB) | Positive integer |
+| `DocumentAudio:MaxArchiveBytes` | `209715200` (200 MiB) | Integer >= MaxFileBytes and <= Int64.MaxValue - 1048576 |
+| `DocumentAudio:PlaybackLinkSeconds` | `300` | Integer, 60–3600 inclusive |
+
+Administrator preview separately requires a valid `Oss:PublicBaseUrl`; its absence affects only that preview.
+Absent numeric keys use defaults; empty, malformed, overflowing or out-of-range values refuse
+startup before database initialization or listening. Missing S3 settings disable import/sweep and
+playback, while relational metadata and document reads remain available. The obsolete keys
+`InternalApi:Enabled` and `DocumentAudio:Enabled` are ignored, with one startup Warning listing
+only the keys present. No schema or data migration is needed. To roll back to the previous image
+with the same enabled behavior, set both old switches to `true` again and retain network isolation.
 
 The target PostgreSQL database must exist before startup: a missing database is refused by default with the fixed error `database_target_preparation.creation_not_allowed` (`DATABASE_ALLOW_CREATE=true` opts into automatic creation). Startup runs the EF Core migrations under a PostgreSQL advisory lock, so multiple instances starting against the same database serialize and only one executes the migration. See [`docs/database/migrations.md`](docs/database/migrations.md).
 
@@ -108,7 +124,7 @@ cd frontend && npm ci && npm run build
 | StructaDoc | Yes | document parsing & original/artifact storage (ADR-0009) |
 | SignaCore (OIDC) | Yes | admin authentication, JWKS |
 | OpenSearch | Yes | full-text block index & search |
-| S3 (SeaweedFS/MinIO) | Legacy / optional | read-compat & deletion of pre-migration objects; structure audio under `audio/` when `DocumentAudio:Enabled` |
+| S3 (SeaweedFS/MinIO) | Legacy / optional | read-compat & deletion of pre-migration objects; structure audio under `audio/` when internal S3 is configured |
 | OpenAI-compatible LLM | Optional | document metadata analysis |
 
 ## Documentation

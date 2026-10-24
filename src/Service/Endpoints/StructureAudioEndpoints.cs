@@ -31,7 +31,7 @@ public static class StructureAudioEndpoints
         parses.MapGet("/{parseId:guid}/structure/nodes/{nodeId:guid}/audio", ListNode);
         parses.MapGet("/{parseId:guid}/audio/{audioId:guid}/playback-link", Playback);
         parses.MapPost("/{parseId:guid}/audio", Import)
-            .WithMetadata(new RequestSizeLimitAttribute(checked((options.Validate() == null ? options.MaxArchiveBytes : new DocumentAudioOptions().MaxArchiveBytes) + MultipartOverheadBytes)));
+            .WithMetadata(new RequestSizeLimitAttribute(checked(options.MaxArchiveBytes + MultipartOverheadBytes)));
         parses.MapPut("/{parseId:guid}/audio", Save);
         parses.MapDelete("/{parseId:guid}/audio/{audioId:guid}", Remove);
 

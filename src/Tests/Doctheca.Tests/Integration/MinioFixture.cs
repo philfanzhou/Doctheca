@@ -45,7 +45,6 @@ public sealed class MinioFixture : IAsyncLifetime
     /// <summary>Settings that enable structure audio against this store with the given bucket.</summary>
     public Dictionary<string, string?> Settings(string bucket) => new()
     {
-        ["DocumentAudio:Enabled"] = "true",
         ["Oss:InternalEndpoint"] = InternalEndpoint,
         ["Oss:InternalSecure"] = "false",
         ["Oss:AccessKey"] = AccessKey,

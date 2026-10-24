@@ -27,14 +27,14 @@ public sealed partial class InternalCatalogEndpointTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task AudioMetadata_IsRelationalDirectCurrentMembershipWithoutStorageOrTokens(bool malformedStorage)
+    public async Task AudioMetadata_IsRelationalDirectCurrentMembershipWithoutStorageOrTokens(bool obsoleteEnabled)
     {
         var tokens = 0;
         var sql = new CatalogSql();
         using var factory = CreateFactory(settings: new Dictionary<string, string?>
         {
-            ["InternalApi:Enabled"] = "true", ["DocumentAudio:Enabled"] = malformedStorage ? "true" : "false",
-            ["DocumentAudio:MaxFileBytes"] = malformedStorage ? "invalid-size" : "1048576",
+            ["DocumentAudio:Enabled"] = obsoleteEnabled ? "true" : "false",
+            ["DocumentAudio:MaxFileBytes"] = "1048576",
             ["Oss:InternalEndpoint"] = "", ["Oss:PublicBaseUrl"] = "invalid-public-address"
         }, configureTestServices: services =>
         {

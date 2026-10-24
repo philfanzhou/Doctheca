@@ -9,14 +9,14 @@ public sealed class InternalApiEndpointMetadata;
 
 public static class InternalCatalogEndpoints
 {
-    public static WebApplication UseInternalApiBoundary(this WebApplication app, InternalApiOptions options)
+    public static WebApplication UseInternalApiBoundary(this WebApplication app)
     {
         app.Use(async (context, next) =>
         {
             if (context.Request.Path.StartsWithSegments("/internal", StringComparison.OrdinalIgnoreCase) &&
-                (!options.Enabled || context.GetEndpoint()?.Metadata.GetMetadata<InternalApiEndpointMetadata>() is null))
+                context.GetEndpoint()?.Metadata.GetMetadata<InternalApiEndpointMetadata>() is null)
             {
-                // Reserved internal errors, including disabled audio links, must never be cached or used as referrers.
+                // Reserved internal errors, including invalid audio links, must never be cached or used as referrers.
                 context.Response.Headers.CacheControl = "no-store";
                 context.Response.Headers.XContentTypeOptions = "nosniff";
                 context.Response.Headers["Referrer-Policy"] = "no-referrer";
@@ -28,9 +28,8 @@ public static class InternalCatalogEndpoints
         return app;
     }
 
-    public static WebApplication MapInternalCatalogEndpoints(this WebApplication app, InternalApiOptions options)
+    public static WebApplication MapInternalCatalogEndpoints(this WebApplication app)
     {
-        if (!options.Enabled) return app;
         var group = app.MapGroup("/internal/v1").AllowAnonymous()
             .WithMetadata(new InternalApiEndpointMetadata()).RequireServiceMantleSecurityResponseHeaders();
         group.MapGet("/structure-definitions", Definitions);

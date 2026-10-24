@@ -18,8 +18,8 @@ foreign key for that replacement model; the repository checks same-parse members
 
 `StructureAudioStore` alone writes/deletes `audio/` through the existing `IOssService`/`S3OssService`.
 It refuses non-audio keys. Legacy upload/image prefixes remain read-only except for existing cleanup.
-`DocumentAudio:Enabled` defaults to false. Enabling the lifecycle requires the internal S3 endpoint,
-access/secret keys and bucket; local-file storage is unsupported. A public storage URL is not required for import or cleanup. Administrator playback additionally requires an explicitly valid `Oss:PublicBaseUrl` and `DocumentAudio:PlaybackLinkSeconds` (default 300, allowed 60–3600); invalid playback settings disable only playback, never fall back to the internal endpoint. These settings are acquired at startup; restart to apply changes. Invalid `DocumentAudio` settings only disable audio. Missing S3 settings disable recovery without
+Audio storage is available when the internal S3 endpoint,
+access/secret keys and bucket are complete; local-file storage is unsupported. A public storage URL is not required for import or cleanup. Administrator playback additionally requires an explicitly valid `Oss:PublicBaseUrl` and `DocumentAudio:PlaybackLinkSeconds` (default 300, allowed 60–3600); missing/invalid public addressing disables only administrator playback, which never falls back to the internal endpoint. These settings are acquired at startup; restart to apply changes. Invalid numeric settings refuse startup before database initialization or HTTP listening, even without S3. Missing S3 settings disable recovery without
 constructing a client; existing document/structure reads remain usable, and legacy storage operations
 keep their existing S3 configuration requirements. See
 [deployment](../development/Deployment.md#structure-audio-storage-issue-90).
@@ -35,7 +35,7 @@ keep their existing S3 configuration requirements. See
 
 `POST /admin/structure-audio/orphan-sweep` performs administrator recovery. It requires `DocthecaAdmin`, uses
 the existing security headers and returns `{ success: true, data: { scanned, deleted, failed } }`.
-Missing identity returns 401, a non-admin returns 403, and disabled/unavailable storage returns a
+Missing identity returns 401, a non-admin returns 403, and unavailable storage returns a
 fixed safe 503 (`DOCTHECA_AUDIO_STORAGE_NOT_CONFIGURED` / `DOCTHECA_AUDIO_STORAGE_UNAVAILABLE`).
 Audio cleanup uses complete-or-fail S3 listing: a rejected or interrupted listing returns the
 unavailable error, never a successful zero-object count. Existing legacy listing callers retain
@@ -58,12 +58,11 @@ cleanup. See [migration procedure](../database/migrations.md#structure-audio-upg
 
 | Private configuration key | Default | Validation |
 | --- | --- | --- |
-| `DocumentAudio:Enabled` | `false` | Enables import/storage only with complete internal S3 settings |
 | `DocumentAudio:MaxFileBytes` | `20971520` (20 MiB) | Positive; each audio upload or ZIP entry |
-| `DocumentAudio:PlaybackLinkSeconds` | `300` | Whole seconds, 60–3600; invalid/malformed values disable only playback |
+| `DocumentAudio:PlaybackLinkSeconds` | `300` | Whole seconds, 60–3600; invalid/malformed values refuse startup |
 | `DocumentAudio:MaxArchiveBytes` | `209715200` (200 MiB) | At least MaxFileBytes, and no greater than Int64.MaxValue minus 1048576 |
 
-Environment variables replace `:` with `__`. The request's uploaded file bytes and the actual expanded total across all loose files and ZIPs must each fit MaxArchiveBytes. Before buffering, the whole multipart body is capped at MaxArchiveBytes plus 1 MiB for boundaries, paths and headers, including requests without Content-Length. There are at most 1000 audio files and 4000 ZIP entries per request. Oversized request or expanded total returns 413; a per-file excess returns 400. Invalid limits disable audio without stopping the host.
+Environment variables replace `:` with `__`. The request's uploaded file bytes and the actual expanded total across all loose files and ZIPs must each fit MaxArchiveBytes. Before buffering, the whole multipart body is capped at MaxArchiveBytes plus 1 MiB for boundaries, paths and headers, including requests without Content-Length. There are at most 1000 audio files and 4000 ZIP entries per request. Oversized request or expanded total returns 413; a per-file excess returns 400. Absent numeric keys use defaults; empty, non-integer, overflowing or invalid limits/TTL refuse host startup with key-name-only diagnostics. The snapshot is read after Consul loading and requires a restart to change.
 
 Supported extensions/signatures: `.mp3` (ID3 or MPEG frame sync), `.m4a` (ftyp), `.wav` (RIFF/WAVE), `.ogg` (OggS), `.flac` (fLaC). This is format screening, not media decoding, malware detection, transcoding or permission to distribute the content. Callers are responsible for authorized content. ZIPs are streamed without extracting files to disk. Nested/broken archives, unsupported extensions/signatures, unsafe paths and duplicates reject the entire batch. `.DS_Store`, `__MACOSX/`, `._*`, `Thumbs.db`, `desktop.ini` and directory entries are skipped.
 
@@ -100,9 +99,9 @@ Responses use `{ "success": true, "data": ... }`; errors use `{ "success": false
 | Invalid save, including duplicate link IDs | 400 / `DOCTHECA_AUDIO_INVALID` |
 | Request or expanded total over limit | 413 / `DOCTHECA_AUDIO_IMPORT_TOO_LARGE` |
 | Existing source path / no structure nodes | 409 / `DOCTHECA_AUDIO_ALREADY_IMPORTED`, `DOCTHECA_AUDIO_STRUCTURE_REQUIRED` |
-| Disabled or unavailable storage | 503 / `DOCTHECA_AUDIO_STORAGE_NOT_CONFIGURED`, `DOCTHECA_AUDIO_STORAGE_UNAVAILABLE` |
+| Unconfigured or unavailable storage | 503 / `DOCTHECA_AUDIO_STORAGE_NOT_CONFIGURED`, `DOCTHECA_AUDIO_STORAGE_UNAVAILABLE` |
 
-Missing parse or disabled storage is refused before buffering uploads. Removal commits before best-effort object deletion, with sweep recovery for cleanup outages. The last complete valid save wins; invalid review batches change nothing. This adds no database schema or dependency. The foundation upgrade/backup recovery procedure above still applies; rollback may lose post-backup work and does not promise old-image/new-schema compatibility.
+Missing parse or unconfigured storage is refused before buffering uploads. Removal commits before best-effort object deletion, with sweep recovery for cleanup outages. The last complete valid save wins; invalid review batches change nothing. This adds no database schema or dependency. The foundation upgrade/backup recovery procedure above still applies; rollback may lose post-backup work and does not promise old-image/new-schema compatibility.
 
 ## Console workflow
 
@@ -112,11 +111,11 @@ Choose a folder, multiple files or ZIPs, then review flagged files or all files.
 
 The [Lexarbor model](https://github.com/philfanzhou/Lexarbor/blob/d91451c8094215d783b76497f44e76515d669d4e/docs/api/Audio.md#administrator-playback) uses an S3 presigned GET URL. Only `url` may contain the configured public host, bucket/object path, access-key identifier and temporary signature. There are no separate storage-location fields, secret keys, internal endpoint or application/session credentials. Metadata/errors keep the stricter no-storage-fields guarantee. Never log the URL, store it in a database/browser storage, capture it in HAR/traces or send it to analytics. Responses set `Cache-Control: no-store`, including authorization failures.
 
-The referenced parse/audio must exist and belong together (404 otherwise); no node link is required for administrator preview. The service first checks the object through the internal S3 client, then signs with a separate public client. Public signing uses the standard `us-east-1` signing region without network discovery through the public host; all byte operations continue to use the internal endpoint. Missing, denied, unavailable or timed-out storage and invalid playback settings return fixed 503 `DOCTHECA_AUDIO_STORAGE_UNAVAILABLE` / `Audio storage is unavailable`. Provider messages are discarded. Stat/signing has a combined 30-second bound; caller cancellation propagates without success or writes.
+The referenced parse/audio must exist and belong together (404 otherwise); no node link is required for administrator preview. The service first checks the object through the internal S3 client, then signs with a separate public client. Public signing uses the standard `us-east-1` signing region without network discovery through the public host; all byte operations continue to use the internal endpoint. Missing, denied, unavailable or timed-out storage and missing/invalid public addressing return fixed 503 `DOCTHECA_AUDIO_STORAGE_UNAVAILABLE` / `Audio storage is unavailable`. Provider messages are discarded. Stat/signing has a combined 30-second bound; caller cancellation propagates without success or writes.
 
 `expiresAt` is the UTC S3 request timestamp plus `expiresInSeconds`. The browser must be able to reach `Oss:PublicBaseUrl` with its protocol/host. HTTPS consoles need HTTPS media to avoid mixed-content blocking. A configured path-prefix reverse proxy must strip that prefix before forwarding and preserve the signed Host and query. Native cross-origin media playback and fetch/WebAudio have different CORS requirements: configure bucket/proxy rules for the actual console origins and needed GET/HEAD/Range behavior; no global API CORS change is made here.
 
-Deletion, replacement, disabling audio or changing configuration cannot immediately revoke a previously issued credential. It may remain usable until S3 expiry; deletion may also make it fail earlier. An object can disappear after Stat and normal media failures are expected. Expiry is enforced for new S3 requests, not necessarily an already-open stream or bytes already buffered in the browser. Request another link on play after expiry. Administrator playback has no permanent link, media proxy, transcoding or new settings UI.
+Deletion, replacement or changing storage/public-address configuration cannot immediately revoke a previously issued credential. It may remain usable until S3 expiry; deletion may also make it fail earlier. An object can disappear after Stat and normal media failures are expected. Expiry is enforced for new S3 requests, not necessarily an already-open stream or bytes already buffered in the browser. Request another link on play after expiry. Administrator playback has no permanent link, media proxy, transcoding or new settings UI.
 
 No schema, package, port or deployment topology change is introduced. Reverting to the pre-playback image removes the routes/player while preserving the audio table; recovery to before #107 follows the verified backup/restore procedure above.
 
@@ -157,7 +156,19 @@ No token-bearing URL enters diagnostics or persistence. Deployer access logs mus
 
 A deletion/unlink before final admission refuses playback; a post-admission race may complete
 an open stream, and the next request always rechecks. Links provide neither caller authentication
-nor guaranteed availability. Callers re-list after expiry/restart. Enabling InternalApi does not
-add admin permission. No schema, object layout, package or configuration key changes are needed;
-disabling InternalApi and restarting or restoring the previous image removes the routes without
-data rollback. Existing audio import/review, admin signing and backup/restore remain unchanged.
+nor guaranteed availability. Callers re-list after expiry/restart. Internal routes grant no admin
+permission. The proxy adds no schema, object layout or package changes. These routes are always
+mapped; apply the configuration upgrade and rollback notes below. Existing audio import/review,
+admin signing and backup/restore remain unchanged.
+
+### Configuration upgrade and rollback (#127)
+
+`InternalApi:Enabled` and `DocumentAudio:Enabled` are obsolete: any values are ignored and only the
+present key names are logged together once at startup Warning level. Internal routes are always
+mapped; deployers must block the whole case-insensitive `/internal` path segment at public ingress
+and prevent direct public access to port 5012. Missing internal S3 settings disable import/sweep
+and playback, while relational metadata, review/removal, direct-node metadata and catalog/tree
+counts retain their existing behavior and missing-resource precedence. The optional public S3
+address controls administrator preview only. No schema/data migration is required. Rollback to
+the previous image needs both old switches set to `true` for the same behavior, with ingress
+restrictions retained. See [deployment](../development/Deployment.md#upgrade-and-rollback-127).

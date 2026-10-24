@@ -9,9 +9,8 @@ namespace Doctheca.Service;
 
 public static class InternalSearchEndpoints
 {
-    public static WebApplication MapInternalSearchEndpoints(this WebApplication app, InternalApiOptions options)
+    public static WebApplication MapInternalSearchEndpoints(this WebApplication app)
     {
-        if (!options.Enabled) return app;
         app.MapGet("/internal/v1/search", Search).AllowAnonymous()
             .WithMetadata(new InternalApiEndpointMetadata()).RequireServiceMantleSecurityResponseHeaders();
         return app;

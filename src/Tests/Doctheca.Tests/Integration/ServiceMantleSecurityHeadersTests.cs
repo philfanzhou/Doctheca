@@ -111,7 +111,7 @@ public sealed class ServiceMantleSecurityHeadersTests : ServiceMantleIntegration
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public void MarkedEndpoints_AreExactlyTheJsonAdminAndEnabledInternalEndpoints(bool internalEnabled)
+    public void MarkedEndpoints_AreExactlyTheJsonAdminAndInternalEndpoints(bool internalEnabled)
     {
         using var factory = CreateFactory(settings: new Dictionary<string, string?>
         {
@@ -130,7 +130,6 @@ public sealed class ServiceMantleSecurityHeadersTests : ServiceMantleIntegration
         var all = endpoints.Select(pair => pair.Key).ToHashSet();
 
         var expected = new HashSet<string>(ExpectedMarked, StringComparer.Ordinal);
-        if (internalEnabled)
         {
             expected.Add("GET /internal/v1/structure-definitions");
             expected.Add("GET /internal/v1/documents");
@@ -139,12 +138,11 @@ public sealed class ServiceMantleSecurityHeadersTests : ServiceMantleIntegration
             expected.Add("GET /internal/v1/search");
             expected.Add("GET /internal/v1/structure-nodes/{nodeId}/audio");
         }
-        // Exactly the expected JSON endpoints are marked; disabled internal routes do not exist.
+        // Exactly the expected JSON endpoints are marked; binary internal endpoints stay unmarked.
         Assert.True(
             marked.SetEquals(expected),
             $"marked set mismatch.\n  extra: {string.Join(", ", marked.Except(expected))}\n" +
             $"  missing: {string.Join(", ", expected.Except(marked))}");
-        if (!internalEnabled) Assert.DoesNotContain(all, route => route.Contains("/internal/", StringComparison.Ordinal));
 
         // The rendering-contract endpoints exist and are unmarked.
         foreach (var unmarked in ExpectedUnmarked)
@@ -152,7 +150,6 @@ public sealed class ServiceMantleSecurityHeadersTests : ServiceMantleIntegration
             Assert.Contains(unmarked, all);
             Assert.DoesNotContain(unmarked, marked);
         }
-        if (internalEnabled)
         {
             const string image = "GET /internal/v1/structure-nodes/{nodeId}/images/{imageId}/content";
             Assert.Contains(image, all);

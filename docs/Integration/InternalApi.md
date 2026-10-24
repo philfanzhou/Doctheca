@@ -1,8 +1,7 @@
 # Internal read API (v1)
 
 This read-only API is for downstream business services inside the internal network.
-`InternalApi:Enabled` defaults to `false`; missing, false or malformed values disable it.
-Only explicit true at process startup registers these anonymous routes:
+These anonymous routes are always registered; no enable switch is needed:
 
 - `GET /internal/v1/structure-definitions`
 - `GET /internal/v1/documents`
@@ -15,13 +14,13 @@ Only explicit true at process startup registers these anonymous routes:
 
 There is no caller authentication or document-level authorization. The deployer must restrict
 the entire `/internal` path segment, case insensitively, to internal callers and prevent direct
-public access to port 5012. Request parameters, Cookies and Bearer tokens cannot enable it.
+public access to port 5012. Request parameters, Cookies and Bearer tokens do not provide caller authorization.
 Existing `/admin/*` authentication and CSRF rules are unchanged. See
 [deployment](../development/Deployment.md#internal-api).
 
 Catalogs (#97), current trees (#98), content/owned images (#99) and search (#100) are implemented.
 Direct current-node audio and expiring proxy playback (#101) are implemented under [#91](https://github.com/philfanzhou/Doctheca/issues/91).
-Unimplemented paths return 404 even when the setting is enabled.
+Unknown paths and unsupported methods return the reserved JSON 404, never SPA HTML.
 
 ## Lists and inputs
 
@@ -96,7 +95,7 @@ file's selected definition. Both the audio row and node must belong to that same
 Unlinked, dangling/cross-parse node references and audio of older parses do not count.
 Historical match status does not override a current node link. Counts use relational metadata
 only: no playback tokens, object-storage calls or search index are involved. They remain
-available when storage is disabled or misconfigured; the audio route still reports its existing
+available when internal S3 is incomplete or LocalFile is selected; the audio route still reports its existing
 503 when playback is unavailable. Counts do not guarantee stored bytes exist or are playable.
 Each response is consistent within its repeatable-read snapshot, but separate requests/pages
 have no shared snapshot: committed link, deletion or tree changes affect the next request.
@@ -329,7 +328,7 @@ can finish after the caller disconnects. No database, index or object-storage wr
 
 | Condition | Status | Fixed error code |
 | --- | --- | --- |
-| Disabled, unknown internal path or unsupported method | 404 | `DOCTHECA_INTERNAL_NOT_FOUND` |
+| Unknown internal path or unsupported method | 404 | `DOCTHECA_INTERNAL_NOT_FOUND` |
 | Invalid identifier/list/filter/search/cursor input | 400 | `DOCTHECA_INTERNAL_INVALID` |
 | Unknown requested definition | 404 | `DOCTHECA_INTERNAL_DEFINITION_NOT_FOUND` |
 | Unknown document | 404 | `DOCTHECA_INTERNAL_DOCUMENT_NOT_FOUND` |
@@ -346,8 +345,8 @@ document content, storage reference or credential is added to error bodies or di
 Every `/internal` path is reserved before static/SPA handling, including nested static-looking
 paths and `/internal` itself; `/internalized` remains an ordinary SPA path.
 
-No database migration, new package, storage write or port change is introduced. Disable the
-setting and restart, or restore the previous image, to remove the API without data rollback.
+No database migration, new package, storage write or port change is introduced. Internal routes
+are always mapped; see the configuration upgrade and rollback notes below.
 This API does not implement network isolation or guarantee a snapshot across list requests.
 
 ## Direct node audio and temporary playback
@@ -370,9 +369,9 @@ document/parse/node/audio IDs, no storage identity or application credential. Th
 purpose-specific ephemeral protector is separate from the admin key ring; no token cache,
 database row or object is created. Restart invalidates old links; callers re-list after expiry
 or restart. `expiresAt` is the protector's exact expiry. Existing `DocumentAudio:PlaybackLinkSeconds`
-defaults to 300; an integer 60–3600 is valid. Malformed/out-of-range TTL disables this proxy.
+defaults to 300; an integer 60–3600 is valid. Malformed/out-of-range TTL refuses host startup before initialization or HTTP listening.
 
-Proxy availability requires enabled audio with complete internal S3 configuration and valid
+Proxy availability requires complete internal S3 configuration and valid
 limits/TTL. Missing or invalid `Oss:PublicBaseUrl` does not disable this proxy; administrator
 public S3 signing retains its independent public-address requirement. LocalFile is unsupported.
 An existing node with unavailable audio returns 503 `DOCTHECA_INTERNAL_AUDIO_UNAVAILABLE` /
@@ -410,8 +409,13 @@ admin OIDC; deployer proxies/access logs must also omit token-bearing URLs. Prov
 capacity for the configured bound and restrict `/internal/*` to the internal network.
 
 The additive routes require no migration, package, configuration key, port or topology change.
-Disable `InternalApi:Enabled` and restart or restore the previous image to remove them without
-data rollback. Audio import, admin preview/signing and the #90 backup/restore rules are unchanged.
+The obsolete `InternalApi:Enabled` and `DocumentAudio:Enabled` keys have no effect and are listed
+once by key name in a startup Warning. Audio availability follows complete internal S3 settings,
+with no LocalFile support. Invalid audio numeric tunables refuse startup; only a missing/invalid
+public S3 address disables administrator preview independently. No schema/data migration applies.
+Rolling back the previous image requires both old enable switches `true` for the same behavior;
+retain ingress isolation. See [upgrade and rollback](../development/Deployment.md#upgrade-and-rollback-127).
+The #90 backup/restore rules are unchanged.
 
 The audio discovery additions (#122) require no schema, configuration or data migration.
 Restoring the previous image removes `hasAudio` and `audioCount`; downstream callers must

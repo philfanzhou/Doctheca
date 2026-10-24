@@ -176,8 +176,6 @@ public sealed class StructureAudioLifecycleTests(PostgreSqlFixture database, Min
     }
 
     [Theory]
-    [InlineData("DocumentAudio:Enabled", "false", "DocumentAudio:Enabled")]
-    [InlineData("DocumentAudio:Enabled", "invalid", "DocumentAudio settings")]
     [InlineData("Oss:BucketName", "", "Oss:BucketName")]
     [InlineData("Oss:InternalEndpoint", "", "Oss:InternalEndpoint")]
     public async Task DisabledOrMalformedStorageDoesNotBlockExistingFeatures(string key, string value, string reason)

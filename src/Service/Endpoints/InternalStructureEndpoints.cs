@@ -12,9 +12,8 @@ public static class InternalStructureEndpoints
     // A valid definition can have 50 nested levels, each with a node object and children array.
     private static readonly JsonSerializerOptions TreeJsonOptions = new(JsonSerializerDefaults.Web) { MaxDepth = 128 };
 
-    public static WebApplication MapInternalStructureEndpoints(this WebApplication app, InternalApiOptions options)
+    public static WebApplication MapInternalStructureEndpoints(this WebApplication app)
     {
-        if (!options.Enabled) return app;
         app.MapGet("/internal/v1/documents/{documentFileId}/structure", ReadTree)
             .AllowAnonymous().WithMetadata(new InternalApiEndpointMetadata()).RequireServiceMantleSecurityResponseHeaders();
         return app;

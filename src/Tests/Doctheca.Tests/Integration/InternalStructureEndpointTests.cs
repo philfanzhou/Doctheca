@@ -26,7 +26,7 @@ public sealed class InternalStructureEndpointTests(PostgreSqlFixture database) :
 {
     private static string Url(Guid file) => $"/internal/v1/documents/{file}/structure";
     private WebApplicationFactory<Program> Factory(Action<IServiceCollection>? services = null) =>
-        CreateFactory(configureTestServices: services, settings: new Dictionary<string, string?> { ["InternalApi:Enabled"] = "true" });
+        CreateFactory(configureTestServices: services, settings: new Dictionary<string, string?>());
 
     [Theory]
     [InlineData(2)]

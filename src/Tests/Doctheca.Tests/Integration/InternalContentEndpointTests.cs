@@ -30,7 +30,7 @@ public sealed class InternalContentEndpointTests(PostgreSqlFixture database) : S
     private static string Url(Guid node) => $"/internal/v1/structure-nodes/{node:D}/content";
     private static string ImageUrl(Guid node, Guid image, string revision) => $"/internal/v1/structure-nodes/{node:D}/images/{image:D}/content?revision={revision}";
     private WebApplicationFactory<Program> Factory(Action<IServiceCollection>? services = null) =>
-        CreateFactory(configureTestServices: services, settings: new Dictionary<string, string?> { ["InternalApi:Enabled"] = "true" });
+        CreateFactory(configureTestServices: services, settings: new Dictionary<string, string?>());
 
     [Fact]
     public async Task SmallPages_CoverInclusiveRangeExactlyOnceWithGapsAndAllowListedFields()

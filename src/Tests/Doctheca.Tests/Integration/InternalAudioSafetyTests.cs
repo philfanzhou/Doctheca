@@ -1,5 +1,7 @@
 using System.Diagnostics;
 using System.Net;
+using System.Net.Http.Headers;
+using System.Net.Http.Json;
 using System.Text.Json;
 using Doctheca.Common.Oss;
 using Doctheca.Database;
@@ -25,17 +27,20 @@ public sealed partial class InternalAudioEndpointTests
 {
     [Theory]
     [InlineData(null)][InlineData("false")][InlineData("invalid")]
-    public async Task DefaultOff_AudioRoutesRemainReservedWithoutRepositoryOrStorageAccess(string? enabled)
+    public async Task ObsoleteEnableValues_DoNotDisableAudioRoutes(string? enabled)
     {
-        var repository = new Mock<IInternalAudioRepository>(MockBehavior.Strict); var oss = new Mock<IOssService>(MockBehavior.Strict);
+        var repository = new Mock<IInternalAudioRepository>(MockBehavior.Strict);
+        var oss = new Mock<IOssService>(MockBehavior.Strict);
+        var node = Guid.NewGuid();
+        repository.Setup(r => r.ReadAudioAsync(node, null, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((InternalAudioMembership?)null);
         using var factory = Factory(services =>
         { services.RemoveAll<IInternalAudioRepository>(); services.AddSingleton(repository.Object); services.RemoveAll<IOssService>(); services.AddSingleton(oss.Object); }, new() { ["InternalApi:Enabled"] = enabled });
         using var client = factory.CreateClient();
-        foreach (var path in new[] { ListUrl(Guid.NewGuid()), ListUrl(Guid.NewGuid()) + $"/{Guid.NewGuid():D}/content?token=opaque" })
-        {
-            using var response = await client.GetAsync(path); Assert.Equal(HttpStatusCode.NotFound, response.StatusCode); Headers(response);
-            Assert.Contains("DOCTHECA_INTERNAL_NOT_FOUND", await response.Content.ReadAsStringAsync());
-        }
+        using var response = await client.GetAsync(ListUrl(node));
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode); Headers(response);
+        Assert.Contains("DOCTHECA_INTERNAL_NODE_NOT_FOUND", await response.Content.ReadAsStringAsync());
+        repository.Verify(r => r.ReadAudioAsync(node, null, It.IsAny<CancellationToken>()), Times.Once);
         repository.VerifyNoOtherCalls(); oss.VerifyNoOtherCalls();
     }
 
@@ -50,7 +55,33 @@ public sealed partial class InternalAudioEndpointTests
             var oss = new Mock<IOssService>(MockBehavior.Strict);
             using var factory = Factory(services => { services.RemoveAll<IOssService>(); services.AddSingleton(oss.Object); });
             using var client = factory.CreateClient(); var seed = await SeedAsync(factory.Services, PlayableWave.Bytes());
-            try { using var response = await client.GetAsync(ListUrl(seed.Node)); Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode); oss.VerifyNoOtherCalls(); }
+            try
+            {
+                using var response = await client.GetAsync(ListUrl(seed.Node));
+                Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+                var token = factory.Services.GetRequiredService<InternalAudioTokens>().Create(
+                    new(seed.File, seed.Parse, seed.Node, seed.Audio), DateTimeOffset.UtcNow.AddMinutes(2));
+                using var bytes = await client.GetAsync(ListUrl(seed.Node) + $"/{seed.Audio:D}/content?token=" + token);
+                Assert.Equal(HttpStatusCode.ServiceUnavailable, bytes.StatusCode);
+                client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", CreateToken("admin"));
+                using var import = await client.PostAsync($"/admin/document-parses/{seed.Parse}/audio", null);
+                Assert.Equal(HttpStatusCode.ServiceUnavailable, import.StatusCode);
+                Assert.Contains("USE_LOCAL_OSS", await import.Content.ReadAsStringAsync());
+                using var sweep = await client.PostAsync("/admin/structure-audio/orphan-sweep", null);
+                Assert.Equal(HttpStatusCode.ServiceUnavailable, sweep.StatusCode);
+                using var list = await client.GetAsync($"/admin/document-parses/{seed.Parse}/audio");
+                Assert.Equal(HttpStatusCode.OK, list.StatusCode);
+                using var direct = await client.GetAsync($"/admin/document-parses/{seed.Parse}/structure/nodes/{seed.Node}/audio");
+                Assert.Equal(HttpStatusCode.OK, direct.StatusCode);
+                using var review = await client.PutAsJsonAsync($"/admin/document-parses/{seed.Parse}/audio",
+                    new { links = new[] { new { id = seed.Audio, nodeId = seed.Node } } });
+                Assert.Equal(HttpStatusCode.OK, review.StatusCode);
+                using var adminPlayback = await client.GetAsync($"/admin/document-parses/{seed.Parse}/audio/{seed.Audio}/playback-link");
+                Assert.Equal(HttpStatusCode.ServiceUnavailable, adminPlayback.StatusCode);
+                using var missing = await client.PostAsync($"/admin/document-parses/{Guid.NewGuid()}/audio", null);
+                Assert.Equal(HttpStatusCode.NotFound, missing.StatusCode);
+                oss.VerifyNoOtherCalls();
+            }
             finally { await Cleanup(factory.Services, seed); }
         }
         finally

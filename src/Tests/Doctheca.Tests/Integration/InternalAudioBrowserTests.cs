@@ -14,7 +14,7 @@ public sealed partial class AdminHostedFrontendTests
     public async Task AnonymousInternalAudio_PlaysRealBytesInChromiumWithoutStorageUrlsOrCredentials()
     {
         var bucket = "internal-browser-" + Guid.NewGuid().ToString("N")[..12];
-        var settings = minio.Settings(bucket); settings["InternalApi:Enabled"] = "true"; settings["Oss:PublicBaseUrl"] = "";
+        var settings = minio.Settings(bucket); settings["Oss:PublicBaseUrl"] = "";
         await using var h = await Open(settings: settings, configureServices: services =>
         {
             services.RemoveAll<IOssService>();

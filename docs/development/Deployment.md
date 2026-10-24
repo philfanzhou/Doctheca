@@ -80,24 +80,19 @@ LLM document-analysis configuration is injected via environment variables in `st
 
 ## Internal API
 
-`InternalApi:Enabled` (`InternalApi__Enabled` in the container environment) defaults to `false`.
-Only an explicit boolean `true` at startup registers the anonymous GET routes
-`/internal/v1/structure-definitions`, `/internal/v1/documents` and
-`/internal/v1/documents/{documentFileId}/structure`,
-`/internal/v1/structure-nodes/{nodeId}/content` and
-`/internal/v1/structure-nodes/{nodeId}/images/{imageId}/content` and `/internal/v1/search`. Missing, false and invalid
-values fail closed without stopping the host; invalid-value diagnostics contain only a fixed
-reason and the key name. Restart after changing the setting. Inject it into the Doctheca
-container environment directly; `start.sh` does not forward arbitrary host environment variables.
+All implemented anonymous GET routes under `/internal/v1/` are always mapped, including catalogs,
+current structure, node content/images, search, audio lists and token-protected audio bytes.
+The obsolete `InternalApi:Enabled` setting is ignored regardless of value. `start.sh` does not
+forward arbitrary host environment variables; inject supported settings into the container directly.
 
-Before enabling, restrict **all `/internal/*` paths** on port 5012 to the internal network using
+Before deployment, restrict **all `/internal/*` paths** on port 5012 to the internal network using
 trusted firewall/proxy routing. Block the entire case-insensitive `/internal` path segment at
 public ingress, including `/internal` itself, and prevent direct public access to the container
 port. The API has no caller authentication or per-document access control. Existing admin
 authentication, CSRF, SPA/static files and health checks keep their current behavior.
-Disabled paths, unknown internal paths and unsupported methods return fixed JSON 404, never SPA
+Unknown internal paths and unsupported methods return fixed JSON 404, never SPA
 HTML. Catalogs, current trees, revision-checked node content, owned image bytes and subtree search are available; see
-[Internal API](../Integration/InternalApi.md). Audio routes remain unavailable.
+[Internal API](../Integration/InternalApi.md). Audio lists and byte playback require complete internal S3 settings.
 Image responses never redirect to storage, carry no-store/nosniff headers, and allow only the
 documented raster image media types. Do not log image bytes, upstream error text or source references;
 the StructaDoc client disables URI logging and consumes no provider error body for asset reads.
@@ -107,9 +102,34 @@ consistent OpenSearch subtree index. Engine failures return empty results with f
 query text, request JSON and provider bodies are not logged. An already-sent search read may finish
 after caller cancellation, but the cancelled request cannot return a successful search response.
 
-This is additive and creates no persisted state, schema, object-storage or port changes.
-Rollback: set `InternalApi__Enabled=false` and restart, or redeploy the previous image against
-the same database. Network restrictions remain the deployer's responsibility.
+For example, place this case-insensitive nginx rule before any general proxy location and do not
+add a `^~ /` location that would suppress regex matching:
+
+```nginx
+# Public ingress: block /internal itself and every descendant, for every HTTP method.
+location ~* ^/internal(?:/|$) {
+    return 404;
+}
+location / {
+    proxy_pass http://doctheca:5012;
+}
+```
+
+Also block direct public access to port 5012; this nginx example protects only proxied traffic.
+Trusted internal callers may reach the service through a separate private network route.
+
+### Upgrade and rollback (#127)
+
+No database, schema, object layout, data, port or topology migration is required. Before upgrading,
+ensure public ingress blocks `/internal/*`, remove `InternalApi:Enabled` and `DocumentAudio:Enabled`,
+and correct malformed audio tunables. Both obsolete keys are ignored even when false or invalid;
+one startup Warning lists only the obsolete key names present. All audio numeric keys are read
+once after Consul loading and before initialization; changes require a restart. A missing numeric
+key uses its default, while an empty, non-integer, overflowing or invalid value refuses startup
+with a fixed key-name diagnostic. This happens even when S3 is incomplete or LocalFile is selected.
+
+Rolling back to the previous image requires setting **both** old enable switches to `true` again
+for the same behavior. Keep public-ingress restrictions in place. No data rollback is needed.
 
 ## OSS Address Configuration
 
@@ -127,17 +147,17 @@ The persistence and object-lifecycle foundation (#107) reserves `audio/` in the 
 Only `StructureAudioStore` can write/delete this prefix; keys are `audio/{parseId:N}/{audioId:N}{extension}`.
 Legacy uploads and parse images stay read-only. Administrator import/review (#108) is available from the structure editor; administrator temporary playback (#109) is also available.
 
-`DocumentAudio:Enabled` (`DocumentAudio__Enabled`) defaults to `false`. Setting it to `true` enables
-administrator import and the internal lifecycle/recovery endpoint. It requires S3 (not `USE_LOCAL_OSS=1`)
-and the existing `Oss:InternalEndpoint`, `Oss:AccessKey`, `Oss:SecretKey` and `Oss:BucketName`.
-`Oss:PublicBaseUrl` is not required for import or cleanup. Invalid `DocumentAudio` flags disable the audio lifecycle without stopping existing features.
+Audio import, persistence and administrator orphan-sweep are available exactly when S3 is selected
+(not `USE_LOCAL_OSS=1`) and `Oss:InternalEndpoint`, `Oss:AccessKey`, `Oss:SecretKey` and
+`Oss:BucketName` are complete. `DocumentAudio:Enabled` is obsolete and ignored.
+`Oss:PublicBaseUrl` is not required for import, cleanup or internal proxy playback.
 Missing S3 settings disable recovery without constructing a client; document/structure reads remain
 available, while legacy storage operations keep their existing configuration requirements.
-Diagnostics contain only key names. `DocumentAudio:MaxFileBytes` defaults to 20971520 (20 MiB), and `DocumentAudio:MaxArchiveBytes` to 209715200 (200 MiB) for uploaded file bytes and the expanded total across the entire request. Limits must be positive, file <= archive, and archive <= Int64.MaxValue - 1048576. The full multipart body allows only 1 MiB additional overhead. Imports are capped at 1000 audio files, 4000 ZIP entries, 1000-character paths and 255-character segments. Invalid settings disable audio. Request/expanded overflow returns 413; invalid batches/per-file excess return 400, with no object or row writes. `DocumentAudio:PlaybackLinkSeconds` defaults to 300 seconds and allows 60–3600. Invalid/malformed TTL or missing/invalid `Oss:PublicBaseUrl` disables administrator playback only. Playback never falls back to the internal address. The public host must be browser-reachable (HTTPS for an HTTPS console); a path-prefix proxy must strip the prefix and preserve signed Host/query. Signing uses the standard `us-east-1` region without public endpoint discovery. Configure S3/proxy CORS for actual console origins when fetch/WebAudio is used, and allow required GET/HEAD/Range behavior. Internal object checks have a 30-second combined playback deadline. Treat the signed URL as a temporary credential: no logs, persistence, HAR/traces or analytics. Issued URLs may remain usable until expiry after deletion/replacement/disable, and expiry does not stop an already-open stream.
+Diagnostics contain only key names. `DocumentAudio:MaxFileBytes` defaults to 20971520 (20 MiB), and `DocumentAudio:MaxArchiveBytes` to 209715200 (200 MiB) for uploaded file bytes and the expanded total across the entire request. Limits must be positive, file <= archive, and archive <= Int64.MaxValue - 1048576. The full multipart body allows only 1 MiB additional overhead. Imports are capped at 1000 audio files, 4000 ZIP entries, 1000-character paths and 255-character segments. Invalid numeric settings refuse startup before database initialization or HTTP listening. Request/expanded overflow returns 413; invalid batches/per-file excess return 400, with no object or row writes. `DocumentAudio:PlaybackLinkSeconds` defaults to 300 seconds and allows 60–3600. Invalid/malformed TTL refuses startup. Missing/invalid `Oss:PublicBaseUrl` disables administrator playback only. Playback never falls back to the internal address. The public host must be browser-reachable (HTTPS for an HTTPS console); a path-prefix proxy must strip the prefix and preserve signed Host/query. Signing uses the standard `us-east-1` region without public endpoint discovery. Configure S3/proxy CORS for actual console origins when fetch/WebAudio is used, and allow required GET/HEAD/Range behavior. Internal object checks have a 30-second combined playback deadline. Treat the signed URL as a temporary credential: no logs, persistence, HAR/traces or analytics. Issued URLs may remain usable until expiry after deletion/replacement/disable, and expiry does not stop an already-open stream.
 
 After a parse/document deletion, object cleanup is best-effort. An administrator can call
 `POST /admin/structure-audio/orphan-sweep` to remove unreferenced `audio/` objects older than one
-hour; recent, referenced and legacy objects are preserved. A disabled/unavailable store returns a
+hour; recent, referenced and legacy objects are preserved. An unconfigured/unavailable store returns a
 safe 503. See [StructureAudio](../modules/StructureAudio.md).
 
 `IdentityService:Authority/Audience/RequireHttpsMetadata`
@@ -443,11 +463,11 @@ retired endpoints/Cookies and the matched-image rollback contract.
 ### Internal audio proxy
 
 The [internal audio contract](../Integration/InternalApi.md#direct-node-audio-and-temporary-playback)
-adds opt-in anonymous node audio list/content GETs using existing settings only. Complete internal
-S3 configuration, enabled audio and valid 60–3600-second PlaybackLinkSeconds are required (default
+adds always-mapped anonymous node audio list/content GETs using existing settings only. Complete internal
+S3 configuration and valid 60–3600-second PlaybackLinkSeconds are required (default
 300). Missing/malformed public S3 URL does not disable this proxy; administrator public signing
 still requires it. LocalFile is unavailable. Restrict `/internal/*` at the network/reverse proxy;
-the switch adds no caller or document authorization.
+these routes provide no caller or document authorization.
 
 Allow bounded temporary disk capacity per active transfer up to DocumentAudio:MaxFileBytes.
 The server creates unpredictable DeleteOnClose scratch files, verifies actual length and metadata,
@@ -461,5 +481,5 @@ Do not record complete links/tokens in access logs, proxy diagnostics, traces or
 host suppresses raw hosting queries even without hosted admin login. A restart or a different
 process can invalidate links early; clients must re-list. There is no cross-instance token key
 sharing requirement or configuration. No database/object write, migration, package, port or
-container topology change is introduced. Disable InternalApi and restart or restore the prior
-image to remove the routes without data rollback. Existing audio backup/recovery rules remain.
+container topology change is introduced. Internal routes are always mapped; see the
+[configuration upgrade and rollback](#upgrade-and-rollback-127) notes. Existing audio backup/recovery rules remain.

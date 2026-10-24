@@ -12,9 +12,8 @@ namespace Doctheca.Service;
 
 public static class InternalContentEndpoints
 {
-    public static WebApplication MapInternalContentEndpoints(this WebApplication app, InternalApiOptions options)
+    public static WebApplication MapInternalContentEndpoints(this WebApplication app)
     {
-        if (!options.Enabled) return app;
         app.MapGet("/internal/v1/structure-nodes/{nodeId}/content", ReadContent)
             .AllowAnonymous().WithMetadata(new InternalApiEndpointMetadata()).RequireServiceMantleSecurityResponseHeaders();
         // Binary streaming owns errors and aborts. It must stay outside the JSON middleware,

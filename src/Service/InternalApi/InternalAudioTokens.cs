@@ -49,11 +49,6 @@ public sealed class InternalAudioTokens
 
 public sealed record InternalAudioSettings(bool Available, int LinkSeconds)
 {
-    public static InternalAudioSettings Evaluate(DocumentAudioStorageStatus storage, string? raw)
-    {
-        var seconds = 300;
-        if (raw is not null && !int.TryParse(raw, System.Globalization.NumberStyles.Integer,
-                System.Globalization.CultureInfo.InvariantCulture, out seconds)) return new(false, 300);
-        return new(storage.Available && seconds is >= 60 and <= 3600, seconds);
-    }
+    public static InternalAudioSettings Evaluate(DocumentAudioStorageStatus storage, int seconds) =>
+        new(storage.Available, seconds);
 }
