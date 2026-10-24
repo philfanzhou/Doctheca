@@ -29,7 +29,7 @@ public static class StructureDefinitionEndpoints
     /// <summary>Request body of POST and PUT; levels are listed in display order.</summary>
     public sealed record DefinitionRequest(string? Name, List<LevelRequest>? Levels);
 
-    public sealed record LevelRequest(Guid? Id, string? Name, Guid? ParentLevelId);
+    public sealed record LevelRequest(Guid? Id, string? Name, Guid? ParentLevelId, bool Required = false);
 
     private static async Task<IResult> List(IStructureDefinitionService service)
     {
@@ -77,7 +77,7 @@ public static class StructureDefinitionEndpoints
     private static StructureDefinitionInput ToInput(DefinitionRequest body) =>
         new(body.Name, body.Levels?.Select(level => level is null
             ? new StructureLevelInput(null, null, null)
-            : new StructureLevelInput(level.Id, level.Name, level.ParentLevelId)).ToList());
+            : new StructureLevelInput(level.Id, level.Name, level.ParentLevelId, level.Required)).ToList());
 
     private static async Task<DefinitionRequest?> ReadAsync(HttpRequest request, ILoggerFactory loggerFactory)
     {

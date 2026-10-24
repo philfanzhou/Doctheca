@@ -24,7 +24,7 @@ See [relations.md](relations.md).
 
 ## Migration History
 
-The schema is managed with EF Core migrations through [DocthecaMigrationExecutor](../../src/Database/DocthecaMigrationExecutor.cs): empty databases migrate from the `20260930161548_InitialCreate` baseline, databases at an earlier known version receive the pending migrations through the data-only `20261022194526_ClassifyLevelLessTitles` (the preceding page/footnote schema is retained), verified legacy databases are taken over (safe backfills plus baseline registration, then the later migrations), and unknown or conflicting structures fail startup with the fixed error code `DOCTHECA_DB_SCHEMA_INCOMPATIBLE`. See [migrations.md](migrations.md) for the full rules and upgrade notes.
+The schema is managed with EF Core migrations through [DocthecaMigrationExecutor](../../src/Database/DocthecaMigrationExecutor.cs): empty databases migrate from the `20260930161548_InitialCreate` baseline, databases at an earlier known version receive the pending migrations through `20261024021500_AddRequiredStructureLevels` (default-false required policy; the preceding page/footnote/classification data is retained), verified legacy databases are taken over (safe backfills plus baseline registration, then the later migrations), and unknown or conflicting structures fail startup with the fixed error code `DOCTHECA_DB_SCHEMA_INCOMPATIBLE`. See [migrations.md](migrations.md) for the full rules and upgrade notes.
 
 ## Database Configuration
 

@@ -20,6 +20,7 @@ public sealed class StructureLevelModel
     public string Name { get; set; } = string.Empty;
     public Guid? ParentLevelId { get; set; }
     public int SortOrder { get; set; }
+    public bool Required { get; set; }
 }
 
 /// <summary>

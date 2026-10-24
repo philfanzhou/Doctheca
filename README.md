@@ -13,7 +13,7 @@ A self-hosted **document library & full-text retrieval** service for educational
 | **DocumentExport** | Export Markdown / HTML per document file or per parse |
 | **DocumentMetadataAnalysis** | Optional LLM analysis of parsed Markdown to auto-detect subject/grade and backfill; failure never blocks parsing |
 | **DocumentSearch** | OpenSearch full-text precise search with block-level indexing and subject/grade filters |
-| **DocumentStructure** | Runtime-configured structure definitions and levels (for example Unit → Section), hand-marked structure nodes on a continuous view of a parse, and search narrowed to a node's subtree |
+| **DocumentStructure** | Runtime-configured structure definitions and levels with required-ancestor audio policy (recorded only; enforcement pending), hand-marked structure nodes on a continuous view of a parse, and search narrowed to a node's subtree |
 | **StructureAudio** | Bounded ZIP/folder/file import, hierarchical matching and administrator link review, metadata persistence, deletion/orphan recovery and administrator playback using fresh expiring public S3 links |
 | **AdminAuthentication** | SignaCore hosted admin login via the official `SignaCore.Client.AspNetCore` client: `role=admin` pre-sign-in gate, server sessions, CSRF and prepared logout; legacy Bearer compatibility |
 | **InternalCatalog** | Anonymous read-only structure definition and marked-document catalogs, current document trees with direct audio counts and audio-filtered discovery, node content pages, owned image bytes, subtree search and expiring same-origin direct-node audio; always mapped and restricted to the internal network by the deployer |
@@ -99,6 +99,14 @@ Printed page labels add the `document_parse_pages` table without changing HTTP r
 physical page numbering. Existing parses remain readable without labels; no remote backfill runs.
 The previous image requires the documented page-label down script after stopping all instances
 and taking a verified backup; it cannot run directly against the newer migration history.
+
+Required-level policy (#129) adds default-false `structure_levels.required` and an administrator
+level control/response field, including embedded administrator tree definitions. All ancestors of
+a required level must also be required. This records policy only; audio behavior is unchanged.
+A complete older-client PUT omitting the field resets flags to false. Stop mixed-version writers
+and keep a verified backup and matching image/configuration before upgrading. Earlier images
+require backup recovery or the explicit policy down maintenance (which discards flags); see
+[required-policy upgrade and recovery](docs/database/migrations.md#required-level-policy-issue-129).
 
 Startup and readiness use the shared ServiceMantle 0.3.1-rc.1 gate, receipt, and EF Core mapped-schema health source. The configuration and HTTP contracts remain unchanged. The operational code transition from the earlier 0.3.0 adoption remains: alerts replace `DOCTHECA_DB_CREATION_NOT_ALLOWED` with `database_target_preparation.creation_not_allowed` and `DOCTHECA_DB_ALLOW_CREATE_INVALID` with `database_target_preparation.invalid_target`. There is no schema/data migration in this upgrade; rollback redeploys the previous image against the same existing compatible database.
 

@@ -188,6 +188,7 @@ remain in temporary mode-0600 environment files and are checked for disclosure w
 | `20261022160829_AddDocumentParsePages` | The `document_parse_pages` table with composite physical-page key and cascade parse ownership (#102); no existing table or row changes |
 | `20261022184348_AddBlockFootnotes` | Nullable `document_parse_blocks.footnote` (#105); existing captions and all page/structure/audio rows are retained |
 | `20261022194526_ClassifyLevelLessTitles` | Data-only title classification correction (#106); identical schema including pages/footnotes/audio |
+| `20261024021500_AddRequiredStructureLevels` | Adds non-null default-false required-level policy (#129); prior data/links retained |
 
 Adding or changing migrations requires extending `DocthecaMigrationExecutor.KnownMigrationIds`
 (the known-version contract) and `TablesAfterMigration` together with the executor's takeover
@@ -327,7 +328,7 @@ post-backup writes cannot survive that restoration. Apply later down scripts fir
 down, exact page-version schema/history and every retained row (including pages/audio), forward
 migration again, and refused unknown/conflicting states. `OpenSearchAnnotationTests` verifies
 mapping3 rebuild and explicit local-row reindex. The annotation down tests target the page version. The current optional previous-image startup
-check targets the annotation version after the later classification down; its legacy-takeover
+check targets the annotation version after the required-policy and classification downs; its legacy-takeover
 check then rolls back footnotes/pages/audio/structure.
 
 ## Level-less Title Classification (issue #106)
@@ -377,10 +378,49 @@ re-forward, pre-commit failure/cancellation, and concurrent/repeated starts unde
 lock. `OpenSearchHeadingClassificationTests` verifies real local-row reindex without a mapping
 bump, legacy values, returned integers, phrase/stemmed behavior and empty-title exclusion.
 
+## Required-level policy (issue #129)
+
+`20261024021500_AddRequiredStructureLevels` adds only `structure_levels.required`, a non-null
+PostgreSQL boolean with database default false. Existing levels retain every ID, value and link;
+all policy flags start false. The administrator API/UI records the required-ancestor policy;
+this migration does not enforce audio, rewrite objects, contact external services or reindex.
+Internal v1 JSON stays unchanged. Full PUT omission resets flags to false.
+
+**Upgrade.** Stop mixed-version writers, verify a consistent database backup and retain the
+matching image/configuration recovery set. Startup applies the column under the existing ordered
+migration/advisory lock. Empty, every earlier supported history and verified legacy takeover reach
+the current model. Historical target models remain unchanged. Unknown/gapped history, an unrecorded
+column or missing/wrong-typed/nullable current column are refused without repair, stamping or writes;
+unknown history retains priority. Failure/cancellation before this migration commits leaves neither
+its column nor its history row; retry after correcting the cause. Earlier committed migrations and
+legacy backfills remain truthful pending state and are not undone by a later failure.
+
+**Recovery.** Standard recovery restores the verified pre-upgrade database backup and matching
+image/configuration; writes since that backup are lost. The previous image rejects the newer
+history/extra column, so an image-only downgrade is insufficient. No storage restore or reindex
+is introduced solely by this column.
+
+Optional down maintenance: stop **all instances**, take a verified backup, apply any later down
+scripts first, then run
+[20261024021500_AddRequiredStructureLevels.down.sql](rollback/20261024021500_AddRequiredStructureLevels.down.sql)
+or controlled EF Down to `20261022194526_ClassifyLevelLessTitles`. One transaction drops only
+`structure_levels.required` and its exact history row. Every earlier row/ID/link/object is preserved;
+all required-policy values are permanently discarded. Start the preceding image only after this
+maintenance or backup recovery. Re-forward adds the column with all flags false again.
+
+`RequiredPolicyMigrationTests` verifies raw true policy loss, exact earlier schema/history and
+every other row for EF and shipped SQL Down, re-forward defaults, model/EnsureCreated schema
+agreement, populated upgrade, refusal, pre-commit failure/cancellation/retry and repeated/concurrent
+startup. Earlier migration tests prepend this down script to their documented reverse chains.
+The container verifier checks the new final history; its optional previous-image check now targets
+the existing annotation-version image after required-policy and classification downs, before
+the older legacy chain.
+
 ## Change Log
 
 | Date | Change | Impact |
 |------|------|------|
+| 2026-10-24 | Added `20261024021500_AddRequiredStructureLevels` (#129) | Default-false policy column only; administrator complete PUT omission resets false; backup or explicit down before older image |
 | 2026-10-23 | Added data-only `20261022194526_ClassifyLevelLessTitles` (#106) | Canonical level-less titles use -2; preserve legacy positives/body0; explicit reindex and backup/down recovery |
 | 2026-10-23 | Added `20261022184348_AddBlockFootnotes` and annotation mapping4 (#105) | Additive nullable footnote; upgrade and rollback require explicit local-row reindex; down discards only footnotes |
 | 2026-10-23 | Added `20261022160829_AddDocumentParsePages` (#102) | Additive optional page labels; previous image requires backup/down-script maintenance or pre-upgrade backup restoration |

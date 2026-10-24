@@ -64,6 +64,9 @@ public class StructureDefinitionRepository : IStructureDefinitionRepository
     public async Task<bool> UpdateAsync(StructureDefinitionModel definition)
     {
         await using var transaction = await _context.Database.BeginTransactionAsync();
+        // Serialize complete replacements before reading tracked levels, including unchanged flags.
+        await _context.Database.SqlQuery<Guid>(
+            $"SELECT id AS \"Value\" FROM structure_definitions WHERE id = {definition.Id} FOR UPDATE").ToListAsync();
         var entity = await _context.StructureDefinitions
             .Include(e => e.Levels)
             .FirstOrDefaultAsync(e => e.Id == definition.Id);
@@ -94,6 +97,7 @@ public class StructureDefinitionRepository : IStructureDefinitionRepository
             {
                 current.Name = level.Name;
                 current.SortOrder = level.SortOrder;
+                current.Required = level.Required;
             }
             else
             {
@@ -103,6 +107,7 @@ public class StructureDefinitionRepository : IStructureDefinitionRepository
                     DefinitionId = definition.Id,
                     Name = level.Name,
                     SortOrder = level.SortOrder,
+                    Required = level.Required,
                 });
             }
         }
@@ -182,6 +187,7 @@ public class StructureDefinitionRepository : IStructureDefinitionRepository
         Name = model.Name,
         ParentLevelId = model.ParentLevelId,
         SortOrder = model.SortOrder,
+        Required = model.Required,
     };
 
     private static StructureDefinitionModel MapToModel(StructureDefinitionEntity entity) => new()
@@ -199,6 +205,7 @@ public class StructureDefinitionRepository : IStructureDefinitionRepository
                 Name = level.Name,
                 ParentLevelId = level.ParentLevelId,
                 SortOrder = level.SortOrder,
+                Required = level.Required,
             })
             .ToList(),
     };

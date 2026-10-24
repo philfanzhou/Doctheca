@@ -32,7 +32,7 @@ public sealed class HeadingClassificationMigrationTests(PostgreSqlMigrationFixtu
         await executor.ExecuteAsync();
         (await LevelsAsync(context)).Should().BeEquivalentTo(expected);
         (await SnapshotAsync(context)).Should().Equal(before);
-        (await MigrationGoldenStates.ReadColumnShapeAsync(context, DocthecaMigrationExecutor.AllTableNames)).Should().Equal(columns);
+        (await MigrationGoldenStates.ReadColumnShapeAsync(context, DocthecaMigrationExecutor.AllTableNames)).Where(column => !column.StartsWith("structure_levels.required:")).Should().Equal(columns);
         (await MigrationGoldenStates.ReadConstraintShapeAsync(context, DocthecaMigrationExecutor.AllTableNames)).Should().Equal(constraints);
         (await MigrationGoldenStates.ReadAppliedHistoryAsync(context)).Should().Equal(MigrationGoldenStates.AllIds);
         (await executor.InspectAsync()).Should().Be(DocthecaMigrationExecutor.DatabaseState.CurrentVersionCompatible);
@@ -77,8 +77,12 @@ public sealed class HeadingClassificationMigrationTests(PostgreSqlMigrationFixtu
         var afterForward = new Dictionary<Guid, int>(levels);
         foreach (var id in titleIds.Where(id => levels[id] == -2)) levels[id] = -1;
         if (documentedSql)
+        {
+            await MigrationGoldenStates.ExecuteRawAsync(context, await File.ReadAllTextAsync(
+                StructureMigrationTests.RollbackScriptPath(DocthecaMigrationExecutor.AddRequiredStructureLevelsMigrationId)));
             await MigrationGoldenStates.ExecuteRawAsync(context, await File.ReadAllTextAsync(
                 StructureMigrationTests.RollbackScriptPath(DocthecaMigrationExecutor.ClassifyLevelLessTitlesMigrationId)));
+        }
         else
             await context.GetService<IMigrator>().MigrateAsync(DocthecaMigrationExecutor.AddBlockFootnotesMigrationId);
         (await LevelsAsync(context)).Should().BeEquivalentTo(levels);
@@ -203,7 +207,7 @@ public sealed class HeadingClassificationMigrationTests(PostgreSqlMigrationFixtu
             {
                 await using var command = context.Database.GetDbConnection().CreateCommand();
                 var removed = legacy ? " - 'sequence' - 'structure_definition_id' - 'footnote'" : "";
-                command.CommandText = $"SELECT '{table}:' || (to_jsonb(t) - 'text_level'{removed})::text FROM {table} t ORDER BY 1";
+                command.CommandText = $"SELECT '{table}:' || (to_jsonb(t) - 'text_level' - 'required'{removed})::text FROM {table} t ORDER BY 1";
                 await using var reader = await command.ExecuteReaderAsync();
                 while (await reader.ReadAsync()) rows.Add(reader.GetString(0));
             }

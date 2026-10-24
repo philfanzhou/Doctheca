@@ -22,7 +22,7 @@ namespace Doctheca.Tests.Integration;
 /// cascade, concurrent saves, and the admin authorization boundary of the new routes.
 /// </summary>
 [Collection(ServiceMantleIntegrationCollection.Name)]
-public sealed class DocumentStructureEndpointTests(PostgreSqlFixture database) : ServiceMantleIntegrationTestBase(database)
+public sealed partial class DocumentStructureEndpointTests(PostgreSqlFixture database) : ServiceMantleIntegrationTestBase(database)
 {
     private readonly RecordingSearchIndex _searchIndex = new();
 
@@ -42,6 +42,7 @@ public sealed class DocumentStructureEndpointTests(PostgreSqlFixture database) :
     [Theory]
     [InlineData("GET", "/admin/structure-definitions")]
     [InlineData("POST", "/admin/structure-definitions")]
+    [InlineData("PUT", "/admin/structure-definitions/00000000-0000-0000-0000-000000000001")]
     [InlineData("GET", "/admin/document-parses/00000000-0000-0000-0000-000000000001/blocks")]
     [InlineData("GET", "/admin/document-parses/00000000-0000-0000-0000-000000000001/structure")]
     [InlineData("PUT", "/admin/document-parses/00000000-0000-0000-0000-000000000001/structure")]

@@ -355,6 +355,23 @@ every instance, back up, apply the page-label down script, then start the previo
 maintenance loses labels only; standard recovery restores the matching pre-upgrade backup.
 See [Migrations — Printed Page Label Upgrade](../database/migrations.md#printed-page-label-upgrade-issue-102).
 
+### Required-level policy upgrade (#129)
+
+The first start containing `20261024021500_AddRequiredStructureLevels` adds the non-null
+`structure_levels.required` boolean, default false for every saved level. Stop mixed-version
+writers and retain a verified database backup plus its matching image/configuration. Administrator
+levels gain an additive boolean/control (also in administrator tree definitions); a complete PUT
+from an older client that omits the field resets it to false. This records policy only; audio
+validation is not active. No configuration, port, storage or search-index change is required.
+
+An image-only downgrade is rejected by earlier schema/history checks. Standard recovery restores
+the pre-upgrade backup with its matching image/configuration and loses later writes. Optional
+maintenance instead stops every instance, takes a backup and runs the exact required-policy down
+script before starting the preceding image; it drops policy flags only, preserving earlier rows
+and objects. Re-forward resets flags false. Follow
+[Migrations — Required-level policy](../database/migrations.md#required-level-policy-issue-129)
+for the transactional script, later-down ordering and failure/retry contract.
+
 ## Startup Command
 
 ```bash

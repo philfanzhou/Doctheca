@@ -9,6 +9,67 @@ namespace Doctheca.Tests.Integration;
 
 public sealed partial class AdminHostedFrontendTests
 {
+    [Fact]
+    public async Task RequiredPolicyEditor_DefaultsValidatesReloadsEscapesNamesAndRetainsCsrfBoundary()
+    {
+        await using var h = await Open();
+        await h.Page.SetViewportSizeAsync(1600, 1000);
+        await h.Page.GotoAsync(h.Origin + "/#structures");
+        await h.Page.GetByRole(AriaRole.Button, new() { Name = "使用 SignaCore 登录" }).ClickAsync();
+        await h.Page.GetByRole(AriaRole.Button, new() { Name = "新建结构定义" }).ClickAsync();
+        var definitionName = "Policy " + Guid.NewGuid().ToString("N") + " <img src=x onerror=window.__pwned=1>";
+        var item = h.Page.Locator(".def-item").Filter(new() { HasText = definitionName });
+        await h.Page.Locator("#structure-definition-name").FillAsync(definitionName);
+        await h.Page.GetByLabel("层级 1 名称").FillAsync("Root <script>window.__pwned=2</script>");
+        await Assertions.Expect(h.Page.GetByLabel("层级 1 音频必需")).Not.ToBeCheckedAsync();
+        await Assertions.Expect(h.Page.GetByText("音频必需仅记录策略", new() { Exact = false })).ToBeVisibleAsync();
+        await h.Page.GetByRole(AriaRole.Button, new() { Name = "添加层级" }).ClickAsync();
+        await h.Page.GetByLabel("层级 2 名称").FillAsync("Child");
+        await Assertions.Expect(h.Page.GetByLabel("层级 2 音频必需")).Not.ToBeCheckedAsync();
+        await h.Page.GetByLabel("层级 2 音频必需").CheckAsync();
+        await h.Page.GetByRole(AriaRole.Button, new() { Name = "保存", Exact = true }).ClickAsync();
+        await Assertions.Expect(h.Page.Locator(".level-row").Nth(1).Locator(".field-error")).ToContainTextAsync("all ancestors");
+        await Assertions.Expect(item).ToHaveCountAsync(0);
+        await h.Page.GetByLabel("层级 1 音频必需").CheckAsync();
+        await h.Page.GetByRole(AriaRole.Button, new() { Name = "保存", Exact = true }).ClickAsync();
+        await Assertions.Expect(item).ToHaveCountAsync(1);
+        await h.Page.ReloadAsync();
+        await Assertions.Expect(item.Locator(".def-level .badge.amber")).ToHaveCountAsync(2);
+        await item.GetByRole(AriaRole.Button, new() { Name = "编辑", Exact = true }).ClickAsync();
+        await Assertions.Expect(h.Page.GetByLabel("层级 1 音频必需")).ToBeCheckedAsync();
+        await Assertions.Expect(h.Page.GetByLabel("层级 2 音频必需")).ToBeCheckedAsync();
+        await h.Page.GetByRole(AriaRole.Button, new() { Name = "添加层级" }).ClickAsync();
+        await h.Page.GetByLabel("层级 3 名称").FillAsync("Optional");
+        await Assertions.Expect(h.Page.GetByLabel("层级 3 音频必需")).Not.ToBeCheckedAsync();
+        await h.Page.GetByLabel("层级 1 音频必需").UncheckAsync();
+        await h.Page.GetByRole(AriaRole.Button, new() { Name = "保存", Exact = true }).ClickAsync();
+        await Assertions.Expect(h.Page.Locator(".level-row").Nth(1).Locator(".field-error")).ToContainTextAsync("all ancestors");
+        await h.Page.GetByLabel("层级 1 音频必需").CheckAsync();
+        await h.Page.GetByRole(AriaRole.Button, new() { Name = "保存", Exact = true }).ClickAsync();
+        await Assertions.Expect(h.Page.Locator(".def-editor")).ToHaveCountAsync(0);
+        await h.Page.ReloadAsync();
+        await Assertions.Expect(item.Locator(".def-level")).ToHaveCountAsync(3);
+        await Assertions.Expect(item.Locator(".def-level .badge.amber")).ToHaveCountAsync(2);
+        Assert.Equal(0, await h.Page.Locator(".def-list img, .def-list script").CountAsync());
+        Assert.True(await h.Page.EvaluateAsync<bool>("window.__pwned === undefined"));
+        var statuses = await h.Page.EvaluateAsync<int[]>("""
+            async name => {
+              const definitions = (await (await fetch('/admin/structure-definitions')).json()).data;
+              const definition = definitions.find(d => d.name === name);
+              const route = '/admin/structure-definitions/' + definition.id;
+              const body = JSON.stringify({ name: definition.name, levels: definition.levels });
+              const send = token => fetch(route, { method: 'PUT', body,
+                headers: { 'Content-Type': 'application/json', ...(token ? { 'X-CSRF-TOKEN': token } : {}) } });
+              const missing = await send();
+              const invalid = await send('invalid-csrf');
+              const pair = await (await fetch('/admin/auth/oidc/csrf')).json();
+              const valid = await send(pair.token);
+              return [missing.status, invalid.status, valid.status];
+            }
+            """, definitionName);
+        Assert.Equal([403, 403, 200], statuses);
+    }
+
     /// <summary>
     /// Issue #89 in the real console: a structure definition is created at runtime, chosen for a
     /// document, and its levels are marked on the continuous block view by click, shift-click and

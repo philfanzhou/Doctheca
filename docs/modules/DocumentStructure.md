@@ -34,13 +34,33 @@ Request body of POST and PUT (levels in display order; ids are optional for new 
 {
   "name": "English textbook",
   "levels": [
-    { "id": "8f1c…", "name": "Unit", "parentLevelId": null },
-    { "id": "2b7e…", "name": "Section", "parentLevelId": "8f1c…" }
+    { "id": "8f1c…", "name": "Unit", "parentLevelId": null, "required": true },
+    { "id": "2b7e…", "name": "Section", "parentLevelId": "8f1c…", "required": false }
   ]
 }
 ```
 
 Rules: name required (≤ 200), 1–50 levels, level names required (≤ 100), a parent must be a level of the same body, no self-parent or cycle, at least one top level, a level id owned by another definition is rejected. A level used by marked nodes may be renamed or reordered; removing it or changing its parent answers 409 `DOCTHECA_STRUCTURE_LEVEL_IN_USE`.
+
+The additive `required` boolean appears on every administrator definition level, including list,
+GET, POST/PUT results and the definition embedded in an administrator parse tree. Omission defaults
+to false; null and non-boolean values are invalid. POST and PUT replace the complete intended
+definition: an older PUT caller omitting `required` resets previously true flags to false.
+
+For each required level, **every ancestor must also be required**. A required prefix followed by
+optional descendants and an independent all-optional root branch are valid. ID ownership/duplicates,
+parent membership, self-parent and cycle validation finish before policy traversal. Violations return
+`400 DOCTHECA_STRUCTURE_INVALID` with a field error at each offending `levels[i].required`; no
+automatic repair or write occurs. Replacements lock the definition row inside the transaction before
+reading tracked levels; concurrent complete saves serialize and the later complete request wins.
+A pre-commit failure rolls back all name, hierarchy and flag changes. Existing definition APIs do
+not accept cancellation tokens; disconnecting is not a guarantee that a valid save is undone.
+
+This is recorded policy only: audio import/review, unlinked audio, playback, nodes, storage objects
+and search remain usable independently of flags. Policy changes are allowed even with existing
+nodes/audio. The internal v1 API does not expose `required`. Administrator/CSRF boundaries remain
+unchanged; callers must await the later #128 enforcement work before relying on audio validation.
+See [upgrade and recovery](../database/migrations.md#required-level-policy-issue-129).
 
 ### Choosing a document's definition
 
@@ -101,7 +121,7 @@ field and leaves stored labels intact.
 
 ## Admin Console
 
-- **结构定义** (sidebar, `#structures`): list, create, edit and delete definitions; each level has a name and an optional parent level, can be reordered, and the hierarchy is previewed.
+- **结构定义** (sidebar, `#structures`): list, create, edit and delete definitions; each level has a name, optional parent and default-false 音频必需 checkbox, can be reordered, and the hierarchy is previewed. Saved required levels carry a visible policy indicator; errors appear beside the level. The editor explains that audio enforcement is not active yet.
 - **Document detail** (`#detail/:fileId`): the file info card has a 结构定义 select (clearing it removes the choice).
 - **结构标注** (button on a parsed parse record, `#structure/:parseId`): all blocks of the parse in one continuous view (headings, text, tables, images, with sequence and page). Select a range by clicking a start block and shift-clicking the end block, or by dragging; the selection bar offers only the levels allowed at that position (the child levels of the deepest node containing the range, or the top levels) and pre-fills the name from the first block. The tree panel edits names, selects or replaces a node's range, deletes nodes, and scrolls to each range. 保存 sends the whole tree; 重新加载 discards local edits; 重建索引 re-indexes the parse.
 - **Untrusted content:** table HTML from parse results is never inserted into the page. It is parsed into an inert `DOMParser` document (no scripts run, no resources load), `script`/`style`/`template`/`noscript` elements are dropped, and only cell text (with row/column spans) is rendered by Vue as escaped text. No sanitizer dependency was added.
@@ -112,3 +132,8 @@ field and leaves stored labels intact.
 - PostgreSQL: `Database/StructureMigrationTests` (populated upgrade, rollback script, refused histories), `Integration/DocumentStructureEndpointTests` (end-to-end API, 401/403/404/409, concurrent saves), `Integration/DocumentStructurePageLabelTests` (both block views, exact labels and old fields, cursor bounds, legacy/missing data, optional lookup failure, cancellation and concurrent page replacement).
 - OpenSearch: `OpenSearch/OpenSearchStructureSearchTests` against a real `opensearchproject/opensearch:2.19.1` container.
 - Browser: `Integration/AdminHostedFrontendTests.StructureIsConfiguredMarkedSavedAndReloadedInTheConsole` (Playwright) and `frontend/tests/structure-tree.mjs`.
+
+Required-policy acceptance is exercised by `RequiredPolicyMigrationTests` (populated/fresh schema,
+refusal, failure/cancellation, concurrent startup and both down paths), `RequiredPolicyRepositoryTests`
+(controlled real PostgreSQL replacement locking/rollback), and the policy cases in
+`DocumentStructureEndpointTests` and `AdminHostedFrontendTests`.
