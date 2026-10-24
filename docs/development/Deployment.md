@@ -392,6 +392,13 @@ python3 scripts/verify-container-startup.py doctheca:startup-verify
 
 The check creates an isolated PostgreSQL 16 container/network and runtime-only synthetic credentials. Without adding `--init` or overriding the entrypoint, it checks invalid AllowCreate, missing-target default refusal, unreachable PostgreSQL, and authentication refusal for actual non-zero container exit, no HTTP listener, safe codes, no credential disclosure, and no missing-target creation. It also checks successful startup, exact health responses, a single gate invocation, and graceful SIGTERM shutdown. Containers, the network, and temporary configuration files are cleaned up. CI runs this check against the release Dockerfile image.
 
+CI uses a separately pinned Playwright environment only for the full test suite;
+the production Dockerfile and this startup verifier remain unchanged. See
+[CI browser environment and rollback](verification.md#github-hosted-browser-test-environment)
+for its digest, host-tool mounts, cold/warm measurements and failure diagnostics.
+Reverting that CI optimization restores host browser installation without any
+production image, configuration or data change.
+
 Callers access Doctheca via `DocthecaService:Url` in Consul `config/ruoyu/service-endpoints.json`. For cross-host deployments this value must be a LAN IP and host-mapped port reachable by the callers, for example:
 
 ```json
