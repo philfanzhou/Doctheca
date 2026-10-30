@@ -537,8 +537,12 @@ consumer in the shared Consul KV. Environment variables use double underscores, 
 | `IdleLifetimeSeconds` | `Connection Idle Lifetime` | integer >= 0 |
 | `PruningIntervalSeconds` | `Connection Pruning Interval` | integer >= 1 |
 | `ConnectionLifetimeSeconds` | `Connection Lifetime` | integer >= 0 |
-| `ConnectionTimeoutSeconds` | `Timeout` | integer >= 0 |
+| `ConnectionTimeoutSeconds` | `Timeout` | integer 0–1024 |
 | `CommandTimeoutSeconds` | `Command Timeout` | integer >= 0 |
+
+With pooling enabled, idle lifetime must be at least the pruning interval (defaults: 300 and 10 seconds).
+`MaximumSize` limits physical connections only when pooling is enabled. Mixed aliases follow Npgsql's
+last-value-wins rule.
 
 `Database:ApplicationName` optionally sets `Application Name`. It must be nonempty and contain
 no control characters. Explicit service settings override fallback connection-string pool

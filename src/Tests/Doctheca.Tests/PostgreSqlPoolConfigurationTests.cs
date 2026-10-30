@@ -59,8 +59,12 @@ public sealed class PostgreSqlPoolConfigurationTests
     [InlineData("MinimumSize", "-1")]
     [InlineData("MinimumSize", "101")]
     [InlineData("IdleLifetimeSeconds", "-1")]
+    [InlineData("IdleLifetimeSeconds", "0")]
+    [InlineData("IdleLifetimeSeconds", "9")]
     [InlineData("PruningIntervalSeconds", "0")]
+    [InlineData("PruningIntervalSeconds", "301")]
     [InlineData("ConnectionTimeoutSeconds", "-1")]
+    [InlineData("ConnectionTimeoutSeconds", "1025")]
     [InlineData("CommandTimeoutSeconds", "")]
     public void InvalidBudgetIsRejectedWithoutValuesOrInnerExceptions(string key, string value)
     {
@@ -75,6 +79,30 @@ public sealed class PostgreSqlPoolConfigurationTests
     public void MinimumCannotExceedTheEffectiveMaximum()
     {
         Assert.Throws<InvalidOperationException>(() => Build(Config([.. Shared, ("Database:Pool:MaximumSize", "2"), ("Database:Pool:MinimumSize", "3")])));
+    }
+
+    [Fact]
+    public void PoolPruningUsesEffectiveDefaultsAndConnectionTimeoutAcceptsTheDriverBoundary()
+    {
+        var result = Build(Config([.. Shared, ("Database:Pool:IdleLifetimeSeconds", "1"),
+            ("Database:Pool:PruningIntervalSeconds", "1"), ("Database:Pool:ConnectionTimeoutSeconds", "1024")]));
+        Assert.Equal("1", result["Connection Idle Lifetime"].ToString());
+        Assert.Equal("1024", result["Timeout"].ToString());
+        var unpooled = Build(Config([.. Shared, ("Database:Pool:IdleLifetimeSeconds", "0")]), "Pooling=false");
+        Assert.Equal("0", unpooled["Connection Idle Lifetime"].ToString());
+    }
+
+    [Theory]
+    [InlineData(false, "MaxPoolSize=2;Maximum Pool Size=5", "5")]
+    [InlineData(true, "MaxPoolSize=2;Maximum Pool Size=5", "5")]
+    [InlineData(false, "Maximum Pool Size=5;MaxPoolSize=2", "2")]
+    [InlineData(true, "Maximum Pool Size=5;MaxPoolSize=2", "2")]
+    [InlineData(false, "MaxPoolSize=2;Maximum Pool Size=5;MaxPoolSize=9", "9")]
+    [InlineData(true, "MaxPoolSize=2;Maximum Pool Size=5;MaxPoolSize=9", "9")]
+    public void MixedPoolAliasesKeepTheLastValueInBothPaths(bool shared, string options, string expected)
+    {
+        var result = Build(Config(shared ? Shared : []), "Host=fixture;Username=fixture;" + options);
+        Assert.Equal(expected, result["Maximum Pool Size"].ToString());
     }
 
     [Fact]

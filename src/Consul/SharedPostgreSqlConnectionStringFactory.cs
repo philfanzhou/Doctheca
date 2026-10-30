@@ -1,4 +1,5 @@
 using System.Data.Common;
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using Microsoft.Extensions.Configuration;
 
@@ -28,7 +29,7 @@ public static class SharedPostgreSqlConnectionStringFactory
 
         try
         {
-            var fallback = new DbConnectionStringBuilder { ConnectionString = fallbackConnectionString ?? string.Empty };
+            var fallback = new PoolConnectionStringBuilder { ConnectionString = fallbackConnectionString ?? string.Empty };
             var builder = shared ? new DbConnectionStringBuilder() : fallback;
             if (shared)
             {
@@ -41,11 +42,6 @@ public static class SharedPostgreSqlConnectionStringFactory
                 builder["Username"] = username!;
                 if (!string.IsNullOrWhiteSpace(configuration["PostgreSql:Password"])) builder["Password"] = configuration["PostgreSql:Password"]!;
             }
-            foreach (var key in builder.Keys.Cast<string>().ToArray())
-                if (PoolKeyword(key) is { } canonical && !string.Equals(key, canonical, StringComparison.OrdinalIgnoreCase))
-                {
-                    var value = builder[key]; builder.Remove(key); builder[canonical] = value;
-                }
             foreach (var (setting, keyword, minimum) in PoolSettings)
             {
                 var configured = configuration["Database:Pool:" + setting];
@@ -56,11 +52,15 @@ public static class SharedPostgreSqlConnectionStringFactory
                 && Integer(minimumSize, 0) > Integer(maximum, 1)) throw Invalid();
             if (Find(builder, "Minimum Pool Size") is { } minimumOnly && Find(builder, "Maximum Pool Size") is null
                 && Integer(minimumOnly, 0) > 100) throw Invalid();
+            var poolingEnabled = true;
             if (Find(builder, "Pooling") is { } pooling)
             {
-                if (!bool.TryParse(pooling, out var enabled)) throw Invalid();
-                builder["Pooling"] = enabled;
+                if (!bool.TryParse(pooling, out poolingEnabled)) throw Invalid();
+                builder["Pooling"] = poolingEnabled;
             }
+            if (poolingEnabled && Integer(Find(builder, "Connection Idle Lifetime") ?? "300", 0)
+                < Integer(Find(builder, "Connection Pruning Interval") ?? "10", 1)) throw Invalid();
+            if (Find(builder, "Timeout") is { } timeout && Integer(timeout, 0) > 1024) throw Invalid();
             if (configuration["Database:ApplicationName"] is { } application)
             {
                 if (string.IsNullOrWhiteSpace(application) || application.Any(char.IsControl)) throw Invalid();
@@ -98,4 +98,15 @@ public static class SharedPostgreSqlConnectionStringFactory
             ? parsed : throw Invalid();
 
     private static InvalidOperationException Invalid() => new("PostgreSQL connection pool configuration is invalid.");
+
+    private sealed class PoolConnectionStringBuilder : DbConnectionStringBuilder
+    {
+        // Canonicalize while parsing, so mixed aliases retain the driver's last-value-wins rule.
+        [AllowNull]
+        public override object this[string keyword]
+        {
+            get => base[PoolKeyword(keyword) ?? keyword];
+            set => base[PoolKeyword(keyword) ?? keyword] = value;
+        }
+    }
 }
