@@ -2,6 +2,9 @@ namespace Doctheca.Consul;
 
 public static class StartupDiagnosticsFormatter
 {
+    public static string SummarizePostgreSqlPool(int maximum, int minimum, int idleSeconds, int pruningSeconds, int timeoutSeconds, bool pooling) =>
+        $"MaximumPoolSize={maximum}, MinimumPoolSize={minimum}, IdleLifetimeSeconds={idleSeconds}, PruningIntervalSeconds={pruningSeconds}, ConnectionTimeoutSeconds={timeoutSeconds}, Pooling={pooling}";
+
     public static string MaskSecret(string? value)
     {
         if (string.IsNullOrWhiteSpace(value))

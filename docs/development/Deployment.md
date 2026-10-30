@@ -523,3 +523,43 @@ This capability adds no schema/history/backfill, object rewrite, package, config
 The administrator audio page now previews in memory and submits additions, explicit targets, existing link edits/removals once; every retained file must satisfy the committed Required-level graph. Old clients that rely on matching to confirm links must send explicit targets, and invalid existing retained audio must be fixed/removed before the next import/review Save. Single-file DELETE remains recovery. Policy edits retain data and playback.
 
 An older binary cannot read the new namespace even though no migration was added. Stop mixed-version writers, retain audio objects, and restore a compatible image or a verified database backup with its matching image/configuration/storage set. Restoring that backup loses subsequent metadata writes. Do not delete bytes, fabricate parses or rewrite old keys to make an image-only downgrade appear compatible. The existing ownership-schema Down refusal and backup procedure still apply. See [audio usage and API](../modules/StructureAudio.md).
+
+## PostgreSQL connection pool budgets
+
+Pool settings are service-private, under `Database:Pool`; do not put one maximum for every
+consumer in the shared Consul KV. Environment variables use double underscores, for example
+`Database__Pool__MaximumSize=6`. Supported keys are:
+
+| Key | Npgsql connection-string option | Valid values |
+| --- | --- | --- |
+| `MaximumSize` | `Maximum Pool Size` | integer >= 1 |
+| `MinimumSize` | `Minimum Pool Size` | integer >= 0, no greater than the maximum |
+| `IdleLifetimeSeconds` | `Connection Idle Lifetime` | integer >= 0 |
+| `PruningIntervalSeconds` | `Connection Pruning Interval` | integer >= 1 |
+| `ConnectionLifetimeSeconds` | `Connection Lifetime` | integer >= 0 |
+| `ConnectionTimeoutSeconds` | `Timeout` | integer 0–1024 |
+| `CommandTimeoutSeconds` | `Command Timeout` | integer >= 0 |
+
+With pooling enabled, idle lifetime must be at least the pruning interval (defaults: 300 and 10 seconds).
+`MaximumSize` limits physical connections only when pooling is enabled. Mixed aliases follow Npgsql's
+last-value-wins rule.
+
+`Database:ApplicationName` optionally sets `Application Name`. It must be nonempty and contain
+no control characters. Explicit service settings override fallback connection-string pool
+options. When shared PostgreSQL credentials are complete, they still replace fallback host,
+port, database and credentials; only the listed pool/timing options, `Pooling` and application
+name survive from the fallback. Without complete shared credentials, the ordinary fallback
+connection string remains supported and receives the same explicit service overrides.
+Malformed values fail startup with a fixed message and no configuration values or inner exception.
+Omitted settings preserve driver defaults; adding this capability alone does not impose a budget.
+
+Startup logs report effective pool sizes, idle/pruning intervals, connection timeout and pooling
+state without credentials. Confirm the effective values after rebuilding every consumer.
+Budget the sum of maximum sizes across every pool and service replica below both the shared
+login role limit and PostgreSQL's total connection limit, leaving room for identity, maintenance
+and migrations. Include background workers and separate pools with different connection strings.
+A closed logical connection usually returns its physical connection to its own pool; that idle
+connection still counts against the login role limit. Shorter transactions and HTTP throttling
+therefore complement pool budgets rather than replacing them. No schema or data migration is
+required. Rollback removes the service-specific overrides and restores the previous application
+version; it does not change database role limits or learning records.
