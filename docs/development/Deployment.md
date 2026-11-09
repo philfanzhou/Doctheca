@@ -423,14 +423,13 @@ The service automatically performs the following at startup:
 Newly published release images contain both `linux/amd64` and `linux/arm64` under the same
 tag. Docker selects the matching platform automatically, including ARM64 when Colima
 runs an `aarch64` VM on Apple Silicon. Existing version tags are unchanged; use a
-version published after multi-platform support was added, or a new `edge` image where
-that channel is available. `docker buildx imagetools inspect <image>:<tag>` lists
-the platforms included in a published tag.
+version published after multi-platform support was added. `docker buildx imagetools
+inspect <image>:<tag>` lists the platforms included in a published tag.
 
 The Node and .NET SDK stages run on the build host and produce static web assets and
 framework-dependent assemblies. The runtime base image and OS packages follow the
-target architecture. CI builds both complete images without publishing on pull
-requests, and publishing waits for that check as well as the existing tests.
+target architecture. CI builds both complete images on release tags without publishing them
+first, and publishing waits for that check as well as the existing tests.
 
 
 `start.sh` runs the locally built `doctheca:latest` by default; when using a published image, specify `IMAGE_REPO` and `IMAGE_TAG`:
@@ -440,11 +439,11 @@ docker pull ghcr.io/philfanzhou/doctheca:0.1.0
 IMAGE_REPO=ghcr.io/philfanzhou/doctheca IMAGE_TAG=0.1.0 ./start.sh
 ```
 
-GitHub Actions (`.github/workflows/ci.yml`) runs builds, tests and image builds on PRs, `main` pushes and release tags; only `main` pushes and tags publish images to `ghcr.io/philfanzhou/doctheca`.
+GitHub Actions (`.github/workflows/ci.yml`) runs builds, tests and image builds on PRs, `main` pushes and release tags; only release tags publish images to `ghcr.io/philfanzhou/doctheca` or create GitHub Releases.
 
 | Trigger | Published image tag | GitHub Release |
 |------|---------------|----------------|
-| Merge to `main` | `edge` (moves with the latest commit; not a formal release) | none |
+| Merge to `main` | none (CI only) | none |
 | `vMAJOR.MINOR.PATCH` tag | `MAJOR.MINOR.PATCH`, `MAJOR.MINOR`, `latest` | Formal release, marked as latest |
 | `vMAJOR.MINOR.PATCH-rc.NUMBER` tag | `MAJOR.MINOR.PATCH-rc.NUMBER` only | Pre-release; does not move `MAJOR.MINOR` or `latest` |
 
@@ -458,14 +457,12 @@ git push origin v0.1.0
 
 Release candidates use the `-rc.NUMBER` suffix, e.g. `git tag -a v0.1.0-rc.1 -m "v0.1.0-rc.1"`. Tags in any other format are rejected by CI.
 
-After a tag is pushed, the full `Build & Test` runs first; once it passes, the following execute in order:
+After a tag is pushed, the full `Build & Test` and the multi-platform image build run first; once they pass, the following execute in order:
 
 1. **Publish GHCR Image**: build and push the image, with provenance and SBOM attached.
 2. **Publish GitHub Release**: create a Release for the tag, record the digest of the actually published image, and attach the GitHub auto-generated changelog.
 
 A Release is created only for tags whose tests pass and whose image is pullable. When the pipeline for a tag fails, neither the image nor a Release is published; fix the cause and cut a new version number — do not move a failed tag. Re-running the pipeline for a tag that already has a Release will not overwrite manually edited Release notes.
-
-Each `edge` push leaves the old manifest as an untagged package version in GHCR; GHCR does not clean these up automatically — delete them manually in the package settings when needed.
 
 ## Database Backup & Restore
 
