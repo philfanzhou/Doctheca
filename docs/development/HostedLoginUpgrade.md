@@ -66,7 +66,7 @@ below; rolling back this transport correction alone does not restore the passwor
 ## Package adoption (issue #70)
 
 The self-written OIDC protocol slice was replaced by the official `SignaCore.Client.AspNetCore`
-client (currently 0.1.18). Routes, the session Cookie name, the CSRF header name, configuration keys and
+client (currently 0.1.21). Routes, the session Cookie name, the CSRF header name, configuration keys and
 the admin policy's role assertion are unchanged; wire-level presentation differences are:
 
 - Token redemption and logout preparation authenticate with HTTP Basic instead of a form-carried
@@ -109,3 +109,14 @@ are rejected. The new `UserCanceled` and `PreSignInDenied` reasons both retain t
 
 Rollback uses the previous complete API/SPA image; in-process sessions require sign-in again.
 Persisted business data and configuration keys are unchanged by this dependency upgrade.
+
+## Dependency alignment (SignaCore 0.1.21)
+
+The client package moves from 0.1.18 to 0.1.21. The SignaCore 0.1.18 through 0.1.21 releases ship
+client packages with identical sources, so this alignment changes no route, response shape, Cookie,
+validation default or configuration key. It needs no SQL or configuration migration and no operator
+action; hosted login, the CSRF boundary and prepared logout behave exactly as before.
+
+Rollback restores the previous project-file package version, or the previous complete API/SPA
+image. No data or configuration rollback applies; a process restart still loses the in-process
+sessions.

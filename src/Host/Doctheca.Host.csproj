@@ -14,7 +14,7 @@
     <!-- Official SignaCore hosted-login client (issue #70): owns the OIDC code flow, the
          server-side session tickets, the CSRF boundary, and the prepared logout. The host keeps
          only the thin adaptation layer in src/Host/Authentication. -->
-    <PackageReference Include="SignaCore.Client.AspNetCore" Version="0.1.18" />
+    <PackageReference Include="SignaCore.Client.AspNetCore" Version="0.1.21" />
     <PackageReference Include="ServiceMantle.Diagnostics" Version="0.3.3" />
     <!-- PostgreSQL migration capabilities for the startup orchestration (issue #53): the
          session advisory lock provider (PostgreSqlMigrationLockProvider) and the target
