@@ -62,7 +62,7 @@ public sealed partial class AdminOidcIntegrationTests
             ["Logging:LogLevel:Microsoft.AspNetCore"] = "Trace" };
         if (missing is not null) settings[missing] = "";
         using var factory = CreateFactory(settings: settings, configureTestServices: services => {
-            services.AddHttpClient(SignaCoreHostedLoginDefaults.HttpClientName)
+            services.AddHttpClient(HostedLoginDefaults.HttpClientName)
                 .ConfigurePrimaryHttpMessageHandler(() => authority);
             // Consume the real host's filters: a standalone factory bypasses the production
             // category protection and cannot verify its registration on unavailable paths.
@@ -121,7 +121,7 @@ public sealed partial class AdminOidcIntegrationTests
             ["IdentityService:Authority"] = OidcTestAuthority.Issuer, ["IdentityService:AppId"] = OidcTestAuthority.ClientId,
             ["IdentityService:AppSecret"] = OidcTestAuthority.Secret, [missing] = "" };
         using var factory = CreateFactory(settings: settings, configureTestServices: services => {
-            services.AddHttpClient(SignaCoreHostedLoginDefaults.HttpClientName)
+            services.AddHttpClient(HostedLoginDefaults.HttpClientName)
                 .ConfigurePrimaryHttpMessageHandler(() => authority);
             services.RemoveAll<ILoggerFactory>();
             services.AddSingleton<ILoggerFactory>(new LoggerFactory([logs]));

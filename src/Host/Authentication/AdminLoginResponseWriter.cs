@@ -11,13 +11,13 @@ namespace Doctheca.Host.Authentication;
 /// endpoint keeps its <c>success</c>/<c>data</c> envelope.
 /// </summary>
 /// <remarks>
-/// Reason mapping: <see cref="SignaCoreSignInReason.UserCanceled"/> and
-/// <see cref="SignaCoreSignInReason.PreSignInDenied"/> both surface as
+/// Reason mapping: <see cref="SignInReason.UserCanceled"/> and
+/// <see cref="SignInReason.PreSignInDenied"/> both surface as
 /// <c>authError=notAdmin</c>; discovery and token-endpoint transport failures surface as
 /// <c>authError=identityUnavailable</c>; every other protocol failure surfaces as
 /// <c>authError=signInFailed</c>. No other failure detail ever reaches the browser.
 /// </remarks>
-public sealed class AdminLoginResponseWriter : ISignaCoreHostedLoginResponseWriter
+public sealed class AdminLoginResponseWriter : IHostedLoginResponseWriter
 {
     public static readonly AdminLoginResponseWriter Instance = new();
 
@@ -27,10 +27,10 @@ public sealed class AdminLoginResponseWriter : ISignaCoreHostedLoginResponseWrit
     internal const string InvalidReturnUrlMessage = "The return URL must be a path inside this site.";
     internal const string ReauthenticationRequired = "Re-authentication is required.";
 
-    public Task WriteSignInFailureAsync(HttpContext context, SignaCoreSignInReason reason,
+    public Task WriteSignInFailureAsync(HttpContext context, SignInReason reason,
         CancellationToken cancellationToken)
     {
-        if (reason == SignaCoreSignInReason.InvalidReturnUrl)
+        if (reason == SignInReason.InvalidReturnUrl)
         {
             context.Response.StatusCode = StatusCodes.Status400BadRequest;
             return context.Response.WriteAsJsonAsync(
@@ -40,7 +40,7 @@ public sealed class AdminLoginResponseWriter : ISignaCoreHostedLoginResponseWrit
         return Task.CompletedTask;
     }
 
-    public Task WriteFailurePageAsync(HttpContext context, SignaCoreSignInReason? reason,
+    public Task WriteFailurePageAsync(HttpContext context, SignInReason? reason,
         CancellationToken cancellationToken)
     {
         // The failure page segment is only reached by a browser navigation that the failure
@@ -50,7 +50,7 @@ public sealed class AdminLoginResponseWriter : ISignaCoreHostedLoginResponseWrit
         return Task.CompletedTask;
     }
 
-    public async Task WriteSessionStatusAsync(HttpContext context, SignaCoreSessionStatus status,
+    public async Task WriteSessionStatusAsync(HttpContext context, SessionStatus status,
         CancellationToken cancellationToken)
     {
         if (!status.Authenticated)
@@ -89,11 +89,11 @@ public sealed class AdminLoginResponseWriter : ISignaCoreHostedLoginResponseWrit
         }, cancellationToken);
     }
 
-    internal static string RedirectTarget(SignaCoreSignInReason reason) => reason switch
+    internal static string RedirectTarget(SignInReason reason) => reason switch
     {
-        SignaCoreSignInReason.AccessDenied or SignaCoreSignInReason.UserCanceled
-            or SignaCoreSignInReason.PreSignInDenied => DeniedRedirect,
-        SignaCoreSignInReason.AuthorityUnreachable => IdentityUnavailableRedirect,
+        SignInReason.AccessDenied or SignInReason.UserCanceled
+            or SignInReason.PreSignInDenied => DeniedRedirect,
+        SignInReason.AuthorityUnreachable => IdentityUnavailableRedirect,
         _ => SignInFailedRedirect,
     };
 }

@@ -11,7 +11,7 @@ Old access/refresh Cookies no longer authenticate, refresh or revoke sessions.
 ## Shared and local responsibilities
 
 Since issue #70 the OIDC protocol runs in the official `SignaCore.Client.AspNetCore` package
-(0.1.21): it owns the authorization-code request, the hardened single-use callback, strict ID and
+(0.1.22): it owns the authorization-code request, the hardened single-use callback, strict ID and
 access-token validation, issuer/subject correlation, the bounded server-side ticket/pending/return
 stores with their sweep, the user-neutral CSRF boundary, the local-session-first prepared logout,
 and secret-free bounded logging. Doctheca keeps a thin adaptation layer in

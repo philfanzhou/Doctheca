@@ -59,7 +59,7 @@ public sealed class AdminOidcSessionMiddleware(RequestDelegate next)
                 }
             }
 
-            var session = await context.AuthenticateAsync(SignaCoreHostedLoginDefaults.SessionAuthenticationScheme);
+            var session = await context.AuthenticateAsync(HostedLoginDefaults.SessionAuthenticationScheme);
             if (session.Succeeded)
             {
                 // The session handler has already enforced the antiforgery boundary for unsafe

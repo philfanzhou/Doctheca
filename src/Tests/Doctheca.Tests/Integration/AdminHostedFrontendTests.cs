@@ -84,7 +84,7 @@ public sealed partial class AdminHostedFrontendTests(PostgreSqlFixture database,
         var time = new ManualOidcTime();
         var factory = CreateFactory(root, services =>
         {
-            services.AddHttpClient(SignaCore.Client.AspNetCore.SignaCoreHostedLoginDefaults.HttpClientName)
+            services.AddHttpClient(SignaCore.Client.AspNetCore.HostedLoginDefaults.HttpClientName)
                 .ConfigurePrimaryHttpMessageHandler(() => authority);
             services.Replace(ServiceDescriptor.Singleton<TimeProvider>(time));
             configureServices?.Invoke(services);

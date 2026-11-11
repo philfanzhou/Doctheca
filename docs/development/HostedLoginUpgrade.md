@@ -66,7 +66,7 @@ below; rolling back this transport correction alone does not restore the passwor
 ## Package adoption (issue #70)
 
 The self-written OIDC protocol slice was replaced by the official `SignaCore.Client.AspNetCore`
-client (currently 0.1.21). Routes, the session Cookie name, the CSRF header name, configuration keys and
+client (currently 0.1.22). Routes, the session Cookie name, the CSRF header name, configuration keys and
 the admin policy's role assertion are unchanged; wire-level presentation differences are:
 
 - Token redemption and logout preparation authenticate with HTTP Basic instead of a form-carried
@@ -120,3 +120,20 @@ action; hosted login, the CSRF boundary and prepared logout behave exactly as be
 Rollback restores the previous project-file package version, or the previous complete API/SPA
 image. No data or configuration rollback applies; a process restart still loses the in-process
 sessions.
+
+## Source-level rename alignment (SignaCore 0.1.22)
+
+The client package moves from 0.1.21 to 0.1.22. SignaCore 0.1.22 renames the package's public
+types by dropping the redundant `SignaCore` prefix (`HostedLoginOptions`, `HostedLoginDefaults`,
+`IHostedLoginResponseWriter`, `SignInReason`, `SessionStatus`, `SessionTicket`,
+`IAuthorizationDecision`, `IPreSignInAuthorizationDecision`, `ProtocolValidationOptions`, and the
+EF store's `SessionTicketEntity`/`TicketStore*Extensions`). The registration and mapping extension
+methods (`AddSignaCoreHostedLogin`, `MapSignaCoreHostedLogin`, `ConfigureSignaCoreTicketStore`,
+`AddSignaCoreEntityFrameworkTicketStore`), the authentication scheme and HttpClient names, the
+session Cookie name, the CSRF header, the ticket table name, and the Data Protection purpose
+strings are unchanged, so runtime behavior, wire protocol, and configuration are identical to
+0.1.21. The adaptation is compile-time only: the host's `options.Validation.ClockSkew` assignment
+keeps its property name under the renamed `ProtocolValidationOptions` type.
+
+Rollback restores the previous project-file package version together with the previous type names,
+or the previous complete API/SPA image. No SQL or configuration migration applies.

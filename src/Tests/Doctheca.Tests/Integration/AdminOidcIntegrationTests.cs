@@ -34,7 +34,7 @@ public sealed partial class AdminOidcIntegrationTests(PostgreSqlFixture database
         {
             // The package consumes the authority through its named backchannel client; the short
             // timeout keeps held responses fail closed within the test budgets.
-            services.AddHttpClient(SignaCoreHostedLoginDefaults.HttpClientName)
+            services.AddHttpClient(HostedLoginDefaults.HttpClientName)
                 .ConfigureHttpClient(client => client.Timeout = TimeSpan.FromSeconds(2))
                 .ConfigurePrimaryHttpMessageHandler(() => authority);
             if (time is not null) services.Replace(ServiceDescriptor.Singleton<TimeProvider>(time));
@@ -360,7 +360,7 @@ public sealed partial class AdminOidcIntegrationTests(PostgreSqlFixture database
         using var authority = new OidcTestAuthority { TokenScope = scope };
         using var factory = OidcFactory(authority);
         using var client = Browser(factory);
-        var validation = factory.Services.GetRequiredService<IOptions<SignaCoreHostedLoginOptions>>().Value.Validation;
+        var validation = factory.Services.GetRequiredService<IOptions<HostedLoginOptions>>().Value.Validation;
         Assert.Equal(TimeSpan.FromSeconds(30), validation.ClockSkew);
         Assert.True(validation.RejectFutureIssuedAt);
         Assert.True(validation.RequireScopeEchoSubset);
@@ -605,7 +605,7 @@ public sealed partial class AdminOidcIntegrationTests(PostgreSqlFixture database
         using var authority = new OidcTestAuthority();
         var gate = new HeldPreSignInDecision();
         using var factory = OidcFactory(authority, configure: services =>
-            services.Configure<SignaCoreHostedLoginOptions>(options =>
+            services.Configure<HostedLoginOptions>(options =>
             { options.PreSignInAuthorizationDecision = gate; options.PreSignInAuthorizationTimeout = TimeSpan.FromMilliseconds(200); }));
         using var client = Browser(factory);
         var handshake = await Start(client);
@@ -615,13 +615,13 @@ public sealed partial class AdminOidcIntegrationTests(PostgreSqlFixture database
         gate.Release();
     }
 
-    private sealed class HeldPreSignInDecision : ISignaCorePreSignInAuthorizationDecision
+    private sealed class HeldPreSignInDecision : IPreSignInAuthorizationDecision
     {
         private readonly TaskCompletionSource _release = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        public ValueTask<SignaCoreAuthorizationDecisionResult> DecideAsync(
-            SignaCorePreSignInAuthorizationContext context, CancellationToken cancellationToken)
+        public ValueTask<AuthorizationDecisionResult> DecideAsync(
+            PreSignInAuthorizationContext context, CancellationToken cancellationToken)
             => new(_release.Task.WaitAsync(cancellationToken).ContinueWith(
-                _ => SignaCoreAuthorizationDecisionResult.Allowed, CancellationToken.None));
+                _ => AuthorizationDecisionResult.Allowed, CancellationToken.None));
         public void Release() => _release.TrySetResult();
     }
 }

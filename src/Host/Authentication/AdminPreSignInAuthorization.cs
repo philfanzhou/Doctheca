@@ -14,19 +14,19 @@ namespace Doctheca.Host.Authentication;
 /// The decision is a pure claim assertion on the verified access-token principal: no side
 /// effects, no I/O, and it honours the cancellation token so timeouts cancel promptly.
 /// </remarks>
-public sealed class AdminPreSignInAuthorizationDecision : ISignaCorePreSignInAuthorizationDecision
+public sealed class AdminPreSignInAuthorizationDecision : IPreSignInAuthorizationDecision
 {
     public static readonly AdminPreSignInAuthorizationDecision Instance = new();
 
-    public ValueTask<SignaCoreAuthorizationDecisionResult> DecideAsync(
-        SignaCorePreSignInAuthorizationContext context, CancellationToken cancellationToken)
+    public ValueTask<AuthorizationDecisionResult> DecideAsync(
+        PreSignInAuthorizationContext context, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
         var allowed = context.AccessTokenPrincipal.Claims.Any(claim =>
             claim.Type is "role" or ClaimTypes.Role
             && string.Equals(claim.Value, "admin", StringComparison.OrdinalIgnoreCase));
         return ValueTask.FromResult(allowed
-            ? SignaCoreAuthorizationDecisionResult.Allowed
-            : SignaCoreAuthorizationDecisionResult.Denied);
+            ? AuthorizationDecisionResult.Allowed
+            : AuthorizationDecisionResult.Denied);
     }
 }
