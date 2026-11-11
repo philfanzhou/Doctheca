@@ -243,17 +243,17 @@ public sealed class AdminOidcStoresTests
     /// end-to-end by the integration suite (admin flow, non-admin denial, decision timeout).
     /// </summary>
     [Theory]
-    [InlineData(SignaCoreSignInReason.AccessDenied, "/?authError=notAdmin")]
-    [InlineData(SignaCoreSignInReason.UserCanceled, "/?authError=notAdmin")]
-    [InlineData(SignaCoreSignInReason.PreSignInDenied, "/?authError=notAdmin")]
-    [InlineData(SignaCoreSignInReason.AuthorityUnreachable, "/?authError=identityUnavailable")]
-    [InlineData(SignaCoreSignInReason.StateMismatch, "/?authError=signInFailed")]
-    [InlineData(SignaCoreSignInReason.IssuerMismatch, "/?authError=signInFailed")]
-    [InlineData(SignaCoreSignInReason.InvalidResponse, "/?authError=signInFailed")]
-    [InlineData(SignaCoreSignInReason.TokenExchangeFailed, "/?authError=signInFailed")]
-    [InlineData(SignaCoreSignInReason.InvalidToken, "/?authError=signInFailed")]
-    [InlineData(SignaCoreSignInReason.SessionStoreFull, "/?authError=signInFailed")]
-    public void SignInFailuresRedirectToBoundedSpaTargets(SignaCoreSignInReason reason, string expected)
+    [InlineData(SignInReason.AccessDenied, "/?authError=notAdmin")]
+    [InlineData(SignInReason.UserCanceled, "/?authError=notAdmin")]
+    [InlineData(SignInReason.PreSignInDenied, "/?authError=notAdmin")]
+    [InlineData(SignInReason.AuthorityUnreachable, "/?authError=identityUnavailable")]
+    [InlineData(SignInReason.StateMismatch, "/?authError=signInFailed")]
+    [InlineData(SignInReason.IssuerMismatch, "/?authError=signInFailed")]
+    [InlineData(SignInReason.InvalidResponse, "/?authError=signInFailed")]
+    [InlineData(SignInReason.TokenExchangeFailed, "/?authError=signInFailed")]
+    [InlineData(SignInReason.InvalidToken, "/?authError=signInFailed")]
+    [InlineData(SignInReason.SessionStoreFull, "/?authError=signInFailed")]
+    public void SignInFailuresRedirectToBoundedSpaTargets(SignInReason reason, string expected)
     {
         Assert.Equal(expected, AdminLoginResponseWriter.RedirectTarget(reason));
     }
@@ -265,7 +265,7 @@ public sealed class AdminOidcStoresTests
         var body = new MemoryStream();
         context.Response.Body = body;
         await AdminLoginResponseWriter.Instance.WriteSignInFailureAsync(
-            context, SignaCoreSignInReason.InvalidReturnUrl, CancellationToken.None);
+            context, SignInReason.InvalidReturnUrl, CancellationToken.None);
         Assert.Equal(StatusCodes.Status400BadRequest, context.Response.StatusCode);
         using var document = System.Text.Json.JsonDocument.Parse(body.ToArray());
         Assert.False(document.RootElement.GetProperty("success").GetBoolean());

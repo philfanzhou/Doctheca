@@ -58,11 +58,11 @@ public static class AdminOidcRegistration
             .PostConfigure(options => options.Cookie.Name = AdminOidcConstants.CsrfCookie);
         // The SPA consumes the protected API with explicit sign-in, so challenges must keep the
         // fixed 401 contract instead of redirecting anonymous API calls to the sign-in start.
-        services.AddOptions<PolicySchemeOptions>(SignaCoreHostedLoginDefaults.AuthenticationScheme)
+        services.AddOptions<PolicySchemeOptions>(HostedLoginDefaults.AuthenticationScheme)
             .Configure(options => options.ForwardChallenge = JwtBearerDefaults.AuthenticationScheme);
         // Backchannel timeouts keep the fixed identity-unavailable outcome (see the handler).
         services.AddTransient<AdminOidcBackchannelTimeoutHandler>();
-        services.AddHttpClient(SignaCoreHostedLoginDefaults.HttpClientName)
+        services.AddHttpClient(HostedLoginDefaults.HttpClientName)
             .AddHttpMessageHandler<AdminOidcBackchannelTimeoutHandler>();
         return services;
     }

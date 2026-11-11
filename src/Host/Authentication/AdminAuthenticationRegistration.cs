@@ -42,7 +42,7 @@ internal static class AdminAuthenticationRegistration
                 // JwtBearer handler and everything else by the package's session (issue #70).
                 policy.AddAuthenticationSchemes(JwtBearerDefaults.AuthenticationScheme);
                 if (AdminOidcSettings.Read(configuration, environment).Available)
-                    policy.AddAuthenticationSchemes(SignaCoreHostedLoginDefaults.AuthenticationScheme);
+                    policy.AddAuthenticationSchemes(HostedLoginDefaults.AuthenticationScheme);
                 policy.RequireAuthenticatedUser();
                 policy.RequireAssertion(context => context.User.Identities.Any(identity => identity.IsAuthenticated)
                     && context.User.Claims.Any(claim => claim.Type is "role" or ClaimTypes.Role
