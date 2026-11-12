@@ -238,6 +238,7 @@ public sealed partial class AdminOidcIntegrationTests(PostgreSqlFixture database
     [InlineData("sub-missing")][InlineData("sub-empty")]
     [InlineData("iss-empty")]
     [InlineData("exp-expired")][InlineData("nonce")][InlineData("nonce-missing")]
+    [InlineData("iat-missing")]
     [InlineData("nonce", true)]
     public async Task InvalidIdTokenIsRejectedWithoutTicket(string defect, bool http = false)
     {
@@ -251,14 +252,16 @@ public sealed partial class AdminOidcIntegrationTests(PostgreSqlFixture database
 
     /// <summary>
     /// Standard OIDC validation semantics of the framework handler (the replaced package applied
-    /// them too): a multi-valued <c>aud</c> containing the client id is valid, no <c>iat</c> claim
-    /// is demanded, an expiry is not cross-checked against <c>iat</c>, an unknown <c>kid</c> falls
-    /// back to the whole published JWKS, and duplicate flattened claims take their last value. The
-    /// ID token's <c>typ</c> header is not interpreted by the framework.
+    /// them too): a multi-valued <c>aud</c> containing the client id is valid, no future <c>iat</c>
+    /// restriction applies beyond the clock skew, an expiry is not cross-checked against
+    /// <c>iat</c>, an unknown <c>kid</c> falls back to the whole published JWKS, and duplicate
+    /// flattened claims take their last value. The ID token's <c>typ</c> header is not interpreted
+    /// by the framework, while its protocol validator does demand a present <c>iat</c> claim, so
+    /// that defect stays in the rejected matrix above.
     /// </summary>
     [Theory]
     [InlineData("aud-array")][InlineData("aud-single-array")]
-    [InlineData("iat-missing")][InlineData("iat-string")][InlineData("iat-near-future")]
+    [InlineData("iat-string")][InlineData("iat-near-future")]
     [InlineData("exp-before-iat")][InlineData("iss-duplicate")][InlineData("kid")]
     [InlineData("typ")]
     public async Task StandardOidcIdTokenToleranceSignsIn(string defect)

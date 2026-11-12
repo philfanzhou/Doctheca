@@ -126,13 +126,14 @@ Cookies. Application pages, redirects and logs never echo protocol values.
 
 The framework handler verifies the ID token's signature against the published JWKS, its issuer
 against the Discovery issuer, its application audience and its lifetime (30-second skew), and
-requires the handshake nonce. Standard OIDC semantics apply: a multi-valued `aud` containing the
-client id is accepted, no `iat` claim is demanded, an unknown `kid` falls back to the whole JWKS,
-and an expiry is not cross-checked against `iat`. Doctheca refuses an unsecured (`alg=none`) ID
-token explicitly — the framework skips the signature requirement for tokens received over its
-authenticated backchannel — and the sign-in session principal carries the verified ID-token
-claims. Only the verified administrator role decides sign-in; a denied or cancelled sign-in
-creates no new ticket or session Cookie and does not renew or replace an existing session.
+requires the handshake nonce and a present `iat` claim. Standard OIDC semantics apply: a
+multi-valued `aud` containing the client id is accepted, an unknown `kid` falls back to the whole
+JWKS, and an expiry is not cross-checked against `iat`. Doctheca refuses an unsecured
+(`alg=none`) ID token explicitly — the framework skips the signature requirement for tokens
+received over its authenticated backchannel — and the sign-in session principal carries the
+verified ID-token claims. Only the verified administrator role decides sign-in; a denied or
+cancelled sign-in creates no new ticket or session Cookie and does not renew or replace an
+existing session.
 
 The access token is no longer client-validated (a standard relying party consumes it
 opportunistically); the session's expiry is taken from the token response's `expires_in`

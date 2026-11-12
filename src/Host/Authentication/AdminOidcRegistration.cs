@@ -105,6 +105,9 @@ public static class AdminOidcRegistration
                 // delivers. The framework's own default is form_post.
                 options.ResponseMode = OpenIdConnectResponseMode.Query;
                 options.UsePkce = true;
+                // The wire contract of the replaced slice: no telemetry parameters on the
+                // authorize or end-session redirect, and exactly the requested scopes.
+                options.DisableTelemetry = true;
                 options.Scope.Clear();
                 options.Scope.Add("openid");
                 options.Scope.Add("profile");
@@ -216,6 +219,15 @@ public static class AdminOidcRegistration
                         properties.IsPersistent = true;
                     }
 
+                    return Task.CompletedTask;
+                };
+
+                // The authorization redirect carries the configured callback URI exactly as
+                // registered with the authority — never the request-derived one, which a
+                // TLS-terminating proxy would rewrite to the internal scheme and host.
+                options.Events.OnRedirectToIdentityProvider = context =>
+                {
+                    context.ProtocolMessage.RedirectUri = settings.RedirectUri;
                     return Task.CompletedTask;
                 };
 

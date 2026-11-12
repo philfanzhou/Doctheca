@@ -134,7 +134,11 @@ public sealed partial class AdminOidcIntegrationTests
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.Equal("text/html", response.Content.Headers.ContentType!.MediaType);
         Assert.Contains("Sign-out could not be confirmed", await response.Content.ReadAsStringAsync());
-        await AssertRevoked(client, session.Cookie);
+        // The rejected return never touches the live session.
+        using var sessionProbe = new HttpRequestMessage(HttpMethod.Get, "/admin/auth/oidc/session");
+        sessionProbe.Headers.Add("Cookie", session.Cookie);
+        Assert.Equal(HttpStatusCode.OK, (await client.SendAsync(sessionProbe)).StatusCode);
+        Assert.Equal(1, Tickets(factory).Count);
     }
 
     [Fact]
