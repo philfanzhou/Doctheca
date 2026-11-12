@@ -1,11 +1,11 @@
-﻿# Integration — Integration Matrix
+# Integration — Integration Matrix
 
 ## Integration Overview Table
 
 | Target | Protocol | Direction | Purpose | Security boundary |
 |------|------|------|------|----------|
 | Admin UI | HTTP same-origin | Inbound | Document management and search | Identity `role=admin` HttpOnly Cookie/JWT |
-| SignaCore | HTTP/OIDC | Outbound | Hosted sign-in, code exchange, prepared logout, JWKS | Authority from Consul |
+| SignaCore | HTTP/OIDC | Outbound | Hosted sign-in, code exchange, standard RP-initiated logout, JWKS | Authority from Consul |
 | PostgreSQL | TCP | Outbound | Document/parse data CRUD | Service-private database |
 | StructaDoc | HTTP | Outbound | Document upload, Parse Runs, Blocks/Markdown/Assets sync, image proxy, deletion (ADR-0009) | `Authorization: ApiKey` scoped key, BaseUrl from Consul/environment variables |
 | MinIO/SeaweedFS | S3 | Outbound | Legacy files and parse images (read-only compatibility and delete cleanup); structure audio under `audio/` (internal write/delete lifecycle; #107, playback pending #109) | Shared Consul configuration; `DocumentAudio:*` private |

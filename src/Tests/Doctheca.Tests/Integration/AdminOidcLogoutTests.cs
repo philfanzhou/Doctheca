@@ -3,20 +3,13 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using Doctheca.Host.Authentication;
 using Doctheca.Tests.Authentication;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection.Extensions;
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
+using Microsoft.AspNetCore.WebUtilities;
 using Xunit;
 
 namespace Doctheca.Tests.Integration;
 
 public sealed partial class AdminOidcIntegrationTests
 {
-    /// <summary>The package derives the logout-return correlation cookie name from the session
-    /// cookie name (issue #70): browser-held, HttpOnly, and scoped to the logout paths.</summary>
-    private static string LogoutReturnCookie => AdminOidcConstants.SessionCookie + "-logout-return";
-
     private sealed record SessionCredentials(string Cookie, string CsrfCookie, string CsrfToken);
 
     private static async Task<SessionCredentials> SignInWithCsrf(HttpClient client, OidcTestAuthority authority)
@@ -39,10 +32,19 @@ public sealed partial class AdminOidcIntegrationTests
         return client.SendAsync(request, cancellation);
     }
 
+    /// <summary>A CSRF credential pair obtained without any session (the issuer is public).</summary>
+    private static async Task<SessionCredentials> AnonymousCsrf(HttpClient client)
+    {
+        using var response = await client.GetAsync("/admin/auth/oidc/csrf");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        return new("", string.Join("; ", response.Headers.GetValues("Set-Cookie").Select(value => value.Split(';')[0])),
+            (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("token").GetString()!);
+    }
+
     private static async Task<JsonElement> LocalOnly(HttpResponseMessage response)
     {
-        // Declared shape (issue #70 D4): a logout that cannot be prepared upstream answers the
-        // package's fixed local-only body; the local session is always revoked before it.
+        // The fixed local-only outcome: the local session was revoked (or there was none) and no
+        // upstream redirect could be handed to the browser.
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
         Assert.Equal("local_only", body.GetProperty("outcome").GetString());
@@ -65,16 +67,10 @@ public sealed partial class AdminOidcIntegrationTests
         response.Headers.GetValues("Set-Cookie"), cookie => cookie.StartsWith(AdminOidcConstants.SessionCookie + "="));
 
     [Fact]
-    public async Task PreparedLogoutRevokesFirstUsesServerSnapshotAndRedirectsOnce()
+    public async Task StandardLogoutCarriesIdTokenHintAndRegisteredPostLogoutUri()
     {
-        using var authority = new OidcTestAuthority { HoldLogout = true };
-        var logs = new OidcLogCapture();
-        using var factory = OidcFactory(authority, configure: services =>
-        {
-            services.RemoveAll<ILoggerFactory>();
-            services.Configure<LoggerFilterOptions>(options => options.MinLevel = LogLevel.Trace);
-            services.AddSingleton<ILoggerFactory>(provider => new LoggerFactory([logs], provider.GetRequiredService<IOptionsMonitor<LoggerFilterOptions>>()));
-        });
+        using var authority = new OidcTestAuthority();
+        using var factory = OidcFactory(authority);
         using var client = Browser(factory);
         var session = await SignInWithCsrf(client, authority);
         using var sessionRequest = new HttpRequestMessage(HttpMethod.Get, "/admin/auth/oidc/session");
@@ -85,134 +81,102 @@ public sealed partial class AdminOidcIntegrationTests
         Assert.Equal("authenticated", status.GetProperty("reason").GetString());
         Assert.Equal("fake-name", status.GetProperty("username").GetString());
         Assert.NotNull(status.GetProperty("expiresAt").GetString());
-        // Declared status (issue #70 D-family): a logout without its CSRF credential is
-        // rejected by the package's own boundary with its fixed 400 body.
+        // A logout without its CSRF credential is rejected by the boundary with its fixed 400
+        // body and touches nothing.
         var rejected = await Logout(client, session, csrf: false);
         Assert.Equal(HttpStatusCode.BadRequest, rejected.StatusCode);
         Assert.Equal("csrf_rejected", (await rejected.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("outcome").GetString());
         Assert.Equal(1, Tickets(factory).Count);
 
-        var pending = Logout(client, session);
-        await authority.LogoutEntered.Task.WaitAsync(TimeSpan.FromSeconds(5));
-        await AssertRevoked(client, session.Cookie);
-        var form = Assert.Single(authority.LogoutForms);
-        // D1: HTTP Basic client authentication; the form carries neither id nor secret.
-        Assert.Equal(new[] { "id_token_hint", "post_logout_redirect_uri", "state" }, form.Keys.Order().ToArray());
-        Assert.Equal(authority.LastIdToken, form["id_token_hint"]);
-        Assert.Equal(OidcTestAuthority.PostLogoutUri, form["post_logout_redirect_uri"]);
-        var basic = Assert.Single(authority.LogoutAuthorizationHeaders);
-        Assert.StartsWith("Basic ", basic);
-        Assert.Equal(OidcTestAuthority.ClientId + ":" + OidcTestAuthority.Secret,
-            System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(basic!["Basic ".Length..])));
-        authority.LogoutRelease.TrySetResult();
-        using var response = await pending;
-        // D4: the prepared answer is one redirect to the verified logout URI.
+        using var response = await Logout(client, session);
+        // The standard RP-initiated logout: one redirect to the authority's end-session endpoint,
+        // carrying the server-held ID token as id_token_hint, the registered post-logout URI, and
+        // the protected state that lands the browser back on the SPA result.
         Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
-        Assert.Equal(OidcTestAuthority.Issuer + "/oauth2/logout?logout_handle=" + new string('h', 43),
-            response.Headers.Location!.AbsoluteUri);
+        var location = response.Headers.Location!;
+        Assert.Equal(OidcTestAuthority.Issuer + OidcTestAuthority.EndSessionPath, location.GetLeftPart(UriPartial.Path));
+        var query = QueryHelpers.ParseQuery(location.Query);
+        Assert.Equal(authority.LastIdToken, query["id_token_hint"].ToString());
+        Assert.Equal(OidcTestAuthority.PostLogoutUri, query["post_logout_redirect_uri"].ToString());
+        var state = query["state"].ToString();
+        Assert.False(string.IsNullOrEmpty(state));
         AssertSessionCookieDeleted(response);
-        var binding = response.Headers.GetValues("Set-Cookie").Single(value => value.StartsWith(LogoutReturnCookie + "="));
-        Assert.Contains("httponly", binding.ToLowerInvariant());
-        Assert.Contains("secure", binding.ToLowerInvariant());
-        Assert.Contains("samesite=lax", binding.ToLowerInvariant());
-        Assert.Contains("path=/admin/auth/oidc/logout", binding.ToLowerInvariant());
-        using var returnedRequest = new HttpRequestMessage(HttpMethod.Get, AdminOidcConstants.LogoutReturnPath + "?state=" + form["state"]);
-        returnedRequest.Headers.Add("Cookie", binding.Split(';')[0]);
+        // The standard flow needs no extra correlation cookie: the protected state round-trips
+        // through the authority's own redirect.
+        Assert.DoesNotContain(response.Headers.GetValues("Set-Cookie"), cookie => cookie.Contains("logout-return"));
+        await AssertRevoked(client, session.Cookie);
+        // No second server-to-server call exists in the standard flow.
+        Assert.Equal(1, authority.Redeems);
+
+        using var returnedRequest = new HttpRequestMessage(HttpMethod.Get, AdminOidcConstants.LogoutReturnPath + "?state=" + Uri.EscapeDataString(state));
         using var returned = await client.SendAsync(returnedRequest);
+        Assert.Equal(HttpStatusCode.Redirect, returned.StatusCode);
         Assert.Equal(AdminOidcConstants.SignedOutRedirect, returned.Headers.Location!.OriginalString);
-        var surfaces = await response.Content.ReadAsStringAsync() + string.Join('\n', response.Headers) + returned.Headers.Location + string.Join('\n', logs.Messages);
-        foreach (var canary in new[] { OidcTestAuthority.Secret, authority.LastAccessToken!, authority.LastIdToken!, authority.LastVerifier!, form["state"] })
-            Assert.DoesNotContain(canary, surfaces);
-        Assert.DoesNotContain("fictitious-code-", surfaces);
-        await AssertRevoked(client, session.Cookie);
+        // The return is idempotent (its state is a protected, server-independent value): a replay
+        // lands on the same SPA result instead of the package's one-time 400.
+        using var replay = await client.SendAsync(new HttpRequestMessage(HttpMethod.Get, returnedRequest.RequestUri));
+        Assert.Equal(HttpStatusCode.Redirect, replay.StatusCode);
+        Assert.Equal(AdminOidcConstants.SignedOutRedirect, replay.Headers.Location!.OriginalString);
     }
 
     [Theory]
-    [InlineData(false)][InlineData(true)]
-    public async Task ParallelAndRepeatedLogoutMakesAtMostOneProviderCall(bool http)
+    [InlineData("missing-state")][InlineData("wrong-state")][InlineData("duplicate-state")]
+    public async Task LogoutReturnWithoutProtectedStateAnswersFixed400Page(string defect)
     {
-        using var authority = new OidcTestAuthority { HoldLogout = true };
-        using var factory = OidcFactory(authority, http: http);
-        using var client = Browser(factory, http);
+        using var authority = new OidcTestAuthority();
+        using var factory = OidcFactory(authority);
+        using var client = Browser(factory);
         var session = await SignInWithCsrf(client, authority);
-        var pending = Enumerable.Range(0, 6).Select(_ => Logout(client, session)).ToArray();
-        await authority.LogoutEntered.Task.WaitAsync(TimeSpan.FromSeconds(5));
-        await AssertRevoked(client, session.Cookie);
-        authority.LogoutRelease.TrySetResult();
-        var responses = await Task.WhenAll(pending);
-        Assert.Single(responses, response => response.StatusCode == HttpStatusCode.Redirect
-            && response.Headers.Location!.AbsoluteUri.Contains("logout_handle="));
-        foreach (var repeated in responses.Where(response => response.StatusCode == HttpStatusCode.OK))
-            await LocalOnly(repeated);
-        await LocalOnly(await Logout(client, session));
-        Assert.Single(authority.LogoutForms);
-        Assert.Equal(0, Tickets(factory).Count);
+        var state = defect == "wrong-state" ? "fictitious-state-canary" : "plain-random-padding";
+        var query = "?state=" + (defect == "missing-state" ? "" : Uri.EscapeDataString(state));
+        if (defect == "duplicate-state") query += "&state=" + Uri.EscapeDataString(state);
+        using var response = await client.GetAsync(AdminOidcConstants.LogoutReturnPath + query);
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal("text/html", response.Content.Headers.ContentType!.MediaType);
+        Assert.Contains("Sign-out could not be confirmed", await response.Content.ReadAsStringAsync());
         await AssertRevoked(client, session.Cookie);
     }
 
-    [Theory]
-    [InlineData("500")][InlineData("404")][InlineData("json")][InlineData("timeout")][InlineData("oversized")][InlineData("duplicate")]
-    [InlineData("500", true)][InlineData("timeout", true)]
-    public async Task ProviderFailureLeavesLocalRevocationAndNeverRetries(string failure, bool http = false)
+    [Fact]
+    public async Task MissingEndSessionEndpointLeavesLocalRevocationOnly()
     {
-        using var authority = new OidcTestAuthority { LogoutFailure = failure };
-        using var factory = OidcFactory(authority, http: http);
-        using var client = Browser(factory, http);
+        using var authority = new OidcTestAuthority { EndSessionUnavailable = true };
+        using var factory = OidcFactory(authority);
+        using var client = Browser(factory);
         var session = await SignInWithCsrf(client, authority);
         var response = await Logout(client, session);
         AssertSessionCookieDeleted(response);
         await LocalOnly(response);
         await AssertRevoked(client, session.Cookie);
         await LocalOnly(await Logout(client, session));
-        Assert.Single(authority.LogoutForms);
+        Assert.Equal(1, authority.Redeems);
     }
 
     [Fact]
-    public async Task ActualBackchannelTimeoutLeavesSessionRevoked()
-    {
-        using var authority = new OidcTestAuthority { HoldLogout = true };
-        using var factory = OidcFactory(authority);
-        using var client = Browser(factory);
-        var session = await SignInWithCsrf(client, authority);
-        var pending = Logout(client, session);
-        await authority.LogoutEntered.Task.WaitAsync(TimeSpan.FromSeconds(5));
-        await AssertRevoked(client, session.Cookie);
-        var response = await pending.WaitAsync(TimeSpan.FromSeconds(5));
-        AssertSessionCookieDeleted(response);
-        await LocalOnly(response);
-        await LocalOnly(await Logout(client, session));
-        Assert.Single(authority.LogoutForms);
-    }
-
-    [Theory]
-    [InlineData("nonce", "admin")][InlineData("valid", "user")][InlineData("valid", "sub-mismatch")]
-    public async Task RejectedCallbackDoesNotReplaceOrExtendExistingSessionAndDoesNotLeak(string idDefect, string accessDefect)
+    public async Task LogoutWithoutLiveSessionAnswersLocalOnlyAndTouchesNothing()
     {
         using var authority = new OidcTestAuthority();
-        var logs = new OidcLogCapture();
-        using var factory = OidcFactory(authority, configure: services =>
-        {
-            services.RemoveAll<ILoggerFactory>();
-            services.Configure<LoggerFilterOptions>(options => options.MinLevel = LogLevel.Trace);
-            services.AddSingleton<ILoggerFactory>(provider => new LoggerFactory([logs], provider.GetRequiredService<IOptionsMonitor<LoggerFilterOptions>>()));
-        });
+        using var factory = OidcFactory(authority);
+        using var client = Browser(factory);
+        var credentials = await AnonymousCsrf(client);
+        using var response = await Logout(client, credentials);
+        await LocalOnly(response);
+        Assert.False(response.Headers.Contains("Set-Cookie"));
+        Assert.Equal(0, Tickets(factory).Count);
+    }
+
+    [Fact]
+    public async Task ExpiredSessionLogoutAnswersLocalOnly()
+    {
+        using var authority = new OidcTestAuthority();
+        var time = new ManualOidcTime();
+        using var factory = OidcFactory(authority, time);
         using var client = Browser(factory);
         var session = await SignInWithCsrf(client, authority);
-        var handshake = await Start(client);
-        var code = authority.Code(handshake.Query, idDefect, accessDefect);
-        var response = await Callback(client, handshake, code, cookies: session.Cookie);
-        Failed(response, accessDefect == "user" ? AdminLoginResponseWriter.DeniedRedirect : AdminLoginResponseWriter.SignInFailedRedirect);
-        using var original = new HttpRequestMessage(HttpMethod.Get, "/admin/auth/oidc/session");
-        original.Headers.Add("Cookie", session.Cookie);
-        var status = await client.SendAsync(original);
-        Assert.Equal(HttpStatusCode.OK, status.StatusCode);
-        Assert.Equal(1, Tickets(factory).Count);
-        var surfaces = await response.Content.ReadAsStringAsync() + string.Join('\n', response.Headers) + response.Headers.Location
-            + await status.Content.ReadAsStringAsync() + string.Join('\n', logs.Messages);
-        foreach (var canary in new[] { OidcTestAuthority.Secret, authority.LastAccessToken!, authority.LastIdToken!, authority.LastVerifier!, code })
-            Assert.DoesNotContain(canary, surfaces);
-        Assert.DoesNotContain(handshake.Query["state"], string.Join('\n', response.Headers.Where(header => header.Key != "Set-Cookie"))
-            + await response.Content.ReadAsStringAsync() + await status.Content.ReadAsStringAsync() + string.Join('\n', logs.Messages));
+        time.Advance(TimeSpan.FromMinutes(16));
+        using var response = await Logout(client, session);
+        await LocalOnly(response);
+        await AssertRevoked(client, session.Cookie);
     }
 
     [Theory]
@@ -224,109 +188,6 @@ public sealed partial class AdminOidcIntegrationTests
         using var client = Browser(factory);
         var response = await client.GetAsync("/admin/auth/oidc/start" + query);
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-    }
-
-    [Theory]
-    [InlineData(false)][InlineData(true)]
-    public async Task LogoutCancellationDoesNotResurrectLocalSession(bool http)
-    {
-        using var authority = new OidcTestAuthority { HoldLogout = true };
-        using var factory = OidcFactory(authority, http: http);
-        using var client = Browser(factory, http);
-        var session = await SignInWithCsrf(client, authority);
-        using var cancellation = new CancellationTokenSource();
-        var pending = Logout(client, session, cancellation: cancellation.Token);
-        await authority.LogoutEntered.Task.WaitAsync(TimeSpan.FromSeconds(5));
-        cancellation.Cancel();
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => pending);
-        await AssertRevoked(client, session.Cookie);
-        await LocalOnly(await Logout(client, session));
-        Assert.Single(authority.LogoutForms);
-    }
-
-    [Theory]
-    [InlineData("https://external.example/oauth2/logout?logout_handle=hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh")]
-    [InlineData("//external.example/oauth2/logout?logout_handle=hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh")]
-    [InlineData("https://user@identity.example.test/oauth2/logout?logout_handle=hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh")]
-    [InlineData("/oauth2/logout?logout_handle=short")]
-    [InlineData("/oauth2/logout?logout_handle=hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh&state=canary")]
-    [InlineData("/oauth2/logout?logout_handle=hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh&logout_handle=hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh")]
-    [InlineData("/oauth2/logout?logout_handle=hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh#fragment")]
-    public async Task UnsafeLogoutNavigationIsNotReleased(string url)
-    {
-        using var authority = new OidcTestAuthority { LogoutUrl = url };
-        using var factory = OidcFactory(authority);
-        using var client = Browser(factory);
-        var session = await SignInWithCsrf(client, authority);
-        var response = await Logout(client, session);
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.Equal("local_only", (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("outcome").GetString());
-        await AssertRevoked(client, session.Cookie);
-    }
-
-    /// <summary>
-    /// Declared change (issue #70): the package verifies the returned <c>logout_uri</c> against
-    /// the authority's own origin plus exactly one well-formed logout handle, but — unlike the
-    /// replaced slice — does not pin the path to <c>/oauth2/logout</c>: the authority dictates
-    /// where the browser is sent within its own origin.
-    /// </summary>
-    [Fact]
-    public async Task AuthorityControlledLogoutPathIsFollowedWhenHandleIsVerified()
-    {
-        using var authority = new OidcTestAuthority { LogoutUrl = "/signacore-signout?logout_handle=" + new string('h', 43) };
-        using var factory = OidcFactory(authority);
-        using var client = Browser(factory);
-        var session = await SignInWithCsrf(client, authority);
-        using var response = await Logout(client, session);
-        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
-        Assert.Equal(OidcTestAuthority.Issuer + "/signacore-signout?logout_handle=" + new string('h', 43),
-            response.Headers.Location!.AbsoluteUri);
-    }
-
-    /// <summary>
-    /// Declared changes (issue #70 D-family): a valid return still lands on the fixed SPA
-    /// result path; an unverifiable return now answers the package's fixed 400 page instead of
-    /// redirecting to an authError target, and unknown extra query members no longer invalidate
-    /// an otherwise valid return.
-    /// </summary>
-    [Theory]
-    [InlineData("valid", true)][InlineData("missing-cookie", false)][InlineData("wrong-cookie", false)][InlineData("wrong-state", false)]
-    [InlineData("expired", false)][InlineData("duplicate", false)][InlineData("unknown-parameter", true)]
-    public async Task LogoutReturnRequiresUnexpiredBrowserBindingAndIsSingleUse(string scenario, bool valid)
-    {
-        using var authority = new OidcTestAuthority();
-        var time = new ManualOidcTime();
-        using var factory = OidcFactory(authority, time);
-        using var client = Browser(factory);
-        var session = await SignInWithCsrf(client, authority);
-        using var loggedOut = await Logout(client, session);
-        var binding = loggedOut.Headers.GetValues("Set-Cookie").Single(value => value.StartsWith(LogoutReturnCookie + "=")).Split(';')[0];
-        var state = Assert.Single(authority.LogoutForms)["state"];
-        if (scenario == "expired") time.Advance(TimeSpan.FromMinutes(5));
-        var query = "?state=" + (scenario == "wrong-state" ? new string('x', 43) : state);
-        if (scenario == "duplicate") query += "&state=" + state;
-        if (scenario == "unknown-parameter") query += "&returnUrl=https://external.example";
-        async Task<HttpResponseMessage> Return()
-        {
-            var request = new HttpRequestMessage(HttpMethod.Get, AdminOidcConstants.LogoutReturnPath + query);
-            if (scenario != "missing-cookie") request.Headers.Add("Cookie", scenario == "wrong-cookie" ? LogoutReturnCookie + "=" + new string('x', 43) : binding);
-            return await client.SendAsync(request);
-        }
-        var returned = await Return();
-        if (valid)
-        {
-            Assert.Equal(HttpStatusCode.Redirect, returned.StatusCode);
-            Assert.Equal(AdminOidcConstants.SignedOutRedirect, returned.Headers.Location!.OriginalString);
-        }
-        else
-        {
-            Assert.Equal(HttpStatusCode.BadRequest, returned.StatusCode);
-            Assert.Equal("text/html", returned.Content.Headers.ContentType!.MediaType);
-        }
-        var replay = await Return();
-        Assert.Equal(HttpStatusCode.BadRequest, replay.StatusCode);
-        await AssertRevoked(client, session.Cookie);
-        Assert.DoesNotContain(state, returned.Headers.Location?.OriginalString ?? string.Empty);
     }
 
     [Theory]
@@ -352,7 +213,7 @@ public sealed partial class AdminOidcIntegrationTests
             logout.Headers.Add("Cookie", session.Cookie);
             logout.Headers.Add("Authorization", "Bearer " + CreateToken("admin"));
             Assert.Equal(HttpStatusCode.BadRequest, (await client.SendAsync(logout)).StatusCode);
-            Assert.Empty(authority.LogoutForms);
+            Assert.Equal(1, authority.Redeems);
         }
     }
 

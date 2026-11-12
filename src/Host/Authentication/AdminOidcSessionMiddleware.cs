@@ -1,31 +1,33 @@
+using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.Net.Http.Headers;
-using SignaCore.Client.AspNetCore;
 
 namespace Doctheca.Host.Authentication;
 
 /// <summary>
-/// Request boundary for cookie-session access to the protected admin API (hosted login). It
-/// keeps the replaced slice's fixed results: an expired or unknown session answers the fixed
+/// Request boundary for cookie-session access to the protected admin API (hosted login). It keeps
+/// the replaced slice's fixed results: an expired or unknown session answers the fixed
 /// re-authentication JSON before any endpoint runs, and a session-authenticated unsafe method
 /// without a valid antiforgery credential answers the fixed CSRF JSON.
 /// </summary>
 /// <remarks>
 /// <para>
-/// Only requests that actually carry the opaque session cookie enter the boundary, and only
-/// under <c>/admin</c> outside the anonymous <c>/admin/auth</c> area. A Bearer header is served
-/// by the boundary only after the host's JwtBearer handler independently verifies it; the
-/// verified marker also routes the package's forwarding scheme to JwtBearer, so a Bearer
-/// principal can never borrow the cookie session's role claims. A present but unverified Bearer
-/// header falls back to the session boundary exactly as before. Bearer-authenticated requests
-/// pass without any CSRF requirement.
+/// Only requests that actually carry the opaque session cookie enter the boundary, and only under
+/// <c>/admin</c> outside the anonymous <c>/admin/auth</c> area. A Bearer header is served by the
+/// boundary only after the host's JwtBearer handler independently verifies it; the verified marker
+/// also routes the admin policy's forwarding scheme to JwtBearer, so a Bearer principal can never
+/// borrow the cookie session's role claims. A present but unverified Bearer header falls back to
+/// the session boundary exactly as before. Bearer-authenticated requests pass without any CSRF
+/// requirement.
 /// </para>
 /// <para>
-/// The CSRF validation itself runs inside the package's session handler during authentication:
-/// for an unsafe method it fails closed, which this middleware reports as the fixed 403. The
-/// response bodies are fixed and contain nothing from the request; the ServiceMantle security
-/// response headers come from the endpoint markers, not from this middleware.
+/// The CSRF validation itself runs here for every session-authenticated unsafe method (RFC 9110
+/// safe methods are GET, HEAD, OPTIONS, and TRACE): the antiforgery pair issued by the
+/// <c>/admin/auth/oidc/csrf</c> endpoint must validate, otherwise the fixed 403 is answered and
+/// the endpoint never runs. The response bodies are fixed and contain nothing from the request;
+/// the ServiceMantle security response headers come from the endpoint markers, not from this
+/// middleware.
 /// </para>
 /// </remarks>
 public sealed class AdminOidcSessionMiddleware(RequestDelegate next)
@@ -59,22 +61,31 @@ public sealed class AdminOidcSessionMiddleware(RequestDelegate next)
                 }
             }
 
-            var session = await context.AuthenticateAsync(HostedLoginDefaults.SessionAuthenticationScheme);
+            var session = await context.AuthenticateAsync(AdminOidcConstants.SessionScheme);
             if (session.Succeeded)
             {
-                // The session handler has already enforced the antiforgery boundary for unsafe
-                // methods as part of this authentication.
+                if (!IsSafeMethod(context.Request.Method))
+                {
+                    try
+                    {
+                        await context.RequestServices.GetRequiredService<IAntiforgery>()
+                            .ValidateRequestAsync(context);
+                    }
+                    catch (AntiforgeryValidationException)
+                    {
+                        // The request is not silently re-authenticated: one fixed 403, and the
+                        // endpoint never runs.
+                        await RejectAsync(context, StatusCodes.Status403Forbidden, CsrfRequired);
+                        return;
+                    }
+                }
+
                 context.User = session.Principal!;
-            }
-            else if (session.Failure is not null)
-            {
-                // The handler only fails when the antiforgery validation of an unsafe session
-                // request was rejected; unknown and expired sessions answer NoResult instead.
-                await RejectAsync(context, StatusCodes.Status403Forbidden, CsrfRequired);
-                return;
             }
             else
             {
+                // Unknown, expired, and unprotectable sessions are indistinguishable: the fixed
+                // re-authentication answer.
                 await RejectAsync(context, StatusCodes.Status401Unauthorized, ReauthenticationRequired);
                 return;
             }
@@ -82,6 +93,16 @@ public sealed class AdminOidcSessionMiddleware(RequestDelegate next)
 
         await next(context);
     }
+
+    /// <summary>
+    /// The RFC 9110 safe methods: GET, HEAD, OPTIONS, and TRACE. Everything else — POST, PUT,
+    /// PATCH, DELETE, and any extension method — must carry the antiforgery credential.
+    /// </summary>
+    private static bool IsSafeMethod(string method) =>
+        HttpMethods.IsGet(method)
+        || HttpMethods.IsHead(method)
+        || HttpMethods.IsOptions(method)
+        || HttpMethods.IsTrace(method);
 
     private static Task RejectAsync(HttpContext context, int statusCode, string message)
     {

@@ -6,7 +6,6 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.Options;
-using SignaCore.Client.AspNetCore;
 
 namespace Doctheca.Host.Authentication;
 
@@ -38,11 +37,11 @@ internal static class AdminAuthenticationRegistration
             options.AddPolicy(DocthecaAuthorizationPolicies.Admin, policy =>
             {
                 // The role assertion itself is unchanged; the session scheme of the policy is the
-                // package's forwarding scheme, so a verified Bearer header is served by the host's
-                // JwtBearer handler and everything else by the package's session (issue #70).
+                // host's forwarding scheme, so a verified Bearer header is served by the host's
+                // JwtBearer handler and everything else by the cookie session.
                 policy.AddAuthenticationSchemes(JwtBearerDefaults.AuthenticationScheme);
                 if (AdminOidcSettings.Read(configuration, environment).Available)
-                    policy.AddAuthenticationSchemes(HostedLoginDefaults.AuthenticationScheme);
+                    policy.AddAuthenticationSchemes(AdminOidcConstants.AuthenticationScheme);
                 policy.RequireAuthenticatedUser();
                 policy.RequireAssertion(context => context.User.Identities.Any(identity => identity.IsAuthenticated)
                     && context.User.Claims.Any(claim => claim.Type is "role" or ClaimTypes.Role

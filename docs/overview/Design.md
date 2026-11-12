@@ -25,8 +25,9 @@ Tech stack: .NET, ASP.NET Core Minimal APIs, EF Core 10/Npgsql, Mapster, OpenSea
 
 ### Browser Administrators
 
-- SignaCore hosted login handles passwords; Doctheca uses a Confidential code client and PKCE.
-- Both tokens are validated and the verified access-token `role=admin` authorizes sign-in.
+- SignaCore hosted login handles passwords; Doctheca uses a Confidential code client and PKCE
+  on the framework's OpenID Connect handler.
+- The ID token is validated and its verified `role=admin` authorizes sign-in.
 - The browser receives an opaque HttpOnly server-session Cookie, never tokens.
 - Cookie-authenticated writes require identity-bound CSRF; expiry requires reauthentication.
 - Header Bearer clients retain strict issuer/audience/signature/expiry/admin-role validation.
@@ -39,7 +40,7 @@ Tech stack: .NET, ASP.NET Core Minimal APIs, EF Core 10/Npgsql, Mapster, OpenSea
 |------|------|
 | Restore application-layer authentication and enforce the admin role | Network isolation cannot stop any reachable caller from reading or writing admin data |
 | HttpOnly cookies instead of localStorage | Frontend JavaScript never touches tokens, reducing XSS token-theft risk |
-| Absolute server sessions and local-first prepared logout | No refresh/replay; revocation cannot be undone by provider failures |
+| Absolute server sessions and local-first standard logout | No refresh/replay; revocation cannot be undone by provider failures |
 | Validate both tokens before sign-in | Strict token binding and administrator authorization from the access token |
 | Static SPA anonymous | Unauthenticated users must be able to load the login page first |
 | Do not reserve unused Quaestura interfaces | No callers exist today; avoid maintaining interfaces, credentials, and configuration with no consumers |

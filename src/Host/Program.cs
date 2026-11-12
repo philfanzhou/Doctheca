@@ -384,8 +384,8 @@ app.UseAuthentication();
 // Cookie-session boundary for the protected admin API (hosted login): expired sessions get the
 // fixed re-authentication result before any endpoint runs, and non-safe methods must carry the
 // CSRF credential. Verified Bearer callers and unconfigured hosted login bypass the session
-// boundary. The start guard keeps the strict sign-in-entry input contract of the package's
-// start endpoint.
+// boundary. The start guard keeps the strict sign-in-entry input contract ahead of the generic
+// OpenID Connect challenge.
 app.UseMiddleware<AdminOidcStartGuardMiddleware>();
 app.UseMiddleware<AdminOidcSessionMiddleware>();
 

@@ -5,7 +5,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using SignaCore.Client.AspNetCore;
 using Xunit;
 
 namespace Doctheca.Tests.Integration;
@@ -36,7 +35,6 @@ public sealed partial class AdminOidcIntegrationTests
             Assert.False(response.Headers.Contains("Set-Cookie"));
         }
         Assert.Equal(redeems, authority.Redeems);
-        Assert.Empty(authority.LogoutForms);
         // The retired logout must not revoke the current opaque session.
         using var probe = new HttpRequestMessage(HttpMethod.Get, "/admin/auth/session");
         probe.Headers.Add("Cookie", session + "; docthecaAccessToken=invalid; docthecaRefreshToken=invalid");
@@ -62,7 +60,7 @@ public sealed partial class AdminOidcIntegrationTests
             ["Logging:LogLevel:Microsoft.AspNetCore"] = "Trace" };
         if (missing is not null) settings[missing] = "";
         using var factory = CreateFactory(settings: settings, configureTestServices: services => {
-            services.AddHttpClient(HostedLoginDefaults.HttpClientName)
+            services.AddHttpClient(AdminOidcConstants.HttpClientName)
                 .ConfigurePrimaryHttpMessageHandler(() => authority);
             // Consume the real host's filters: a standalone factory bypasses the production
             // category protection and cannot verify its registration on unavailable paths.
@@ -80,13 +78,12 @@ public sealed partial class AdminOidcIntegrationTests
         var query = "?code=" + canaries[0] + "&state=" + canaries[1]
             + "&error=" + canaries[2] + "&error_description=" + canaries[3];
         // With the hosted login unavailable every entrypoint keeps the fixed 503 contract; with
-        // it complete the canary query never produces a sign-in: the callback fails closed and
-        // the logout return answers the package's fixed 400 page (issue #70).
+        // it complete the canary query never produces a sign-in: the callback fails closed (the
+        // protected state cannot be read) and the logout return answers the fixed 400 page.
         using var callbackResponse = await client.GetAsync(AdminOidcConstants.CallbackPath + query);
         Assert.Equal(missing is null ? HttpStatusCode.Redirect : HttpStatusCode.ServiceUnavailable, callbackResponse.StatusCode);
         using var returnResponse = await client.GetAsync(AdminOidcConstants.LogoutReturnPath + query);
-        Assert.Equal(missing is not null ? HttpStatusCode.ServiceUnavailable
-            : HttpStatusCode.BadRequest, returnResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, returnResponse.StatusCode);
         if (missing is not null)
         {
             foreach (var response in new[] { callbackResponse, returnResponse })
@@ -99,12 +96,6 @@ public sealed partial class AdminOidcIntegrationTests
         Assert.False(logs.Messages.Any(message => message.Contains(OidcTestAuthority.Secret)), "Client credentials appeared in host logs.");
         Assert.False(authority.DiscoveryEntered.Task.IsCompleted);
         Assert.Equal(0, authority.Redeems);
-        Assert.Empty(authority.LogoutForms);
-        if (missing is null)
-        {
-            // The package is registered with a complete configuration: no protocol object exists.
-            Assert.Equal(0, Tickets(factory).Count);
-        }
     }
 
     [Theory]
@@ -121,7 +112,7 @@ public sealed partial class AdminOidcIntegrationTests
             ["IdentityService:Authority"] = OidcTestAuthority.Issuer, ["IdentityService:AppId"] = OidcTestAuthority.ClientId,
             ["IdentityService:AppSecret"] = OidcTestAuthority.Secret, [missing] = "" };
         using var factory = CreateFactory(settings: settings, configureTestServices: services => {
-            services.AddHttpClient(HostedLoginDefaults.HttpClientName)
+            services.AddHttpClient(AdminOidcConstants.HttpClientName)
                 .ConfigurePrimaryHttpMessageHandler(() => authority);
             services.RemoveAll<ILoggerFactory>();
             services.AddSingleton<ILoggerFactory>(new LoggerFactory([logs]));
@@ -138,7 +129,6 @@ public sealed partial class AdminOidcIntegrationTests
         Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/health/live")).StatusCode);
         Assert.False(authority.DiscoveryEntered.Task.IsCompleted);
         Assert.Equal(0, authority.Redeems);
-        Assert.Empty(authority.LogoutForms);
         Assert.Contains(logs.Messages, value => value.Contains("DOCTHECA_OIDC_NOT_CONFIGURED") && value.Contains(missing));
         Assert.DoesNotContain(logs.Messages, value => value.Contains(OidcTestAuthority.Secret));
     }

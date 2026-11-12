@@ -6,7 +6,7 @@ Register a Confidential SignaCore client and exact callback/post-logout URIs; in
 credentials and trust settings per [Hosted Login](../modules/AdminAuthentication/07-HostedLogin.md).
 Choose the effective external HTTP or HTTPS profile in every environment; exact callback and
 post-logout origins/paths must match registration. HTTPS uses Secure Cookies; HTTP omits Secure
-for all four carriers and provides no network confidentiality, integrity or listener authenticity.
+for every carrier and provides no network confidentiality, integrity or listener authenticity.
 Operators choose network/TLS protection. Keep trusted forwarded-scheme handling behind TLS
 termination, and explicitly set `IdentityService:RequireHttpsMetadata=false` for HTTP Authority or
 Issuer (the Bearer default remains true). Never include credentials, protocol parameters, tokens
@@ -39,19 +39,21 @@ Session restoration uses `/admin/auth/oidc/session`; writes carry the CSRF pair 
 `/admin/auth/oidc/csrf`. Missing/wrong CSRF returns 403; expired sessions return reauthentication
 401 without refresh or write replay. The old token Cookies alone must return 401.
 
-Use the SPA logout button: local revocation precedes provider preparation, successful preparation
-returns the validated provider redirect, and provider failure reports local-only exit. Repeated
-exit cannot resurrect a session or repeat provider preparation.
+Use the SPA logout button: local revocation precedes the upstream redirect, a successful
+sign-out redirects to the authority's end-session endpoint with the stored ID token as hint, and
+an unconstructible upstream redirect reports local-only exit. Repeated
+exit cannot resurrect a session.
 
 Run the browser flow on a Production host at a non-loopback HTTP origin as well as the HTTPS
 profile. The automated Chromium test maps synthetic `.test` names to loopback, uses random
 Kestrel ports and asserts the page is not a secure context. It verifies route restoration,
 protected reads, missing/wrong CSRF rejection, a CSRF-authorized DELETE reaching its handler,
-non-Secure HttpOnly Cookies, prepared logout/return via a CSRF-authorized top-level form, and
+non-Secure HttpOnly Cookies, standard end-session logout/return via a CSRF-authorized top-level
+form, and
 subsequent 401. The existing SPA button's cross-origin fetch path is tested separately; the form
 ensures Chromium actually traverses the provider and return redirects. No production service,
-trace, HAR or storage-state capture is used. Effective-options/Set-Cookie tests also cover all
-four carriers and clearing when request and configured callback schemes differ; HTTPS remains
+trace, HAR or storage-state capture is used. Effective-options/Set-Cookie tests also cover every
+carrier and clearing when request and configured callback schemes differ; HTTPS remains
 Secure. HTTP failure/cancellation/replay/concurrency and mixed Bearer/session checks retain the
 same authorization boundaries. Settings cover all environments, independent Authority transport,
 structural URI failures, safe diagnostics and the 500-character registration boundary.

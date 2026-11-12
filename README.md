@@ -15,7 +15,7 @@ A self-hosted **document library & full-text retrieval** service for educational
 | **DocumentSearch** | OpenSearch full-text precise search with block-level indexing and subject/grade filters |
 | **DocumentStructure** | Runtime-configured structure definitions and levels with required-ancestor audio policy enforced at audio commit, hand-marked structure nodes on a continuous view of a parse, and search narrowed to a node's subtree |
 | **StructureAudio** | Document-owned audio without a source/parse; bounded ZIP/folder/file preview, suggested/explicit targets and one atomic Required-policy import/link/removal Save, metadata persistence, deletion/orphan recovery and administrator playback using fresh expiring public S3 links |
-| **AdminAuthentication** | SignaCore hosted admin login via the official `SignaCore.Client.AspNetCore` client: `role=admin` pre-sign-in gate, server sessions, CSRF and prepared logout; legacy Bearer compatibility |
+| **AdminAuthentication** | SignaCore hosted admin login on the framework's OpenID Connect handler (no client package): `role=admin` pre-sign-in gate, server sessions, CSRF and standard RP-initiated logout; legacy Bearer compatibility |
 | **InternalCatalog** | Anonymous read-only structure definition and marked-document catalogs, current document trees with direct audio counts and audio-filtered discovery, node content pages, owned image bytes, subtree search and expiring same-origin direct-node audio; always mapped and restricted to the internal network by the deployer |
 
 ## Tech Stack
@@ -147,8 +147,8 @@ MIT — see [LICENSE](LICENSE).
 
 ### Hosted administration frontend
 
-The administration SPA uses SignaCore hosted login, driven by the official
-`SignaCore.Client.AspNetCore` package with a thin host adaptation layer. Register exact
+The administration SPA uses SignaCore hosted login, driven by the framework's own OpenID Connect
+handler with a thin host adaptation layer. Register exact
 callback/post-logout URIs and inject server-only Confidential client credentials; deploy API and
 SPA in the same image. Canonical HTTP and HTTPS callback pairs work in every environment.
 The configured external callback scheme selects Secure Cookies for HTTPS and non-Secure Cookies

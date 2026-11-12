@@ -2,7 +2,7 @@
 
 ## HTTP contract
 
-The six `/admin/auth/oidc` routes, opaque session, CSRF and prepared logout are specified in
+The six `/admin/auth/oidc` routes, opaque session, CSRF and standard RP-initiated logout are specified in
 [07-HostedLogin.md](07-HostedLogin.md). Missing required configuration returns
 `503 {"success":false,"message":"Hosted sign-in is not configured."}` on every hosted route.
 

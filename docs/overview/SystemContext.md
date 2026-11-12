@@ -1,4 +1,4 @@
-﻿# SystemContext — Service Positioning
+# SystemContext — Service Positioning
 
 ## Service Positioning
 
@@ -15,7 +15,7 @@ Admin Browser
           │
           ▼
 Doctheca :5012 ─────► SignaCore :5002
-  │                    hosted code exchange/prepared logout + OIDC/JWKS
+  │                    hosted code exchange/standard end-session logout + OIDC/JWKS
   ├────► PostgreSQL
   ├────► SeaweedFS/MinIO (legacy objects only)
   ├────► OpenSearch
@@ -49,7 +49,7 @@ See [Internal API](../Integration/InternalApi.md) for pagination and deployment 
 
 | Dependency | Purpose |
 |------|------|
-| SignaCore | Hosted sign-in, code exchange, prepared logout, OIDC discovery/JWKS |
+| SignaCore | Hosted sign-in, code exchange, standard RP-initiated logout, OIDC discovery/JWKS |
 | PostgreSQL | Files, parse records, and locally synchronized blocks/images |
 | StructaDoc (external repository, :8080) | Primary-ownership storage of document originals and parse artifacts; Parse Run execution (MinerU provider + LibreOffice conversion fallback); Blocks/Markdown/Assets APIs |
 | MinIO / SeaweedFS / LocalFile | Read-only compatibility and delete cleanup for legacy (pre-migration uploaded) files and parse images; structure audio under the `audio/` prefix (S3 only, optional) |
