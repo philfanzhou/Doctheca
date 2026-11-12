@@ -151,10 +151,12 @@ public static class AdminOidcRegistration
 
                     // A response without a state or an issuer parameter is rejected before any
                     // authority interaction; a present issuer must then equal the discovery
-                    // issuer. The comparison uses the cached configuration of the challenge.
+                    // issuer. The raw query is the decision input: the handler has already
+                    // replaced the message's state with its userstate portion by this point, and
+                    // the comparison uses the cached configuration of the challenge.
                     var issuer = context.ProtocolMessage.Iss;
-                    if (string.IsNullOrEmpty(context.ProtocolMessage.State)
-                        || string.IsNullOrEmpty(issuer))
+                    var state = context.Request.Query["state"].ToString();
+                    if (string.IsNullOrEmpty(state) || string.IsNullOrEmpty(issuer))
                     {
                         context.Fail(AdminOidcConstants.InvalidResponseFailure);
                         return;

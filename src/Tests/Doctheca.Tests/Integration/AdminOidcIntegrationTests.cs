@@ -70,7 +70,7 @@ public sealed partial class AdminOidcIntegrationTests(PostgreSqlFixture database
         var query = QueryHelpers.ParseQuery(response.Headers.Location.Query).ToDictionary(p => p.Key, p => p.Value.ToString());
         var cookies = response.Headers.GetValues("Set-Cookie").Select(value => value.Split(';')[0]).ToArray();
         Assert.Contains(cookies, cookie => cookie.StartsWith(".AspNetCore.Correlation."));
-        Assert.Contains(cookies, cookie => cookie.StartsWith(".AspNetCore.Nonce."));
+        Assert.Contains(cookies, cookie => cookie.StartsWith(".AspNetCore.OpenIdConnect.Nonce."));
         foreach (var cookie in response.Headers.GetValues("Set-Cookie"))
         {
             Assert.Contains("httponly", cookie.ToLowerInvariant());
@@ -83,7 +83,7 @@ public sealed partial class AdminOidcIntegrationTests(PostgreSqlFixture database
         Assert.Single(handshake.Cookies, cookie => cookie.StartsWith(".AspNetCore.Correlation."));
 
     private static string NonceCookie(Handshake handshake) =>
-        Assert.Single(handshake.Cookies, cookie => cookie.StartsWith(".AspNetCore.Nonce."));
+        Assert.Single(handshake.Cookies, cookie => cookie.StartsWith(".AspNetCore.OpenIdConnect.Nonce."));
 
     private static Task<HttpResponseMessage> Callback(HttpClient client, Handshake handshake, string? code, string? query = null,
         string? cookies = null, CancellationToken cancellation = default, bool includeBinding = true)

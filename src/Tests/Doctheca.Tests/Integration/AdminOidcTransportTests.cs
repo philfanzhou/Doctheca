@@ -50,7 +50,7 @@ public sealed partial class AdminOidcIntegrationTests
 
         var handshake = await Start(client, "/#search");
         var correlationName = handshake.Cookies.Single(cookie => cookie.StartsWith(".AspNetCore.Correlation.")).Split('=')[0];
-        var nonceName = handshake.Cookies.Single(cookie => cookie.StartsWith(".AspNetCore.Nonce.")).Split('=')[0];
+        var nonceName = handshake.Cookies.Single(cookie => cookie.StartsWith(".AspNetCore.OpenIdConnect.Nonce.")).Split('=')[0];
         // Both single-purpose carrier cookies are scoped to the callback path, exactly like the
         // package's per-state binding cookie was.
         CookieProfile(Carrier(handshake.Response, correlationName), http, AdminOidcConstants.CallbackPath, "lax");

@@ -83,7 +83,8 @@ public sealed partial class AdminOidcIntegrationTests
         using var callbackResponse = await client.GetAsync(AdminOidcConstants.CallbackPath + query);
         Assert.Equal(missing is null ? HttpStatusCode.Redirect : HttpStatusCode.ServiceUnavailable, callbackResponse.StatusCode);
         using var returnResponse = await client.GetAsync(AdminOidcConstants.LogoutReturnPath + query);
-        Assert.Equal(HttpStatusCode.BadRequest, returnResponse.StatusCode);
+        Assert.Equal(missing is not null ? HttpStatusCode.ServiceUnavailable
+            : HttpStatusCode.BadRequest, returnResponse.StatusCode);
         if (missing is not null)
         {
             foreach (var response in new[] { callbackResponse, returnResponse })

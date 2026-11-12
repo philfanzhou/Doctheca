@@ -160,7 +160,7 @@ public sealed partial class AdminHostedFrontendTests(PostgreSqlFixture database,
         Assert.Equal(0, TicketCount(h.Factory));
         var remainingNames = (await h.Context.CookiesAsync()).Select(value => value.Name).ToArray();
         Assert.DoesNotContain(remainingNames, name => name == AdminOidcConstants.SessionCookie
-            || name.StartsWith(".AspNetCore.Correlation.") || name.StartsWith(".AspNetCore.Nonce."));
+            || name.StartsWith(".AspNetCore.Correlation.") || name.StartsWith(".AspNetCore.OpenIdConnect.Nonce."));
         Assert.Equal(401, await h.Page.EvaluateAsync<int>("async () => (await fetch('/admin/document-files')).status"));
     }
 
