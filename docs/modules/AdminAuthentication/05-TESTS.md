@@ -1,9 +1,9 @@
 # 05-TESTS — Doctheca Admin Authentication Tests
 
 Backend coverage uses real Program.cs, isolated PostgreSQL 16, synthetic signing keys and a fake
-SignaCore authority. It checks dual-token validation, non-admin denial, cancellation/replay,
+SignaCore authority. It checks ID-token validation and the non-admin denial, cancellation/replay,
 expiry/restart, identity-bound CSRF, mixed Bearer/session credentials, local-first revocation,
-prepared logout, concurrent/repeated exit and safe failure results.
+the standard end-session redirect, concurrent/repeated exit and safe failure results.
 
 Retirement regressions send empty, malformed, JSON and non-JSON bodies to all old POST routes
 with old Cookies and a live session: fixed 410, no token Cookie, no provider call and no hosted

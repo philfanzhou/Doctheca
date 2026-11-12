@@ -4,6 +4,7 @@ using System.Text.Json;
 using Doctheca.Host.Authentication;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Xunit;
@@ -13,7 +14,7 @@ namespace Doctheca.Tests.Integration;
 public sealed partial class AdminOidcIntegrationTests
 {
     private static string Carrier(HttpResponseMessage response, string name) => response.Headers.GetValues("Set-Cookie")
-        .Single(value => value.StartsWith(name + "=", StringComparison.Ordinal));
+        .Single(value => value.StartsWith(name, StringComparison.Ordinal));
 
     private static void CookieProfile(string cookie, bool http, string path, string sameSite, bool cleared = false)
     {
@@ -48,20 +49,26 @@ public sealed partial class AdminOidcIntegrationTests
         Assert.Equal(!http, csrfOptions.Cookie.Build(context).Secure);
 
         var handshake = await Start(client, "/#search");
-        var bindingName = handshake.BindingCookie.Split('=')[0];
-        CookieProfile(Carrier(handshake.Response, bindingName), http, AdminOidcConstants.CallbackPath, "lax");
-        Assert.Contains("expires=", Carrier(handshake.Response, bindingName));
+        var correlationName = handshake.Cookies.Single(cookie => cookie.StartsWith(".AspNetCore.Correlation.")).Split('=')[0];
+        var nonceName = handshake.Cookies.Single(cookie => cookie.StartsWith(".AspNetCore.OpenIdConnect.Nonce.")).Split('=')[0];
+        // Both single-purpose carrier cookies are scoped to the callback path, exactly like the
+        // package's per-state binding cookie was.
+        CookieProfile(Carrier(handshake.Response, correlationName), http, AdminOidcConstants.CallbackPath, "lax");
+        CookieProfile(Carrier(handshake.Response, nonceName), http, AdminOidcConstants.CallbackPath, "lax");
+        Assert.Contains("expires=", Carrier(handshake.Response, correlationName));
+        Assert.Contains("expires=", Carrier(handshake.Response, nonceName));
         var code = authority.Code(handshake.Query);
         using var signedIn = await Callback(client, handshake, code);
         Assert.Equal("/#search", signedIn.Headers.Location!.OriginalString);
-        CookieProfile(Carrier(signedIn, bindingName), http, AdminOidcConstants.CallbackPath, "lax", cleared: true);
+        CookieProfile(Carrier(signedIn, correlationName), http, AdminOidcConstants.CallbackPath, "lax", cleared: true);
+        CookieProfile(Carrier(signedIn, nonceName), http, AdminOidcConstants.CallbackPath, "lax", cleared: true);
         CookieProfile(Carrier(signedIn, AdminOidcConstants.SessionCookie), http, "/", "lax");
         Assert.Contains("expires=", Carrier(signedIn, AdminOidcConstants.SessionCookie));
         var sessionCookie = SessionCookie(signedIn);
         // ASP.NET requires an effective HTTPS request to issue and validate Always-secure
         // antiforgery credentials. A TLS proxy must keep its existing trusted forwarded-scheme configuration.
         using var csrfRequest = new HttpRequestMessage(HttpMethod.Get,
-            "https://admin.example.test/admin/auth/oidc/csrf");
+            (http ? "http" : "https") + "://admin.example.test/admin/auth/oidc/csrf");
         csrfRequest.Headers.Add("Cookie", sessionCookie);
         using var csrf = await client.SendAsync(csrfRequest);
         Assert.Equal(HttpStatusCode.OK, csrf.StatusCode);
@@ -73,18 +80,12 @@ public sealed partial class AdminOidcIntegrationTests
         using var loggedOut = await Logout(csrfClient, credentials);
         Assert.Equal(HttpStatusCode.Redirect, loggedOut.StatusCode);
         CookieProfile(Carrier(loggedOut, AdminOidcConstants.SessionCookie), http, "/", "lax", cleared: true);
-        var returnCarrier = Carrier(loggedOut, LogoutReturnCookie);
-        CookieProfile(returnCarrier, http, "/admin/auth/oidc/logout", "lax");
-        Assert.Contains("expires=", returnCarrier);
+        var state = QueryHelpers.ParseQuery(loggedOut.Headers.Location!.Query)["state"].ToString();
         using var returnRequest = new HttpRequestMessage(HttpMethod.Get,
-            AdminOidcConstants.LogoutReturnPath + "?state=" + Assert.Single(authority.LogoutForms)["state"]);
-        returnRequest.Headers.Add("Cookie", returnCarrier.Split(';')[0]);
+            AdminOidcConstants.LogoutReturnPath + "?state=" + Uri.EscapeDataString(state));
         using var returned = await client.SendAsync(returnRequest);
         Assert.Equal(AdminOidcConstants.SignedOutRedirect, returned.Headers.Location!.OriginalString);
-        CookieProfile(Carrier(returned, LogoutReturnCookie), http, "/admin/auth/oidc/logout", "lax", cleared: true);
-        using var replay = await client.SendAsync(new HttpRequestMessage(HttpMethod.Get, returnRequest.RequestUri)
-        { Headers = { { "Cookie", returnCarrier.Split(';')[0] } } });
-        Assert.Equal(HttpStatusCode.BadRequest, replay.StatusCode);
+        Assert.False(returned.Headers.Contains("Set-Cookie"));
         await AssertRevoked(client, sessionCookie);
         var surfaces = string.Join('\n', logs.Messages) + await signedIn.Content.ReadAsStringAsync()
             + await loggedOut.Content.ReadAsStringAsync() + returned.Headers.Location;
@@ -107,7 +108,9 @@ public sealed partial class AdminOidcIntegrationTests
         cancellation.Cancel();
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => callback);
         Assert.Equal(0, Tickets(factory).Count);
-        Failed(await Callback(client, handshake, code));
+        // The browser's carrier cookies were consumed by the cancelled callback: a replay of the
+        // navigation cannot redeem the code again.
+        Failed(await Callback(client, handshake, code, includeBinding: false));
         Assert.Equal(1, authority.Redeems);
     }
 }

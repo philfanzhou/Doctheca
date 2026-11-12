@@ -4,12 +4,13 @@
 
 1. The browser opens `/admin/auth/oidc/start` with a validated station-local return URL.
 2. Doctheca redirects to the trusted SignaCore hosted page with S256 PKCE, state and nonce.
-3. The callback consumes pending state once; code exchange stays server-side. Both tokens are
-   verified and strictly bound; the validated access-token administrator role authorizes sign-in.
+3. The framework's OpenID Connect handler consumes the callback; code exchange stays
+   server-side, and the validated ID-token administrator role authorizes sign-in.
 4. The browser receives only an opaque HttpOnly server-session Cookie and returns to its local
    route. Cookie-authenticated writes include identity-bound CSRF credentials.
 5. Expiry requires explicit reauthentication without refresh or write replay. Logout revokes
-   the local ticket first, then prepares provider logout and validates its navigation result.
+   the local ticket first, then redirects to the standard end-session endpoint with the stored
+   ID token as hint and lands back on the fixed signed-out result.
 
 Old POST login/refresh/logout return 410 without body binding or provider calls. Old token
 Cookies are ignored; header Bearer callers retain their strict validation path. Missing required

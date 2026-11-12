@@ -2,8 +2,9 @@
 
 ASP.NET Core OpenID Connect owns code exchange, PKCE, correlation/nonce and token validation;
 Cookie authentication owns the opaque reference, JwtBearer owns header credentials, and
-antiforgery owns identity-bound CSRF. Doctheca supplies strict dual-token validation, access-token
-administrator authorization before sign-in, bounded in-memory stores and prepared logout.
+antiforgery owns identity-bound CSRF. Doctheca supplies the strict authorization-response
+shape, ID-token administrator authorization before sign-in, bounded in-memory stores and the
+standard RP-initiated logout presentation.
 See [shared and local boundaries](07-HostedLogin.md#shared-and-local-responsibilities).
 
 `AdminAuthEndpoints` provides only fixed retirement handlers and the protected read-only

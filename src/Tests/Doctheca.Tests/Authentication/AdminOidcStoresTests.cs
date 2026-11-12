@@ -3,7 +3,6 @@ using Doctheca.Host.Authentication;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
-using SignaCore.Client.AspNetCore;
 using Xunit;
 
 namespace Doctheca.Tests.Authentication;
@@ -238,24 +237,46 @@ public sealed class AdminOidcStoresTests
     }
 
     /// <summary>
-    /// The fixed presentation mapping of the package's closed reason set (issue #70). The
-    /// decision input itself is package-internal; the gate's Allowed/Denied outcomes are covered
-    /// end-to-end by the integration suite (admin flow, non-admin denial, decision timeout).
+    /// The fixed presentation mapping of the generic handler's closed failure set. The decision
+    /// input is the remote-failure exception of the OpenID Connect handler; the gate denial and
+    /// the user's cancellation both merge into the <c>notAdmin</c> outcome, transport failures of
+    /// the authority (timeouts included) surface as identity-unavailable, and everything else is
+    /// a plain sign-in failure. The mapping is covered end-to-end by the integration suite.
     /// </summary>
     [Theory]
-    [InlineData(SignInReason.AccessDenied, "/?authError=notAdmin")]
-    [InlineData(SignInReason.UserCanceled, "/?authError=notAdmin")]
-    [InlineData(SignInReason.PreSignInDenied, "/?authError=notAdmin")]
-    [InlineData(SignInReason.AuthorityUnreachable, "/?authError=identityUnavailable")]
-    [InlineData(SignInReason.StateMismatch, "/?authError=signInFailed")]
-    [InlineData(SignInReason.IssuerMismatch, "/?authError=signInFailed")]
-    [InlineData(SignInReason.InvalidResponse, "/?authError=signInFailed")]
-    [InlineData(SignInReason.TokenExchangeFailed, "/?authError=signInFailed")]
-    [InlineData(SignInReason.InvalidToken, "/?authError=signInFailed")]
-    [InlineData(SignInReason.SessionStoreFull, "/?authError=signInFailed")]
-    public void SignInFailuresRedirectToBoundedSpaTargets(SignInReason reason, string expected)
+    [InlineData("notAdmin", "/?authError=notAdmin")]
+    [InlineData("accessDenied", "/?authError=notAdmin")]
+    [InlineData("unreachable", "/?authError=identityUnavailable")]
+    [InlineData("timeout", "/?authError=identityUnavailable")]
+    [InlineData("unreachableWrapped", "/?authError=identityUnavailable")]
+    [InlineData("protocol", "/?authError=signInFailed")]
+    [InlineData("validation", "/?authError=signInFailed")]
+    [InlineData("none", "/?authError=signInFailed")]
+    public void SignInFailuresRedirectToBoundedSpaTargets(string kind, string expected)
     {
-        Assert.Equal(expected, AdminLoginResponseWriter.RedirectTarget(reason));
+        Assert.Equal(expected, AdminLoginResponseWriter.RedirectTarget(Failure(kind)));
+    }
+
+    private static Exception? Failure(string kind) => kind switch
+    {
+        "notAdmin" => new Exception(AdminOidcConstants.NotAdminFailure),
+        "accessDenied" => AccessDenied(),
+        "unreachable" => new HttpRequestException("connection refused"),
+        "timeout" => new HttpRequestException("timed out", new TimeoutException("fake.timeout")),
+        // IdentityModel wraps discovery retrieval failures (IDX20803/IDX20807) around the
+        // transport error; the whole chain is inspected.
+        "unreachableWrapped" => new InvalidOperationException("IDX20803",
+            new IOException("IDX20807", new HttpRequestException("connection refused"))),
+        "protocol" => new Microsoft.IdentityModel.Protocols.OpenIdConnect.OpenIdConnectProtocolException("token endpoint error"),
+        "validation" => new Microsoft.IdentityModel.Tokens.SecurityTokenValidationException("invalid token"),
+        _ => null
+    };
+
+    private static Exception AccessDenied()
+    {
+        var exception = new Microsoft.IdentityModel.Protocols.OpenIdConnect.OpenIdConnectProtocolException("access_denied");
+        exception.Data["error"] = "access_denied";
+        return exception;
     }
 
     [Fact]
@@ -264,8 +285,7 @@ public sealed class AdminOidcStoresTests
         var context = new DefaultHttpContext();
         var body = new MemoryStream();
         context.Response.Body = body;
-        await AdminLoginResponseWriter.Instance.WriteSignInFailureAsync(
-            context, SignInReason.InvalidReturnUrl, CancellationToken.None);
+        await AdminLoginResponseWriter.WriteInvalidReturnUrlAsync(context, CancellationToken.None);
         Assert.Equal(StatusCodes.Status400BadRequest, context.Response.StatusCode);
         using var document = System.Text.Json.JsonDocument.Parse(body.ToArray());
         Assert.False(document.RootElement.GetProperty("success").GetBoolean());

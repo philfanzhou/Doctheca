@@ -61,7 +61,9 @@ public sealed partial class AdminHostedFrontendTests(PostgreSqlFixture database,
         var origin = $"http://{(nonLoopback ? "admin.doctheca.test" : "127.0.0.1")}:{appPort}";
         var authority = new OidcTestAuthority { AuthorityIssuer = $"http://{(nonLoopback ? "identity.doctheca.test" : "127.0.0.1")}:{providerPort}" };
         if (scenario == "unavailable") authority.DiscoveryDefect = "500";
-        if (scenario == "local") authority.LogoutFailure = "500";
+        // The local-only exit needs an authority that cannot accept the standard upstream
+        // sign-out: its discovery omits the end-session endpoint.
+        if (scenario == "local") authority.EndSessionUnavailable = true;
         if (scenario == "signInFailed") authority.TokenFailure = "500";
         var builder = WebApplication.CreateBuilder();
         builder.Logging.ClearProviders();
@@ -72,19 +74,21 @@ public sealed partial class AdminHostedFrontendTests(PostgreSqlFixture database,
             var query = context.Request.Query.ToDictionary(p => p.Key, p => p.Value.ToString());
             var callback = QueryHelpers.AddQueryString(query["redirect_uri"], new Dictionary<string, string?> {
                 ["state"] = query["state"], ["iss"] = authority.AuthorityIssuer,
-                [scenario == "cancelled" ? "error" : "code"] = scenario == "cancelled" ? "access_denied" : authority.Code(query, accessDefect: scenario == "user" ? "user" : "admin") });
+                [scenario == "cancelled" ? "error" : "code"] = scenario == "cancelled" ? "access_denied" : authority.Code(query, defect: scenario == "user" ? "id-user" : "valid") });
             context.Response.Redirect(callback);
         });
-        provider.MapGet("/oauth2/logout", (Microsoft.AspNetCore.Http.HttpContext context) =>
+        // The authority's standard RP-initiated end-session page: it returns the browser to the
+        // registered post-logout URI with the caller's state echoed back.
+        provider.MapGet(OidcTestAuthority.EndSessionPath, (Microsoft.AspNetCore.Http.HttpContext context) =>
         {
-            var form = authority.LogoutForms.Last();
-            context.Response.Redirect(QueryHelpers.AddQueryString(form["post_logout_redirect_uri"], "state", form["state"]));
+            var query = context.Request.Query.ToDictionary(p => p.Key, p => p.Value.ToString());
+            context.Response.Redirect(QueryHelpers.AddQueryString(query["post_logout_redirect_uri"], "state", query["state"]));
         });
         await provider.StartAsync();
         var time = new ManualOidcTime();
         var factory = CreateFactory(root, services =>
         {
-            services.AddHttpClient(SignaCore.Client.AspNetCore.HostedLoginDefaults.HttpClientName)
+            services.AddHttpClient(AdminOidcConstants.HttpClientName)
                 .ConfigurePrimaryHttpMessageHandler(() => authority);
             services.Replace(ServiceDescriptor.Singleton<TimeProvider>(time));
             configureServices?.Invoke(services);
@@ -106,7 +110,7 @@ public sealed partial class AdminHostedFrontendTests(PostgreSqlFixture database,
     }
 
     [Fact]
-    public async Task ProductionNonLoopbackHttpCompletesLoginCsrfWriteAndPreparedLogout()
+    public async Task ProductionNonLoopbackHttpCompletesLoginCsrfWriteAndStandardLogout()
     {
         await using var h = await Open(environment: "Production", nonLoopback: true);
         Assert.Equal("Production", h.Factory.Services.GetRequiredService<Microsoft.Extensions.Hosting.IHostEnvironment>().EnvironmentName);
@@ -139,8 +143,8 @@ public sealed partial class AdminHostedFrontendTests(PostgreSqlFixture database,
             Assert.Equal("/", cookie.Path);
             Assert.Equal(name == AdminOidcConstants.CsrfCookie ? SameSiteAttribute.Strict : SameSiteAttribute.Lax, cookie.SameSite);
         }
-        // A top-level form follows the provider/return redirects in Chromium. The existing
-        // SPA button's cross-origin fetch behavior is covered separately below.
+        // A top-level form follows the provider/end-session/return redirects in Chromium. The
+        // existing SPA button's cross-origin fetch behavior is covered separately below.
         var field = h.Factory.Services.GetRequiredService<Microsoft.Extensions.Options.IOptions<Microsoft.AspNetCore.Antiforgery.AntiforgeryOptions>>().Value.FormFieldName;
         await h.Page.EvaluateAsync("""
             async field => {
@@ -153,16 +157,15 @@ public sealed partial class AdminHostedFrontendTests(PostgreSqlFixture database,
             }
             """, field);
         await Assertions.Expect(h.Page.GetByRole(AriaRole.Alert)).ToContainTextAsync("已退出登录");
-        Assert.Single(h.Authority.LogoutForms);
         Assert.Equal(0, TicketCount(h.Factory));
         var remainingNames = (await h.Context.CookiesAsync()).Select(value => value.Name).ToArray();
         Assert.DoesNotContain(remainingNames, name => name == AdminOidcConstants.SessionCookie
-            || name == AdminOidcConstants.SessionCookie + "-logout-return" || name.Contains("-login-binding."));
+            || name.StartsWith(".AspNetCore.Correlation.") || name.StartsWith(".AspNetCore.OpenIdConnect.Nonce."));
         Assert.Equal(401, await h.Page.EvaluateAsync<int>("async () => (await fetch('/admin/document-files')).status"));
     }
 
     [Fact]
-    public async Task DeepLinkLoginExpiryReauthenticationAndPreparedLogout()
+    public async Task DeepLinkLoginExpiryReauthenticationAndStandardLogout()
     {
         await using var h = await Open();
         await h.Page.GotoAsync(h.Origin + "/#search");
@@ -182,7 +185,6 @@ public sealed partial class AdminHostedFrontendTests(PostgreSqlFixture database,
         await Assertions.Expect(h.Page.GetByRole(AriaRole.Button, new() { Name = "退出", Exact = true })).ToBeVisibleAsync();
         await h.Page.GetByRole(AriaRole.Button, new() { Name = "退出", Exact = true }).ClickAsync();
         await Assertions.Expect(h.Page.GetByRole(AriaRole.Alert)).ToContainTextAsync("已退出登录");
-        Assert.Single(h.Authority.LogoutForms);
         Assert.False(new Uri(h.Page.Url).Query.Contains("authResult"), "Result was not removed.");
     }
 
@@ -213,8 +215,7 @@ public sealed partial class AdminHostedFrontendTests(PostgreSqlFixture database,
     }
 
     private static int TicketCount(WebApplicationFactory<Program> factory) =>
-        ((SignaCore.Client.AspNetCore.InMemoryTicketStore)factory.Services
-            .GetRequiredService<SignaCore.Client.AspNetCore.ITicketStore>()).Count;
+        factory.Services.GetRequiredService<AdminOidcTicketStore>().Count;
 
     private sealed record BrowserHarness(string Root, string Origin, OidcTestAuthority Authority, WebApplication Provider,
         WebApplicationFactory<Program> Factory, IPlaywright Playwright, IBrowser Browser, IBrowserContext Context, IPage Page,

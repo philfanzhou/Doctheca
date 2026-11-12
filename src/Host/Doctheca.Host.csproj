@@ -8,13 +8,13 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.13" />
+    <!-- The admin hosted-login slice runs on the framework's own OpenID Connect handler. The
+         handler ships as this package in .NET 10 (outside the shared framework, like JwtBearer);
+         no SignaCore client package is referenced any more. -->
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.OpenIdConnect" Version="10.0.13" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.13" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
     <PackageReference Include="OpenSearch.Net" Version="2.2.0" />
-    <!-- Official SignaCore hosted-login client (issue #70): owns the OIDC code flow, the
-         server-side session tickets, the CSRF boundary, and the prepared logout. The host keeps
-         only the thin adaptation layer in src/Host/Authentication. -->
-    <PackageReference Include="SignaCore.Client.AspNetCore" Version="0.1.22" />
     <PackageReference Include="ServiceMantle.Diagnostics" Version="0.3.3" />
     <!-- PostgreSQL migration capabilities for the startup orchestration (issue #53): the
          session advisory lock provider (PostgreSqlMigrationLockProvider) and the target

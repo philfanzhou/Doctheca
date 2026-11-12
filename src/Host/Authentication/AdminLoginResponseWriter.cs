@@ -1,59 +1,100 @@
+using System.Net.Http;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.Http;
-using SignaCore.Client.AspNetCore;
+using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 
 namespace Doctheca.Host.Authentication;
 
 /// <summary>
-/// Presents the package's protocol outcomes in this host's fixed JSON/redirect shapes (issue
-/// #70). The package defines the outcomes; this writer keeps the browser-facing contract of the
-/// replaced self-written slice: failures redirect to the SPA root with one bounded
-/// <c>authError</c> value, an invalid return URL answers the fixed 400 body, and the session
-/// endpoint keeps its <c>success</c>/<c>data</c> envelope.
+/// The fixed presentation layer of the admin hosted-login slice (the framework's OpenID Connect
+/// handler defines the protocol; this writer keeps the browser-facing contract of the replaced
+/// package integration): failures redirect to the SPA root with one bounded <c>authError</c>
+/// value, an invalid return URL answers the fixed 400 body, and the session endpoint keeps its
+/// <c>success</c>/<c>data</c> envelope.
 /// </summary>
 /// <remarks>
-/// Reason mapping: <see cref="SignInReason.UserCanceled"/> and
-/// <see cref="SignInReason.PreSignInDenied"/> both surface as
-/// <c>authError=notAdmin</c>; discovery and token-endpoint transport failures surface as
-/// <c>authError=identityUnavailable</c>; every other protocol failure surfaces as
-/// <c>authError=signInFailed</c>. No other failure detail ever reaches the browser.
+/// Reason mapping: the pre-sign-in admin-gate denial and the user's cancellation both surface as
+/// <c>authError=notAdmin</c>; transport failures of the authority's discovery, JWKS, or token
+/// endpoints — backchannel timeouts included, which the timeout handler normalizes to
+/// <see cref="HttpRequestException"/> — surface as <c>authError=identityUnavailable</c>; every
+/// other protocol failure surfaces as <c>authError=signInFailed</c>. No other failure detail ever
+/// reaches the browser.
 /// </remarks>
-public sealed class AdminLoginResponseWriter : IHostedLoginResponseWriter
+public static class AdminLoginResponseWriter
 {
-    public static readonly AdminLoginResponseWriter Instance = new();
-
     internal const string SignInFailedRedirect = "/?authError=signInFailed";
     internal const string DeniedRedirect = "/?authError=notAdmin";
     internal const string IdentityUnavailableRedirect = "/?authError=identityUnavailable";
     internal const string InvalidReturnUrlMessage = "The return URL must be a path inside this site.";
     internal const string ReauthenticationRequired = "Re-authentication is required.";
 
-    public Task WriteSignInFailureAsync(HttpContext context, SignInReason reason,
-        CancellationToken cancellationToken)
+    /// <summary>
+    /// The fixed landing of one sign-in failure. The decision input is the closed failure set of
+    /// the OpenID Connect handler; the mapping keeps the package integration's bounded outcomes.
+    /// </summary>
+    internal static string RedirectTarget(Exception? failure)
     {
-        if (reason == SignInReason.InvalidReturnUrl)
+        if (failure is null)
         {
-            context.Response.StatusCode = StatusCodes.Status400BadRequest;
-            return context.Response.WriteAsJsonAsync(
-                new { success = false, message = InvalidReturnUrlMessage }, cancellationToken);
+            return SignInFailedRedirect;
         }
-        context.Response.Redirect(RedirectTarget(reason));
-        return Task.CompletedTask;
+
+        if (failure.Message == AdminOidcConstants.NotAdminFailure)
+        {
+            return DeniedRedirect;
+        }
+
+        if (failure is OpenIdConnectProtocolException protocol
+            && string.Equals(
+                protocol.Data["error"] as string,
+                "access_denied",
+                StringComparison.Ordinal))
+        {
+            // The user's cancellation merges with the denial outcome, exactly as before.
+            return DeniedRedirect;
+        }
+
+        return IsAuthorityUnavailable(failure) ? IdentityUnavailableRedirect : SignInFailedRedirect;
     }
 
-    public Task WriteFailurePageAsync(HttpContext context, SignInReason? reason,
-        CancellationToken cancellationToken)
+    /// <summary>
+    /// Whether the failure chain is a transport failure of the authority's endpoints — the
+    /// identity-unavailable outcome. IdentityModel wraps discovery and document retrieval errors
+    /// (for example <c>IOException</c>/<c>InvalidOperationException</c> around IDX20803/IDX20807),
+    /// so every link of the chain is inspected.
+    /// </summary>
+    internal static bool IsAuthorityUnavailable(Exception failure)
     {
-        // The failure page segment is only reached by a browser navigation that the failure
-        // redirect above never produces; answer it with the same bounded redirect so the SPA
-        // renders a fixed outcome instead of a package page.
-        context.Response.Redirect(reason is { } value ? RedirectTarget(value) : SignInFailedRedirect);
-        return Task.CompletedTask;
+        for (var exception = failure; exception is not null; exception = exception.InnerException)
+        {
+            if (exception is HttpRequestException or TimeoutException or IOException)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
-    public async Task WriteSessionStatusAsync(HttpContext context, SessionStatus status,
-        CancellationToken cancellationToken)
+    /// <summary>The fixed 400 body of an invalid sign-in-entry return URL; no pending sign-in is
+    /// ever created for the rejected input.</summary>
+    internal static Task WriteInvalidReturnUrlAsync(HttpContext context, CancellationToken cancellationToken)
     {
-        if (!status.Authenticated)
+        context.Response.StatusCode = StatusCodes.Status400BadRequest;
+        return context.Response.WriteAsJsonAsync(
+            new { success = false, message = InvalidReturnUrlMessage }, cancellationToken);
+    }
+
+    /// <summary>
+    /// The session-status endpoint's two fixed shapes. An anonymous, unknown, or expired session
+    /// answers the fixed re-authentication result; a live session reports its display name and the
+    /// expiry read back from the server-side ticket, never a token.
+    /// </summary>
+    internal static async Task WriteSessionStatusAsync(
+        HttpContext context, AuthenticateResult session, CancellationToken cancellationToken)
+    {
+        if (!session.Succeeded || session.Principal is null)
         {
             context.Response.StatusCode = StatusCodes.Status401Unauthorized;
             await context.Response.WriteAsJsonAsync(new
@@ -65,16 +106,6 @@ public sealed class AdminLoginResponseWriter : IHostedLoginResponseWriter
             return;
         }
 
-        // The expiry is read back from the server-side ticket behind the presented opaque
-        // cookie, the same value the replaced slice reported from its session properties.
-        DateTimeOffset? expiresAt = null;
-        if (context.Request.Cookies.TryGetValue(AdminOidcConstants.SessionCookie, out var key)
-            && !string.IsNullOrEmpty(key))
-        {
-            var ticket = await context.RequestServices.GetRequiredService<ITicketStore>()
-                .RetrieveAsync(key, cancellationToken);
-            expiresAt = ticket?.ExpiresUtc;
-        }
         context.Response.StatusCode = StatusCodes.Status200OK;
         await context.Response.WriteAsJsonAsync(new
         {
@@ -83,17 +114,9 @@ public sealed class AdminLoginResponseWriter : IHostedLoginResponseWriter
             {
                 authenticated = true,
                 reason = "authenticated",
-                username = status.DisplayName,
-                expiresAt
+                username = session.Principal.FindFirst("name")?.Value,
+                expiresAt = session.Properties?.ExpiresUtc
             }
         }, cancellationToken);
     }
-
-    internal static string RedirectTarget(SignInReason reason) => reason switch
-    {
-        SignInReason.AccessDenied or SignInReason.UserCanceled
-            or SignInReason.PreSignInDenied => DeniedRedirect,
-        SignInReason.AuthorityUnreachable => IdentityUnavailableRedirect,
-        _ => SignInFailedRedirect,
-    };
 }

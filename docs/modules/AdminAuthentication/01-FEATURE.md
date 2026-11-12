@@ -1,8 +1,9 @@
 # 01-FEATURE — Doctheca Admin Authentication
 
 The administration console uses SignaCore hosted login with a Confidential authorization-code
-client and S256 PKCE. Doctheca validates both tokens and authorizes the verified access-token
-`role=admin` before creating an opaque HttpOnly server-session Cookie. Tokens stay server-side.
+client and S256 PKCE on the framework's OpenID Connect handler. Doctheca validates the ID token
+and authorizes its verified `role=admin` before creating an opaque HttpOnly server-session
+Cookie. Tokens stay server-side.
 Ordinary users cannot create an administrator session. Bearer API callers retain their issuer,
 audience, discovery/JWKS and administrator-role checks.
 

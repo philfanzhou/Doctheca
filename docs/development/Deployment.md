@@ -1,4 +1,4 @@
-﻿# Deployment — Deployment & Operations
+# Deployment — Deployment & Operations
 
 ## Service Ports
 
@@ -172,7 +172,7 @@ are provided by Consul; `appsettings.json` only keeps the local-development fall
 | MinIO / SeaweedFS | Deployment-dependent (default 8333) | Object storage (S3-compatible; address comes from Consul `Oss:InternalEndpoint`): legacy objects read-only, structure audio under `audio/` |
 | Consul | 8500 | Shared configuration reads and service registration |
 | Loki | 3100 | Log aggregation (configured via Consul `Loki:Uri`) |
-| SignaCore | 5002 | Hosted admin login, prepared logout, OIDC discovery/JWKS |
+| SignaCore | 5002 | Hosted admin login, standard RP-initiated logout, OIDC discovery/JWKS |
 
 ## Admin Authentication Configuration
 
@@ -196,12 +196,14 @@ Hosted administration configuration (replace example hostnames and inject creden
 ```
 
 Register a Confidential SignaCore client with PerApplication audience and exact callback and
-post-logout registrations. AppId/AppSecret remain required server-only backchannel credentials;
+post-logout registrations; the registered post-logout URI is what the standard RP-initiated
+logout presents at SignaCore's `end_session_endpoint`, so the SignaCore version must publish it.
+AppId/AppSecret remain required server-only backchannel credentials;
 existing Bearer trust/audience configuration remains independent. Inject secrets at runtime.
 The current SPA uses [hosted login](../modules/AdminAuthentication/07-HostedLogin.md).
 
 Canonical HTTP and HTTPS callback/post-logout pairs are accepted in every environment, with
-matching scheme, host and port and exact registered paths. All four hosted Cookie carriers and
+matching scheme, host and port and exact registered paths. All hosted Cookie carriers and
 their clear operations follow the configured external callback scheme: HTTPS uses Secure, HTTP
 omits it, independently of environment and inbound scheme. For TLS termination, keep HTTPS
 callbacks and existing trusted forwarded-scheme handling; ASP.NET antiforgery issuance/validation needs an

@@ -137,3 +137,47 @@ keeps its property name under the renamed `ProtocolValidationOptions` type.
 
 Rollback restores the previous project-file package version together with the previous type names,
 or the previous complete API/SPA image. No SQL or configuration migration applies.
+
+## Generic OIDC handler migration (package removal)
+
+The `SignaCore.Client.AspNetCore` package reference is removed entirely (SignaCore ADR 0010 opened
+its deprecation window), and the admin sign-in runs on the framework's own
+`Microsoft.AspNetCore.Authentication.OpenIdConnect` handler — referenced as a package in .NET 10,
+like JwtBearer. Every browser-facing contract is unchanged: the six `/admin/auth/oidc` routes and
+their fixed bodies/statuses, the `docthecaAdminSession`/`docthecaAdminCsrf` Cookies with
+`X-CSRF-TOKEN`, the `/?authError=...` and `/?authResult=signedOut` landings, the fixed
+401/403/503 shapes of the session boundary, and the `{"token"}`/`{"outcome"}` JSON envelopes.
+
+SignaCore-side registration does not change in value: the same
+`<origin>/admin/auth/oidc/logout/return` URI registered as `PostLogout` is what the standard
+RP-initiated logout now presents as `post_logout_redirect_uri` at Discovery's
+`end_session_endpoint`. The previous prepared-logout server call (`POST /oauth2/logout/requests`)
+is no longer made; SignaCore 0.1.x publishes the standard end-session endpoint since ADR 0010
+stage 1, and an authority without it degrades logout to the fixed `{"outcome":"local_only"}`
+local revocation. Deployments must run a SignaCore version that publishes
+`end_session_endpoint`.
+
+Declared behavioral differences of the generic path:
+
+- The client authenticates the token request with `client_secret_post` (form body) instead of
+  HTTP Basic; the secret still never reaches the browser. SignaCore accepts both.
+- The access token is no longer client-validated; the sign-in gate asserts the verified ID
+  token's `role=admin`, and the session's expiry is taken from the token response's
+  `expires_in`. Scope echoes, duplicate token-response members and response sizes are no longer
+  client-policed.
+- The ticket store evicts the least-recently-used session at its 4096 capacity instead of
+  refusing new sign-ins; the oldest idle session answers the fixed re-authentication result.
+- Sign-in carrier Cookies are the framework's correlation/nonce Cookies (HttpOnly, Lax, scoped to
+  the callback path) instead of the package's per-state binding Cookie; the session Cookie now
+  carries a data-protected key, so replicas must share the ASP.NET data-protection key ring.
+- A valid sign-out return is idempotent (its protected state replays to the same SPA result)
+  instead of one-time; a logout whose upstream redirect cannot be constructed keeps the local
+  revocation and answers `local_only`, exactly as before.
+- Discovery defects that only affect later stages (a wrong issuer value, an unusable JWKS)
+  surface at the callback instead of the sign-in start; transport failures of the authority keep
+  the `identityUnavailable` outcome at both stages.
+
+Rollback restores the previous complete API/SPA image; in-process sessions require sign-in again
+in either direction. No SQL or configuration migration applies; the required configuration keys
+are unchanged.
+
