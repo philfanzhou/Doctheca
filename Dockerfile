@@ -35,7 +35,7 @@ COPY --from=frontend-build /wwwroot src/Host/wwwroot
 RUN dotnet publish "src/Host/Doctheca.Host.csproj" -c Release -o /app/publish /p:UseAppHost=false
 
 # ========== Stage 3: Runtime ==========
-FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS final
+FROM mcr.microsoft.com/dotnet/aspnet:11.0 AS final
 
 # Keep dotnet as a child so fatal signals terminate it normally, and preserve its
 # exit status. The default image must not require callers to add docker --init.
