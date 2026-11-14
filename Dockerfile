@@ -14,7 +14,7 @@ COPY frontend/ ./
 RUN npm run build
 
 # ========== Stage 2: Build & Publish Backend ==========
-FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:10.0 AS backend-build
+FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:11.0 AS backend-build
 WORKDIR /src
 
 COPY src/Common/Doctheca.Common.csproj src/Common/
