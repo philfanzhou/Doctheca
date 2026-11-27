@@ -38,7 +38,7 @@ public interface ISearchIndexService
     /// <summary>
     /// Exact search (OpenSearch BM25)
     /// </summary>
-    Task<(List<SearchResultModel> Results, int TotalCount, string? NextToken)> ExactSearchAsync(
-        string query, bool phrase, SearchFilterModel? filter, int pageSize, string? pageToken);
+    Task<(List<SearchResult> Results, int TotalCount, string? NextToken)> ExactSearchAsync(
+        string query, bool phrase, SearchFilter? filter, int pageSize, string? pageToken);
 
 }

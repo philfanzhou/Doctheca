@@ -18,7 +18,7 @@ internal static class MarkdownExportHelper
     /// <summary>
     /// Replace stored image references in markdown with relative paths (images/name) for ZIP packaging.
     /// </summary>
-    public static string ReplaceImagePathsRelative(string markdown, IReadOnlyList<DocumentParseImageModel> images)
+    public static string ReplaceImagePathsRelative(string markdown, IReadOnlyList<DocumentParseImage> images)
     {
         foreach (var img in images)
         {
@@ -34,8 +34,8 @@ internal static class MarkdownExportHelper
     /// </summary>
     public static async Task<string> ReplaceImagePathsBase64Async(
         string markdown,
-        IReadOnlyList<DocumentParseImageModel> images,
-        Func<DocumentParseImageModel, Task<Stream?>> imageOpener,
+        IReadOnlyList<DocumentParseImage> images,
+        Func<DocumentParseImage, Task<Stream?>> imageOpener,
         ILogger logger)
     {
         foreach (var img in images)
@@ -75,8 +75,8 @@ internal static class MarkdownExportHelper
     /// </summary>
     public static async Task<string> ReplaceImagePathsAsync(
         string markdown,
-        IReadOnlyList<DocumentParseImageModel> images,
-        Func<DocumentParseImageModel, Task<string?>> urlResolver,
+        IReadOnlyList<DocumentParseImage> images,
+        Func<DocumentParseImage, Task<string?>> urlResolver,
         ILogger logger)
     {
         foreach (var img in images)
@@ -108,8 +108,8 @@ internal static class MarkdownExportHelper
     public static async Task<MemoryStream> BuildMarkdownZipAsync(
         string fileName,
         string markdownContent,
-        IReadOnlyList<DocumentParseImageModel> images,
-        Func<DocumentParseImageModel, Task<Stream?>> imageOpener,
+        IReadOnlyList<DocumentParseImage> images,
+        Func<DocumentParseImage, Task<Stream?>> imageOpener,
         ILogger logger)
     {
         var ms = new MemoryStream();

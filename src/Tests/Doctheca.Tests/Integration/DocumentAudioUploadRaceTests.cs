@@ -1,6 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
-using Doctheca.Common.Oss;
+using Doctheca.Common.ObjectStorage;
 using Doctheca.Database;
 using Doctheca.Database.Repositories;
 using Doctheca.Domain.Models;
@@ -27,11 +27,11 @@ public sealed partial class StructureAudioEndpointTests
         var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously); var calls = 0;
         using var factory = Factory(configure: services =>
         {
-            services.RemoveAll<IOssService>(); services.AddScoped<IOssService>(sp =>
+            services.RemoveAll<IObjectStore>(); services.AddScoped<IObjectStore>(sp =>
             {
-                var actual = new S3OssService(sp.GetRequiredService<IOptions<OssOptions>>().Value); var proxy = new Mock<IOssService>(MockBehavior.Strict);
-                proxy.Setup(x => x.UploadAsync(It.IsAny<Stream>(), It.IsAny<string>(), It.IsAny<string>(), OssBucket.Audio, It.IsAny<string>(), It.IsAny<CancellationToken>()))
-                    .Returns(async (Stream bytes, string name, string type, OssBucket bucket, string? folder, CancellationToken ct) =>
+                var actual = new S3ObjectStore(sp.GetRequiredService<IOptions<StoreOptions>>().Value); var proxy = new Mock<IObjectStore>(MockBehavior.Strict);
+                proxy.Setup(x => x.UploadAsync(It.IsAny<Stream>(), It.IsAny<string>(), It.IsAny<string>(), Bucket.Audio, It.IsAny<string>(), It.IsAny<CancellationToken>()))
+                    .Returns(async (Stream bytes, string name, string type, Bucket bucket, string? folder, CancellationToken ct) =>
                     {
                         var key = await actual.UploadAsync(bytes, name, type, bucket, folder, ct);
                         if (Interlocked.Increment(ref calls) == 1) { uploaded.TrySetResult(); await release.Task.WaitAsync(ct); }

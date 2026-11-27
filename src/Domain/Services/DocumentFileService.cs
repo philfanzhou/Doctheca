@@ -18,7 +18,7 @@ public class DocumentFileService : IDocumentFileService
         _logger = logger;
     }
 
-    public async Task<DocumentFileModel> CreateAsync(DocumentFileModel model)
+    public async Task<DocumentFile> CreateAsync(DocumentFile model)
     {
         model.CreatedAt = DateTimeOffset.UtcNow;
         await _fileRepository.AddAsync(model);
@@ -26,37 +26,17 @@ public class DocumentFileService : IDocumentFileService
         return model;
     }
 
-    public async Task<DocumentFileModel?> GetByIdAsync(Guid id)
+    public async Task<DocumentFile?> GetByIdAsync(Guid id)
     {
         return await _fileRepository.GetByIdAsync(id);
     }
 
-    public async Task<(List<DocumentFileModel> Items, int TotalCount)> GetListAsync(int page, int size, string? fileName = null)
+    public async Task<(List<DocumentFile> Items, int TotalCount)> GetListAsync(int page, int size, string? fileName = null)
     {
         return await _fileRepository.GetListAsync(page, size, fileName);
     }
 
-    public async Task<DocumentFileModel?> UpdateMetadataAsync(Guid id, string? subject, string? grade, string? year)
-    {
-        var updated = await _fileRepository.UpdateMetadataAsync(id, subject, grade, year);
-        if (!updated)
-        {
-            _logger.LogWarning("Document file not found for metadata update: {Id}", id);
-            return null;
-        }
-
-        var model = await _fileRepository.GetByIdAsync(id);
-        if (model != null)
-        {
-            _logger.LogInformation(
-                "Document file metadata updated: {Id}, Subject={Subject}, Grade={Grade}, Year={Year}",
-                id, model.Subject ?? "(none)", model.Grade ?? "(none)", model.Year ?? "(none)");
-        }
-
-        return model;
-    }
-
-    public async Task<DocumentFileModel?> AttachStructaDocDocumentAsync(Guid id, Guid structaDocDocumentId)
+    public async Task<DocumentFile?> AttachStructaDocDocumentAsync(Guid id, Guid structaDocDocumentId)
     {
         var updated = await _fileRepository.AttachStructaDocDocumentAsync(id, structaDocDocumentId);
         if (!updated)
@@ -69,9 +49,4 @@ public class DocumentFileService : IDocumentFileService
     }
 
     public Task<IReadOnlyList<string>?> DeleteWithAudioAsync(Guid id) => _fileRepository.DeleteWithAudioAsync(id);
-
-    public async Task<bool> DeleteAsync(Guid id)
-    {
-        return await _fileRepository.DeleteAsync(id);
-    }
 }

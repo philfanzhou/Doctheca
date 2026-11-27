@@ -30,7 +30,7 @@
 
 ## Integration Tests (not implemented)
 
-The endpoint layer (`DocumentExportEndpoints`) and the shared cores (`ExportMarkdownCore` / `ExportHtmlCore`) currently have no integration tests; they need to be added to cover FR-06 / FR-07 and AC-04 through AC-09.
+The endpoint layer (`DocumentExport`) and the shared cores (`ExportMarkdownCore` / `ExportHtmlCore`) currently have no integration tests; they need to be added to cover FR-06 / FR-07 and AC-04 through AC-09.
 
 | # | Test case | Coverage |
 |---|---------|------|
@@ -55,4 +55,4 @@ dotnet test src/Tests/Doctheca.Tests
 ## Coverage Targets
 
 - `MarkdownExportHelper` line coverage ≥ 80%
-- For the `DocumentExportEndpoints` endpoint layer, integration tests covering the precondition validation branches are recommended
+- For the `DocumentExport` endpoint layer, integration tests covering the precondition validation branches are recommended

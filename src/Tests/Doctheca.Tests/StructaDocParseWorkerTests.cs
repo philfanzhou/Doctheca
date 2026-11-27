@@ -5,7 +5,7 @@ using Microsoft.Extensions.Options;
 using Moq;
 using ServiceMantle;
 using ServiceMantle.Web.Logging;
-using Doctheca.Common.Oss;
+using Doctheca.Common.ObjectStorage;
 using Doctheca.Domain.Models;
 using Doctheca.Domain.Repositories;
 using Doctheca.Domain.Services;
@@ -23,7 +23,7 @@ public class StructaDocParseWorkerTests
     private readonly Mock<IStructaDocClient> _client = new();
     private readonly Mock<IStructaDocParseResultSync> _sync = new();
     private readonly Mock<ISearchIndexService> _searchIndex = new();
-    private readonly Mock<IOssService> _ossService = new();
+    private readonly Mock<IObjectStore> _ossService = new();
     private readonly StructaDocOptions _options = new()
     {
         BaseUrl = "http://structadoc.test",
@@ -40,7 +40,7 @@ public class StructaDocParseWorkerTests
             .ReturnsAsync(CreateFile(documentId: documentId));
         _client.Setup(x => x.CreateParseRunAsync(
                 documentId, job.Id.ToString("N"), null, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(CreateRun(runId, StructaDocParseRunStatus.Queued));
+            .ReturnsAsync(CreateRun(runId, ParseRunStatus.Queued));
 
         await Run((worker, provider) => worker.SubmitAsync(job, provider, CancellationToken.None));
 
@@ -64,7 +64,7 @@ public class StructaDocParseWorkerTests
             .ReturnsAsync(CreateFile(documentId: documentId));
         _client.Setup(x => x.CreateParseRunAsync(
                 documentId, It.IsAny<string>(), providerConfigId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(CreateRun(Guid.NewGuid(), StructaDocParseRunStatus.Queued));
+            .ReturnsAsync(CreateRun(Guid.NewGuid(), ParseRunStatus.Queued));
 
         await Run((worker, provider) => worker.SubmitAsync(job, provider, CancellationToken.None));
 
@@ -85,10 +85,10 @@ public class StructaDocParseWorkerTests
             .ReturnsAsync(new MemoryStream([1, 2]));
         _client.Setup(x => x.UploadDocumentAsync(
                 file.FileName, file.ContentType, It.IsAny<Stream>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new StructaDocDocumentResponse { Id = documentId, MediaType = "application/pdf" });
+            .ReturnsAsync(new DocumentResponse { Id = documentId, MediaType = "application/pdf" });
         _client.Setup(x => x.CreateParseRunAsync(
                 documentId, It.IsAny<string>(), null, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(CreateRun(Guid.NewGuid(), StructaDocParseRunStatus.Queued));
+            .ReturnsAsync(CreateRun(Guid.NewGuid(), ParseRunStatus.Queued));
 
         await Run((worker, provider) => worker.SubmitAsync(job, provider, CancellationToken.None));
 
@@ -127,7 +127,7 @@ public class StructaDocParseWorkerTests
         var file = CreateFile(documentId: Guid.NewGuid());
         _fileService.Setup(x => x.GetByIdAsync(job.DocumentFileId)).ReturnsAsync(file);
         _client.Setup(x => x.GetParseRunAsync(runId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(CreateRun(runId, StructaDocParseRunStatus.Succeeded));
+            .ReturnsAsync(CreateRun(runId, ParseRunStatus.Succeeded));
         _sync.Setup(x => x.SyncAsync(job, runId, It.IsAny<CancellationToken>()))
             .ReturnsAsync("# markdown");
 
@@ -144,10 +144,10 @@ public class StructaDocParseWorkerTests
         var runId = Guid.NewGuid();
         var job = CreateJob(DocumentParseStatus.Parsing, runId: runId);
         _client.Setup(x => x.GetParseRunAsync(runId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new StructaDocParseRunResponse
+            .ReturnsAsync(new ParseRunResponse
             {
                 Id = runId,
-                Status = StructaDocParseRunStatus.Failed,
+                Status = ParseRunStatus.Failed,
                 ErrorCode = "provider-task-failed",
                 ErrorMessage = "MinerU rejected the file",
             });
@@ -168,7 +168,7 @@ public class StructaDocParseWorkerTests
         var runId = Guid.NewGuid();
         var job = CreateJob(DocumentParseStatus.Parsing, runId: runId);
         _client.Setup(x => x.GetParseRunAsync(runId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(CreateRun(runId, StructaDocParseRunStatus.Running));
+            .ReturnsAsync(CreateRun(runId, ParseRunStatus.Running));
 
         await Run((worker, provider) => worker.PollAsync(job, provider, CancellationToken.None));
 
@@ -177,7 +177,7 @@ public class StructaDocParseWorkerTests
             It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>(),
             It.IsAny<Guid?>()), Times.Never);
         _sync.Verify(x => x.SyncAsync(
-            It.IsAny<DocumentParseModel>(), It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never);
+            It.IsAny<DocumentParse>(), It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]
@@ -202,7 +202,7 @@ public class StructaDocParseWorkerTests
         var runId = Guid.NewGuid();
         var job = CreateJob(DocumentParseStatus.Parsing, runId: runId);
         _client.Setup(x => x.GetParseRunAsync(runId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync((StructaDocParseRunResponse?)null);
+            .ReturnsAsync((ParseRunResponse?)null);
 
         await Run((worker, provider) => worker.PollAsync(job, provider, CancellationToken.None));
 
@@ -215,7 +215,7 @@ public class StructaDocParseWorkerTests
 
     // ── helpers ──
 
-    private static DocumentParseModel CreateJob(string status, string modelVersion = "vlm", Guid? runId = null) => new()
+    private static DocumentParse CreateJob(string status, string modelVersion = "vlm", Guid? runId = null) => new()
     {
         Id = Guid.NewGuid(),
         DocumentFileId = Guid.NewGuid(),
@@ -224,7 +224,7 @@ public class StructaDocParseWorkerTests
         StructaDocParseRunId = runId,
     };
 
-    private static DocumentFileModel CreateFile(Guid? documentId, string? filePath = null, Guid? id = null) => new()
+    private static DocumentFile CreateFile(Guid? documentId, string? filePath = null, Guid? id = null) => new()
     {
         Id = id ?? Guid.NewGuid(),
         FileName = "paper.pdf",
@@ -233,7 +233,7 @@ public class StructaDocParseWorkerTests
         StructaDocDocumentId = documentId,
     };
 
-    private static StructaDocParseRunResponse CreateRun(Guid runId, string status) => new()
+    private static ParseRunResponse CreateRun(Guid runId, string status) => new()
     {
         Id = runId,
         Status = status,

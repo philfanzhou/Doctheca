@@ -2,7 +2,7 @@
 
 ## Current test status
 
-**No unit test coverage at present.** `DocumentAnalysisServiceTests.cs` does not exist under `src/Tests/Doctheca.Tests/`; the metadata analysis functionality currently has zero tests. Project tests are concentrated in files such as `ConstantsTests` / `DocumentFileServiceTests` / `DocumentFileDeleteCleanupTests` / `DocumentParseBlockServiceTests` / `OpenSearchIndexServiceTests`; see the repository test directory for details.
+**No unit test coverage at present.** `DocumentAnalysisServiceTests.cs` does not exist under `src/Tests/Doctheca.Tests/`; the metadata analysis functionality currently has zero tests. Project tests are concentrated in files such as `ConstantsTests` / `DocumentFileServiceTests` / `DocumentFileDeleteCleanupTests` / `DocumentParseBlockServiceTests` / `IndexManagerTests`; see the repository test directory for details.
 
 > This repository uses xUnit + Moq + FluentAssertions. New tests must follow the test conventions for the `doctheca` project in `.agent/rules/coding-policy.md`.
 
@@ -35,7 +35,7 @@ The following are suggested coverage directions based on the `internal` testable
 | IT-02 | After parsing completes, metadata is missing → LLM called to fill it, DB updated, OpenSearch synced | `StructaDocParseWorker` + `DocumentAnalysisService` (mock) | AC-04 |
 | IT-03 | LLM call fails → parse status remains `parsed`, OpenSearch index already written | `StructaDocParseWorker` | AC-05 |
 | IT-04 | `IDocumentAnalysisService` not registered (ApiKey empty) → Worker skips, logs at Info | `StructaDocParseWorker` (no DI registration) | AC-06 |
-| IT-05 | Manual PUT metadata → DB update + OpenSearch `UpdateByQueryAsync` sync | `DocumentFileEndpoints` + `OpenSearchIndexService` | AC-07 |
+| IT-05 | Manual PUT metadata → DB update + OpenSearch `UpdateByQueryAsync` sync | `DocumentFiles` + `IndexService` | AC-07 |
 | IT-06 | LLM analysis does not overwrite existing fields (keeps original DB values) | `StructaDocParseWorker.AnalyzeMetadataIfMissingAsync` | AC-08 |
 
 ## How to run
@@ -45,7 +45,7 @@ The following are suggested coverage directions based on the `internal` testable
 dotnet test src/Tests/Doctheca.Tests --configuration Release
 
 # Filter by existing test file (example)
-dotnet test src/Tests/Doctheca.Tests --filter "FullyQualifiedName~OpenSearchIndexServiceTests"
+dotnet test src/Tests/Doctheca.Tests --filter "FullyQualifiedName~IndexManagerTests"
 ```
 
 ## Coverage targets (pending DM-18)

@@ -4,11 +4,11 @@
 
 | Type | Convention | Example |
 |------|------|------|
-| Endpoint static class | `XxxEndpoints` | `DocumentExportEndpoints` |
+| Endpoint static class | Named after the resource, in `Doctheca.Service.Endpoints` | `DocumentExport` |
 | Helper static class | `XxxHelper`, internal | `MarkdownExportHelper` |
-| Image model | `DocumentParseImageModel` | — |
+| Image model | `DocumentParseImage` | — |
 | Method | PascalCase, Async suffix | `ReplaceImagePathsBase64Async`, `BuildMarkdownZipAsync` |
-| Parameter | camelCase | `markdownContent`, `ossService`, `parseId` |
+| Parameter | camelCase | `markdownContent`, `objectStore`, `parseId` |
 | Local variable | camelCase | `htmlBody`, `zipFileName`, `presignedUrl` |
 
 ## Method Naming Conventions (MarkdownExportHelper)
@@ -75,7 +75,7 @@ Uniform response format: `{ "success": false, "message": "...", "errorCode": "..
 
 ## Dispose Conventions
 
-- `using var imgStream = await ossService.DownloadAsync(...)` — each image stream is released individually
+- `using var imgStream = await objectStore.DownloadAsync(...)` — each image stream is released individually
 - `ZipArchive` is wrapped in `using`; `leaveOpen: true` only spares the underlying `MemoryStream`
 - `StringBuilder` / `MemoryStream` need no explicit Dispose
 

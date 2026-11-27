@@ -1,4 +1,4 @@
-using Doctheca.Common.Oss;
+using Doctheca.Common.ObjectStorage;
 using Doctheca.Database;
 using Doctheca.Database.Repositories;
 using Microsoft.EntityFrameworkCore;
@@ -18,8 +18,8 @@ public sealed partial class AdminHostedFrontendTests
         var settings = minio.Settings(bucket); settings["Oss:PublicBaseUrl"] = "";
         await using var h = await Open(settings: settings, configureServices: services =>
         {
-            services.RemoveAll<IOssService>();
-            services.AddScoped<IOssService>(sp => new S3OssService(sp.GetRequiredService<IOptions<OssOptions>>().Value));
+            services.RemoveAll<IObjectStore>();
+            services.AddScoped<IObjectStore>(sp => new S3ObjectStore(sp.GetRequiredService<IOptions<StoreOptions>>().Value));
         });
         var bytes = PlayableWave.Bytes(); var seed = await InternalAudioEndpointTests.SeedAsync(h.Factory.Services, bytes);
         await minio.PutAsync(bucket, $"audio/{seed.Parse:N}/{seed.Audio:N}.wav", bytes);
@@ -36,7 +36,7 @@ public sealed partial class AdminHostedFrontendTests
         finally
         {
             using var scope = h.Factory.Services.CreateScope(); var db = scope.ServiceProvider.GetRequiredService<DocthecaDbContext>();
-            await new DocumentFileRepository(db).DeleteAsync(seed.File);
+            await new DocumentFileRepository(db).DeleteWithAudioAsync(seed.File);
             await db.StructureDefinitions.Where(x => x.Id == seed.Definition).ExecuteDeleteAsync();
         }
     }

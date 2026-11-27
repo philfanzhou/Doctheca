@@ -23,7 +23,7 @@ public sealed class AnnotationSnippetTests
                 hits = new[] { new { _source = new { text = "raw body", caption = "raw caption", footnote = "raw note" }, highlight = highlight.RootElement } }
             }
         });
-        var result = OpenSearchResponseParser.ParseSearchResponse(json, true, 100).Results.Single();
+        var result = ResponseParser.ParseSearchResponse(json, true, 100).Results.Single();
         result.AssociatedText.Should().Be(expected);
         result.Caption.Should().Be("raw caption");
         result.Footnote.Should().Be("raw note");
@@ -42,7 +42,7 @@ public sealed class AnnotationSnippetTests
         {
             hits = new { total = new { value = 1 }, hits = new[] { new { _source = new { text, caption, footnote } } } }
         });
-        var result = OpenSearchResponseParser.ParseSearchResponse(json, false, 100).Results.Single();
+        var result = ResponseParser.ParseSearchResponse(json, false, 100).Results.Single();
         result.AssociatedText.Should().Be(expected);
         result.Caption.Should().Be(string.IsNullOrEmpty(caption) ? null : caption);
         result.Footnote.Should().Be(string.IsNullOrEmpty(footnote) ? null : footnote);

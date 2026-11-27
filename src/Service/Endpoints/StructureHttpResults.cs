@@ -2,7 +2,7 @@ using Microsoft.AspNetCore.Http;
 using Doctheca.Domain.Models.Structure;
 using Doctheca.Domain.Services.Structure;
 
-namespace Doctheca.Service;
+namespace Doctheca.Service.Endpoints;
 
 /// <summary>Maps structure results onto the unified JSON envelope (200/400/404/409).</summary>
 internal static class StructureHttpResults
@@ -30,7 +30,7 @@ internal static class StructureHttpResults
     internal static IResult ParseNotFound() =>
         Results.NotFound(new { success = false, message = "Parse record not found", errorCode = StructureErrorCodes.ParseNotFound });
 
-    internal static object Definition(StructureDefinitionModel definition) => new
+    internal static object Definition(StructureDefinition definition) => new
     {
         id = definition.Id.ToString(),
         name = definition.Name,
@@ -50,7 +50,7 @@ internal static class StructureHttpResults
     {
         var levelNames = tree.Definition?.Levels.ToDictionary(level => level.Id, level => level.Name) ?? [];
         var children = tree.Nodes.ToLookup(node => node.ParentId);
-        object Node(DocumentStructureNodeModel node) => new
+        object Node(DocumentStructureNode node) => new
         {
             id = node.Id.ToString(),
             levelId = node.LevelId.ToString(),

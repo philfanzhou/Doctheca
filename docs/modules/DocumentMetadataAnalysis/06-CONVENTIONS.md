@@ -38,7 +38,7 @@ Error messages use Chinese (end-user facing), while internal exception messages 
 
 | Value | Semantics |
 |----|------|
-| `null` | No change (UpdateMetadataAsync parameters) |
+| `null` | No change (the metadata update parameters) |
 | `""` (empty string) | Clear the field |
 | `DocumentMetadataAnalysis` field is null | The LLM could not determine the field |
 
@@ -52,4 +52,4 @@ Error messages use Chinese (end-user facing), while internal exception messages 
 
 ## Null validation boundary
 
-> This feature **does not enforce validation** of the value ranges for subject/grade/year. `DocthecaConstants.ValidSubjects` / `ValidGrades` serve only as LLM prompt examples and a reserve for future validation; `UpdateMetadataAsync` and the Entity column constraints only provide `MaxLength` + nullable fallbacks.
+> This feature **does not enforce validation** of the value ranges for subject/grade/year. The ranges the LLM prompt suggests (English/语文/数学/物理/化学/生物/其他 and K, G1–G12) are examples only; the entity column constraints provide `MaxLength` + nullable fallbacks.

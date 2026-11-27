@@ -112,6 +112,6 @@ not logged. No remote annotation backfill/re-sync or new UI is introduced. Deplo
 
 ## Validation
 
-- Unit/integration tests: `src/Tests/Doctheca.Tests/` (`StructaDoc/StructaDocClientTests`, `StructaDoc/StructaDocPagesClientTests`, `Parsing/StructaDocParseResultSyncTests`, `Parsing/StructaDocAnnotationSyncTests`, `Parsing/StructaDocPagesSyncTests`, `Parsing/DocumentParsePageIdentityTests`, `Database/DocumentParsePageRepositoryTests`, `Database/PageMigrationTests`, `Database/AnnotationMigrationTests`, `OpenSearch/OpenSearchAnnotationTests`, `Parsing/ParseImageContentSourceTests`, `StructaDocParseWorkerTests`).
+- Unit/integration tests: `src/Tests/Doctheca.Tests/` (`StructaDoc/StructaDocClientTests`, `StructaDoc/StructaDocPagesClientTests`, `Parsing/StructaDocParseResultSyncTests`, `Parsing/StructaDocAnnotationSyncTests`, `Parsing/StructaDocPagesSyncTests`, `Parsing/DocumentParsePageIdentityTests`, `Database/DocumentParsePageRepositoryTests`, `Database/PageMigrationTests`, `Database/AnnotationMigrationTests`, `OpenSearch/OpenSearchAnnotationTests`, `Parsing/ImageContentSourceTests`, `StructaDocParseWorkerTests`).
 - Command: `dotnet test src/Doctheca.sln --configuration Release` (in this service's directory).
 - Before switching traffic, the `vlm` + batch endpoint combination must be validated with real documents in a real environment (ADR-0009 consequences clause).

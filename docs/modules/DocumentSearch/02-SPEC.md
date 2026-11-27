@@ -18,8 +18,8 @@ public interface ISearchIndexService
     Task DeleteParseIndexAsync(Guid parseId);
     Task DeleteDocumentFileIndexAsync(Guid documentFileId);
     Task UpdateDocumentFileMetadataAsync(Guid documentFileId, string? subject, string? grade, string? year);
-    Task<(List<SearchResultModel> Results, int TotalCount, string? NextToken)> ExactSearchAsync(
-        string query, bool phrase, SearchFilterModel? filter, int pageSize, string? pageToken);
+    Task<(List<SearchResult> Results, int TotalCount, string? NextToken)> ExactSearchAsync(
+        string query, bool phrase, SearchFilter? filter, int pageSize, string? pageToken);
 }
 ```
 
@@ -32,13 +32,13 @@ public interface ISearchIndexService
 | `UpdateDocumentFileMetadataAsync` | Refreshes subject/grade/year by `document_file_id` | After metadata updates (manual or LLM) |
 | `ExactSearchAsync` | OpenSearch BM25 search | HTTP search requests |
 
-### 1.2 ISearchDomainService (`src/Domain/Services/ISearchDomainService.cs`)
+### 1.2 ISearchService (`src/Domain/Services/ISearchService.cs`)
 
 ```csharp
-public interface ISearchDomainService
+public interface ISearchService
 {
-    Task<(List<SearchResultModel> Results, int TotalCount, string? NextToken)> ExactSearchAsync(
-        string query, bool phrase, SearchFilterModel? filter, int pageSize, string? pageToken);
+    Task<(List<SearchResult> Results, int TotalCount, string? NextToken)> ExactSearchAsync(
+        string query, bool phrase, SearchFilter? filter, int pageSize, string? pageToken);
 }
 ```
 
@@ -47,8 +47,8 @@ A thin wrapper around `ISearchIndexService.ExactSearchAsync` that degrades to em
 ### 1.3 Domain Models (`src/Domain/Models/`)
 
 ```csharp
-// SearchResultModel.cs
-public class SearchResultModel
+// SearchResult.cs
+public class SearchResult
 {
     public string DocumentName { get; set; } = string.Empty;
     public int PageNumber { get; set; }
@@ -61,8 +61,8 @@ public class SearchResultModel
     public DateTimeOffset? CreatedAt { get; set; }
 }
 
-// SearchFilterModel.cs
-public class SearchFilterModel
+// SearchFilter.cs
+public class SearchFilter
 {
     public string? DocumentTitle { get; set; }
     public string? Subject { get; set; }
@@ -75,7 +75,6 @@ public static class SearchMatchType
 {
     public const string ExactPhrase = "exact_phrase";
     public const string Stemmed = "stemmed";
-    public const string ExactWord = "exact_word";
 }
 
 // OpenSearchOptions.cs
@@ -86,7 +85,7 @@ public class OpenSearchOptions
 }
 ```
 
-> Note: `SearchResultModel` / `SearchFilterModel` / `OpenSearchOptions` / `SearchMatchType` each live in their own same-named files; `SearchConfig.cs` **does not exist**.
+> Note: `SearchResult` / `SearchFilter` / `OpenSearchOptions` / `SearchMatchType` each live in their own same-named files; `SearchConfig.cs` **does not exist**.
 
 ## 2. OpenSearch Index Spec (`BuildIndexBody`)
 
@@ -232,7 +231,7 @@ public class OpenSearchOptions
 
 ### 7.1 GET /admin/documents/search
 
-Defined in `DocumentSearchEndpoints.cs`, mapped to the path `/admin/documents/search`.
+Defined in `DocumentSearch.cs`, mapped to the path `/admin/documents/search`.
 
 | Parameter | Type | Default | Description |
 |------|------|--------|------|
@@ -277,8 +276,8 @@ Defined in `DocumentSearchEndpoints.cs`, mapped to the path `/admin/documents/se
 
 ### 7.2 Search Degradation
 
-- `SearchDomainService.ExactSearchAsync` catches any exception thrown by `ISearchIndexService.ExactSearchAsync` and returns `(Results: [], TotalCount: 0, NextToken: null)` after a LogWarning.
-- `OpenSearchIndexService.ExactSearchAsync` throws `InvalidOperationException` when OpenSearch returns a non-200 status.
+- `SearchService.ExactSearchAsync` catches any exception thrown by `ISearchIndexService.ExactSearchAsync` and returns `(Results: [], TotalCount: 0, NextToken: null)` after a LogWarning.
+- `IndexService.ExactSearchAsync` throws `InvalidOperationException` when OpenSearch returns a non-200 status.
 
 ## 8. Error Handling Table
 
@@ -290,7 +289,7 @@ Defined in `DocumentSearchEndpoints.cs`, mapped to the path `/admin/documents/se
 | Empty blocks (at index time) | LogWarning and return, no exception thrown |
 | OpenSearch connection failure (index/delete) | Throws; the caller catches it and logs a Warning without blocking the main flow |
 | Empty `text_content` | Skip the block |
-| OpenSearch search non-200 | Throws `InvalidOperationException`; `SearchDomainService` catches it and returns empty results |
+| OpenSearch search non-200 | Throws `InvalidOperationException`; `SearchService` catches it and returns empty results |
 | `pageToken` decode failure | LogDebug, start from the first page |
 | Metadata sync failure | LogWarning, no blocking |
 
@@ -313,7 +312,7 @@ catch (Exception ex)
 }
 ```
 
-### 9.2 Index Deletion (`DocumentParseEndpoints` / `DocumentFileEndpoints` Integration)
+### 9.2 Index Deletion (`DocumentParses` / `DocumentFiles` Integration)
 
 - `DeleteDocumentParse`: calls `DeleteParseIndexAsync` after the parse record is deleted (best-effort).
 - `DeleteDocumentFile`: calls `DeleteDocumentFileIndexAsync` after the database delete (Step 4) (best-effort).
@@ -331,19 +330,19 @@ After LLM analysis completes, call `UpdateDocumentFileMetadataAsync(documentFile
 | `OpenSearch` | `IndexName` | `doctheca-segments` |
 
 - Configuration binding: `builder.Services.Configure<OpenSearchOptions>(builder.Configuration.GetSection("OpenSearch"))`.
-- DI registration: `AddSingleton<ISearchIndexService, OpenSearchIndexService>()`.
+- DI registration: `AddSingleton<ISearchIndexService, IndexService>()`.
 - Database initialization uses `DatabaseInitializer` (no EF Core Migration).
 
 ## 11. Testing Strategy
 
 ### 11.1 Unit Tests (UT)
 
-Pure logic tests (`internal static` methods), no OpenSearch HTTP dependency. Implemented in `OpenSearchIndexServiceTests.cs` and `SearchDomainServiceTests.cs`, which underneath call `OpenSearchIndexManager.BuildIndexBody`, `OpenSearchQueryBuilder.BuildSearchBody`, and `OpenSearchResponseParser.ParseSearchResponse` respectively.
+Pure logic tests (`internal static` methods), no OpenSearch HTTP dependency. Implemented in `IndexManagerTests.cs` and `SearchServiceTests.cs`, which underneath call `IndexManager.BuildIndexBody`, `QueryBuilder.BuildSearchBody`, and `ResponseParser.ParseSearchResponse` respectively.
 
 - `BuildSearchBody`: query building, filter building, search_after, sort, highlight.
 - `ParseSearchResponse`: normal parsing, phrase MatchType, highlight priority, nextToken generation, empty results, defaults for missing fields.
 - `BuildIndexBody`: block fields present with correct types, no legacy fields, analyzers retained.
-- `SearchDomainService.ExactSearchAsync`: delegation, filter pass-through, pageToken pass-through, exception degradation, empty results.
+- `SearchService.ExactSearchAsync`: delegation, filter pass-through, pageToken pass-through, exception degradation, empty results.
 
 ### 11.2 Integration Tests (Planned)
 
@@ -363,12 +362,12 @@ Depend on real OpenSearch HTTP and a database; not implemented:
 | File | Impact |
 |------|------|
 | `ISearchIndexService.cs` | 6 method signatures |
-| `OpenSearchIndexService.cs` | `ISearchIndexService` facade; actual logic delegated to helper classes under `OpenSearch/` |
-| `ISearchDomainService.cs` / `SearchDomainService.cs` | Thin wrapper + degradation |
-| `DocumentSearchEndpoints.cs` | `GET /admin/documents/search` |
+| `IndexService.cs` | `ISearchIndexService` facade; actual logic delegated to helper classes under `OpenSearch/` |
+| `ISearchService.cs` / `SearchService.cs` | Thin wrapper + degradation |
+| `DocumentSearch.cs` | `GET /admin/documents/search` |
 | `StructaDocParseWorker.cs` | Indexing after parse completion (best-effort) |
-| `DocumentParseEndpoints.cs` | Index cleanup after parse deletion |
-| `DocumentFileEndpoints.cs` | Index cleanup after file deletion; index sync after metadata updates |
+| `DocumentParses.cs` | Index cleanup after parse deletion |
+| `DocumentFiles.cs` | Index cleanup after file deletion; index sync after metadata updates |
 | `Program.cs` | `EnsureIndexAsync` at startup (best-effort) |
 
 ---
@@ -382,8 +381,8 @@ Depend on real OpenSearch HTTP and a database; not implemented:
 #### 13.1.1 Domain Models (extending `src/Domain/Models/`, no standalone classes)
 
 ```csharp
-// SearchResultModel.cs — Generation 2 adds optional fields (null when old frontends do not send them, backward compatible)
-public class SearchResultModel
+// SearchResult.cs — Generation 2 adds optional fields (null when old frontends do not send them, backward compatible)
+public class SearchResult
 {
     // ... V1 fields unchanged (including public double Score = OpenSearch _score) ...
     public string? BlockData { get; set; }                  // [Generation 2] raw minerU JSON text (for detail display)
@@ -398,8 +397,8 @@ public class SearchResultModel
     public string? Caption { get; set; }                    // [Generation 2] concatenated caption text (keyword recall)
 }
 
-// SearchFilterModel.cs — Generation 2 adds minerU filter conditions (the 4 original V1 items unchanged)
-public class SearchFilterModel
+// SearchFilter.cs — Generation 2 adds minerU filter conditions (the 4 original V1 items unchanged)
+public class SearchFilter
 {
     // ... V1 fields (DocumentTitle / Subject / Grade / Year) unchanged ...
     public string? BlockType { get; set; }                  // [Generation 2] exact match on minerU type
@@ -427,18 +426,18 @@ public interface ISearchIndexService
 
 > Generation 2 minerU fields **form the same bulk request as the V1 fields** inside the `IndexParseBlocksAsync` implementation (fields appended under the same `_id = $"block_{block.Id}"`), adding no extra network round trip and no new interface methods.
 
-#### 13.1.3 ISearchDomainService Extension (minerU filter branch extended within the same `ExactSearchAsync`)
+#### 13.1.3 ISearchService Extension (minerU filter branch extended within the same `ExactSearchAsync`)
 
 ```csharp
-public interface ISearchDomainService
+public interface ISearchService
 {
     // V1 signature unchanged; Generation 2 adds the minerU filter branch + attachment field parsing inside the ExactSearchAsync implementation
-    Task<(List<SearchResultModel> Results, int TotalCount, string? NextToken)> ExactSearchAsync(
-        string query, bool phrase, SearchFilterModel? filter, int pageSize, string? pageToken);
+    Task<(List<SearchResult> Results, int TotalCount, string? NextToken)> ExactSearchAsync(
+        string query, bool phrase, SearchFilter? filter, int pageSize, string? pageToken);
 }
 ```
 
-#### 13.1.4 HTTP Endpoint (extending `DocumentSearchEndpoints.cs`, no new files)
+#### 13.1.4 HTTP Endpoint (extending `DocumentSearch.cs`, no new files)
 
 ```csharp
 // GET /admin/documents/search — Generation 2 adds optional input parameters (all original V1 parameters query/phrase/subject/grade/year/documentTitle/pageSize/pageToken are retained)
@@ -523,7 +522,7 @@ Appended to the V1 `BuildIndexBody` mappings:
 
 #### GET /admin/documents/search (Generation 2 extension)
 
-Defined in `DocumentSearchEndpoints.cs` (extending the V1 file, no new files). All original V1 parameters are retained, with **added** optional minerU filter parameters:
+Defined in `DocumentSearch.cs` (extending the V1 file, no new files). All original V1 parameters are retained, with **added** optional minerU filter parameters:
 
 | Parameter | Type | Default | Description |
 |------|------|--------|------|
@@ -650,7 +649,7 @@ A minerU attachment branch is appended at the end of the V1 `ParseSearchResponse
 |------|------|
 | All minerU filters null | Takes the V1 path, behavior exactly equivalent (zero regression) |
 | `pageSize` over the limit | Silently truncated to 100 (V1 value unchanged) |
-| OpenSearch search non-200 | Throws `InvalidOperationException`; `SearchDomainService` catches it and returns empty results (V1 degradation path) |
+| OpenSearch search non-200 | Throws `InvalidOperationException`; `SearchService` catches it and returns empty results (V1 degradation path) |
 | `_meta.block_data` missing | `BlockData = null`, response not blocked |
 | `pageToken` decode failure | LogDebug, start from the first page (V1 unchanged) |
 
@@ -677,9 +676,9 @@ _meta         = new { block_data = block.BlockData }   // attached whole (V1 min
 
 #### 13.9.2 Domain Service and Endpoint Extensions
 
-- `ISearchIndexService` / `OpenSearchIndexService`: minerU fields added **within the same `IndexParseBlocksAsync` implementation**; `BuildIndexBody` gains minerU dimension mappings; the minerU filter branch added **within the same `ExactSearchAsync` implementation** + minerU attachment in `ParseSearchResponse`. **No new interface methods, no standalone `Build/Parse` methods.**
-- `ISearchDomainService` / `SearchDomainService`: minerU filter pass-through and attachment field parsing extended within the same `ExactSearchAsync`; the degradation pattern reuses V1. **No new `BlockXxx` methods.**
-- `DocumentSearchEndpoints.cs`: the same `GET /admin/documents/search` endpoint gains optional minerU inputs (behavior equals V1 when parameters are null). **No new endpoint files.**
+- `ISearchIndexService` / `IndexService`: minerU fields added **within the same `IndexParseBlocksAsync` implementation**; `BuildIndexBody` gains minerU dimension mappings; the minerU filter branch added **within the same `ExactSearchAsync` implementation** + minerU attachment in `ParseSearchResponse`. **No new interface methods, no standalone `Build/Parse` methods.**
+- `ISearchService` / `SearchService`: minerU filter pass-through and attachment field parsing extended within the same `ExactSearchAsync`; the degradation pattern reuses V1. **No new `BlockXxx` methods.**
+- `DocumentSearch.cs`: the same `GET /admin/documents/search` endpoint gains optional minerU inputs (behavior equals V1 when parameters are null). **No new endpoint files.**
 
 #### 13.9.3 Frontend Extension
 
@@ -694,11 +693,11 @@ Reuses V1 `OpenSearch:Url` / `OpenSearch:IndexName`; no new configuration sectio
 
 #### 13.11.1 Unit Tests (UT) — added to existing test files
 
-No standalone test classes; minerU assertions are added to the existing `OpenSearchIndexServiceTests.cs` / `SearchDomainServiceTests.cs`:
+No standalone test classes; minerU assertions are added to the existing `IndexManagerTests.cs` / `SearchServiceTests.cs`:
 
 - `BuildSearchBody` assertions added: minerU filter conditions (`blockType` / `pageNumber` / `hasImage`) go to `filter` clauses; with no minerU filters the `BuildSearchBody` output is identical to V1.
 - `ParseSearchResponse` assertions added: `_source._meta.block_data` maps correctly to `BlockData`; `x0/y0/x1/y1` combine into `Bbox`; falls back to null when missing.
-- `SearchDomainService.ExactSearchAsync` assertions added: minerU filters are passed through to the index service; exception degradation still returns empty results.
+- `SearchService.ExactSearchAsync` assertions added: minerU filters are passed through to the index service; exception degradation still returns empty results.
 
 #### 13.11.2 Integration Tests (planned, same integration test suite as V1)
 
@@ -711,9 +710,9 @@ No standalone test classes; minerU assertions are added to the existing `OpenSea
 | File | Impact |
 |------|------|
 | `ISearchIndexService.cs` | V1's 6 method signatures unchanged; the implementation gains minerU field indexing (Generation 2) |
-| `OpenSearchIndexService.cs` | The V1 facade gains minerU fields; `OpenSearchIndexManager.BuildIndexBody` gains minerU dimension mappings; minerU filter + attachment branches added inside `OpenSearchQueryBuilder.BuildSearchBody` / `OpenSearchResponseParser.ParseSearchResponse` |
-| `ISearchDomainService.cs` / `SearchDomainService.cs` | minerU filter pass-through and attachment field parsing added inside `ExactSearchAsync` (extended within the V1 method) |
-| `DocumentSearchEndpoints.cs` (extension, same file) | `GET /admin/documents/search` gains optional minerU inputs (original V1 inputs and validation retained) |
+| `IndexService.cs` | The V1 facade gains minerU fields; `IndexManager.BuildIndexBody` gains minerU dimension mappings; minerU filter + attachment branches added inside `QueryBuilder.BuildSearchBody` / `ResponseParser.ParseSearchResponse` |
+| `ISearchService.cs` / `SearchService.cs` | minerU filter pass-through and attachment field parsing added inside `ExactSearchAsync` (extended within the V1 method) |
+| `DocumentSearch.cs` (extension, same file) | `GET /admin/documents/search` gains optional minerU inputs (original V1 inputs and validation retained) |
 | `StructaDocParseWorker.cs` | `IndexBlocksToSearchAsync` gains minerU dimension fields (same bulk) |
 | `SearchPage.vue` (doctheca built-in frontend extension, same page) | Adds the "Advanced filters" drawer + result-row detail expansion |
 | `Program.cs` | No changes (reuses V1 DI registration) |

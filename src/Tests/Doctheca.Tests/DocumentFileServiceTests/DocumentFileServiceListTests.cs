@@ -28,7 +28,7 @@ public class DocumentFileServiceListTests
     public async Task GetListAsync_ReturnsPagedResults()
     {
         // Arrange
-        var items = new List<DocumentFileModel>
+        var items = new List<DocumentFile>
         {
             new() { Id = Guid.NewGuid(), FileName = "a.pdf" },
             new() { Id = Guid.NewGuid(), FileName = "b.pdf" },

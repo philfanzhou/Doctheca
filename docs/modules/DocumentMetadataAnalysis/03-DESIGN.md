@@ -8,14 +8,13 @@
 │   ├── Domain/
 │   │   ├── Models/
 │   │   │   ├── DocumentMetadataAnalysis.cs        # LLM analysis result record (Subject/Grade/Year)
-│   │   │   ├── DocumentAnalysisOptions.cs          # LLM configuration options (inherits AiClientOptions)
-│   │   │   ├── DocumentFileModel.cs                # File model (includes Subject/Grade/Year)
-│   │   │   └── DocthecaConstants.cs              # Subject/grade constants (ValidSubjects/ValidGrades, not enforced by this feature)
+│   │   │   ├── DocumentAnalysisOptions.cs          # LLM configuration options (inherits ClientOptions)
+│   │   │   ├── DocumentFile.cs                # File model (includes Subject/Grade/Year)
 │   │   ├── Services/
 │   │   │   ├── IDocumentAnalysisService.cs         # LLM analysis interface
 │   │   │   ├── IDocumentFileService.cs             # File service interface (includes UpdateMetadataAsync)
 │   │   │   ├── DocumentFileService.cs              # File service implementation
-│   │   │   └── ISearchDomainService.cs             # Search domain service
+│   │   │   └── ISearchService.cs             # Search domain service
 │   │   └── Repositories/
 │   │       ├── IDocumentFileRepository.cs           # File repository interface (includes UpdateMetadataAsync)
 │   │       ├── ISearchIndexService.cs               # Search index interface (includes UpdateDocumentFileMetadataAsync)
@@ -26,9 +25,9 @@
 │   │   │   ├── DocumentAnalysisPromptBuilder.cs     # prompt building (pure static logic)
 │   │   │   └── DocumentAnalysisResponseParser.cs    # response parsing (includes response records, ExtractJson)
 │   │   ├── StructaDocParseWorker.cs                 # background parse Worker (includes AnalyzeMetadataIfMissingAsync)
-│   │   ├── OpenSearchIndexService.cs                # OpenSearch index service (includes UpdateDocumentFileMetadataAsync)
+│   │   ├── IndexService.cs                # OpenSearch index service (includes UpdateDocumentFileMetadataAsync)
 │   │   └── Endpoints/
-│   │       └── DocumentFileEndpoints.cs             # PUT /{id}/metadata endpoint + UpdateMetadataRequest record
+│   │       └── DocumentFiles.cs             # PUT /{id}/metadata endpoint + UpdateMetadataRequest record
 │   ├── Database/
 │   │   ├── DatabaseInitializer.cs                   # SQL-based initialization (CREATE TABLE IF NOT EXISTS / ADD COLUMN IF NOT EXISTS)
 │   │   ├── DocthecaDbContext.cs                   # EF Core DbContext (Fluent API)
@@ -59,7 +58,7 @@ Task<DocumentMetadataAnalysis?> AnalyzeMetadataAsync(string textPreview, Cancell
 ### IDocumentFileService (new method)
 
 ```csharp
-Task<DocumentFileModel?> UpdateMetadataAsync(Guid id, string? subject, string? grade, string? year);
+Task<DocumentFile?> UpdateMetadataAsync(Guid id, string? subject, string? grade, string? year);
 ```
 
 ### ISearchIndexService (new method)
@@ -110,7 +109,7 @@ Response 404: { "success": false, "message": "File not found", "errorCode": "DOC
 - **Initialization**: `InitializeAsync` (called at startup + lazily on the first `AnalyzeMetadataAsync`). Resolves the `ContextLength` configuration (supports `"128K"` / `"1M"` / plain numbers); if not configured, calls `TryFetchContextLengthAsync` (GET `/v1/models/{Model}`) to fetch it dynamically. Computes the internal fields from context: `_chunkSize` (`(contextLength - 200 - _maxTokensValue) × 0.8 × 1.5`, capped at `2500`) and `_maxTokensValue` (default `4096`). Disables the LLM when no context is available (`_chunkSize = _maxTokensValue = 0`). The service no longer modifies the injected `DocumentAnalysisOptions` POCO.
 - **Input truncation**: takes the first 2000 characters of the Markdown (`textPreview[..2000]`). Note: `StructaDocParseWorker.AnalyzeMetadataIfMissingAsync` already truncates once before the call; this is redundant protection.
 - **Request body**: assembled by `BuildRequestBody` — system prompt `"Return JSON directly, no explanation."` + user prompt (`DocumentAnalysisPromptBuilder.BuildMetadataAnalysisPrompt`), `max_tokens = _maxTokensValue`, `temperature = 0.1` (read-only property), `stream = true`.
-- **Streaming SSE call**: via the shared `OpenAiCompatibleClient.CallStreamingAsync` (`Doctheca.Ai` namespace, backed by `OpenAiSseReader`); per-attempt timeout + SSE idle timeout (`StreamIdleTimeoutSeconds`, default 60s) are guaranteed by the client.
+- **Streaming SSE call**: via the shared `OpenAiCompatibleClient.CallStreamingAsync` (`Doctheca.Ai` namespace, backed by `SseReader`); per-attempt timeout + SSE idle timeout (`StreamIdleTimeoutSeconds`, default 60s) are guaranteed by the client.
 - **Response parsing**: `DocumentAnalysisResponseParser.ParseMetadataAnalysis` — `DocumentAnalysisResponseParser.ExtractJson` strips ```json``` / ```` ``` wrapping; `JsonSerializer.Deserialize` uses `SnakeCaseLower` + `WhenWritingNull`; empty strings/whitespace/`"null"` literals are all treated as null.
 - **Failure handling**: any exception is caught, `LogWarning` is emitted, and null is returned; the Worker layer treats it as best-effort.
 
@@ -118,8 +117,8 @@ Response 404: { "success": false, "message": "File not found", "errorCode": "DOC
 
 The following `internal` methods are pure-logic test entry points (require `InternalsVisibleTo` for the test project):
 
-- `DocumentAnalysisPromptBuilder.BuildMetadataAnalysisPrompt(string textPreview)` — static, returns the user prompt
-- `DocumentAnalysisResponseParser.ParseMetadataAnalysis(string response, ILogger<DocumentAnalysisService> logger, JsonSerializerOptions jsonOptions)` — parses the raw LLM response
+- `DocumentAnalysisPromptBuilder.Build(string textPreview)` — static, returns the user prompt
+- `DocumentAnalysisResponseParser.Parse(string response, ILogger<DocumentAnalysisService> logger, JsonSerializerOptions jsonOptions)` — parses the raw LLM response
 - `DocumentAnalysisService.ParseTokenCount(string? value)` — parses `"128K"` / `"1M"` / plain numbers
 
 ## Error handling
@@ -153,8 +152,8 @@ if (llmSection.Exists() && !string.IsNullOrEmpty(llmSection["ApiKey"]))
     builder.Services.AddSingleton<OpenAiCompatibleClient>(sp => /* named HttpClient + DocumentAnalysisOptions + StreamIdleTimeoutSeconds */);
     builder.Services.AddTransient<IDocumentAnalysisService, DocumentAnalysisService>();
 }
-// IDocumentFileService / ISearchIndexService / ISearchDomainService are always registered
-// ISearchIndexService → OpenSearchIndexService (Singleton)
+// IDocumentFileService / ISearchIndexService / ISearchService are always registered
+// ISearchIndexService → IndexService (Singleton)
 // IDocumentFileService → DocumentFileService (Scoped)
 ```
 

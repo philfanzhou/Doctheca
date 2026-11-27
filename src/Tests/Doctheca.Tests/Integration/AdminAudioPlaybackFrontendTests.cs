@@ -3,7 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 using Microsoft.Playwright;
-using Doctheca.Common.Oss;
+using Doctheca.Common.ObjectStorage;
 using Xunit;
 
 namespace Doctheca.Tests.Integration;
@@ -16,8 +16,8 @@ public sealed partial class AdminHostedFrontendTests
         var bucket = "playback-browser-" + Guid.NewGuid().ToString("N")[..12];
         await using var h = await Open(settings: minio.Settings(bucket), configureServices: services =>
         {
-            services.RemoveAll<IOssService>();
-            services.AddScoped<IOssService>(sp => new S3OssService(sp.GetRequiredService<IOptions<OssOptions>>().Value));
+            services.RemoveAll<IObjectStore>();
+            services.AddScoped<IObjectStore>(sp => new S3ObjectStore(sp.GetRequiredService<IOptions<StoreOptions>>().Value));
         });
         var parseId = await SeedTextbookStructureAsync(h);
         await h.Page.GotoAsync(h.Origin + "/#audio/" + parseId);

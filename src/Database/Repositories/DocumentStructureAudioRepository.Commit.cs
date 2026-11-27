@@ -23,12 +23,12 @@ public partial class DocumentStructureAudioRepository
         var nodes = await _context.DocumentStructureNodes.AsNoTracking().Where(n => n.TreeId == treeId)
             .OrderBy(n => n.SortOrder).Select(n => DocumentStructureRepository.MapToModel(n)).ToListAsync(ct);
         var levels = await _context.StructureLevels.AsNoTracking().Where(l => l.DefinitionId == file.StructureDefinitionId)
-            .Select(l => new StructureLevelModel { Id = l.Id, DefinitionId = l.DefinitionId, ParentLevelId = l.ParentLevelId,
+            .Select(l => new StructureLevel { Id = l.Id, DefinitionId = l.DefinitionId, ParentLevelId = l.ParentLevelId,
                 Name = l.Name, SortOrder = l.SortOrder, Required = l.Required }).ToListAsync(ct);
         return new(file.Id, treeId, owner.IsDocument ? null : owner.Id, treeId == file.CurrentStructureTreeId, nodes, levels);
     }
 
-    public async Task<List<DocumentStructureAudioModel>> GetByOwnerAsync(AudioOwner owner, CancellationToken ct = default)
+    public async Task<List<DocumentStructureAudio>> GetByOwnerAsync(AudioOwner owner, CancellationToken ct = default)
     {
         var treeId = owner.IsDocument
             ? await _context.DocumentFiles.Where(f => f.Id == owner.Id).Select(f => f.CurrentStructureTreeId).SingleOrDefaultAsync(ct)
@@ -37,7 +37,7 @@ public partial class DocumentStructureAudioRepository
             .OrderBy(a => a.SourcePath).Select(a => MapToModel(a)).ToListAsync(ct);
     }
 
-    public async Task<AudioLinkUpdateResult> CommitAsync(AudioOwner owner, IReadOnlyList<DocumentStructureAudioModel> additions,
+    public async Task<AudioLinkUpdateResult> CommitAsync(AudioOwner owner, IReadOnlyList<DocumentStructureAudio> additions,
         IReadOnlyList<AudioLinkChange> changes, IReadOnlyCollection<Guid> removeIds, DateTimeOffset now,
         bool deleteOnly = false, CancellationToken ct = default)
     {

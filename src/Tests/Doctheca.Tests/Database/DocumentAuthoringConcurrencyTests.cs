@@ -128,13 +128,13 @@ public sealed partial class DocumentAuthoringConcurrencyTests(PostgreSqlMigratio
         var winner = Guid.NewGuid();
         try
         {
-            if (action == "delete") await new DocumentFileRepository(setup).DeleteAsync(seed.File);
+            if (action == "delete") await new DocumentFileRepository(setup).DeleteWithAudioAsync(seed.File);
             else await new DocumentAuthoringRepository(setup).AttachSourceAsync(seed.File, winner, "application/pdf", default);
         }
         finally { barrier.Resume.TrySetResult(); }
         await pending;
         if (action == "parse") (await setup.DocumentParses.CountAsync()).Should().Be(2);
-        else (await (Task<StructureResult<DocumentFileModel>>)pending).Status.Should().Be(action == "delete" ? StructureResultStatus.NotFound : StructureResultStatus.Conflict);
+        else (await (Task<StructureResult<DocumentFile>>)pending).Status.Should().Be(action == "delete" ? StructureResultStatus.NotFound : StructureResultStatus.Conflict);
         if (action != "delete") (await setup.DocumentFiles.AsNoTracking().SingleAsync()).StructaDocDocumentId.Should().Be(winner);
     }
 

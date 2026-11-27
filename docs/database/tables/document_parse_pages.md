@@ -13,13 +13,14 @@ Physical page numbers are keys; printed labels are opaque untrusted display text
 The composite primary key is `(parse_id, page_number)`. `CK_document_parse_pages_page_number`
 requires `page_number > 0`. There is no surrogate ID or label uniqueness constraint.
 
-`DocumentParsePageRepository.ReplaceAsync` validates the entire input before writing. A transaction
-locks the owning parse row, deletes its old pages, inserts the complete replacement and commits.
-An empty replacement still deletes old pages. Replacements of the same parse serialize; readers
-see a committed complete set, and the last committed replacement wins. Other parses keep their
-own page identities. Insert/cancellation failures roll back the whole replacement. A committed
-replacement is truthful work even if the caller is cancelled immediately afterward; cancellation
-does not undo that commit or publish a successful partial sync.
+`DocumentParseRepository.CompleteAsync` validates the entire page set before writing. Its
+transaction locks the owning document, deletes the parse's old pages, inserts the complete
+replacement together with the blocks and images, and commits. An empty page set still deletes
+the old pages. Replacements of the same document serialize; readers see a committed complete
+set, and the last committed replacement wins. Other parses keep their own page identities.
+Insert/cancellation failures roll back the whole result. A committed replacement is truthful
+work even if the caller is cancelled immediately afterward; cancellation does not undo that
+commit or publish a successful partial sync.
 
 `ReadBatchAsync` accepts explicit `DocumentParsePageKey` pairs and returns only matching pairs in
 one database statement. A missing row has no value; a row with a null label remains a known page.

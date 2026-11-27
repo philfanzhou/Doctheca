@@ -7,27 +7,27 @@ namespace Doctheca.Service.StructaDoc;
 public interface IStructaDocClient
 {
     /// <summary>Upload a document (multipart field "file"). Returns the created document.</summary>
-    Task<StructaDocDocumentResponse> UploadDocumentAsync(
+    Task<DocumentResponse> UploadDocumentAsync(
         string fileName, string contentType, Stream content, CancellationToken ct = default);
 
     /// <summary>
     /// Create a Parse Run for a document. The idempotency key makes retries after crashes safe;
     /// a replayed submission returns the original run.
     /// </summary>
-    Task<StructaDocParseRunResponse> CreateParseRunAsync(
+    Task<ParseRunResponse> CreateParseRunAsync(
         Guid documentId, string idempotencyKey, Guid? providerConfigId = null, CancellationToken ct = default);
 
     /// <summary>Get a Parse Run; null when it does not exist or is not accessible.</summary>
-    Task<StructaDocParseRunResponse?> GetParseRunAsync(Guid parseRunId, CancellationToken ct = default);
+    Task<ParseRunResponse?> GetParseRunAsync(Guid parseRunId, CancellationToken ct = default);
 
     /// <summary>Fetch all blocks of a succeeded Parse Run, following the sequence cursor.</summary>
-    Task<List<StructaDocBlockResponse>> GetAllBlocksAsync(Guid parseRunId, CancellationToken ct = default);
+    Task<List<BlockResponse>> GetAllBlocksAsync(Guid parseRunId, CancellationToken ct = default);
 
     /// <summary>List optional physical pages and printed labels as a bare array.</summary>
-    Task<List<StructaDocPageResponse>> GetPagesAsync(Guid parseRunId, CancellationToken ct = default);
+    Task<List<PageResponse>> GetPagesAsync(Guid parseRunId, CancellationToken ct = default);
 
     /// <summary>List assets (extracted images and binary resources) of a Parse Run.</summary>
-    Task<List<StructaDocAssetResponse>> GetAssetsAsync(Guid parseRunId, CancellationToken ct = default);
+    Task<List<AssetResponse>> GetAssetsAsync(Guid parseRunId, CancellationToken ct = default);
 
     /// <summary>Download the canonical Markdown artifact of a Parse Run.</summary>
     Task<string> GetMarkdownAsync(Guid parseRunId, CancellationToken ct = default);

@@ -29,7 +29,7 @@ public class DocumentFileServiceAttachTests
         // Arrange
         var id = Guid.NewGuid();
         var documentId = Guid.NewGuid();
-        var stored = new DocumentFileModel { Id = id, StructaDocDocumentId = documentId };
+        var stored = new DocumentFile { Id = id, StructaDocDocumentId = documentId };
         _fileRepoMock.Setup(r => r.AttachStructaDocDocumentAsync(id, documentId)).ReturnsAsync(true);
         _fileRepoMock.Setup(r => r.GetByIdAsync(id)).ReturnsAsync(stored);
 

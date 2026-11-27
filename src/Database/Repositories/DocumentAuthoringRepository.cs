@@ -11,32 +11,32 @@ namespace Doctheca.Database.Repositories;
 /// <summary>Administrator mutations share the existing document-first ownership boundary.</summary>
 public sealed class DocumentAuthoringRepository(DocthecaDbContext context) : IDocumentAuthoringRepository
 {
-    public async Task<StructureResult<DocumentFileModel>> CreateAsync(DocumentMetadataInput input, Guid? createdBy, CancellationToken ct)
+    public async Task<StructureResult<DocumentFile>> CreateAsync(DocumentMetadataInput input, Guid? createdBy, CancellationToken ct)
     {
         await using var tx = await context.Database.BeginTransactionAsync(ct);
         var errors = ValidateMetadata(input, true);
         await ValidateDefinitionAsync(input, errors, ct);
-        if (errors.Count > 0) return StructureResult<DocumentFileModel>.Invalid(errors);
+        if (errors.Count > 0) return StructureResult<DocumentFile>.Invalid(errors);
         var file = new DocumentFileEntity { FileName = input.FileName!.Trim(), Subject = input.Subject,
             Grade = input.Grade, Year = input.Year, StructureDefinitionId = input.StructureDefinitionId,
             ContentType = string.Empty, CreatedBy = createdBy };
         context.DocumentFiles.Add(file);
         await context.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
-        return StructureResult<DocumentFileModel>.Ok(Model(file));
+        return StructureResult<DocumentFile>.Ok(Model(file));
     }
 
-    public async Task<StructureResult<DocumentFileModel>> UpdateAsync(Guid id, DocumentMetadataInput input, CancellationToken ct)
+    public async Task<StructureResult<DocumentFile>> UpdateAsync(Guid id, DocumentMetadataInput input, CancellationToken ct)
     {
         await using var tx = await context.Database.BeginTransactionAsync(ct);
         var file = await StructureOwnership.LockDocumentAsync(context, id, ct);
-        if (file is null) return Missing<DocumentFileModel>();
+        if (file is null) return Missing<DocumentFile>();
         var errors = ValidateMetadata(input, false);
         await ValidateDefinitionAsync(input, errors, ct);
-        if (errors.Count > 0) return StructureResult<DocumentFileModel>.Invalid(errors);
+        if (errors.Count > 0) return StructureResult<DocumentFile>.Invalid(errors);
         if (input.SetDefinition && file.StructureDefinitionId != input.StructureDefinitionId &&
             await context.DocumentStructureNodes.AnyAsync(n => n.DocumentFileId == id, ct))
-            return StructureResult<DocumentFileModel>.Conflict(StructureErrorCodes.DocumentStructureInUse,
+            return StructureResult<DocumentFile>.Conflict(StructureErrorCodes.DocumentStructureInUse,
                 "Clear current and historical structure nodes before changing the definition");
         if (input.FileName is not null) file.FileName = input.FileName.Trim();
         if (input.Subject is not null) file.Subject = input.Subject;
@@ -46,10 +46,10 @@ public sealed class DocumentAuthoringRepository(DocthecaDbContext context) : IDo
         file.UpdatedAt = DateTimeOffset.UtcNow;
         await context.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
-        return StructureResult<DocumentFileModel>.Ok(Model(file));
+        return StructureResult<DocumentFile>.Ok(Model(file));
     }
 
-    public async Task<DocumentFileModel?> FillMissingAsync(Guid id, string? subject, string? grade, string? year, CancellationToken ct)
+    public async Task<DocumentFile?> FillMissingAsync(Guid id, string? subject, string? grade, string? year, CancellationToken ct)
     {
         await using var tx = await context.Database.BeginTransactionAsync(ct);
         var file = await StructureOwnership.LockDocumentAsync(context, id, ct);
@@ -64,20 +64,20 @@ public sealed class DocumentAuthoringRepository(DocthecaDbContext context) : IDo
         return Model(file);
     }
 
-    public async Task<StructureResult<DocumentFileModel>> AttachSourceAsync(Guid id, Guid sourceId, string mediaType, CancellationToken ct)
+    public async Task<StructureResult<DocumentFile>> AttachSourceAsync(Guid id, Guid sourceId, string mediaType, CancellationToken ct)
     {
         await using var tx = await context.Database.BeginTransactionAsync(ct);
         var file = await StructureOwnership.LockDocumentAsync(context, id, ct);
-        if (file is null) return Missing<DocumentFileModel>();
+        if (file is null) return Missing<DocumentFile>();
         if (file.StructaDocDocumentId is not null || !string.IsNullOrWhiteSpace(file.FilePath))
-            return StructureResult<DocumentFileModel>.Conflict("DOCTHECA_DOCUMENT_SOURCE_EXISTS", "The document already has a source");
+            return StructureResult<DocumentFile>.Conflict("DOCTHECA_DOCUMENT_SOURCE_EXISTS", "The document already has a source");
         file.StructaDocDocumentId = sourceId;
         file.ContentType = mediaType;
         file.UpdatedAt = DateTimeOffset.UtcNow;
         await context.SaveChangesAsync(ct);
         ct.ThrowIfCancellationRequested();
         await tx.CommitAsync(ct);
-        return StructureResult<DocumentFileModel>.Ok(Model(file));
+        return StructureResult<DocumentFile>.Ok(Model(file));
     }
 
     public async Task<bool> IsSourceReferencedAsync(Guid documentId, Guid sourceId, CancellationToken ct)
@@ -95,16 +95,13 @@ public sealed class DocumentAuthoringRepository(DocthecaDbContext context) : IDo
         return file is null ? null : await ReadTreeAsync(file, ct);
     }
 
-    public Task<List<DocumentStructureNodeModel>> GetCurrentBindingsAsync(Guid parseId) =>
-        new DocumentStructureRepository(context).GetCurrentBindingsAsync(parseId);
-
     public async Task<StructureResult<DocumentTreeSave>> SaveTreeAsync(Guid documentId, IReadOnlyList<DocumentNodeInput> roots, CancellationToken ct)
     {
         await using var tx = await context.Database.BeginTransactionAsync(ct);
         var file = await StructureOwnership.LockDocumentAsync(context, documentId, ct);
         if (file is null) return Missing<DocumentTreeSave>();
         var existing = await context.DocumentStructureNodes.AsNoTracking().Where(n => n.TreeId == file.CurrentStructureTreeId).ToDictionaryAsync(n => n.Id, ct);
-        var flat = new List<DocumentStructureNodeModel>();
+        var flat = new List<DocumentStructureNode>();
         var errors = new List<StructureFieldError>();
         var seen = new HashSet<Guid>();
         var paths = new Dictionary<Guid, string>();
@@ -178,7 +175,7 @@ public sealed class DocumentAuthoringRepository(DocthecaDbContext context) : IDo
         return errors;
     }
     private static StructureResult<T> Missing<T>() => StructureResult<T>.NotFound(StructureErrorCodes.FileNotFound, "File not found");
-    private static DocumentFileModel Model(DocumentFileEntity f) => new() { Id = f.Id, FileName = f.FileName, FilePath = f.FilePath,
+    private static DocumentFile Model(DocumentFileEntity f) => new() { Id = f.Id, FileName = f.FileName, FilePath = f.FilePath,
         StructaDocDocumentId = f.StructaDocDocumentId, ContentType = f.ContentType, CreatedBy = f.CreatedBy,
         Subject = f.Subject, Grade = f.Grade, Year = f.Year, StructureDefinitionId = f.StructureDefinitionId,
         CreatedAt = f.CreatedAt, UpdatedAt = f.UpdatedAt };

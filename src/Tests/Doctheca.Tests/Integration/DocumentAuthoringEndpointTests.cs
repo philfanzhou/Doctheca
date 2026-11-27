@@ -2,7 +2,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json.Nodes;
-using Doctheca.Common.Oss;
+using Doctheca.Common.ObjectStorage;
 using Doctheca.Database;
 using Doctheca.Database.Entities;
 using Doctheca.Database.Repositories;
@@ -23,12 +23,12 @@ namespace Doctheca.Tests.Integration;
 public sealed partial class DocumentStructureEndpointTests
 {
     private readonly Mock<IStructaDocClient> _authoringUpstream = new();
-    private readonly Mock<IOssService> _authoringStorage = new();
+    private readonly Mock<IObjectStore> _authoringStorage = new();
     private WebApplicationFactory<Program> AuthoringFactory(bool configured = false) => CreateFactory(configureTestServices: services =>
     {
         services.RemoveAll<ISearchIndexService>(); services.AddSingleton<ISearchIndexService>(_searchIndex);
         services.RemoveAll<IStructaDocClient>(); services.AddSingleton(_authoringUpstream.Object);
-        services.RemoveAll<IOssService>(); services.AddSingleton(_authoringStorage.Object);
+        services.RemoveAll<IObjectStore>(); services.AddSingleton(_authoringStorage.Object);
     }, settings: configured ? new Dictionary<string, string?> { ["StructaDoc:BaseUrl"] = "http://structadoc.test", ["StructaDoc:ApiKey"] = "test-only" } : null);
 
     [Theory]
@@ -138,7 +138,7 @@ public sealed partial class DocumentStructureEndpointTests
         }
         var source = Guid.NewGuid(); Stream? uploadedStream = null;
         _authoringUpstream.Setup(u => u.UploadDocumentAsync(It.IsAny<string>(), "application/pdf", It.IsAny<Stream>(), It.IsAny<CancellationToken>()))
-            .Callback<string, string, Stream, CancellationToken>((_, _, s, _) => uploadedStream = s).ReturnsAsync(new StructaDocDocumentResponse { Id = source });
+            .Callback<string, string, Stream, CancellationToken>((_, _, s, _) => uploadedStream = s).ReturnsAsync(new DocumentResponse { Id = source });
         (await client.PostAsync($"/admin/document-files/{id}/source", Pdf())).StatusCode.Should().Be(HttpStatusCode.OK);
         Assert.Throws<ObjectDisposedException>(() => uploadedStream!.ReadByte());
         var attached = (await ReadData(await client.GetAsync($"/admin/document-files/{id}")))!;
@@ -147,7 +147,7 @@ public sealed partial class DocumentStructureEndpointTests
         using (var scope = factory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<DocthecaDbContext>(); var parseId = Guid.Parse(parsed);
-            await new DocumentParseRepository(db).CompleteAsync(parseId, Guid.NewGuid(), "body", [], [], Enumerable.Range(0, 200).Select(i => new DocumentParseBlockModel { ParseId = parseId, Sequence = i, BlockType = "text", TextContent = "paragraph", BlockData = "{}" }).ToArray());
+            await new DocumentParseRepository(db).CompleteAsync(parseId, Guid.NewGuid(), "body", [], [], Enumerable.Range(0, 200).Select(i => new DocumentParseBlock { ParseId = parseId, Sequence = i, BlockType = "text", TextContent = "paragraph", BlockData = "{}" }).ToArray());
             var historical = new DocumentStructureTreeEntity { DocumentFileId = Guid.Parse(id), OriginParseId = parseId }; db.DocumentStructureTrees.Add(historical); await db.SaveChangesAsync();
             db.DocumentStructureNodes.Add(new() { TreeId = historical.Id, DocumentFileId = Guid.Parse(id), ParseId = parseId, LevelId = unit, Name = "Historical", StartSequence = 0, EndSequence = 199 }); await db.SaveChangesAsync();
         }
@@ -156,7 +156,7 @@ public sealed partial class DocumentStructureEndpointTests
         bound["treeId"]!.GetValue<string>().Should().Be(treeId);
         bound["nodes"]!.AsArray().Select(n => n!["id"]!.GetValue<string>()).Should().Equal(nodes.Select(n => n!["id"]!.GetValue<string>()));
         using (var scope = factory.Services.CreateScope())
-        { var repo = scope.ServiceProvider.GetRequiredService<IDocumentAuthoringRepository>(); (await repo.GetCurrentBindingsAsync(Guid.Parse(parsed))).Select(n => n.Id.ToString()).Should().BeEquivalentTo(nodes.Select(n => n!["id"]!.GetValue<string>())); }
+        { var repo = scope.ServiceProvider.GetRequiredService<IDocumentStructureRepository>(); (await repo.GetCurrentBindingsAsync(Guid.Parse(parsed))).Select(n => n.Id.ToString()).Should().BeEquivalentTo(nodes.Select(n => n!["id"]!.GetValue<string>())); }
         var history = (await ReadData(await client.GetAsync($"/admin/document-parses/{parsed}/structure")))!;
         history["nodes"]!.AsArray().Single()!["name"]!.GetValue<string>().Should().Be("Historical");
         foreach (var n in nodes) { n!["parseId"] = null; n["startSequence"] = null; n["endSequence"] = null; }

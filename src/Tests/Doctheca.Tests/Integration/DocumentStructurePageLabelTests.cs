@@ -65,7 +65,6 @@ public sealed class DocumentStructurePageLabelTests(PostgreSqlFixture database) 
         probe.Reads.Select(keys => keys.Select(key => key.PageNumber).Order().ToArray())
             .Should().BeEquivalentTo(new[] { new[] { 1, 2 }, new[] { 1 }, new[] { 3, 4 }, new[] { 5, 6 } }, options => options.WithStrictOrdering());
         probe.Reads.SelectMany(keys => keys).Should().OnlyContain(key => key.ParseId == seed.Parse);
-        probe.Writes.Should().Be(0);
 
         // A different parse's identical physical page numbers cannot borrow this parse's labels.
         (await DataAsync(client, Route(foreign, node) + "?limit=1"))["items"]![0]!["pageLabel"]!.GetValue<string>()
@@ -96,7 +95,6 @@ public sealed class DocumentStructurePageLabelTests(PostgreSqlFixture database) 
             items.Should().OnlyContain(item => item!.AsObject().ContainsKey("pageLabel") && item["pageLabel"] == null);
         }
         probe.Reads.Should().ContainSingle("legacy provenance never qualifies for any lookup");
-        probe.Writes.Should().Be(0);
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<DocthecaDbContext>();
         (await db.DocumentParsePages.CountAsync(page => page.ParseId == legacy.Parse)).Should().Be(5);
@@ -117,7 +115,6 @@ public sealed class DocumentStructurePageLabelTests(PostgreSqlFixture database) 
         data["hasMore"]!.GetValue<bool>().Should().BeTrue();
         data["nextAfterSequence"]!.GetValue<int>().Should().Be(1);
         probe.Messages.Should().Equal((LogLevel.Warning, "Optional ordered-block page labels unavailable", (Exception?)null));
-        probe.Writes.Should().Be(0);
     }
 
     [Theory]
@@ -175,8 +172,12 @@ public sealed class DocumentStructurePageLabelTests(PostgreSqlFixture database) 
         try
         {
             using var scope = factory.Services.CreateScope();
-            await new DocumentParsePageRepository(scope.ServiceProvider.GetRequiredService<DocthecaDbContext>())
-                .ReplaceAsync(seed.Parse, [new(seed.Parse, 1, "new", null), new(seed.Parse, 2, "new", null)]);
+            var db = scope.ServiceProvider.GetRequiredService<DocthecaDbContext>();
+            await db.DocumentParsePages.Where(page => page.ParseId == seed.Parse).ExecuteDeleteAsync();
+            db.DocumentParsePages.AddRange(
+                new DocumentParsePageEntity { ParseId = seed.Parse, PageNumber = 1, Label = "new" },
+                new DocumentParsePageEntity { ParseId = seed.Parse, PageNumber = 2, Label = "new" });
+            await db.SaveChangesAsync();
             var other = await DataAsync(client, Route(foreign, node) + "?limit=2");
             other["items"]!.AsArray().Select(item => item!["pageLabel"]!.GetValue<string>()).Should().Equal("foreign", "foreign");
         }
@@ -185,7 +186,6 @@ public sealed class DocumentStructurePageLabelTests(PostgreSqlFixture database) 
         (await DataAsync(client, Route(seed, node) + "?limit=2"))["items"]!.AsArray()
             .Select(item => item!["pageLabel"]!.GetValue<string>()).Should().Equal("new", "new");
         probe.Messages.Should().BeEmpty();
-        probe.Writes.Should().Be(0);
     }
 
     private WebApplicationFactory<Program> Factory(PageProbe probe) => CreateFactory(configureTestServices: services =>
@@ -239,10 +239,9 @@ public sealed class DocumentStructurePageLabelTests(PostgreSqlFixture database) 
         }).ToArray();
         db.AddRange(definition, level, file, parse, node, image);
         db.DocumentParseBlocks.AddRange(blocks);
+        if (pages) db.DocumentParsePages.AddRange(new[] { (1, (string?)label), (2, label), (3, ""), (4, (string?)null), (6, "last") }
+            .Select(page => new DocumentParsePageEntity { ParseId = parse.Id, PageNumber = page.Item1, Label = page.Item2 }));
         await db.SaveOwnedChangesAsync();
-        if (pages) await new DocumentParsePageRepository(db).ReplaceAsync(parse.Id,
-            [new(parse.Id, 1, label, null), new(parse.Id, 2, label, null), new(parse.Id, 3, "", null),
-                new(parse.Id, 4, null, null), new(parse.Id, 6, "last", null)]);
         return new(parse.Id, node.Id, image.Id, blocks.Select(block => block.Id).ToArray());
     }
 
@@ -250,7 +249,6 @@ public sealed class DocumentStructurePageLabelTests(PostgreSqlFixture database) 
     {
         public ConcurrentQueue<DocumentParsePageKey[]> Reads { get; } = new();
         public ConcurrentQueue<(LogLevel Level, string Message, Exception? Exception)> Messages { get; } = new();
-        public int Writes;
         public Func<CancellationToken, Task>? BeforeRead;
         public Func<CancellationToken, Task>? AfterRead;
         public ILogger CreateLogger(string categoryName) => new Logger(this, categoryName);
@@ -261,19 +259,14 @@ public sealed class DocumentStructurePageLabelTests(PostgreSqlFixture database) 
             public bool IsEnabled(LogLevel logLevel) => true;
             public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
             {
-                if (category == "DocumentStructureEndpoints") probe.Messages.Enqueue((logLevel, formatter(state, exception), exception));
+                if (category == "DocumentStructure") probe.Messages.Enqueue((logLevel, formatter(state, exception), exception));
             }
         }
     }
 
     private sealed class ObservedPages(IDocumentParsePageRepository inner, PageProbe probe) : IDocumentParsePageRepository
     {
-        public Task ReplaceAsync(Guid parseId, IReadOnlyCollection<DocumentParsePageModel> pages, CancellationToken ct = default)
-        {
-            Interlocked.Increment(ref probe.Writes);
-            return inner.ReplaceAsync(parseId, pages, ct);
-        }
-        public async Task<IReadOnlyDictionary<DocumentParsePageKey, DocumentParsePageModel>> ReadBatchAsync(
+        public async Task<IReadOnlyDictionary<DocumentParsePageKey, DocumentParsePage>> ReadBatchAsync(
             IReadOnlyCollection<DocumentParsePageKey> keys, CancellationToken ct = default)
         {
             probe.Reads.Enqueue(keys.ToArray());

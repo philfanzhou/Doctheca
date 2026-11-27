@@ -16,14 +16,14 @@ public class DocumentStructureRepository : IDocumentStructureRepository
         _context = context;
     }
 
-    public Task<List<DocumentStructureNodeModel>> GetCurrentBindingsAsync(Guid parseId) =>
+    public Task<List<DocumentStructureNode>> GetCurrentBindingsAsync(Guid parseId) =>
         (from node in _context.DocumentStructureNodes.AsNoTracking()
          join file in _context.DocumentFiles on node.DocumentFileId equals file.Id
          where node.TreeId == file.CurrentStructureTreeId && node.ParseId == parseId
          orderby node.SortOrder
          select MapToModel(node)).ToListAsync();
 
-    public async Task<List<DocumentStructureNodeModel>> GetByParseIdAsync(Guid parseId)
+    public async Task<List<DocumentStructureNode>> GetByParseIdAsync(Guid parseId)
     {
         var treeId = await StructureOwnership.TreeForParseAsync(_context, parseId);
         return await _context.DocumentStructureNodes
@@ -35,7 +35,7 @@ public class DocumentStructureRepository : IDocumentStructureRepository
             .ToListAsync();
     }
 
-    public async Task<bool> ReplaceAsync(Guid parseId, IReadOnlyList<DocumentStructureNodeModel> nodes)
+    public async Task<bool> ReplaceAsync(Guid parseId, IReadOnlyList<DocumentStructureNode> nodes)
     {
         await using var transaction = await _context.Database.BeginTransactionAsync();
 
@@ -65,7 +65,7 @@ public class DocumentStructureRepository : IDocumentStructureRepository
     }
 
     internal static async Task<List<StructureFieldError>> ValidateNodesAsync(
-        DocthecaDbContext context, DocumentFileEntity file, Guid? treeId, IReadOnlyList<DocumentStructureNodeModel> nodes, CancellationToken ct, IReadOnlyDictionary<Guid, string>? paths = null)
+        DocthecaDbContext context, DocumentFileEntity file, Guid? treeId, IReadOnlyList<DocumentStructureNode> nodes, CancellationToken ct, IReadOnlyDictionary<Guid, string>? paths = null)
     {
         var errors = new List<StructureFieldError>();
         if (file.StructureDefinitionId is { } definitionId)
@@ -111,7 +111,7 @@ public class DocumentStructureRepository : IDocumentStructureRepository
     }
 
     internal static async Task ReplaceNodesAsync(DocthecaDbContext context, Guid documentId, Guid treeId,
-        IReadOnlyList<DocumentStructureNodeModel> nodes, CancellationToken ct)
+        IReadOnlyList<DocumentStructureNode> nodes, CancellationToken ct)
     {
         // Audio linked to a node that the new tree no longer contains is unlinked (issue #90);
         // nodes kept by id keep their audio across the delete and re-insert below.
@@ -161,13 +161,7 @@ public class DocumentStructureRepository : IDocumentStructureRepository
         return [.. foreign];
     }
 
-    public async Task<bool> DocumentFileHasNodesAsync(Guid documentFileId)
-    {
-        return await _context.DocumentStructureNodes
-            .AnyAsync(node => node.DocumentFileId == documentFileId);
-    }
-
-    internal static DocumentStructureNodeModel MapToModel(DocumentStructureNodeEntity entity) => new()
+    internal static DocumentStructureNode MapToModel(DocumentStructureNodeEntity entity) => new()
     {
         Id = entity.Id,
         ParseId = entity.ParseId,

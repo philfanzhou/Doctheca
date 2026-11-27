@@ -81,9 +81,9 @@ public class StructureAudioMatcherTests
     ];
 
     /// <summary>Unit nodes with Section A, Section B and an unrelated Project node; level names are never used.</summary>
-    internal static List<DocumentStructureNodeModel> TextbookNodes()
+    internal static List<DocumentStructureNode> TextbookNodes()
     {
-        var nodes = new List<DocumentStructureNodeModel>();
+        var nodes = new List<DocumentStructureNode>();
         for (var u = 0; u < UnitTitles.Length; u++)
         {
             var unit = Node(UnitTitles[u], null, u * 50, u * 50 + 49);
@@ -243,6 +243,6 @@ public class StructureAudioMatcherTests
         matcher.Match("chapter 2 section 2.1.mp3").NodeId.Should().Be(section.Id);
     }
 
-    private static DocumentStructureNodeModel Node(string name, Guid? parentId, int start, int end) =>
+    private static DocumentStructureNode Node(string name, Guid? parentId, int start, int end) =>
         new() { Id = Guid.NewGuid(), ParentId = parentId, Name = name, StartSequence = start, EndSequence = end };
 }

@@ -33,12 +33,12 @@ public sealed class ExplicitIssuerTrustTests
     [Fact]
     public async Task Factory_CapturesNormalizedImmutableTrust_AndKeepsInstancesIndependent()
     {
-        var options = new IdentityAuthenticationOptions
+        var options = new IdentityOptions
         {
             Issuer = " " + Issuer + " ", Audience = Audience,
             AdditionalValidIssuers = ["", " ", null!, Issuer, " " + LegacyIssuer + " ", LegacyIssuer]
         };
-        var parameters = IdentityTokenValidationParametersFactory.Create(options);
+        var parameters = TokenValidationParametersFactory.Create(options);
         Assert.Equal(new[] { Issuer, LegacyIssuer }, parameters.ValidIssuers);
         // Even direct mutation through the exposed list must not mutate captured trust.
         var list = Assert.IsAssignableFrom<IList<string>>(parameters.ValidIssuers);
@@ -46,7 +46,7 @@ public sealed class ExplicitIssuerTrustTests
         options.Issuer = DiscoveryIssuer;
         options.AdditionalValidIssuers[4] = UnknownIssuer;
         options.AdditionalValidIssuers = [UnknownIssuer];
-        var other = IdentityTokenValidationParametersFactory.Create(options);
+        var other = TokenValidationParametersFactory.Create(options);
         var clone = parameters.Clone();
         clone.ValidIssuer = DiscoveryIssuer;
         clone.ValidIssuers = [DiscoveryIssuer, UnknownIssuer];
@@ -60,8 +60,8 @@ public sealed class ExplicitIssuerTrustTests
             Assert.Equal(DiscoveryIssuer, other.IssuerValidator(DiscoveryIssuer, null!, other));
             AssertRejected(other, Issuer);
         })));
-        Assert.Throws<ArgumentNullException>(() => IdentityTokenValidationParametersFactory.Create(null!));
-        var empty = IdentityTokenValidationParametersFactory.Create(new IdentityAuthenticationOptions { AdditionalValidIssuers = null! });
+        Assert.Throws<ArgumentNullException>(() => TokenValidationParametersFactory.Create(null!));
+        var empty = TokenValidationParametersFactory.Create(new IdentityOptions { AdditionalValidIssuers = null! });
         Assert.Empty(empty.ValidIssuers);
         AssertRejected(empty, Issuer);
     }
@@ -76,7 +76,7 @@ public sealed class ExplicitIssuerTrustTests
     [InlineData(" " + Issuer)]
     public void Validator_RejectsNonExactInput_WithSafeDiagnostic(string? issuer)
     {
-        var parameters = IdentityTokenValidationParametersFactory.Create(new IdentityAuthenticationOptions { Issuer = Issuer });
+        var parameters = TokenValidationParametersFactory.Create(new IdentityOptions { Issuer = Issuer });
         AssertRejected(parameters, issuer);
     }
 
@@ -110,7 +110,7 @@ public sealed class ExplicitIssuerTrustTests
             ["IdentityService:Audience"] = Audience,
             ["IdentityService:ClockSkewSeconds"] = "0"
         });
-        builder.Services.AddRuoyuJwtBearer(builder.Configuration, builder.Environment,
+        builder.Services.AddIdentityJwtBearer(builder.Configuration, builder.Environment,
             consumer => { consumer.MapInboundClaims = false; consumer.NameClaimType = "sub"; consumer.RoleClaimType = "role"; });
         var wrappedManager = nonBaseManager ? new DiscoveryConfigurationManager(backchannel) : null;
         builder.Services.Configure<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme, options =>

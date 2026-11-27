@@ -46,7 +46,7 @@ public sealed class StructaDocClient : IStructaDocClient
         }
     }
 
-    public async Task<StructaDocDocumentResponse> UploadDocumentAsync(
+    public async Task<DocumentResponse> UploadDocumentAsync(
         string fileName, string contentType, Stream content, CancellationToken ct = default)
     {
         using var form = new MultipartFormDataContent();
@@ -63,10 +63,10 @@ public sealed class StructaDocClient : IStructaDocClient
             throw await BuildErrorAsync(response, "upload-document", ct);
         }
 
-        return await ReadJsonAsync<StructaDocDocumentResponse>(response, "upload-document", ct);
+        return await ReadJsonAsync<DocumentResponse>(response, "upload-document", ct);
     }
 
-    public async Task<StructaDocParseRunResponse> CreateParseRunAsync(
+    public async Task<ParseRunResponse> CreateParseRunAsync(
         Guid documentId, string idempotencyKey, Guid? providerConfigId = null, CancellationToken ct = default)
     {
         var payload = providerConfigId.HasValue
@@ -94,10 +94,10 @@ public sealed class StructaDocClient : IStructaDocClient
                 "StructaDoc replayed idempotent parse run creation for document {DocumentId}", documentId);
         }
 
-        return await ReadJsonAsync<StructaDocParseRunResponse>(response, "create-parse-run", ct);
+        return await ReadJsonAsync<ParseRunResponse>(response, "create-parse-run", ct);
     }
 
-    public async Task<StructaDocParseRunResponse?> GetParseRunAsync(Guid parseRunId, CancellationToken ct = default)
+    public async Task<ParseRunResponse?> GetParseRunAsync(Guid parseRunId, CancellationToken ct = default)
     {
         using var response = await SendAsync(
             new HttpRequestMessage(HttpMethod.Get, $"api/v1/parse-runs/{parseRunId:D}"),
@@ -113,12 +113,12 @@ public sealed class StructaDocClient : IStructaDocClient
             throw await BuildErrorAsync(response, "get-parse-run", ct);
         }
 
-        return await ReadJsonAsync<StructaDocParseRunResponse>(response, "get-parse-run", ct);
+        return await ReadJsonAsync<ParseRunResponse>(response, "get-parse-run", ct);
     }
 
-    public async Task<List<StructaDocBlockResponse>> GetAllBlocksAsync(Guid parseRunId, CancellationToken ct = default)
+    public async Task<List<BlockResponse>> GetAllBlocksAsync(Guid parseRunId, CancellationToken ct = default)
     {
-        var blocks = new List<StructaDocBlockResponse>();
+        var blocks = new List<BlockResponse>();
         int? afterSequence = null;
 
         for (var page = 0; page < MaxBlockPages; page++)
@@ -132,7 +132,7 @@ public sealed class StructaDocClient : IStructaDocClient
                 throw await BuildErrorAsync(response, "list-blocks", ct);
             }
 
-            var result = await ReadJsonAsync<StructaDocBlockPageResponse>(response, "list-blocks", ct);
+            var result = await ReadJsonAsync<BlockPageResponse>(response, "list-blocks", ct);
             blocks.AddRange(result.Items);
 
             if (result.NextSequence == null)
@@ -155,7 +155,7 @@ public sealed class StructaDocClient : IStructaDocClient
             200, isTransient: false, problemTitle: "blocks-pagination-limit");
     }
 
-    public async Task<List<StructaDocPageResponse>> GetPagesAsync(Guid parseRunId, CancellationToken ct = default)
+    public async Task<List<PageResponse>> GetPagesAsync(Guid parseRunId, CancellationToken ct = default)
     {
         // Headers-only completion avoids buffering error bodies. Retain the client's timeout
         // across successful body reads as well, since HttpClient stops timing at the headers.
@@ -175,7 +175,7 @@ public sealed class StructaDocClient : IStructaDocClient
                 throw new StructaDocException("StructaDoc pages request failed.", status, status is 408 or 429 || status >= 500);
             }
             var payload = await response.Content.ReadAsStringAsync(timeout.Token);
-            var pages = JsonSerializer.Deserialize<List<StructaDocPageResponse>>(payload, JsonOptions);
+            var pages = JsonSerializer.Deserialize<List<PageResponse>>(payload, JsonOptions);
             timeout.Token.ThrowIfCancellationRequested();
             if (pages is null || pages.Any(page => page is null || page.Number <= 0)
                 || pages.Select(page => page.Number).Distinct().Count() != pages.Count)
@@ -193,7 +193,7 @@ public sealed class StructaDocClient : IStructaDocClient
         }
     }
 
-    public async Task<List<StructaDocAssetResponse>> GetAssetsAsync(Guid parseRunId, CancellationToken ct = default)
+    public async Task<List<AssetResponse>> GetAssetsAsync(Guid parseRunId, CancellationToken ct = default)
     {
         using var response = await SendAsync(
             new HttpRequestMessage(HttpMethod.Get, $"api/v1/parse-runs/{parseRunId:D}/assets"),
@@ -204,7 +204,7 @@ public sealed class StructaDocClient : IStructaDocClient
             throw await BuildErrorAsync(response, "list-assets", ct);
         }
 
-        return await ReadJsonAsync<List<StructaDocAssetResponse>>(response, "list-assets", ct);
+        return await ReadJsonAsync<List<AssetResponse>>(response, "list-assets", ct);
     }
 
     public async Task<string> GetMarkdownAsync(Guid parseRunId, CancellationToken ct = default)

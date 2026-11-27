@@ -20,14 +20,14 @@ All OpenSearch write operations (index/delete/metadata sync) are best-effort:
 
 ### Search Degradation Strategy
 
-`SearchDomainService` acts as a thin wrapper layer over `ISearchIndexService` and handles exceptions uniformly:
+`SearchService` acts as a thin wrapper layer over `ISearchIndexService` and handles exceptions uniformly:
 - Catches **any** exception (not limited to specific types), logs a Warning, and returns empty results.
 - **Rationale**: HTTP search requests should not return 500 because of an OpenSearch failure; callers (frontend/downstream) receiving empty results can render "no results" normally.
-- The degradation logic lives in the domain layer (`SearchDomainService`), not the HTTP endpoint layer, ensuring reusability.
+- The degradation logic lives in the domain layer (`SearchService`), not the HTTP endpoint layer, ensuring reusability.
 
 ### Query Building Testability
 
-`OpenSearchIndexService`'s `OpenSearchLowLevelClient` is created via `new` in the constructor, making it hard to inject mocks. The pure logic is therefore extracted into `internal static` methods:
+`IndexService`'s `OpenSearchLowLevelClient` is created via `new` in the constructor, making it hard to inject mocks. The pure logic is therefore extracted into `internal static` methods:
 - `BuildIndexBody()` — index mapping/settings
 - `BuildSearchBody(query, phrase, filter, pageSize, pageToken, logger)` — search request body
 - `ParseSearchResponse(responseJson, phrase, pageSize)` — response parsing
@@ -36,7 +36,7 @@ These methods have no external dependencies; unit tests can call them directly t
 
 ## Generation 2 Evolution: Block-Level Retrieval over minerU v1 JSON
 
-> **Evolution approach: merge into the V1 index / V1 endpoint / V1 frontend** — no parallel endpoint, no standalone `BlockXxx` model classes, no separate parallel `BlockSearchPage.vue` page. Rationale (from the @user design review): the admin backend's "block-level retrieval" shares the same OpenSearch index, the same `document_parse_blocks` table, the same `StructaDocParseWorker` entry point, the same `SearchDomainService` degradation chain, and the same doctheca built-in frontend as the existing "exact keyword retrieval" — opening a parallel path would mean maintaining two retrieval systems.
+> **Evolution approach: merge into the V1 index / V1 endpoint / V1 frontend** — no parallel endpoint, no standalone `BlockXxx` model classes, no separate parallel `BlockSearchPage.vue` page. Rationale (from the @user design review): the admin backend's "block-level retrieval" shares the same OpenSearch index, the same `document_parse_blocks` table, the same `StructaDocParseWorker` entry point, the same `SearchService` degradation chain, and the same doctheca built-in frontend as the existing "exact keyword retrieval" — opening a parallel path would mean maintaining two retrieval systems.
 
 ### minerU v1 Block Field Sources and Layering
 
@@ -112,15 +112,15 @@ New fields vs pipeline: text_level, text_format, sub_type (code distinguishes co
 |----|------|------|
 | OpenSearch index mapping | V1 `BuildIndexBody` gains `bbox`/`x0 y0 x1 y1`/`score`/`has_image`/`_meta.block_data` | Same index, same `_id` |
 | Index-writing Worker | `StructaDocParseWorker.IndexBlocksToSearchAsync` appends the new fields in the same bulk | Same best-effort entry point |
-| Domain service | `SearchDomainService.ExactSearchAsync` extended + new parameters; **no new methods**, only filter/return-field branches added within the same method | The extended signature delegated to `ISearchIndexService` |
-| Endpoint | `DocumentSearchEndpoints.Search` **extended**: new optional inputs `blockType`/`pageNumber`/`hasImage`; the returned `SearchResultModel` gains `BlockData`/`Bbox`/`Score` fields (new fields optional, compatible with old frontends) | Same `GET /admin/documents/search` |
+| Domain service | `SearchService.ExactSearchAsync` extended + new parameters; **no new methods**, only filter/return-field branches added within the same method | The extended signature delegated to `ISearchIndexService` |
+| Endpoint | `DocumentSearch.Search` **extended**: new optional inputs `blockType`/`pageNumber`/`hasImage`; the returned `SearchResult` gains `BlockData`/`Bbox`/`Score` fields (new fields optional, compatible with old frontends) | Same `GET /admin/documents/search` |
 | Frontend | `SearchPage.vue` gains an "Advanced filters" drawer (minerU field filtering) + result-row expansion showing `blockData` | Same page, not side by side |
 
 **Decision**: Option Q selected (evolve V1).
 
 Rationale:
 - Indexing/writes/degradation/pagination are fully reused; maintenance effort is near minimal.
-- The result contract is backward compatible: the new fields `BlockData`/`Bbox`/`Score` are optional in `SearchResultModel`; frontends that do not send/display them (including old Ruoyu.Admin references, if any) are unaffected.
+- The result contract is backward compatible: the new fields `BlockData`/`Bbox`/`Score` are optional in `SearchResult`; frontends that do not send/display them (including old Ruoyu.Admin references, if any) are unaffected.
 - The admin UI entry point remains in the doctheca built-in frontend; the Ruoyu.Admin boundary is not expanded.
 - minerU `type` shares its source with `block_type`, `page_id` with `page_number`, `text|content|body` with `text_content` → Dimension 1 has zero new mapping cost.
 
@@ -146,25 +146,25 @@ The V1 endpoint's new `blockType` parameter accepts a **string** (free text); th
 ├── src/
 │   ├── Domain/
 │   │   ├── Models/
-│   │   │   ├── SearchResultModel.cs               # Search result model (Generation 2 evolution adds BlockData/Bbox/Score)
-│   │   │   ├── SearchFilterModel.cs               # Search filter model (Generation 2 evolution adds BlockType/PageNumber/HasImage)
+│   │   │   ├── SearchResult.cs               # Search result model (Generation 2 evolution adds BlockData/Bbox/Score)
+│   │   │   ├── SearchFilter.cs               # Search filter model (Generation 2 evolution adds BlockType/PageNumber/HasImage)
 │   │   │   ├── SearchMatchType.cs                 # Match type constants (unchanged)
 │   │   │   └── OpenSearchOptions.cs               # OpenSearch configuration section (unchanged)
 │   │   ├── Services/
-│   │   │   ├── ISearchDomainService.cs            # Search domain service interface (ExactSearchAsync extended signature)
-│   │   │   └── SearchDomainService.cs             # Search domain service implementation (filters extended within the same ExactSearchAsync)
+│   │   │   ├── ISearchService.cs            # Search domain service interface (ExactSearchAsync extended signature)
+│   │   │   └── SearchService.cs             # Search domain service implementation (filters extended within the same ExactSearchAsync)
 │   │   └── Repositories/
 │   │       ├── ISearchIndexService.cs             # Search index interface (adds minerU field indexing)
 │   │       └── IDocumentParseBlockRepository.cs   # Block repository interface (unchanged, no new GetPagedAsync method)
 │   ├── Service/
 │   │   ├── Endpoints/
-│   │   │   └── DocumentSearchEndpoints.cs         # GET /admin/documents/search (Generation 2 evolution extends inputs and response)
+│   │   │   └── DocumentSearch.cs         # GET /admin/documents/search (Generation 2 evolution extends inputs and response)
 │   │   ├── OpenSearch/
-│   │   │   ├── OpenSearchIndexManager.cs          # Index lifecycle management (create/delete/version check)
-│   │   │   ├── OpenSearchQueryBuilder.cs          # Search request body construction (BuildSearchBody)
-│   │   │   ├── OpenSearchResponseParser.cs        # Search response parsing (ParseSearchResponse)
-│   │   │   └── OpenSearchJsonHelper.cs            # Safe OpenSearch JSON field reading helpers
-│   │   ├── OpenSearchIndexService.cs              # OpenSearch index service facade (composes the classes above, implements ISearchIndexService)
+│   │   │   ├── IndexManager.cs          # Index lifecycle management (create/delete/version check)
+│   │   │   ├── QueryBuilder.cs          # Search request body construction (BuildSearchBody)
+│   │   │   ├── ResponseParser.cs        # Search response parsing (ParseSearchResponse)
+│   │   │   └── JsonHelper.cs            # Safe OpenSearch JSON field reading helpers
+│   │   ├── IndexService.cs              # OpenSearch index service facade (composes the classes above, implements ISearchIndexService)
 │   │   └── StructaDocParseWorker.cs               # Indexing after parse completion (best-effort, adds minerU fields)
 │   └── Host/
 │       ├── frontend/                              # doctheca built-in frontend
@@ -173,8 +173,8 @@ The V1 endpoint's new `blockType` parameter accepts a **string** (free text); th
 │       ├── appsettings.json                       # OpenSearch configuration (unchanged)
 │       └── Program.cs                             # DI registration (unchanged)
 └── src/Tests/Doctheca.Tests/
-    ├── OpenSearchIndexServiceTests.cs             # Adds minerU field mapping/query/attachment test cases
-    └── SearchDomainServiceTests.cs                # Adds minerU filter pass-through + attachment degradation test cases
+    ├── IndexManagerTests.cs             # Adds minerU field mapping/query/attachment test cases
+    └── SearchServiceTests.cs                # Adds minerU filter pass-through + attachment degradation test cases
 ```
 
 ## Key Interface Signatures
@@ -186,13 +186,13 @@ See [02-SPEC.md §1.1](./02-SPEC.md#11-isearchindexservice-srcdomainrepositories
 ### Injected Dependencies
 
 ```csharp
-// OpenSearchIndexService constructor
-public sealed class OpenSearchIndexService : ISearchIndexService
+// IndexService constructor
+public sealed class IndexService : ISearchIndexService
 {
-    public OpenSearchIndexService(
+    public IndexService(
         IOptions<OpenSearchOptions> options,
         IServiceProvider serviceProvider,
-        ILogger<OpenSearchIndexService> logger)
+        ILogger<IndexService> logger)
     {
         // ...
     }
@@ -201,25 +201,25 @@ public sealed class OpenSearchIndexService : ISearchIndexService
 
 - `IOptions<OpenSearchOptions>`: OpenSearch configuration.
 - `IServiceProvider`: used to create a scope to resolve `IDocumentParseBlockRepository` (scoped lifetime).
-- `ILogger<OpenSearchIndexService>`: structured logging.
+- `ILogger<IndexService>`: structured logging.
 - `ConnectionConfiguration` and `OpenSearchLowLevelClient` are created via `new` in the constructor. The service is registered as a singleton and lives for the lifetime of the process; it does not implement `IDisposable`. In the referenced `OpenSearch.Net` 2.2.0 package, `OpenSearchLowLevelClient` does not implement `IDisposable`; `ConnectionConfiguration` does, but it is not disposed explicitly and is reclaimed when the process exits.
 
 ```csharp
-// SearchDomainService constructor
-public SearchDomainService(
+// SearchService constructor
+public SearchService(
     ISearchIndexService searchIndexService,
-    ILogger<SearchDomainService> logger)
+    ILogger<SearchService> logger)
 ```
 
 - `ISearchIndexService`: **non-nullable**, injection guaranteed by the DI container (registered as a Singleton).
-- `ILogger<SearchDomainService>`: LogWarning on degradation.
+- `ILogger<SearchService>`: LogWarning on degradation.
 
 ### DI Registration (`Program.cs`)
 
 ```csharp
 builder.Services.Configure<OpenSearchOptions>(builder.Configuration.GetSection("OpenSearch"));
-builder.Services.AddSingleton<ISearchIndexService, OpenSearchIndexService>();
-builder.Services.AddScoped<ISearchDomainService, SearchDomainService>();
+builder.Services.AddSingleton<ISearchIndexService, IndexService>();
+builder.Services.AddScoped<ISearchService, SearchService>();
 ```
 
 ## Data Flows
@@ -247,12 +247,12 @@ StructaDocParseResultSync.SyncAsync
 
 ```
 DELETE /admin/document-parses/{parseId}
-  → DocumentParseEndpoints.DeleteDocumentParse
+  → DocumentParses.DeleteDocumentParse
   → parseService.DeleteParseAsync(parseId)
   → searchIndexService.DeleteParseIndexAsync(parseId) (best-effort)
 
 DELETE /admin/document-files/{id}
-  → DocumentFileEndpoints.DeleteDocumentFile
+  → DocumentFiles.Delete
   → fileService.DeleteAsync(id)
   → OSS cleanup (best-effort)
   → searchIndexService.DeleteDocumentFileIndexAsync(id) (best-effort)
@@ -262,7 +262,7 @@ DELETE /admin/document-files/{id}
 
 ```
 PUT /admin/document-files/{id}/metadata
-  → DocumentFileEndpoints.UpdateDocumentFileMetadata
+  → DocumentFiles.UpdateMetadata
   → fileService.UpdateMetadataAsync(id, subject, grade, year)
   → searchIndexService.UpdateDocumentFileMetadataAsync (best-effort)
 
@@ -275,10 +275,10 @@ LLM automatic analysis (AnalyzeMetadataIfMissingAsync)
 
 ```
 GET /admin/documents/search
-  → DocumentSearchEndpoints.Search
+  → DocumentSearch.Search
   → parameter validation (empty/too-long query → 400)
   → pageSize = Math.Min(Math.Max(pageSize, 1), 100)
-  → construct SearchFilterModel (only when any of subject/grade/year/documentTitle is non-empty)
+  → construct SearchFilter (only when any of subject/grade/year/documentTitle is non-empty)
   → searchService.ExactSearchAsync(query, phrase, filter, pageSize, pageToken)
       → _searchIndexService.ExactSearchAsync(...)
           → BuildSearchBody → _client.SearchAsync → ParseSearchResponse
@@ -309,7 +309,7 @@ An OpenSearch index's mapping **cannot be modified online** once created (field 
 
 **Solution**: write `mapping_version` into the index `_meta`, compare version numbers at startup, and delete and rebuild the index on mismatch.
 
-- The `CurrentMappingVersion` constant is defined in `OpenSearchIndexManager` and incremented on every mapping change to `BuildIndexBody`
+- The `CurrentMappingVersion` constant is defined in `IndexManager` and incremented on every mapping change to `BuildIndexBody`
 - `BuildIndexBody`'s `_meta` field gains `mapping_version`
 - `EnsureIndexExistsAsync` reads the index `_meta.mapping_version`; if missing or lower than the current version, delete and rebuild
 - Rebuilding is best-effort: deletion failure → LogWarning, startup not blocked; creation failure after successful deletion → LogWarning, startup not blocked
@@ -328,7 +328,7 @@ An OpenSearch index's mapping **cannot be modified online** once created (field 
 |------|------|
 | OpenSearch indexing failure | The Worker catches the exception → LogWarning, parsing flow continues |
 | OpenSearch deletion failure | The endpoint catches the exception → LogWarning, deletion flow continues |
-| OpenSearch search failure | `SearchDomainService` catches the exception → LogWarning, returns empty results |
+| OpenSearch search failure | `SearchService` catches the exception → LogWarning, returns empty results |
 | OpenSearch metadata sync failure | The caller catches the exception → LogWarning, no blocking |
 | Empty blocks | LogWarning and return, no exception thrown |
 | Body/caption/footnote all whitespace or absent | Skip the block; annotation-only image/table Blocks are otherwise indexed |
@@ -409,10 +409,10 @@ StructaDocParseWorker.IndexBlocksToSearchAsync (best-effort)
 
 ```
 GET /admin/documents/search
-  → DocumentSearchEndpoints.Search
+  → DocumentSearch.Search
   → parameter validation (empty/too-long query → 400; if all minerU filters are also empty, execute the V1 keyword-only path)
   → pageSize = Math.Min(Math.Max(pageSize, 1), 100)   (V1's 100 unchanged; ≤ 50 recommended with minerU filters, guided by the frontend)
-  → construct SearchFilterModel (the 4 original V1 items + Generation 2 additions BlockType/PageNumber/HasImage)
+  → construct SearchFilter (the 4 original V1 items + Generation 2 additions BlockType/PageNumber/HasImage)
   → searchService.ExactSearchAsync(query, phrase, filter, pageSize, pageToken)
       → _searchIndexService.ExactSearchAsync(...)
           → BuildSearchBody (keyword goes to must; blockType/pageNumber/hasImage go to filter)
@@ -426,11 +426,11 @@ GET /admin/documents/search
 ## Testability Design
 
 - **Pure logic extraction**: `BuildIndexBody` / `BuildSearchBody` / `ParseSearchResponse` are `internal static` with no IO dependencies, directly unit-testable.
-- **Interface isolation**: `ISearchIndexService` / `ISearchDomainService` are injected via constructors; `SearchDomainService` is verifiable with mocks.
-- **Degradation is verifiable**: mock `ISearchIndexService.ExactSearchAsync` to throw and verify `SearchDomainService` returns empty results + LogWarning.
+- **Interface isolation**: `ISearchIndexService` / `ISearchService` are injected via constructors; `SearchService` is verifiable with mocks.
+- **Degradation is verifiable**: mock `ISearchIndexService.ExactSearchAsync` to throw and verify `SearchService` returns empty results + LogWarning.
 - **Startup initialization is best-effort**: `EnsureIndexAsync` failure does not block service startup; it only logs.
 - **Generation 2 minerU filter pure logic is testable**: `BuildSearchBody` adds filter-construction assertions on top of the existing `internal static` tests; `ParseSearchResponse` adds minerU field attachment assertions (`BlockData`/`Bbox`/`Score` extraction) on top of the existing `internal static` tests. **No new** standalone `BuildBlock*` / `ParseBlock*` methods, avoiding double maintenance.
-- **Generation 2 degradation is verifiable**: reuses the existing mock-throw path for `ISearchIndexService.ExactSearchAsync` to verify minerU filters still go through `SearchDomainService` degradation, returning empty results + LogWarning.
+- **Generation 2 degradation is verifiable**: reuses the existing mock-throw path for `ISearchIndexService.ExactSearchAsync` to verify minerU filters still go through `SearchService` degradation, returning empty results + LogWarning.
 
 ### Canonical level-less titles (#106)
 

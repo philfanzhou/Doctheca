@@ -14,7 +14,7 @@ public interface IStructaDocParseResultSync
     /// Pull the full result of a succeeded Parse Run into local storage and mark the parse as parsed.
     /// Returns the canonical Markdown content.
     /// </summary>
-    Task<string> SyncAsync(DocumentParseModel parse, Guid parseRunId, CancellationToken ct);
+    Task<string> SyncAsync(DocumentParse parse, Guid parseRunId, CancellationToken ct);
 }
 
 /// <summary>
@@ -42,7 +42,7 @@ public sealed class StructaDocParseResultSync : IStructaDocParseResultSync
         _logger = logger;
     }
 
-    public async Task<string> SyncAsync(DocumentParseModel parse, Guid parseRunId, CancellationToken ct)
+    public async Task<string> SyncAsync(DocumentParse parse, Guid parseRunId, CancellationToken ct)
     {
         var assets = await _client.GetAssetsAsync(parseRunId, ct);
         var blocks = await _client.GetAllBlocksAsync(parseRunId, ct);
@@ -50,10 +50,10 @@ public sealed class StructaDocParseResultSync : IStructaDocParseResultSync
         var pages = await ReadOptionalPagesAsync(parse.Id, parseRunId, ct);
         ct.ThrowIfCancellationRequested();
         var assetIdToImageId = new Dictionary<Guid, Guid>(assets.Count);
-        var images = new List<DocumentParseImageModel>();
+        var images = new List<DocumentParseImage>();
         foreach (var asset in assets)
         {
-            var image = new DocumentParseImageModel
+            var image = new DocumentParseImage
             {
                 Id = Guid.NewGuid(),
                 ParseId = parse.Id,
@@ -84,7 +84,7 @@ public sealed class StructaDocParseResultSync : IStructaDocParseResultSync
         return markdown;
     }
 
-    private async Task<IReadOnlyCollection<DocumentParsePageModel>> ReadOptionalPagesAsync(
+    private async Task<IReadOnlyCollection<DocumentParsePage>> ReadOptionalPagesAsync(
         Guid parseId, Guid parseRunId, CancellationToken ct)
     {
         try
@@ -97,7 +97,7 @@ public sealed class StructaDocParseResultSync : IStructaDocParseResultSync
                 _logger.LogWarning("Optional StructaDoc pages unavailable for parse {ParseId}: invalid or empty page set", parseId);
                 return [];
             }
-            return pages.Select(page => new DocumentParsePageModel(parseId, page.Number, page.Label, page.LabelSource)).ToList();
+            return pages.Select(page => new DocumentParsePage(parseId, page.Number, page.Label, page.LabelSource)).ToList();
         }
         catch (Exception exception)
         {
@@ -108,12 +108,12 @@ public sealed class StructaDocParseResultSync : IStructaDocParseResultSync
         }
     }
 
-    private static List<DocumentParseBlockModel> MapBlocks(
+    private static List<DocumentParseBlock> MapBlocks(
         Guid parseId,
-        IReadOnlyList<StructaDocBlockResponse> blocks,
+        IReadOnlyList<BlockResponse> blocks,
         IReadOnlyDictionary<Guid, Guid> assetIdToImageId)
     {
-        var models = new List<DocumentParseBlockModel>(blocks.Count);
+        var models = new List<DocumentParseBlock>(blocks.Count);
         var perPageCounter = new Dictionary<int, int>();
 
         foreach (var block in blocks.OrderBy(b => b.Sequence))
@@ -129,7 +129,7 @@ public sealed class StructaDocParseResultSync : IStructaDocParseResultSync
                 imageId = mappedImageId;
             }
 
-            models.Add(new DocumentParseBlockModel
+            models.Add(new DocumentParseBlock
             {
                 Id = Guid.NewGuid(),
                 ParseId = parseId,

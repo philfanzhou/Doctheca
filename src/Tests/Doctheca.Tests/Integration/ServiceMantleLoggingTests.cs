@@ -347,7 +347,7 @@ public sealed class ServiceMantleLoggingTests : ServiceMantleIntegrationTestBase
 
     /// <summary>
     /// Emits the probe events from inside a real request (the search endpoint resolves
-    /// ISearchDomainService → ISearchIndexService during endpoint execution, i.e. inside the
+    /// ISearchService → ISearchIndexService during endpoint execution, i.e. inside the
     /// correlation scope). Every canary is a synthetic, neutral value invented for this test:
     /// the denied-field canaries deliberately carry NO secret-looking name or text, so their
     /// absence from both sinks can only be explained by the sanitizer rejecting the structured
@@ -367,11 +367,11 @@ public sealed class ServiceMantleLoggingTests : ServiceMantleIntegrationTestBase
         public const string FreeTextCanary = "synthetic-freetext-canary";
         public const string NormalFieldMarker = "probe-normal-field-value";
 
-        public Task<(List<SearchResultModel> Results, int TotalCount, string? NextToken)>
+        public Task<(List<SearchResult> Results, int TotalCount, string? NextToken)>
             ExactSearchAsync(
                 string query,
                 bool phrase,
-                SearchFilterModel? filter,
+                SearchFilter? filter,
                 int pageSize,
                 string? pageToken)
         {
@@ -403,7 +403,7 @@ public sealed class ServiceMantleLoggingTests : ServiceMantleIntegrationTestBase
                 .LogWarning("probe.ef.warning");
 
             return Task.FromResult(
-                (new List<SearchResultModel>(), 0, (string?)null));
+                (new List<SearchResult>(), 0, (string?)null));
         }
 
         public Task EnsureIndexAsync() => Task.CompletedTask;

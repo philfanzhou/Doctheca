@@ -25,9 +25,9 @@ public sealed partial class DocumentStructureEndpointTests
         using var original = AuthoringFactory(true);
         using var factory = original.WithWebHostBuilder(b => b.ConfigureTestServices(services => { services.AddSingleton(analysis.Object); services.RemoveAll<ISearchIndexService>(); services.AddSingleton(index.Object); }));
         using var client = Admin(factory); var source = Guid.NewGuid(); var run = Guid.NewGuid();
-        _authoringUpstream.Setup(u => u.UploadDocumentAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<Stream>(), It.IsAny<CancellationToken>())).ReturnsAsync(new StructaDocDocumentResponse { Id = source });
-        _authoringUpstream.Setup(u => u.CreateParseRunAsync(source, It.IsAny<string>(), It.IsAny<Guid?>(), It.IsAny<CancellationToken>())).ReturnsAsync(new StructaDocParseRunResponse { Id = run, DocumentId = source, Status = "succeeded" });
-        _authoringUpstream.Setup(u => u.GetParseRunAsync(run, It.IsAny<CancellationToken>())).ReturnsAsync(new StructaDocParseRunResponse { Id = run, DocumentId = source, Status = "succeeded" });
+        _authoringUpstream.Setup(u => u.UploadDocumentAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<Stream>(), It.IsAny<CancellationToken>())).ReturnsAsync(new DocumentResponse { Id = source });
+        _authoringUpstream.Setup(u => u.CreateParseRunAsync(source, It.IsAny<string>(), It.IsAny<Guid?>(), It.IsAny<CancellationToken>())).ReturnsAsync(new ParseRunResponse { Id = run, Status = "succeeded" });
+        _authoringUpstream.Setup(u => u.GetParseRunAsync(run, It.IsAny<CancellationToken>())).ReturnsAsync(new ParseRunResponse { Id = run, Status = "succeeded" });
         _authoringUpstream.Setup(u => u.GetAllBlocksAsync(run, It.IsAny<CancellationToken>())).ReturnsAsync([]);
         _authoringUpstream.Setup(u => u.GetPagesAsync(run, It.IsAny<CancellationToken>())).ReturnsAsync([]);
         _authoringUpstream.Setup(u => u.GetAssetsAsync(run, It.IsAny<CancellationToken>())).ReturnsAsync([]);

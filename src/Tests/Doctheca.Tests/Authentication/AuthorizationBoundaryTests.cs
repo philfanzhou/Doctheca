@@ -13,12 +13,14 @@ using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Tokens;
 using Moq;
-using Doctheca.Common.Oss;
+using Doctheca.Common.ObjectStorage;
 using Doctheca.Domain.Models;
 using Doctheca.Domain.Repositories;
 using Doctheca.Domain.Services;
 using Doctheca.Host.Authentication;
 using Doctheca.Service;
+using Doctheca.Service.Endpoints;
+using global::Doctheca.Service.OpenSearch;
 using Doctheca.Service.Parsing;
 using Doctheca.Service.StructaDoc;
 using Xunit;
@@ -122,13 +124,13 @@ public class AuthorizationBoundaryTests
                 It.IsAny<int>(),
                 It.IsAny<int>(),
                 It.IsAny<string>()))
-            .ReturnsAsync((new List<DocumentParseModel>(), 0));
+            .ReturnsAsync((new List<DocumentParse>(), 0));
         builder.Services.AddSingleton(parseService.Object);
         builder.Services.AddSingleton(Mock.Of<IDocumentFileService>());
-        builder.Services.AddSingleton(Mock.Of<IOssService>());
+        builder.Services.AddSingleton(Mock.Of<IObjectStore>());
         builder.Services.AddSingleton(Mock.Of<ISearchIndexService>());
         builder.Services.AddSingleton(Mock.Of<IStructaDocClient>());
-        builder.Services.AddSingleton<ParseImageContentSource>();
+        builder.Services.AddSingleton<ImageContentSource>();
 
         builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             .AddJwtBearer(options =>
@@ -150,7 +152,7 @@ public class AuthorizationBoundaryTests
             });
         builder.Services.AddAuthorization(options =>
         {
-            options.AddPolicy(DocthecaAuthorizationPolicies.Admin, policy =>
+            options.AddPolicy(AuthorizationPolicies.Admin, policy =>
             {
                 policy.AddAuthenticationSchemes(JwtBearerDefaults.AuthenticationScheme);
                 policy.RequireAuthenticatedUser();
@@ -163,7 +165,7 @@ public class AuthorizationBoundaryTests
         var app = builder.Build();
         app.UseAuthentication();
         app.UseAuthorization();
-        app.MapDocumentParseEndpoints();
+        app.MapDocumentParses();
         app.MapGet("/health", () => Results.Ok());
         app.MapGet("/", () => Results.Ok());
         app.MapFallback(() => Results.Ok());

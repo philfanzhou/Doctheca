@@ -3,12 +3,13 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
-using Doctheca.Common.Oss;
+using Doctheca.Common.ObjectStorage;
 using Doctheca.Database;
 using Doctheca.Domain.Models;
 using Doctheca.Domain.Repositories;
 using Doctheca.Service;
 using Doctheca.Service.Audio;
+using Doctheca.Service.Endpoints;
 using Doctheca.Service.InternalApi;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Features;
@@ -30,12 +31,12 @@ public sealed partial class InternalAudioEndpointTests
     public async Task ObsoleteEnableValues_DoNotDisableAudioRoutes(string? enabled)
     {
         var repository = new Mock<IInternalAudioRepository>(MockBehavior.Strict);
-        var oss = new Mock<IOssService>(MockBehavior.Strict);
+        var oss = new Mock<IObjectStore>(MockBehavior.Strict);
         var node = Guid.NewGuid();
         repository.Setup(r => r.ReadAudioAsync(node, null, It.IsAny<CancellationToken>()))
             .ReturnsAsync((InternalAudioMembership?)null);
         using var factory = Factory(services =>
-        { services.RemoveAll<IInternalAudioRepository>(); services.AddSingleton(repository.Object); services.RemoveAll<IOssService>(); services.AddSingleton(oss.Object); }, new() { ["InternalApi:Enabled"] = enabled });
+        { services.RemoveAll<IInternalAudioRepository>(); services.AddSingleton(repository.Object); services.RemoveAll<IObjectStore>(); services.AddSingleton(oss.Object); }, new() { ["InternalApi:Enabled"] = enabled });
         using var client = factory.CreateClient();
         using var response = await client.GetAsync(ListUrl(node));
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode); Headers(response);
@@ -52,14 +53,14 @@ public sealed partial class InternalAudioEndpointTests
         try
         {
             Environment.SetEnvironmentVariable("USE_LOCAL_OSS", "1"); Environment.SetEnvironmentVariable("OSS_LOCAL_PATH", directory);
-            var oss = new Mock<IOssService>(MockBehavior.Strict);
-            using var factory = Factory(services => { services.RemoveAll<IOssService>(); services.AddSingleton(oss.Object); });
+            var oss = new Mock<IObjectStore>(MockBehavior.Strict);
+            using var factory = Factory(services => { services.RemoveAll<IObjectStore>(); services.AddSingleton(oss.Object); });
             using var client = factory.CreateClient(); var seed = await SeedAsync(factory.Services, PlayableWave.Bytes());
             try
             {
                 using var response = await client.GetAsync(ListUrl(seed.Node));
                 Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
-                var token = factory.Services.GetRequiredService<InternalAudioTokens>().Create(
+                var token = factory.Services.GetRequiredService<AudioTokens>().Create(
                     new(seed.File, seed.Tree, seed.Node, seed.Audio), DateTimeOffset.UtcNow.AddMinutes(2));
                 using var bytes = await client.GetAsync(ListUrl(seed.Node) + $"/{seed.Audio:D}/content?token=" + token);
                 Assert.Equal(HttpStatusCode.ServiceUnavailable, bytes.StatusCode);
@@ -113,7 +114,7 @@ public sealed partial class InternalAudioEndpointTests
     public async Task OpaqueTokens_ExactExpiryMaximumTtlAndPublicUrlIndependence()
     {
         var provider = new Microsoft.AspNetCore.DataProtection.EphemeralDataProtectionProvider();
-        var tokens = new InternalAudioTokens(provider, TimeProvider.System);
+        var tokens = new AudioTokens(provider, TimeProvider.System);
         using var factory = Factory(services => services.AddSingleton(tokens), new() { ["DocumentAudio:PlaybackLinkSeconds"] = "3600", ["Oss:PublicBaseUrl"] = "" });
         using var client = factory.CreateClient(); var seed = await SeedAsync(factory.Services, PlayableWave.Bytes());
         try
@@ -122,7 +123,7 @@ public sealed partial class InternalAudioEndpointTests
             var playback = json.RootElement.GetProperty("data").GetProperty("items")[0].GetProperty("playback");
             var link = playback.GetProperty("url").GetString()!;
             var token = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(new Uri("http://test" + link).Query)["token"].ToString();
-            var protector = Microsoft.AspNetCore.DataProtection.DataProtectionCommonExtensions.CreateProtector(provider, InternalAudioTokens.Purpose);
+            var protector = Microsoft.AspNetCore.DataProtection.DataProtectionCommonExtensions.CreateProtector(provider, AudioTokens.Purpose);
             var timed = Microsoft.AspNetCore.DataProtection.DataProtectionAdvancedExtensions.ToTimeLimitedDataProtector(protector);
             var bytes = timed.Unprotect(Microsoft.AspNetCore.WebUtilities.WebEncoders.Base64UrlDecode(token), out var expiry);
             Assert.Equal(playback.GetProperty("expiresAt").GetDateTimeOffset(), expiry); Assert.Equal(3600, playback.GetProperty("expiresInSeconds").GetInt32());
@@ -168,10 +169,10 @@ public sealed partial class InternalAudioEndpointTests
             if (Interlocked.Increment(ref calls) == cancelledRead) { entered.SetResult(); await Task.Delay(Timeout.Infinite, cancellation); }
             return membership;
         });
-        var oss = new Mock<IOssService>(MockBehavior.Strict);
+        var oss = new Mock<IObjectStore>(MockBehavior.Strict);
         oss.Setup(x => x.CopyToAsync(It.IsAny<string>(), It.IsAny<Stream>(), It.IsAny<CancellationToken>())).Returns((string _, Stream stream, CancellationToken cancellation) => stream.WriteAsync(bytes, cancellation).AsTask());
-        using var factory = Factory(services => { services.RemoveAll<IInternalAudioRepository>(); services.AddSingleton(repository.Object); services.RemoveAll<IOssService>(); services.AddSingleton(oss.Object); services.RemoveAll<AudioScratchSpace>(); services.AddSingleton<AudioScratchSpace>(scratch); });
-        using var client = factory.CreateClient(); var tokens = factory.Services.GetRequiredService<InternalAudioTokens>();
+        using var factory = Factory(services => { services.RemoveAll<IInternalAudioRepository>(); services.AddSingleton(repository.Object); services.RemoveAll<IObjectStore>(); services.AddSingleton(oss.Object); services.RemoveAll<AudioScratchSpace>(); services.AddSingleton<AudioScratchSpace>(scratch); });
+        using var client = factory.CreateClient(); var tokens = factory.Services.GetRequiredService<AudioTokens>();
         var link = ListUrl(node) + $"/{audio:D}/content?token=" + tokens.Create(new(file, parse, node, audio), DateTimeOffset.UtcNow.AddMinutes(2));
         using var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(10)); var reading = client.GetAsync(link, cancellation.Token);
         await entered.Task.WaitAsync(TimeSpan.FromSeconds(5)); cancellation.Cancel(); await Assert.ThrowsAnyAsync<OperationCanceledException>(() => reading);
@@ -182,19 +183,19 @@ public sealed partial class InternalAudioEndpointTests
     [InlineData(false)][InlineData(true)]
     public async Task OutputFailureOrDisconnect_AbortsAndReleasesScratch(bool cancel)
     {
-        var bytes = PlayableWave.Bytes(); var scratch = new Scratch(); var oss = new Mock<IOssService>(MockBehavior.Strict);
+        var bytes = PlayableWave.Bytes(); var scratch = new Scratch(); var oss = new Mock<IObjectStore>(MockBehavior.Strict);
         oss.Setup(x => x.CopyToAsync(It.IsAny<string>(), It.IsAny<Stream>(), It.IsAny<CancellationToken>())).Returns((string _, Stream stream, CancellationToken cancellation) => stream.WriteAsync(bytes, cancellation).AsTask());
-        using var factory = Factory(services => { services.RemoveAll<IOssService>(); services.AddSingleton(oss.Object); });
+        using var factory = Factory(services => { services.RemoveAll<IObjectStore>(); services.AddSingleton(oss.Object); });
         var seed = await SeedAsync(factory.Services, bytes); using var cancellation = new CancellationTokenSource();
         try
         {
-            using var scope = factory.Services.CreateScope(); var tokens = factory.Services.GetRequiredService<InternalAudioTokens>();
+            using var scope = factory.Services.CreateScope(); var tokens = factory.Services.GetRequiredService<AudioTokens>();
             var context = new DefaultHttpContext { RequestServices = scope.ServiceProvider }; var started = new Started(); var lifetime = new Lifetime(cancellation.Token);
             context.Features.Set<IHttpResponseFeature>(started); context.Features.Set<IHttpRequestLifetimeFeature>(lifetime);
             context.Request.QueryString = new("?token=" + tokens.Create(new(seed.File, seed.Tree, seed.Node, seed.Audio), DateTimeOffset.UtcNow.AddMinutes(2)));
             context.Response.Body = new FaultOutput(() => { started.Value = true; if (cancel) cancellation.Cancel(); });
-            var execute = InternalAudioEndpoints.Content(seed.Node.ToString("D"), seed.Audio.ToString("D"), context,
-                scope.ServiceProvider.GetRequiredService<IInternalAudioRepository>(), factory.Services.GetRequiredService<InternalAudioSettings>(), tokens,
+            var execute = InternalAudio.Content(seed.Node.ToString("D"), seed.Audio.ToString("D"), context,
+                scope.ServiceProvider.GetRequiredService<IInternalAudioRepository>(), factory.Services.GetRequiredService<AudioSettings>(), tokens,
                 scope.ServiceProvider.GetRequiredService<StructureAudioStore>(), scope.ServiceProvider.GetRequiredService<IOptions<DocumentAudioOptions>>(), scratch, factory.Services.GetRequiredService<ILoggerFactory>());
             if (cancel) await Assert.ThrowsAnyAsync<OperationCanceledException>(() => execute); else await execute;
             Assert.True(lifetime.Aborted); Assert.True(scratch.Last?.Disposed); Assert.Equal("audio/wav", context.Response.ContentType);
@@ -205,7 +206,7 @@ public sealed partial class InternalAudioEndpointTests
     [Fact]
     public async Task StorageDeadline_PropagatesToCopyAndCleansScratch()
     {
-        var scratch = new Scratch(); var observed = CancellationToken.None; var oss = new Mock<IOssService>(MockBehavior.Strict);
+        var scratch = new Scratch(); var observed = CancellationToken.None; var oss = new Mock<IObjectStore>(MockBehavior.Strict);
         oss.Setup(x => x.CopyToAsync(It.IsAny<string>(), It.IsAny<Stream>(), It.IsAny<CancellationToken>())).Returns(async (string _, Stream _, CancellationToken cancellation) => { observed = cancellation; await Task.Delay(Timeout.Infinite, cancellation); });
         var store = new StructureAudioStore(() => oss.Object, new(true, null), NullLogger<StructureAudioStore>.Instance);
         var parse = Guid.NewGuid(); var audio = Guid.NewGuid(); var timer = Stopwatch.StartNew();
@@ -216,9 +217,9 @@ public sealed partial class InternalAudioEndpointTests
     [Fact]
     public async Task PostAdmissionRemoval_CanFinishExistingStreamButNeverAuthorizesNextRequest()
     {
-        var bytes = PlayableWave.Bytes(); var scratch = new Scratch(); var oss = new Mock<IOssService>(MockBehavior.Strict);
+        var bytes = PlayableWave.Bytes(); var scratch = new Scratch(); var oss = new Mock<IObjectStore>(MockBehavior.Strict);
         oss.Setup(x => x.CopyToAsync(It.IsAny<string>(), It.IsAny<Stream>(), It.IsAny<CancellationToken>())).Returns((string _, Stream stream, CancellationToken cancellation) => stream.WriteAsync(bytes, cancellation).AsTask());
-        using var factory = Factory(services => { services.RemoveAll<IOssService>(); services.AddSingleton(oss.Object); });
+        using var factory = Factory(services => { services.RemoveAll<IObjectStore>(); services.AddSingleton(oss.Object); });
         using var client = factory.CreateClient(); var seed = await SeedAsync(factory.Services, bytes);
         try
         {
@@ -226,8 +227,8 @@ public sealed partial class InternalAudioEndpointTests
             var context = new DefaultHttpContext { RequestServices = scope.ServiceProvider };
             context.Request.QueryString = new(new Uri("http://test" + link).Query);
             var output = new MutationOutput(() => Mutate(factory.Services, seed, "unlink")); context.Response.Body = output;
-            await InternalAudioEndpoints.Content(seed.Node.ToString("D"), seed.Audio.ToString("D"), context,
-                scope.ServiceProvider.GetRequiredService<IInternalAudioRepository>(), factory.Services.GetRequiredService<InternalAudioSettings>(), factory.Services.GetRequiredService<InternalAudioTokens>(),
+            await InternalAudio.Content(seed.Node.ToString("D"), seed.Audio.ToString("D"), context,
+                scope.ServiceProvider.GetRequiredService<IInternalAudioRepository>(), factory.Services.GetRequiredService<AudioSettings>(), factory.Services.GetRequiredService<AudioTokens>(),
                 scope.ServiceProvider.GetRequiredService<StructureAudioStore>(), scope.ServiceProvider.GetRequiredService<IOptions<DocumentAudioOptions>>(), scratch, factory.Services.GetRequiredService<ILoggerFactory>());
             Assert.Equal(bytes, output.ToArray()); Assert.True(scratch.Last?.Disposed);
             using var next = await client.GetAsync(link); Assert.Equal(HttpStatusCode.NotFound, next.StatusCode);
@@ -243,7 +244,7 @@ public sealed partial class InternalAudioEndpointTests
     [InlineData(false)][InlineData(true)]
     public async Task RealScratch_IsDeletedAfterSuccessOrFailure(bool fail)
     {
-        var scratch = new DiskScratch(); var parse = Guid.NewGuid(); var audio = Guid.NewGuid(); var oss = new Mock<IOssService>(MockBehavior.Strict);
+        var scratch = new DiskScratch(); var parse = Guid.NewGuid(); var audio = Guid.NewGuid(); var oss = new Mock<IObjectStore>(MockBehavior.Strict);
         oss.Setup(x => x.CopyToAsync(It.IsAny<string>(), It.IsAny<Stream>(), It.IsAny<CancellationToken>())).Returns(async (string _, Stream target, CancellationToken cancellation) =>
         { await target.WriteAsync(new byte[1], cancellation); if (fail) throw new IOException("private-provider-canary"); });
         var store = new StructureAudioStore(() => oss.Object, new(true, null), NullLogger<StructureAudioStore>.Instance);
@@ -257,7 +258,7 @@ public sealed partial class InternalAudioEndpointTests
     [InlineData("valid")] [InlineData("foreign-document")] [InlineData("foreign-audio")] [InlineData("wrong-type")] [InlineData("unproven-legacy")]
     public async Task DocumentPrefixBuffer_UsesOnlyVerifiedServerOwnerAndAudioIdentity(string mutation)
     {
-        var document = Guid.NewGuid(); var id = Guid.NewGuid(); var scratch = new Scratch(); var oss = new Mock<IOssService>(MockBehavior.Strict);
+        var document = Guid.NewGuid(); var id = Guid.NewGuid(); var scratch = new Scratch(); var oss = new Mock<IObjectStore>(MockBehavior.Strict);
         var key = $"audio/documents/{document:N}/{id:N}.wav";
         if (mutation == "foreign-document") key = $"audio/documents/{Guid.NewGuid():N}/{id:N}.wav";
         if (mutation == "foreign-audio") key = $"audio/documents/{document:N}/{Guid.NewGuid():N}.wav";
@@ -279,7 +280,7 @@ public sealed partial class InternalAudioEndpointTests
         repository.Setup(x => x.ReadAudioAsync(It.IsAny<Guid>(), It.IsAny<Guid?>(), It.IsAny<CancellationToken>())).ThrowsAsync(new IOException("db-provider-private-canary"));
         using var factory = Factory(services => { services.RemoveAll<IInternalAudioRepository>(); services.AddSingleton(repository.Object); services.AddSingleton<ILoggerProvider>(logs); });
         using var client = factory.CreateClient(); var node = Guid.NewGuid(); var audio = Guid.NewGuid();
-        var tokens = factory.Services.GetRequiredService<InternalAudioTokens>();
+        var tokens = factory.Services.GetRequiredService<AudioTokens>();
         foreach (var path in new[] { ListUrl(node), ListUrl(node) + $"/{audio:D}/content?token=" + tokens.Create(new(Guid.NewGuid(), Guid.NewGuid(), node, audio), DateTimeOffset.UtcNow.AddMinutes(2)) })
         {
             using var response = await client.GetAsync(path); Headers(response); Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
@@ -294,7 +295,7 @@ public sealed partial class InternalAudioEndpointTests
         var directory = Path.Combine(Path.GetTempPath(), "doctheca-unsupported-audio-" + Guid.NewGuid().ToString("N"));
         try
         {
-            IOssService provider = new LocalFileOssService(directory);
+            IObjectStore provider = new LocalFileStore(directory);
             using var target = new MemoryStream();
             await Assert.ThrowsAsync<NotSupportedException>(() => provider.CopyToAsync("audio/not-present.wav", target, CancellationToken.None));
             Assert.Empty(Directory.GetFiles(directory, "*", SearchOption.AllDirectories));

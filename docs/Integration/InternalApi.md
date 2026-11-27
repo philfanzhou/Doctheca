@@ -225,7 +225,7 @@ snapshot, then requires the image's parse ID to match and at least one in-range 
 reference that image. Unknown, cross-node, cross-parse and stale references fail before any
 source is opened. The caller cannot supply a URL, object key or source location.
 
-`ParseImageContentSource` reads the scoped versioned StructaDoc asset API for migrated parses
+`ImageContentSource` reads the scoped versioned StructaDoc asset API for migrated parses
 or the existing legacy OSS reader. The response proxies only bytes with the stored allowed
 media type: `image/png`, `image/jpeg`, `image/gif`, `image/webp`, `image/bmp`, `image/avif`, or
 `image/tiff`. Other types, including SVG, are unavailable (404). Successful responses are full

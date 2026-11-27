@@ -90,10 +90,10 @@ The `document_files` table currently has no subject/grade/year metadata fields. 
 | Component | Change |
 |------|------|
 | `DocumentFileEntity` | Add Subject/Grade/Year columns |
-| `DocumentFileModel` | Add Subject/Grade/Year fields |
+| `DocumentFile` | Add Subject/Grade/Year fields |
 | `IDocumentFileRepository` | Add `UpdateMetadataAsync` |
 | `IDocumentFileService` | Add `UpdateMetadataAsync` |
 | `IDocumentAnalysisService` | Add `AnalyzeMetadataAsync` method |
 | `ISearchIndexService` | Add `UpdateDocumentFileMetadataAsync` method |
 | `StructaDocParseWorker` | Call LLM metadata analysis after parsing completes |
-| `DocumentFileEndpoints` | Add `PUT /{id}/metadata` endpoint |
+| `DocumentFiles` | Add `PUT /{id}/metadata` endpoint |

@@ -14,26 +14,7 @@ public class DocumentParseBlockRepository : IDocumentParseBlockRepository
         _context = context;
     }
 
-    public async Task AddBlocksAsync(Guid parseId, IEnumerable<DocumentParseBlockModel> blocks)
-    {
-        var blockList = blocks.ToList();
-        if (blockList.Count == 0) return;
-
-        // Overwrite strategy: delete existing blocks for this parse first
-        var existing = await _context.DocumentParseBlocks
-            .Where(b => b.ParseId == parseId)
-            .ToListAsync();
-        if (existing.Count > 0)
-        {
-            _context.DocumentParseBlocks.RemoveRange(existing);
-        }
-
-        var entities = blockList.Select(MapToEntity).ToList();
-        _context.DocumentParseBlocks.AddRange(entities);
-        await _context.SaveChangesAsync();
-    }
-
-    public async Task<List<DocumentParseBlockModel>> GetByParseIdAsync(Guid parseId)
+    public async Task<List<DocumentParseBlock>> GetByParseIdAsync(Guid parseId)
     {
         return await _context.DocumentParseBlocks
             .Where(b => b.ParseId == parseId)
@@ -43,16 +24,7 @@ public class DocumentParseBlockRepository : IDocumentParseBlockRepository
             .ToListAsync();
     }
 
-    public async Task<List<DocumentParseBlockModel>> GetByParseAndPageAsync(Guid parseId, int pageId)
-    {
-        return await _context.DocumentParseBlocks
-            .Where(b => b.ParseId == parseId && b.PageId == pageId)
-            .OrderBy(b => b.SortIndex)
-            .Select(b => MapToModel(b))
-            .ToListAsync();
-    }
-
-    public async Task<List<DocumentParseBlockModel>> GetPageBySequenceAsync(
+    public async Task<List<DocumentParseBlock>> GetPageBySequenceAsync(
         Guid parseId, int? afterSequence, int limit, int? fromSequence = null, int? toSequence = null)
     {
         var query = _context.DocumentParseBlocks
@@ -81,7 +53,7 @@ public class DocumentParseBlockRepository : IDocumentParseBlockRepository
         return [.. sequences];
     }
 
-    internal static DocumentParseBlockEntity MapToEntity(DocumentParseBlockModel model) => new()
+    internal static DocumentParseBlockEntity MapToEntity(DocumentParseBlock model) => new()
     {
         Id = model.Id,
         ParseId = model.ParseId,
@@ -106,7 +78,7 @@ public class DocumentParseBlockRepository : IDocumentParseBlockRepository
         Footnote = model.Footnote,
     };
 
-    private static DocumentParseBlockModel MapToModel(DocumentParseBlockEntity entity) => new()
+    private static DocumentParseBlock MapToModel(DocumentParseBlockEntity entity) => new()
     {
         Id = entity.Id,
         ParseId = entity.ParseId,

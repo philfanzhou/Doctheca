@@ -74,7 +74,7 @@ Indexing and search share the same OpenSearch mapping (`BuildIndexBody`), ensuri
 - Supports cursor pagination (`search_after`; `pageToken` is the Base64 encoding of the last sort array of the previous page).
 
 ### FR-08: Search degradation
-- When OpenSearch is unavailable or a query fails, `SearchDomainService` returns empty results and logs a LogWarning without interrupting the request.
+- When OpenSearch is unavailable or a query fails, `SearchService` returns empty results and logs a LogWarning without interrupting the request.
 
 ### FR-09: Search parameter validation
 - An empty query returns HTTP 400 (`DOCTHECA_QUERY_REQUIRED`).
@@ -95,7 +95,7 @@ Indexing and search share the same OpenSearch mapping (`BuildIndexBody`), ensuri
 ### FR-11: Generation 2 — attach the raw minerU block JSON to search hits
 - Each search result gains `blockData` (the raw JSON string from `document_parse_blocks.block_data`), letting the frontend display the hit block's complete minerU fields directly without a second request to `GET /admin/documents/files/{id}`.
 - Also gains `bbox` (float[4]) and `score` (float) fields so the admin UI can verify visual regions and confidence.
-- V1's `SearchResultModel` is **extended backward-compatibly**: `BlockData` / `Bbox` / `Score` are added as optional fields; frontends that do not send/display them (including existing Ruoyu.Admin references) are unaffected. **No new** standalone `BlockResultModel` class.
+- V1's `SearchResult` is **extended backward-compatibly**: `BlockData` / `Bbox` / `Score` are added as optional fields; frontends that do not send/display them (including existing Ruoyu.Admin references) are unaffected. **No new** standalone `BlockResultModel` class.
 
 ### FR-12: Generation 2 — minerU fields enter the OpenSearch mapping
 - V1's `BuildIndexBody` gains minerU dimension fields (see [02-SPEC.md §13.4](./02-SPEC.md)):
@@ -181,23 +181,23 @@ Indexing and search share the same OpenSearch mapping (`BuildIndexBody`), ensuri
 | Component | Changes |
 |------|------|
 | `ISearchIndexService` | Defines 6 methods (unchanged; Generation 2 adds minerU field indexing capability on the same interface) |
-| `OpenSearchIndexService` | Implements `ISearchIndexService`; `BuildIndexBody` / `BuildSearchBody` / `ParseSearchResponse` are `internal static` pure logic |
-| `ISearchDomainService` | Defines `ExactSearchAsync` (thin wrapper + degradation) |
-| `SearchDomainService` | Implements `ISearchDomainService`, returns empty results on exceptions |
-| `DocumentSearchEndpoints` | `GET /admin/documents/search` endpoint |
+| `IndexService` | Implements `ISearchIndexService`; `BuildIndexBody` / `BuildSearchBody` / `ParseSearchResponse` are `internal static` pure logic |
+| `ISearchService` | Defines `ExactSearchAsync` (thin wrapper + degradation) |
+| `SearchService` | Implements `ISearchService`, returns empty results on exceptions |
+| `DocumentSearch` | `GET /admin/documents/search` endpoint |
 | `StructaDocParseWorker` | Calls `IndexParseBlocksAsync` after parse completion (best-effort) |
-| `DocumentParseEndpoints` | `DeleteDocumentParse` calls `DeleteParseIndexAsync` (best-effort) |
-| `DocumentFileEndpoints` | `DeleteDocumentFile` calls `DeleteDocumentFileIndexAsync` (best-effort); `UpdateDocumentFileMetadata` calls `UpdateDocumentFileMetadataAsync` (best-effort) |
+| `DocumentParses` | `DeleteDocumentParse` calls `DeleteParseIndexAsync` (best-effort) |
+| `DocumentFiles` | `DeleteDocumentFile` calls `DeleteDocumentFileIndexAsync` (best-effort); `UpdateDocumentFileMetadata` calls `UpdateDocumentFileMetadataAsync` (best-effort) |
 
 ### Generation 2 Evolution (extending V1 components, no parallel classes)
 
 | Component | Responsibility | When called |
 |------|------|---------|
-| `ISearchIndexService` / `OpenSearchIndexService` | Adds minerU dimension indexing (fields appended in the same bulk of `IndexParseBlocksAsync`: x0/y0/x1/y1/score/has_image/_meta.block_data); adds the minerU filter branch and `blockData` attachment parsing to `ExactSearchAsync` (existing 6 method signatures unchanged) | Same best-effort entry point as V1 parse completion; HTTP query extension |
-| `SearchResultModel` (extending `src/Domain/Models/`) | Adds optional `BlockData` / `Bbox` / `Score` fields (null when old frontends do not send them) | HTTP response contract |
-| `SearchFilterModel` (extending `src/Domain/Models/`) | Adds `BlockType` / `PageNumber` / `ParseId` / `DocumentFileId` / `HasImage` filter conditions | HTTP query input contract |
-| `DocumentSearchEndpoints` (extending `src/Service/Endpoints/`) | The `GET /admin/documents/search` endpoint gains optional filter inputs (FR-10); behavior equals V1 when parameters are null | Admin UI block search entry point (same page) |
-| `SearchDomainService` (extended) | `ExactSearchAsync` gains the minerU filter branch and parses minerU attachment fields; **no new** `BlockXxx` methods | HTTP handler delegate |
+| `ISearchIndexService` / `IndexService` | Adds minerU dimension indexing (fields appended in the same bulk of `IndexParseBlocksAsync`: x0/y0/x1/y1/score/has_image/_meta.block_data); adds the minerU filter branch and `blockData` attachment parsing to `ExactSearchAsync` (existing 6 method signatures unchanged) | Same best-effort entry point as V1 parse completion; HTTP query extension |
+| `SearchResult` (extending `src/Domain/Models/`) | Adds optional `BlockData` / `Bbox` / `Score` fields (null when old frontends do not send them) | HTTP response contract |
+| `SearchFilter` (extending `src/Domain/Models/`) | Adds `BlockType` / `PageNumber` / `ParseId` / `DocumentFileId` / `HasImage` filter conditions | HTTP query input contract |
+| `DocumentSearch` (extending `src/Service/Endpoints/`) | The `GET /admin/documents/search` endpoint gains optional filter inputs (FR-10); behavior equals V1 when parameters are null | Admin UI block search entry point (same page) |
+| `SearchService` (extended) | `ExactSearchAsync` gains the minerU filter branch and parses minerU attachment fields; **no new** `BlockXxx` methods | HTTP handler delegate |
 | `SearchPage.vue` (doctheca built-in frontend, extended) | The existing search page gains an "Advanced filters" drawer + result-row minerU detail expansion; **no new** parallel `BlockSearchPage.vue` | Frontend admin UI |
 
 ## Document Index

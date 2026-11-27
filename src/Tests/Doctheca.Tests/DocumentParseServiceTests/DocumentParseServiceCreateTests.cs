@@ -30,9 +30,9 @@ public class DocumentParseServiceCreateTests
     {
         // Arrange
         var fileId = Guid.NewGuid();
-        var model = new DocumentParseModel { DocumentFileId = fileId, Status = DocumentParseStatus.Pending };
-        _parseRepoMock.Setup(r => r.AddAsync(It.IsAny<DocumentParseModel>()))
-            .Callback<DocumentParseModel>(m => m.Id = Guid.NewGuid())
+        var model = new DocumentParse { DocumentFileId = fileId, Status = DocumentParseStatus.Pending };
+        _parseRepoMock.Setup(r => r.AddAsync(It.IsAny<DocumentParse>()))
+            .Callback<DocumentParse>(m => m.Id = Guid.NewGuid())
             .ReturnsAsync(model);
 
         // Act
@@ -41,7 +41,7 @@ public class DocumentParseServiceCreateTests
         // Assert
         result.Status.Should().Be(DocumentParseStatus.Pending);
         result.DocumentFileId.Should().Be(fileId);
-        _parseRepoMock.Verify(r => r.AddAsync(It.Is<DocumentParseModel>(m =>
+        _parseRepoMock.Verify(r => r.AddAsync(It.Is<DocumentParse>(m =>
             m.Status == DocumentParseStatus.Pending && m.DocumentFileId == fileId)), Times.Once);
     }
 
@@ -50,9 +50,9 @@ public class DocumentParseServiceCreateTests
     {
         // Arrange
         var fileId = Guid.NewGuid();
-        _parseRepoMock.Setup(r => r.AddAsync(It.IsAny<DocumentParseModel>()))
-            .Callback<DocumentParseModel>(m => { m.Id = Guid.NewGuid(); })
-            .ReturnsAsync((DocumentParseModel m) => m);
+        _parseRepoMock.Setup(r => r.AddAsync(It.IsAny<DocumentParse>()))
+            .Callback<DocumentParse>(m => { m.Id = Guid.NewGuid(); })
+            .ReturnsAsync((DocumentParse m) => m);
 
         // Act
         var result = await _service.CreateAsync(fileId);
@@ -66,9 +66,9 @@ public class DocumentParseServiceCreateTests
     {
         // Arrange
         var fileId = Guid.NewGuid();
-        _parseRepoMock.Setup(r => r.AddAsync(It.IsAny<DocumentParseModel>()))
-            .Callback<DocumentParseModel>(m => { m.Id = Guid.NewGuid(); })
-            .ReturnsAsync((DocumentParseModel m) => m);
+        _parseRepoMock.Setup(r => r.AddAsync(It.IsAny<DocumentParse>()))
+            .Callback<DocumentParse>(m => { m.Id = Guid.NewGuid(); })
+            .ReturnsAsync((DocumentParse m) => m);
 
         // Act
         var result = await _service.CreateAsync(fileId, "pipeline");

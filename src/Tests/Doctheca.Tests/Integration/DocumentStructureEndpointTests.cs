@@ -350,8 +350,8 @@ public sealed partial class DocumentStructureEndpointTests(PostgreSqlFixture dat
         public Task DeleteParseIndexAsync(Guid parseId) => Task.CompletedTask;
         public Task DeleteDocumentFileIndexAsync(Guid documentFileId) => Task.CompletedTask;
         public Task UpdateDocumentFileMetadataAsync(Guid documentFileId, string? subject, string? grade, string? year) => Task.CompletedTask;
-        public Task<(List<Doctheca.Domain.Models.SearchResultModel> Results, int TotalCount, string? NextToken)> ExactSearchAsync(
-            string query, bool phrase, Doctheca.Domain.Models.SearchFilterModel? filter, int pageSize, string? pageToken) =>
-            Task.FromResult((new List<Doctheca.Domain.Models.SearchResultModel>(), 0, (string?)null));
+        public Task<(List<Doctheca.Domain.Models.SearchResult> Results, int TotalCount, string? NextToken)> ExactSearchAsync(
+            string query, bool phrase, Doctheca.Domain.Models.SearchFilter? filter, int pageSize, string? pageToken) =>
+            Task.FromResult((new List<Doctheca.Domain.Models.SearchResult>(), 0, (string?)null));
     }
 }

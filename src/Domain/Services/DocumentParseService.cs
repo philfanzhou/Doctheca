@@ -20,9 +20,9 @@ public class DocumentParseService : IDocumentParseService
         _logger = logger;
     }
 
-    public async Task<DocumentParseModel> CreateAsync(Guid documentFileId, string modelVersion = "vlm")
+    public async Task<DocumentParse> CreateAsync(Guid documentFileId, string modelVersion = "vlm")
     {
-        var model = new DocumentParseModel
+        var model = new DocumentParse
         {
             DocumentFileId = documentFileId,
             ModelVersion = modelVersion,
@@ -33,22 +33,22 @@ public class DocumentParseService : IDocumentParseService
         return result;
     }
 
-    public async Task<DocumentParseModel?> GetByIdAsync(Guid id)
+    public async Task<DocumentParse?> GetByIdAsync(Guid id)
     {
         return await _parseRepository.GetByIdAsync(id);
     }
 
-    public async Task<DocumentParseModel?> GetLatestByFileIdAsync(Guid documentFileId)
+    public async Task<DocumentParse?> GetLatestByFileIdAsync(Guid documentFileId)
     {
         return await _parseRepository.GetLatestByFileIdAsync(documentFileId);
     }
 
-    public async Task<DocumentParseModel?> GetLatestByFileIdAndModelAsync(Guid documentFileId, string modelVersion)
+    public async Task<DocumentParse?> GetLatestByFileIdAndModelAsync(Guid documentFileId, string modelVersion)
     {
         return await _parseRepository.GetLatestByFileIdAndModelAsync(documentFileId, modelVersion);
     }
 
-    public async Task<DocumentParseModel> UpdateStatusAsync(
+    public async Task<DocumentParse> UpdateStatusAsync(
         Guid id,
         string status,
         string? errorMessage = null,
@@ -82,44 +82,29 @@ public class DocumentParseService : IDocumentParseService
         return result;
     }
 
-    public async Task<List<DocumentParseModel>> GetPendingJobsAsync()
-    {
-        return await _parseRepository.GetByStatusAsync(DocumentParseStatus.Pending);
-    }
-
-    public async Task<List<DocumentParseModel>> GetByStatusAsync(string status)
+    public async Task<List<DocumentParse>> GetByStatusAsync(string status)
     {
         return await _parseRepository.GetByStatusAsync(status);
     }
 
-    public async Task<List<DocumentParseModel>> GetActiveJobsAsync()
+    public async Task<List<DocumentParse>> GetActiveJobsAsync()
     {
         return await _parseRepository.GetByStatusesAsync([DocumentParseStatus.Pending, DocumentParseStatus.Parsing]);
     }
 
-    public async Task AddImageAsync(DocumentParseImageModel image)
-    {
-        await _imageRepository.AddAsync(image);
-    }
-
-    public async Task<List<DocumentParseImageModel>> GetImagesByParseIdAsync(Guid parseId)
+    public async Task<List<DocumentParseImage>> GetImagesByParseIdAsync(Guid parseId)
     {
         return await _imageRepository.GetByParseIdAsync(parseId);
     }
 
-    public async Task<List<DocumentParseImageModel>> GetImagesByFileIdAsync(Guid documentFileId)
-    {
-        return await _imageRepository.GetByFileIdAsync(documentFileId);
-    }
-
-    public async Task<(List<DocumentParseModel> Items, int TotalCount)> GetListAsync(int page, int size, string? search = null)
+    public async Task<(List<DocumentParse> Items, int TotalCount)> GetListAsync(int page, int size, string? search = null)
     {
         return await _parseRepository.GetListAsync(page, size, search);
     }
 
     public Task<string> CompleteAsync(Guid parseId, Guid runId, string markdown,
-        IReadOnlyCollection<DocumentParsePageModel> pages, IReadOnlyList<DocumentParseImageModel> images,
-        IReadOnlyList<DocumentParseBlockModel> blocks, CancellationToken ct = default) =>
+        IReadOnlyCollection<DocumentParsePage> pages, IReadOnlyList<DocumentParseImage> images,
+        IReadOnlyList<DocumentParseBlock> blocks, CancellationToken ct = default) =>
         _parseRepository.CompleteAsync(parseId, runId, markdown, pages, images, blocks, ct);
 
     public async Task<bool> DeleteParseAsync(Guid parseId)
@@ -133,7 +118,7 @@ public class DocumentParseService : IDocumentParseService
         return true;
     }
 
-    public async Task<List<DocumentParseModel>> GetByFileIdAsync(Guid documentFileId)
+    public async Task<List<DocumentParse>> GetByFileIdAsync(Guid documentFileId)
     {
         return await _parseRepository.GetByFileIdAsync(documentFileId);
     }

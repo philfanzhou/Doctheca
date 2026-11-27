@@ -27,8 +27,8 @@ public sealed class DocumentParsePageIdentityTests
     [InlineData("{\"pageNumber\":1}", int.MaxValue, null)]
     public void OnlyNormalizedPhysicalPageMatchingItsDatabaseRowQualifies(string json, int pageId, int? number)
     {
-        var parse = new DocumentParseModel { Id = Guid.NewGuid(), StructaDocParseRunId = Guid.NewGuid() };
-        var block = new DocumentParseBlockModel { ParseId = parse.Id, PageId = pageId, BlockData = json };
+        var parse = new DocumentParse { Id = Guid.NewGuid(), StructaDocParseRunId = Guid.NewGuid() };
+        var block = new DocumentParseBlock { ParseId = parse.Id, PageId = pageId, BlockData = json };
         var key = DocumentParsePageIdentity.FromBlock(parse, block);
         key.Should().Be(number.HasValue ? new DocumentParsePageKey(parse.Id, number.Value) : null);
     }
@@ -36,8 +36,8 @@ public sealed class DocumentParsePageIdentityTests
     [Fact]
     public void LegacyAndForeignParseCannotBorrowPageIdentity()
     {
-        var parse = new DocumentParseModel { Id = Guid.NewGuid() };
-        var block = new DocumentParseBlockModel { ParseId = parse.Id, PageId = 0, BlockData = "{\"pageNumber\":1}" };
+        var parse = new DocumentParse { Id = Guid.NewGuid() };
+        var block = new DocumentParseBlock { ParseId = parse.Id, PageId = 0, BlockData = "{\"pageNumber\":1}" };
         DocumentParsePageIdentity.FromBlock(parse, block).Should().BeNull();
         parse.StructaDocParseRunId = Guid.NewGuid();
         block.ParseId = Guid.NewGuid();

@@ -21,23 +21,23 @@ public class DocumentStructureServiceTests
     private static readonly Guid OtherDefinitionLevel = Guid.NewGuid();
 
     // Two configured levels: a top level and its child. Names are arbitrary data.
-    private static readonly StructureLevelModel Top = new() { Id = Guid.NewGuid(), DefinitionId = DefinitionId, Name = "L1", SortOrder = 0 };
-    private static readonly StructureLevelModel Child = new() { Id = Guid.NewGuid(), DefinitionId = DefinitionId, Name = "L2", ParentLevelId = Top.Id, SortOrder = 1 };
+    private static readonly StructureLevel Top = new() { Id = Guid.NewGuid(), DefinitionId = DefinitionId, Name = "L1", SortOrder = 0 };
+    private static readonly StructureLevel Child = new() { Id = Guid.NewGuid(), DefinitionId = DefinitionId, Name = "L2", ParentLevelId = Top.Id, SortOrder = 1 };
 
     private readonly Mock<IDocumentStructureRepository> _structure = new();
     private readonly Mock<IDocumentFileRepository> _files = new();
     private readonly DocumentStructureService _service;
-    private List<DocumentStructureNodeModel>? _replaced;
+    private List<DocumentStructureNode>? _replaced;
 
     public DocumentStructureServiceTests()
     {
         var parses = new Mock<IDocumentParseRepository>();
-        parses.Setup(r => r.GetByIdAsync(ParseId)).ReturnsAsync(new DocumentParseModel { Id = ParseId, DocumentFileId = FileId, Status = DocumentParseStatus.Parsed });
-        _files.Setup(r => r.GetByIdAsync(FileId)).ReturnsAsync(new DocumentFileModel { Id = FileId, FileName = "book.pdf", StructureDefinitionId = DefinitionId });
+        parses.Setup(r => r.GetByIdAsync(ParseId)).ReturnsAsync(new DocumentParse { Id = ParseId, DocumentFileId = FileId, Status = DocumentParseStatus.Parsed });
+        _files.Setup(r => r.GetByIdAsync(FileId)).ReturnsAsync(new DocumentFile { Id = FileId, FileName = "book.pdf", StructureDefinitionId = DefinitionId });
         var blocks = new Mock<IDocumentParseBlockRepository>();
         blocks.Setup(r => r.GetSequencesAsync(ParseId)).ReturnsAsync(Enumerable.Range(0, 100).ToHashSet());
         var definitions = new Mock<IStructureDefinitionRepository>();
-        definitions.Setup(r => r.GetByIdAsync(DefinitionId)).ReturnsAsync(new StructureDefinitionModel
+        definitions.Setup(r => r.GetByIdAsync(DefinitionId)).ReturnsAsync(new StructureDefinition
         {
             Id = DefinitionId,
             Name = "D",
@@ -45,8 +45,8 @@ public class DocumentStructureServiceTests
         });
         _structure.Setup(r => r.GetByParseIdAsync(ParseId)).ReturnsAsync(() => _replaced ?? []);
         _structure.Setup(r => r.GetForeignNodeIdsAsync(ParseId, It.IsAny<IReadOnlyCollection<Guid>>())).ReturnsAsync([]);
-        _structure.Setup(r => r.ReplaceAsync(ParseId, It.IsAny<IReadOnlyList<DocumentStructureNodeModel>>()))
-            .Callback<Guid, IReadOnlyList<DocumentStructureNodeModel>>((_, nodes) => _replaced = nodes.ToList())
+        _structure.Setup(r => r.ReplaceAsync(ParseId, It.IsAny<IReadOnlyList<DocumentStructureNode>>()))
+            .Callback<Guid, IReadOnlyList<DocumentStructureNode>>((_, nodes) => _replaced = nodes.ToList())
             .ReturnsAsync(true);
 
         _service = new DocumentStructureService(parses.Object, _files.Object, blocks.Object, _structure.Object,
@@ -103,7 +103,7 @@ public class DocumentStructureServiceTests
         result.Status.Should().Be(StructureResultStatus.Invalid);
         result.ErrorCode.Should().Be(StructureErrorCodes.Invalid);
         result.Errors.Should().Contain(error => error.Field == field);
-        _structure.Verify(r => r.ReplaceAsync(It.IsAny<Guid>(), It.IsAny<IReadOnlyList<DocumentStructureNodeModel>>()), Times.Never);
+        _structure.Verify(r => r.ReplaceAsync(It.IsAny<Guid>(), It.IsAny<IReadOnlyList<DocumentStructureNode>>()), Times.Never);
     }
 
     [Fact]
@@ -129,7 +129,7 @@ public class DocumentStructureServiceTests
     [Fact]
     public async Task DocumentWithoutDefinition_RejectsNodesButAcceptsAnEmptyTree()
     {
-        _files.Setup(r => r.GetByIdAsync(FileId)).ReturnsAsync(new DocumentFileModel { Id = FileId });
+        _files.Setup(r => r.GetByIdAsync(FileId)).ReturnsAsync(new DocumentFile { Id = FileId });
 
         (await _service.SaveTreeAsync(ParseId, [Node(Top.Id, "A", 0, 10)])).Errors
             .Should().Contain(error => error.Field == "nodes");
@@ -141,31 +141,5 @@ public class DocumentStructureServiceTests
     {
         (await _service.SaveTreeAsync(Guid.NewGuid(), [])).Status.Should().Be(StructureResultStatus.NotFound);
         (await _service.GetTreeAsync(Guid.NewGuid())).Should().BeNull();
-    }
-
-    [Fact]
-    public async Task ChangingDefinition_WhileNodesExist_IsConflict()
-    {
-        _structure.Setup(r => r.DocumentFileHasNodesAsync(FileId)).ReturnsAsync(true);
-        var other = Guid.NewGuid();
-        var definitions = new Mock<IStructureDefinitionRepository>();
-        definitions.Setup(r => r.GetByIdAsync(other)).ReturnsAsync(new StructureDefinitionModel { Id = other });
-        var service = new DocumentStructureService(Mock.Of<IDocumentParseRepository>(), _files.Object,
-            Mock.Of<IDocumentParseBlockRepository>(), _structure.Object, definitions.Object,
-            NullLogger<DocumentStructureService>.Instance);
-
-        var result = await service.SetDocumentDefinitionAsync(FileId, other);
-
-        result.Status.Should().Be(StructureResultStatus.Conflict);
-        result.ErrorCode.Should().Be(StructureErrorCodes.DocumentStructureInUse);
-        _files.Verify(r => r.SetStructureDefinitionAsync(It.IsAny<Guid>(), It.IsAny<Guid?>()), Times.Never);
-    }
-
-    [Fact]
-    public async Task ChoosingAnUnknownDefinition_IsInvalid()
-    {
-        var result = await _service.SetDocumentDefinitionAsync(FileId, Guid.NewGuid());
-        result.Status.Should().Be(StructureResultStatus.Invalid);
-        result.Errors.Should().ContainSingle(error => error.Field == "structureDefinitionId");
     }
 }

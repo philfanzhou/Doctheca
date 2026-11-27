@@ -12,7 +12,7 @@ using Microsoft.Extensions.Configuration;
 using Moq;
 using Microsoft.Extensions.Options;
 using Minio.DataModel.Args;
-using Doctheca.Common.Oss;
+using Doctheca.Common.ObjectStorage;
 using Doctheca.Database;
 using Doctheca.Database.Entities;
 using Doctheca.Database.Repositories;
@@ -39,8 +39,8 @@ public sealed class StructureAudioLifecycleTests(PostgreSqlFixture database, Min
         foreach (var (key, value) in extra ?? []) settings[key] = value;
         return CreateFactory(settings: settings, configureTestServices: services =>
         {
-            services.RemoveAll<IOssService>();
-            services.AddScoped<IOssService>(sp => new S3OssService(sp.GetRequiredService<IOptions<OssOptions>>().Value));
+            services.RemoveAll<IObjectStore>();
+            services.AddScoped<IObjectStore>(sp => new S3ObjectStore(sp.GetRequiredService<IOptions<StoreOptions>>().Value));
             configure?.Invoke(services);
             if (logs != null) services.AddSingleton(logs);
             if (time != null)
@@ -84,7 +84,7 @@ public sealed class StructureAudioLifecycleTests(PostgreSqlFixture database, Min
 
         using (var scope = factory.Services.CreateScope())
         {
-            var rows = await scope.ServiceProvider.GetRequiredService<IDocumentStructureAudioRepository>().GetByParseIdAsync(parseId);
+            var rows = await scope.ServiceProvider.GetRequiredService<IDocumentStructureAudioRepository>().GetByOwnerAsync(new(parseId));
             rows.Single(row => row.Id == kept.Id).NodeId.Should().Be(nodes[0].Id);
             var unlinked = rows.Single(row => row.Id == removed.Id);
             unlinked.NodeId.Should().BeNull();
@@ -106,33 +106,33 @@ public sealed class StructureAudioLifecycleTests(PostgreSqlFixture database, Min
         var (_, parseId, nodes) = await SeedStructureAsync(factory, client);
         using var insertion = factory.Services.CreateScope();
         using var replacement = factory.Services.CreateScope();
-        var audio = NewAudio(parseId, nodes[1].Id, $"audio/{parseId:N}/{Guid.NewGuid():N}.mp3");
+        var audio = await OwnedAsync(factory.Services, NewAudio(parseId, nodes[1].Id, $"audio/{parseId:N}/{Guid.NewGuid():N}.mp3"));
         await Task.WhenAll(
-            insertion.ServiceProvider.GetRequiredService<IDocumentStructureAudioRepository>().InsertAsync(parseId, [audio]),
+            insertion.ServiceProvider.GetRequiredService<IDocumentStructureAudioRepository>().CommitAsync(new(parseId), [audio], [], [], DateTimeOffset.UtcNow),
             replacement.ServiceProvider.GetRequiredService<IDocumentStructureRepository>().ReplaceAsync(parseId, [nodes[0]]));
         using var read = factory.Services.CreateScope();
-        var rows = await read.ServiceProvider.GetRequiredService<IDocumentStructureAudioRepository>().GetByParseIdAsync(parseId);
+        var rows = await read.ServiceProvider.GetRequiredService<IDocumentStructureAudioRepository>().GetByOwnerAsync(new(parseId));
         rows.Should().HaveCountLessThanOrEqualTo(1);
         if (rows.Count == 1) { rows[0].NodeId.Should().BeNull(); rows[0].MatchStatus.Should().Be(AudioMatchStatus.NodeRemoved); }
         (await client.DeleteAsync($"/admin/document-parses/{parseId}")).StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
     [Fact]
-    public async Task InvalidLinkBatchChangesNoRows_AndMissingNodesAreInsertedUnlinked()
+    public async Task InvalidLinkBatchChangesNoRows()
     {
         using var factory = Factory();
         using var client = Admin(factory);
         var (_, parseId, nodes) = await SeedStructureAsync(factory, client);
         var first = await StoreAsync(factory, parseId, nodes[0].Id);
-        var second = await StoreAsync(factory, parseId, Guid.NewGuid());
+        var second = await StoreAsync(factory, parseId, nodes[1].Id);
         using (var scope = factory.Services.CreateScope())
         {
             var repo = scope.ServiceProvider.GetRequiredService<IDocumentStructureAudioRepository>();
-            (await repo.UpdateLinksAsync(parseId, [new(first.Id, null), new(second.Id, Guid.NewGuid())], [], DateTimeOffset.UtcNow))
+            (await repo.CommitAsync(new(parseId), [], [new(first.Id, null), new(second.Id, Guid.NewGuid())], [], DateTimeOffset.UtcNow))
                 .Status.Should().Be(AudioLinkUpdateStatus.NodeNotFound);
-            var rows = await repo.GetByParseIdAsync(parseId);
+            var rows = await repo.GetByOwnerAsync(new(parseId));
             rows.Single(row => row.Id == first.Id).NodeId.Should().Be(nodes[0].Id);
-            rows.Single(row => row.Id == second.Id).MatchStatus.Should().Be(AudioMatchStatus.NodeRemoved);
+            rows.Single(row => row.Id == second.Id).NodeId.Should().Be(nodes[1].Id);
         }
         (await client.DeleteAsync($"/admin/document-parses/{parseId}")).StatusCode.Should().Be(HttpStatusCode.OK);
     }
@@ -229,16 +229,14 @@ public sealed class StructureAudioLifecycleTests(PostgreSqlFixture database, Min
         empty["deleted"]!.GetValue<int>().Should().Be(0);
         empty["failed"]!.GetValue<int>().Should().Be(0);
 
-        // Real MinIO rejects these credentials; no mocked IOssService bypasses the SDK boundary.
+        // Real MinIO rejects these credentials; no mocked IObjectStore bypasses the SDK boundary.
         var rejectedKey = "missing" + Guid.NewGuid().ToString("N");
         var logs = new RequestScopeCapture();
         using var denied = Factory(new() { ["Oss:AccessKey"] = rejectedKey }, logs: logs);
         using (var scope = denied.Services.CreateScope())
         {
-            var storage = scope.ServiceProvider.GetRequiredService<IOssService>();
+            var storage = scope.ServiceProvider.GetRequiredService<IObjectStore>();
             await Assert.ThrowsAnyAsync<Exception>(() => storage.ListObjectsOrThrowAsync("audio/"));
-            // Existing consumers retain their best-effort empty-on-failure behavior.
-            (await storage.ListObjectsAsync("uploads/")).Should().BeEmpty();
         }
         using var deniedClient = Admin(denied);
         var response = await deniedClient.PostAsync(Sweep, null);
@@ -354,18 +352,18 @@ public sealed class StructureAudioLifecycleTests(PostgreSqlFixture database, Min
     public async Task InFlightRealUpload_IsProtectedFromSweep_AndCompensatedAfterDocumentDeletion(bool deleteDocument)
     {
         var settings = new ConfigurationBuilder().AddInMemoryCollection(minio.Settings(_bucket)).Build();
-        var real = new S3OssService(settings.GetSection("Oss").Get<OssOptions>()!);
+        var real = new S3ObjectStore(settings.GetSection("Oss").Get<StoreOptions>()!);
         var uploaded = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var resume = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var proxy = new Mock<IOssService>(MockBehavior.Strict);
-        proxy.Setup(storage => storage.UploadAsync(It.IsAny<Stream>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<OssBucket>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
-            .Returns(async (Stream source, string name, string type, OssBucket bucket, string? folder, CancellationToken ct) =>
+        var proxy = new Mock<IObjectStore>(MockBehavior.Strict);
+        proxy.Setup(storage => storage.UploadAsync(It.IsAny<Stream>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<Bucket>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .Returns(async (Stream source, string name, string type, Bucket bucket, string? folder, CancellationToken ct) =>
             {
                 var key = await real.UploadAsync(source, name, type, bucket, folder, ct);
                 uploaded.TrySetResult(); await resume.Task.WaitAsync(ct); return key;
             });
         proxy.Setup(storage => storage.DeleteAsync(It.IsAny<string>())).Returns((string key) => real.DeleteAsync(key));
-        using var factory = Factory(configure: services => { services.RemoveAll<IOssService>(); services.AddSingleton(proxy.Object); });
+        using var factory = Factory(configure: services => { services.RemoveAll<IObjectStore>(); services.AddSingleton(proxy.Object); });
         using var client = Admin(factory); var (file, parse, _) = await SeedStructureAsync(factory, client);
         using var body = new MultipartFormDataContent(); body.Add(new ByteArrayContent(PlayableWave.Bytes()), "files", "Node 0.wav");
         var importing = client.PostAsync($"/admin/document-parses/{parse}/audio", body);
@@ -409,25 +407,37 @@ public sealed class StructureAudioLifecycleTests(PostgreSqlFixture database, Min
             .And.NotContain("objectKey");
     }
 
-    private async Task<DocumentStructureAudioModel> StoreAsync(WebApplicationFactory<Program> factory, Guid parseId, Guid? nodeId)
+    private async Task<DocumentStructureAudio> StoreAsync(WebApplicationFactory<Program> factory, Guid parseId, Guid? nodeId)
     {
         using var scope = factory.Services.CreateScope();
         var id = Guid.NewGuid();
         using var content = new MemoryStream("synthetic-audio"u8.ToArray());
         var key = await scope.ServiceProvider.GetRequiredService<StructureAudioStore>().PutAsync(parseId, id, ".mp3", content, "audio/mpeg");
-        var model = NewAudio(parseId, nodeId, key); model.Id = id;
-        (await scope.ServiceProvider.GetRequiredService<IDocumentStructureAudioRepository>().InsertAsync(parseId, [model])).Should().BeTrue();
+        var model = await OwnedAsync(scope.ServiceProvider, NewAudio(parseId, nodeId, key)); model.Id = id;
+        var status = await scope.ServiceProvider.GetRequiredService<IDocumentStructureAudioRepository>()
+            .CommitAsync(new(parseId), [model], [], [], DateTimeOffset.UtcNow);
+        status.Status.Should().Be(AudioLinkUpdateStatus.Ok);
         return model;
     }
 
-    private static DocumentStructureAudioModel NewAudio(Guid parseId, Guid? nodeId, string key) => new()
+    /// <summary>Fills the owning document and tree the way an import plan does for a parse-owned file.</summary>
+    private static async Task<DocumentStructureAudio> OwnedAsync(IServiceProvider services, DocumentStructureAudio audio)
+    {
+        var context = services.GetRequiredService<DocthecaDbContext>();
+        var owner = await context.DocumentParses.AsNoTracking().Where(parse => parse.Id == audio.ParseId)
+            .Select(parse => new { parse.DocumentFileId, parse.DocumentFile!.CurrentStructureTreeId }).SingleAsync();
+        audio.DocumentFileId = owner.DocumentFileId; audio.TreeId = owner.CurrentStructureTreeId!.Value;
+        return audio;
+    }
+
+    private static DocumentStructureAudio NewAudio(Guid parseId, Guid? nodeId, string key) => new()
     {
         Id = Guid.NewGuid(), ParseId = parseId, NodeId = nodeId, SourcePath = Guid.NewGuid().ToString("N") + ".mp3",
         ObjectKey = key, ContentType = "audio/mpeg", SizeBytes = 15, MatchStatus = AudioMatchStatus.Matched,
         LinkSource = AudioLinkSource.Prefill, CreatedAt = DateTimeOffset.UtcNow, UpdatedAt = DateTimeOffset.UtcNow,
     };
 
-    private static async Task<(Guid File, Guid Parse, List<DocumentStructureNodeModel> Nodes)> SeedStructureAsync(
+    private static async Task<(Guid File, Guid Parse, List<DocumentStructureNode> Nodes)> SeedStructureAsync(
         WebApplicationFactory<Program> factory, HttpClient client)
     {
         var level = Guid.NewGuid();
@@ -437,7 +447,7 @@ public sealed class StructureAudioLifecycleTests(PostgreSqlFixture database, Min
         })))!["id"]!.GetValue<Guid>();
         Guid file = Guid.NewGuid();
         var parse = await SeedParseAsync(factory, file, definition);
-        var nodes = Enumerable.Range(0, 2).Select(i => new DocumentStructureNodeModel
+        var nodes = Enumerable.Range(0, 2).Select(i => new DocumentStructureNode
         {
             Id = Guid.NewGuid(), ParseId = parse, LevelId = level, Name = "Node " + i,
             StartSequence = i, EndSequence = i, SortOrder = i, CreatedAt = DateTimeOffset.UtcNow, UpdatedAt = DateTimeOffset.UtcNow,
@@ -463,10 +473,17 @@ public sealed class StructureAudioLifecycleTests(PostgreSqlFixture database, Min
         return parse.Id;
     }
 
-    private static async Task<List<DocumentStructureAudioModel>> RowsAsync(WebApplicationFactory<Program> factory, Guid parse)
+    private static async Task<List<DocumentStructureAudio>> RowsAsync(WebApplicationFactory<Program> factory, Guid parse)
     {
         using var scope = factory.Services.CreateScope();
-        return await scope.ServiceProvider.GetRequiredService<IDocumentStructureAudioRepository>().GetByParseIdAsync(parse);
+        var context = scope.ServiceProvider.GetRequiredService<DocthecaDbContext>();
+        var treeId = await StructureOwnership.TreeForParseAsync(context, parse);
+        return await context.DocumentStructureAudio.AsNoTracking().Where(audio => audio.TreeId == treeId)
+            .Select(audio => new DocumentStructureAudio
+            {
+                Id = audio.Id, NodeId = audio.NodeId, ObjectKey = audio.ObjectKey, SourcePath = audio.SourcePath,
+                MatchStatus = audio.MatchStatus, LinkSource = audio.LinkSource,
+            }).ToListAsync();
     }
 
     private static async Task<JsonNode?> ReadData(HttpResponseMessage response)

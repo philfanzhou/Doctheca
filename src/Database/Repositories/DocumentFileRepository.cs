@@ -14,7 +14,7 @@ public class DocumentFileRepository : IDocumentFileRepository
         _context = context;
     }
 
-    public async Task AddAsync(DocumentFileModel model)
+    public async Task AddAsync(DocumentFile model)
     {
         var entity = MapToEntity(model);
         _context.DocumentFiles.Add(entity);
@@ -22,13 +22,13 @@ public class DocumentFileRepository : IDocumentFileRepository
         model.Id = entity.Id;
     }
 
-    public async Task<DocumentFileModel?> GetByIdAsync(Guid id)
+    public async Task<DocumentFile?> GetByIdAsync(Guid id)
     {
         var entity = await _context.DocumentFiles.FindAsync(id);
         return entity != null ? MapToModel(entity) : null;
     }
 
-    public async Task<(List<DocumentFileModel> Items, int TotalCount)> GetListAsync(int page, int size, string? fileName = null)
+    public async Task<(List<DocumentFile> Items, int TotalCount)> GetListAsync(int page, int size, string? fileName = null)
     {
         var query = _context.DocumentFiles.AsQueryable();
 
@@ -46,39 +46,6 @@ public class DocumentFileRepository : IDocumentFileRepository
         return (items, total);
     }
 
-    public async Task<bool> UpdateAsync(DocumentFileModel model)
-    {
-        await using var transaction = await _context.Database.BeginTransactionAsync();
-        var entity = await StructureOwnership.LockDocumentAsync(_context, model.Id);
-        if (entity == null) return false;
-
-        entity.FileName = model.FileName;
-        entity.FilePath = model.FilePath;
-        entity.ContentType = model.ContentType;
-        entity.UpdatedAt = DateTimeOffset.UtcNow;
-
-        await _context.SaveChangesAsync();
-        await transaction.CommitAsync();
-        return true;
-    }
-
-    public async Task<bool> UpdateMetadataAsync(Guid id, string? subject, string? grade, string? year)
-    {
-        await using var transaction = await _context.Database.BeginTransactionAsync();
-        var entity = await StructureOwnership.LockDocumentAsync(_context, id);
-        if (entity == null) return false;
-
-        // Only update fields that are non-null (null = no change)
-        if (subject != null) entity.Subject = subject;
-        if (grade != null) entity.Grade = grade;
-        if (year != null) entity.Year = year;
-        entity.UpdatedAt = DateTimeOffset.UtcNow;
-
-        await _context.SaveChangesAsync();
-        await transaction.CommitAsync();
-        return true;
-    }
-
     public async Task<bool> AttachStructaDocDocumentAsync(Guid id, Guid structaDocDocumentId)
     {
         await using var transaction = await _context.Database.BeginTransactionAsync();
@@ -92,23 +59,6 @@ public class DocumentFileRepository : IDocumentFileRepository
         await transaction.CommitAsync();
         return true;
     }
-
-    public async Task<bool> SetStructureDefinitionAsync(Guid id, Guid? structureDefinitionId)
-    {
-        await using var transaction = await _context.Database.BeginTransactionAsync();
-        var entity = await StructureOwnership.LockDocumentAsync(_context, id);
-        if (entity == null) return false;
-
-        if (entity.StructureDefinitionId != structureDefinitionId && await _context.DocumentStructureNodes.AnyAsync(node => node.DocumentFileId == id)) return false;
-        entity.StructureDefinitionId = structureDefinitionId;
-        entity.UpdatedAt = DateTimeOffset.UtcNow;
-
-        await _context.SaveChangesAsync();
-        await transaction.CommitAsync();
-        return true;
-    }
-
-    public async Task<bool> DeleteAsync(Guid id) => await DeleteWithAudioAsync(id) is not null;
 
     public async Task<IReadOnlyList<string>?> DeleteWithAudioAsync(Guid id)
     {
@@ -130,7 +80,7 @@ public class DocumentFileRepository : IDocumentFileRepository
         return keys;
     }
 
-    private static DocumentFileEntity MapToEntity(DocumentFileModel model) => new()
+    private static DocumentFileEntity MapToEntity(DocumentFile model) => new()
     {
         Id = model.Id,
         FileName = model.FileName,
@@ -146,7 +96,7 @@ public class DocumentFileRepository : IDocumentFileRepository
         UpdatedAt = model.UpdatedAt,
     };
 
-    private static DocumentFileModel MapToModel(DocumentFileEntity entity) => new()
+    private static DocumentFile MapToModel(DocumentFileEntity entity) => new()
     {
         Id = entity.Id,
         FileName = entity.FileName,

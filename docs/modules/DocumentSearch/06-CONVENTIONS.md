@@ -5,7 +5,7 @@
 - **Namespaces**: domain code uses `Doctheca.Domain.*`; the service layer uses `Doctheca.Service.*`; the database layer uses `Doctheca.Database.*`.
 - **Class names**: domain services use `XxxDomainService`; models use `XxxModel`; match type constants use a `static class` (`SearchMatchType`); interfaces use `IXxxService` / `IXxxRepository`.
 - **Method names**: start with a verb, following `[Verb][Noun][Async]`, e.g., `ExactSearchAsync`, `IndexParseBlocksAsync`, `BuildSearchBody`.
-- **Return values**: the HTTP endpoint layer returns JSON responses; the domain layer returns tuples `(List<SearchResultModel>, int, string?)`.
+- **Return values**: the HTTP endpoint layer returns JSON responses; the domain layer returns tuples `(List<SearchResult>, int, string?)`.
 - **Private fields**: use the `_camelCase` underscore prefix (e.g., `_searchIndexService`, `_client`).
 - **Database/index fields**: lowercase snake_case (e.g., `document_file_id`, `block_id`, `text_content`, `page_number`).
 - **OpenSearch `_id`**: `block_{blockId}` format, guaranteeing idempotency.
@@ -62,7 +62,7 @@
 
 ## Generation 2 Naming Conventions (extending V1, no parallel classes/files)
 
-- **Class names**: do not add `BlockXxxModel` / `BlockXxxEndpoints` / `BlockXxxPage`. All Generation 2 capabilities **extend optional properties** on existing V1 classes (`SearchResultModel`, `SearchFilterModel`, `DocumentSearchEndpoints`, `SearchPage.vue`).
+- **Class names**: do not add `BlockXxxModel` / `BlockXxxEndpoints` / `BlockXxxPage`. All Generation 2 capabilities **extend optional properties** on existing V1 classes (`SearchResult`, `SearchFilter`, `DocumentSearch`, `SearchPage.vue`).
 - **New index field naming** (genuinely new dimensions; V1 has no fields with the same semantics): `x0`/`y0`/`x1`/`y1` (float, bbox components), `score` (float), `has_image` (bool), `_meta.block_data` (embedded object, enabled:false).
 - **Reused V1 field naming** (same source, no double-write): `block_type` = minerU type, `page_number` = minerU page_id, `text` = minerU text.
 - **OpenSearch embedded non-indexed field**: `_meta.block_data` uses `enabled:false` (stored but not indexed), complying with NFR-11.
@@ -85,7 +85,7 @@
 - **Fallback sorting without keyword**: by `sort_index asc` (block order).
 - **minerU exact-condition combination**: keyword goes to `must`; `blockType` (→ `block_type`) / `pageNumber` (→ `page_number`) / `parseId` / `documentFileId` / `hasImage` (→ `has_image`) go to `filter`.
 - **Zero-regression guard**: when all minerU filters are null, the V1 path is taken (output identical to pre-change). **No new** `DOCTHECA_FILTER_REQUIRED` error code — V1's required-`query` validation already serves as the sole guard.
-- **blockData attachment**: `_source` contains the raw `_meta.block_data` string; `ParseSearchResponse` (the V1 method) adds mapping to `SearchResultModel.BlockData` + combines `Bbox` (x0/y0/x1/y1) + `Score`. No secondary serialization / deserialization.
+- **blockData attachment**: `_source` contains the raw `_meta.block_data` string; `ParseSearchResponse` (the V1 method) adds mapping to `SearchResult.BlockData` + combines `Bbox` (x0/y0/x1/y1) + `Score`. No secondary serialization / deserialization.
 - **Pagination**: `pageSize` maximum 100 (the V1 value); with minerU filters the frontend guides toward ≤ 50 (carries the full `blockData` JSONB, avoiding oversized response bodies).
 
 ## Generation 2 Conventions for Indexing minerU Fields (evolving V1, no parallel structures)
@@ -131,9 +131,9 @@ Field governance boundaries that must be observed when implementing Generation 2
 
 ## Bulk / HTTP Client Conventions
 
-- `OpenSearchLowLevelClient` is created via `new` in the `OpenSearchIndexService` constructor (uses `ConnectionConfiguration`, 30s request timeout).
-- Pure logic is extracted into `internal static` methods (`BuildIndexBody` / `BuildSearchBody` / `ParseSearchResponse`), hosted by `OpenSearchIndexManager`, `OpenSearchQueryBuilder`, and `OpenSearchResponseParser` respectively, for easier unit testing.
-- `OpenSearchJsonHelper` provides safe reading helpers for `_source` JSON fields.
+- `OpenSearchLowLevelClient` is created via `new` in the `IndexService` constructor (uses `ConnectionConfiguration`, 30s request timeout).
+- Pure logic is extracted into `internal static` methods (`BuildIndexBody` / `BuildSearchBody` / `ParseSearchResponse`), hosted by `IndexManager`, `QueryBuilder`, and `ResponseParser` respectively, for easier unit testing.
+- `JsonHelper` provides safe reading helpers for `_source` JSON fields.
 - Exposed to the test assembly via `InternalsVisibleTo`.
 
 ## Test Tooling and Style
@@ -153,5 +153,5 @@ Field governance boundaries that must be observed when implementing Generation 2
 - Comments/logs/exception messages use **English**; business-domain values (e.g., subject names) may be in Chinese.
 - Constructor dependency injection order matches the DI container registration order.
 - Domain services do not expose `DbContext` directly or execute SQL; data access goes through repository interfaces.
-- `ISearchIndexService` is registered as a **Singleton**; `ISearchDomainService` is registered as **Scoped**.
+- `ISearchIndexService` is registered as a **Singleton**; `ISearchService` is registered as **Scoped**.
 - Database initialization uses `DatabaseInitializer` (no EF Core Migration).

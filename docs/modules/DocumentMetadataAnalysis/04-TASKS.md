@@ -7,19 +7,19 @@
 | ID | Task | Status |
 |----|------|------|
 | DM-01 | Create DocumentMetadataAnalysis record (Domain/Models) | completed |
-| DM-02 | Create DocumentAnalysisOptions (inherits AiClientOptions) | completed |
+| DM-02 | Create DocumentAnalysisOptions (inherits ClientOptions) | completed |
 | DM-03 | Implement DocumentAnalysisService.AnalyzeMetadataAsync | completed |
 | DM-04 | Create IDocumentAnalysisService interface | completed |
 | DM-05 | Create DocthecaConstants (ValidSubjects / ValidGrades) | completed |
 | DM-06 | Add Subject/Grade/Year columns to DocumentFileEntity | completed |
-| DM-07 | Add Subject/Grade/Year fields to DocumentFileModel | completed |
+| DM-07 | Add Subject/Grade/Year fields to DocumentFile | completed |
 | DM-08 | Add UpdateMetadataAsync to IDocumentFileRepository | completed |
 | DM-09 | Add UpdateMetadataAsync to IDocumentFileService | completed |
 | DM-10 | Implement IDocumentFileRepository.UpdateMetadataAsync | completed |
 | DM-11 | Implement DocumentFileService.UpdateMetadataAsync | completed |
 | DM-12 | Add UpdateDocumentFileMetadataAsync to ISearchIndexService | completed |
-| DM-13 | Implement OpenSearchIndexService.UpdateDocumentFileMetadataAsync | completed |
-| DM-14 | Add PUT /{id}/metadata to DocumentFileEndpoints | completed |
+| DM-13 | Implement IndexService.UpdateDocumentFileMetadataAsync | completed |
+| DM-14 | Add PUT /{id}/metadata to DocumentFiles | completed |
 | DM-15 | Implement MinerUFileParseWorker.AnalyzeMetadataIfMissingAsync | completed |
 | DM-16 | DI registration of IDocumentAnalysisService (conditional registration) | completed |
 | DM-17 | Program.cs LLM initialization calls InitializeAsync | completed |

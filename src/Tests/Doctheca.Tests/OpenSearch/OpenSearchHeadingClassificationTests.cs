@@ -4,6 +4,8 @@ using Doctheca.Database.Repositories;
 using Doctheca.Domain.Models;
 using Doctheca.Domain.Repositories;
 using Doctheca.Service;
+using Doctheca.Service.Endpoints;
+using global::Doctheca.Service.OpenSearch;
 using Doctheca.Tests.Database;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
@@ -51,9 +53,9 @@ public sealed class OpenSearchHeadingClassificationTests(OpenSearchFixture fixtu
             using var services = new ServiceCollection()
                 .AddDbContext<DocthecaDbContext>(options => options.UseNpgsql(postgres.GetConnectionString(database)))
                 .AddScoped<IDocumentParseBlockRepository, DocumentParseBlockRepository>()
-                .AddSingleton(Moq.Mock.Of<IDocumentStructureRepository>(repository => repository.GetCurrentBindingsAsync(Moq.It.IsAny<Guid>()) == Task.FromResult(new List<Doctheca.Domain.Models.Structure.DocumentStructureNodeModel>()))).BuildServiceProvider();
-            var index = new OpenSearchIndexService(Options.Create(new OpenSearchOptions { Url=fixture.Url, IndexName=name }),
-                services, NullLogger<OpenSearchIndexService>.Instance);
+                .AddSingleton(Moq.Mock.Of<IDocumentStructureRepository>(repository => repository.GetCurrentBindingsAsync(Moq.It.IsAny<Guid>()) == Task.FromResult(new List<Doctheca.Domain.Models.Structure.DocumentStructureNode>()))).BuildServiceProvider();
+            var index = new IndexService(Options.Create(new OpenSearchOptions { Url=fixture.Url, IndexName=name }),
+                services, NullLogger<IndexService>.Instance);
             await index.EnsureIndexAsync();
             await ReindexAsync();
             (await HitsAsync(-1, "beacon delta", true)).Should().Contain(rows[0].Id);
@@ -73,7 +75,7 @@ public sealed class OpenSearchHeadingClassificationTests(OpenSearchFixture fixtu
             mapping.RootElement.GetProperty(name).GetProperty("mappings").GetProperty("_meta")
                 .GetProperty("mapping_version").GetInt32().Should().Be(4);
             var unfiltered = await index.ExactSearchAsync("beacon delta", true,
-                new SearchFilterModel { ParseId=MigrationGoldenStates.ParseId }, 100, null);
+                new SearchFilter { ParseId=MigrationGoldenStates.ParseId }, 100, null);
             unfiltered.TotalCount.Should().Be(8);
             unfiltered.Results.Select(hit=>hit.SegmentId).Distinct().Should().HaveCount(8);
             unfiltered.Results.Should().NotContain(hit=>hit.SegmentId==rows[7].Id.ToString());
@@ -88,7 +90,7 @@ public sealed class OpenSearchHeadingClassificationTests(OpenSearchFixture fixtu
             async Task<Guid[]> HitsAsync(int level,string query,bool phrase)
             {
                 var response = await index.ExactSearchAsync(query,phrase,
-                    new SearchFilterModel { ParseId=MigrationGoldenStates.ParseId,TextLevel=level },100,null);
+                    new SearchFilter { ParseId=MigrationGoldenStates.ParseId,TextLevel=level },100,null);
                 response.Results.Should().OnlyContain(hit=>hit.TextLevel==level);
                 response.Results.Should().OnlyContain(hit=>hit.MatchType==(phrase?SearchMatchType.ExactPhrase:SearchMatchType.Stemmed));
                 return response.Results.Select(hit=>Guid.Parse(hit.SegmentId)).ToArray();

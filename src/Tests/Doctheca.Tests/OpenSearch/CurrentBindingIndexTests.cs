@@ -4,6 +4,8 @@ using Doctheca.Database.Repositories;
 using Doctheca.Domain.Models;
 using Doctheca.Domain.Repositories;
 using Doctheca.Service;
+using Doctheca.Service.Endpoints;
+using global::Doctheca.Service.OpenSearch;
 using Doctheca.Tests.Database;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
@@ -37,9 +39,9 @@ public sealed class CurrentBindingIndexTests(OpenSearchFixture fixture)
             (await repo.SaveTreeAsync(file.Id, [new(chapter, level.Id, "Current chapter", parse.Id, 0, 1, [])], default)).Value!.Tree.TreeId.Should().NotBe(historical.Id);
             using var services = new ServiceCollection().AddDbContext<DocthecaDbContext>(o => o.UseNpgsql(postgres.GetConnectionString(database)))
                 .AddScoped<IDocumentParseBlockRepository, DocumentParseBlockRepository>().AddScoped<IDocumentStructureRepository, DocumentStructureRepository>().BuildServiceProvider();
-            var index = new OpenSearchIndexService(Options.Create(new OpenSearchOptions { Url = fixture.Url, IndexName = name }), services, NullLogger<OpenSearchIndexService>.Instance);
+            var index = new IndexService(Options.Create(new OpenSearchOptions { Url = fixture.Url, IndexName = name }), services, NullLogger<IndexService>.Instance);
             await index.EnsureIndexAsync(); await Reindex();
-            var filter = new SearchFilterModel { StructureNodeId = chapter };
+            var filter = new SearchFilter { StructureNodeId = chapter };
             var hits = await index.ExactSearchAsync("binding beacon", true, filter, 20, null);
             hits.Results.Should().HaveCount(2).And.OnlyContain(h => h.StructurePath == "Current chapter");
             (await index.ExactSearchAsync("binding beacon", true, new() { StructureNodeId = historicalNode.Id }, 20, null)).Results.Should().BeEmpty();

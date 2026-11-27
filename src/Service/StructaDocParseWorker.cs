@@ -3,7 +3,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using ServiceMantle.Web.Logging;
-using Doctheca.Common.Oss;
+using Doctheca.Common.ObjectStorage;
 using Doctheca.Domain.Models;
 using Doctheca.Domain.Repositories;
 using Doctheca.Domain.Services;
@@ -109,7 +109,7 @@ public sealed class StructaDocParseWorker : BackgroundService
     /// Submit a pending parse to StructaDoc. Legacy files (stored in OSS before the migration)
     /// are lazily uploaded to StructaDoc first and attached to the file record.
     /// </summary>
-    internal async Task SubmitAsync(DocumentParseModel job, IServiceProvider scopeProvider, CancellationToken ct)
+    internal async Task SubmitAsync(DocumentParse job, IServiceProvider scopeProvider, CancellationToken ct)
     {
         var parseService = scopeProvider.GetRequiredService<IDocumentParseService>();
         var fileService = scopeProvider.GetRequiredService<IDocumentFileService>();
@@ -142,11 +142,11 @@ public sealed class StructaDocParseWorker : BackgroundService
             run.Id, job.Id, documentId.Value, job.ModelVersion);
     }
 
-    private async Task<Guid> AttachLegacyFileAsync(DocumentFileModel file, IServiceProvider scopeProvider, CancellationToken ct)
+    private async Task<Guid> AttachLegacyFileAsync(DocumentFile file, IServiceProvider scopeProvider, CancellationToken ct)
     {
         var fileService = scopeProvider.GetRequiredService<IDocumentFileService>();
         var client = scopeProvider.GetRequiredService<IStructaDocClient>();
-        var ossService = scopeProvider.GetRequiredService<IOssService>();
+        var objectStore = scopeProvider.GetRequiredService<IObjectStore>();
 
         if (string.IsNullOrEmpty(file.FilePath))
         {
@@ -157,7 +157,7 @@ public sealed class StructaDocParseWorker : BackgroundService
         _logger.LogInformation(
             "Uploading legacy document file {FileId} to StructaDoc before parsing", file.Id);
 
-        await using var source = await ossService.DownloadAsync(file.FilePath);
+        await using var source = await objectStore.DownloadAsync(file.FilePath);
         var uploaded = await client.UploadDocumentAsync(
             file.FileName,
             string.IsNullOrWhiteSpace(file.ContentType) ? "application/octet-stream" : file.ContentType,
@@ -173,7 +173,7 @@ public sealed class StructaDocParseWorker : BackgroundService
     }
 
     /// <summary>Poll a submitted StructaDoc Parse Run and finish the local parse on terminal states.</summary>
-    internal async Task PollAsync(DocumentParseModel job, IServiceProvider scopeProvider, CancellationToken ct)
+    internal async Task PollAsync(DocumentParse job, IServiceProvider scopeProvider, CancellationToken ct)
     {
         var parseService = scopeProvider.GetRequiredService<IDocumentParseService>();
         var fileService = scopeProvider.GetRequiredService<IDocumentFileService>();
@@ -202,7 +202,7 @@ public sealed class StructaDocParseWorker : BackgroundService
 
         switch (run.Status)
         {
-            case StructaDocParseRunStatus.Succeeded:
+            case ParseRunStatus.Succeeded:
             {
                 var markdown = await sync.SyncAsync(job, runId, ct);
 
@@ -214,8 +214,8 @@ public sealed class StructaDocParseWorker : BackgroundService
                 break;
             }
 
-            case StructaDocParseRunStatus.Failed:
-            case StructaDocParseRunStatus.Cancelled:
+            case ParseRunStatus.Failed:
+            case ParseRunStatus.Cancelled:
             {
                 var reason = string.IsNullOrWhiteSpace(run.ErrorCode)
                     ? run.ErrorMessage
@@ -239,7 +239,7 @@ public sealed class StructaDocParseWorker : BackgroundService
     /// Index parse blocks to OpenSearch. Best-effort: failures are logged but do not block the parse workflow.
     /// Passes the file's existing subject/grade/year so that indexing metadata can be filtered.
     /// </summary>
-    private async Task IndexBlocksToSearchAsync(Guid parseId, DocumentFileModel file, IServiceProvider scopeProvider)
+    private async Task IndexBlocksToSearchAsync(Guid parseId, DocumentFile file, IServiceProvider scopeProvider)
     {
         try
         {

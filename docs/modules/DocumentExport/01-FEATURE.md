@@ -6,7 +6,7 @@ Exports the Markdown content of parsed documents (`document_parses` with status 
 
 ## Background
 
-Images in parse output come from two sources (ADR-0009): for **legacy parses**, `markdown_content` references OSS absolute paths (e.g. `documents/mineru/task-123/abc.jpg`) and the bytes are read from OSS; for **new parses**, the Markdown references relative paths (`images/<name>`) and the bytes are streamed from StructaDoc Assets via `ParseImageContentSource`. Markdown distributed as-is cannot load images in offline environments. This feature:
+Images in parse output come from two sources (ADR-0009): for **legacy parses**, `markdown_content` references OSS absolute paths (e.g. `documents/mineru/task-123/abc.jpg`) and the bytes are read from OSS; for **new parses**, the Markdown references relative paths (`images/<name>`) and the bytes are streamed from StructaDoc Assets via `ImageContentSource`. Markdown distributed as-is cannot load images in offline environments. This feature:
 
 1. Provides file-level export (takes the latest parse record by `document_file_id`)
 2. Provides parse-level export (directly specifies a parse by `parse_id`)
@@ -82,16 +82,16 @@ Images in parse output come from two sources (ADR-0009): for **legacy parses**, 
 
 - **Markdown content**: `document_parses.markdown_content`
 - **Image list**: `document_parse_images` (queried by `parse_id`)
-- **Image binaries**: OSS (`IOssService.DownloadAsync`)
+- **Image binaries**: OSS (`IObjectStore.DownloadAsync`)
 - **File name validation**: `document_files.file_name` (falls back to `"document"` for parse-level export when the file no longer exists)
 
 ## Interface Inventory
 
 | Component | Change |
 |------|------|
-| `DocumentExportEndpoints` | Add 4 endpoints + `MapDocumentExportEndpoints` |
+| `DocumentExport` | Add 4 endpoints + `MapDocumentExport` |
 | `MarkdownExportHelper` | Add `ReplaceImagePathsRelative` / `ReplaceImagePathsBase64Async` / `ReplaceImagePathsPresignedAsync` / `BuildMarkdownZipAsync` / `BuildHtmlStream` |
 | `IDocumentParseService` | Reuse existing `GetByIdAsync` / `GetLatestByFileIdAsync` / `GetImagesByParseIdAsync` |
 | `IDocumentFileService` | Reuse existing `GetByIdAsync` |
-| `IOssService` | Reuse existing `DownloadAsync` / `GetPresignedUrlAsync` |
-| `Program.cs` | Register `MapDocumentExportEndpoints` |
+| `IObjectStore` | Reuse existing `DownloadAsync` / `GetPresignedUrlAsync` |
+| `Program.cs` | Register `MapDocumentExport` |

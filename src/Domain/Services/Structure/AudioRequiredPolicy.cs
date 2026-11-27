@@ -5,12 +5,12 @@ namespace Doctheca.Domain.Services.Structure;
 /// <summary>Policy is evaluated from the definition graph, including levels with no current nodes.</summary>
 public sealed class AudioRequiredPolicy
 {
-    private readonly IReadOnlyDictionary<Guid, DocumentStructureNodeModel> _nodes;
-    private readonly Dictionary<Guid, StructureLevelModel> _levels;
+    private readonly IReadOnlyDictionary<Guid, DocumentStructureNode> _nodes;
+    private readonly Dictionary<Guid, StructureLevel> _levels;
     private readonly HashSet<Guid> _aboveRequired = [];
     private readonly bool _required;
 
-    public AudioRequiredPolicy(IReadOnlyList<StructureLevelModel> levels, IReadOnlyDictionary<Guid, DocumentStructureNodeModel> nodes)
+    public AudioRequiredPolicy(IReadOnlyList<StructureLevel> levels, IReadOnlyDictionary<Guid, DocumentStructureNode> nodes)
     {
         _nodes = nodes;
         _levels = levels.ToDictionary(level => level.Id);

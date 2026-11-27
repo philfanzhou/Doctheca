@@ -12,10 +12,10 @@ public sealed class DocumentStructureTree
     public Guid? ParseId { get; init; }
     public Guid DocumentFileId { get; init; }
     public string FileName { get; init; } = string.Empty;
-    public StructureDefinitionModel? Definition { get; init; }
+    public StructureDefinition? Definition { get; init; }
 
-    /// <summary>Flat nodes ordered parents-first by start sequence; rebuild the tree with <see cref="DocumentStructureNodeModel.ParentId"/>.</summary>
-    public IReadOnlyList<DocumentStructureNodeModel> Nodes { get; init; } = [];
+    /// <summary>Flat nodes ordered parents-first by start sequence; rebuild the tree with <see cref="DocumentStructureNode.ParentId"/>.</summary>
+    public IReadOnlyList<DocumentStructureNode> Nodes { get; init; } = [];
 }
 
 public interface IDocumentStructureService
@@ -25,9 +25,6 @@ public interface IDocumentStructureService
 
     /// <summary>Validates and replaces the parse's whole tree; an invalid tree changes nothing.</summary>
     Task<StructureResult<DocumentStructureTree>> SaveTreeAsync(Guid parseId, IReadOnlyList<StructureNodeInput>? nodes);
-
-    /// <summary>Chooses (or clears with null) the structure definition of a document file.</summary>
-    Task<StructureResult<DocumentFileModel>> SetDocumentDefinitionAsync(Guid documentFileId, Guid? structureDefinitionId);
 }
 
 /// <summary>
@@ -140,56 +137,25 @@ public sealed class DocumentStructureService : IDocumentStructureService
         return StructureResult<DocumentStructureTree>.Ok((await GetTreeAsync(parseId))!);
     }
 
-    public async Task<StructureResult<DocumentFileModel>> SetDocumentDefinitionAsync(
-        Guid documentFileId, Guid? structureDefinitionId)
-    {
-        var file = await _fileRepository.GetByIdAsync(documentFileId);
-        if (file == null)
-            return StructureResult<DocumentFileModel>.NotFound(StructureErrorCodes.FileNotFound, "File not found");
-
-        if (file.StructureDefinitionId == structureDefinitionId)
-            return StructureResult<DocumentFileModel>.Ok(file);
-
-        if (structureDefinitionId is { } definitionId && await _definitionRepository.GetByIdAsync(definitionId) == null)
-        {
-            return StructureResult<DocumentFileModel>.Invalid(
-                [new("structureDefinitionId", "structure definition does not exist")]);
-        }
-
-        // Saved trees reference the old definition's levels; they are cleared explicitly first.
-        if (await _structureRepository.DocumentFileHasNodesAsync(documentFileId))
-        {
-            return StructureResult<DocumentFileModel>.Conflict(StructureErrorCodes.DocumentStructureInUse,
-                "The document has marked structure nodes; clear them before changing its structure definition");
-        }
-
-        if (!await _fileRepository.SetStructureDefinitionAsync(documentFileId, structureDefinitionId))
-            return StructureResult<DocumentFileModel>.Conflict(StructureErrorCodes.DocumentStructureInUse,
-                "The document changed while choosing its structure definition; reload and retry");
-        _logger.LogInformation("Document file {FileId} structure definition set to {DefinitionId}",
-            documentFileId, structureDefinitionId?.ToString() ?? "(none)");
-        return StructureResult<DocumentFileModel>.Ok((await _fileRepository.GetByIdAsync(documentFileId))!);
-    }
-
     private sealed class ValidationContext(
-        IReadOnlyDictionary<Guid, StructureLevelModel> levels,
+        IReadOnlyDictionary<Guid, StructureLevel> levels,
         HashSet<int> sequences,
-        IReadOnlyDictionary<Guid, DocumentStructureNodeModel> existing,
+        IReadOnlyDictionary<Guid, DocumentStructureNode> existing,
         DateTimeOffset now)
     {
-        public IReadOnlyDictionary<Guid, StructureLevelModel> Levels { get; } = levels;
+        public IReadOnlyDictionary<Guid, StructureLevel> Levels { get; } = levels;
         public HashSet<int> Sequences { get; } = sequences;
-        public IReadOnlyDictionary<Guid, DocumentStructureNodeModel> Existing { get; } = existing;
+        public IReadOnlyDictionary<Guid, DocumentStructureNode> Existing { get; } = existing;
         public DateTimeOffset Now { get; } = now;
         public List<StructureFieldError> Errors { get; } = [];
-        public List<DocumentStructureNodeModel> Flat { get; } = [];
+        public List<DocumentStructureNode> Flat { get; } = [];
         public Dictionary<Guid, string> PathOf { get; } = [];
     }
 
     private static void ValidateSiblings(ValidationContext context, IReadOnlyList<StructureNodeInput> siblings,
-        string path, DocumentStructureNodeModel? parentNode, Guid? parentLevelId, Guid? parentId)
+        string path, DocumentStructureNode? parentNode, Guid? parentLevelId, Guid? parentId)
     {
-        var accepted = new List<(DocumentStructureNodeModel Node, StructureNodeInput Input, string Path)>();
+        var accepted = new List<(DocumentStructureNode Node, StructureNodeInput Input, string Path)>();
         for (var i = 0; i < siblings.Count; i++)
         {
             var input = siblings[i];
@@ -226,8 +192,8 @@ public sealed class DocumentStructureService : IDocumentStructureService
         }
     }
 
-    private static DocumentStructureNodeModel? ValidateNode(ValidationContext context, StructureNodeInput input,
-        string path, DocumentStructureNodeModel? parentNode, Guid? parentLevelId, Guid? parentId)
+    private static DocumentStructureNode? ValidateNode(ValidationContext context, StructureNodeInput input,
+        string path, DocumentStructureNode? parentNode, Guid? parentLevelId, Guid? parentId)
     {
         var errorCount = context.Errors.Count;
 
@@ -280,7 +246,7 @@ public sealed class DocumentStructureService : IDocumentStructureService
         if (context.Errors.Count > errorCount) return null;
 
         var createdAt = context.Existing.TryGetValue(id, out var previous) ? previous.CreatedAt : context.Now;
-        return new DocumentStructureNodeModel
+        return new DocumentStructureNode
         {
             Id = id,
             LevelId = input.LevelId!.Value,
@@ -294,10 +260,10 @@ public sealed class DocumentStructureService : IDocumentStructureService
     }
 
     /// <summary>Orders stored nodes so each parent precedes its children, siblings by sort order.</summary>
-    internal static List<DocumentStructureNodeModel> OrderParentsFirst(IReadOnlyCollection<DocumentStructureNodeModel> nodes)
+    internal static List<DocumentStructureNode> OrderParentsFirst(IReadOnlyCollection<DocumentStructureNode> nodes)
     {
         var children = nodes.ToLookup(node => node.ParentId);
-        var ordered = new List<DocumentStructureNodeModel>(nodes.Count);
+        var ordered = new List<DocumentStructureNode>(nodes.Count);
         void Visit(Guid? parentId)
         {
             foreach (var node in children[parentId].OrderBy(node => node.SortOrder).ThenBy(node => node.StartSequence))

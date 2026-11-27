@@ -180,7 +180,7 @@ CorrelationId applies to the HTTP path, making it easy to trace request chains a
 - HTTP path: the ServiceMantle correlation ID middleware (`app.UseServiceMantleCorrelationId()` from the `ServiceMantle.Web` package) resolves exactly one Correlation ID per request. A caller-supplied `x-correlation-id` request header is reused verbatim only when it carries exactly one value of 1–64 characters whose first character is an ASCII letter or digit and whose remaining characters are ASCII letters, digits, `.`, `_`, or `-`. Missing, whitespace, overlong, illegal, comma-joined, or repeated values are discarded as a whole and replaced by a generated 32-character lowercase hexadecimal id. The resolved value is published to the `x-correlation-id` response header (injected via `OnStarting` before any response starts, so a downstream write converges back to the same single value), to the `HttpContext` accessor (`context.GetServiceMantleCorrelationId()`), and to the request log scope as the `CorrelationId` field, alongside the `ServiceName`, `ServiceVersion`, and `InstanceId` identity fields from the ServiceMantle host foundation.
 - The original request headers are never rewritten; rejected raw input never reaches the logs; exceptions and cancellation propagate untouched with the request scope released; and the id is not propagated to outbound `HttpClient` calls (OpenTelemetry W3C trace propagation is a separate protocol).
 
-HTTP controllers (`DocumentFileEndpoints`, etc.), static files, and the SPA fallback must be within the scope of this middleware.
+HTTP controllers (`DocumentFiles`, etc.), static files, and the SPA fallback must be within the scope of this middleware.
 
 Middleware pipeline position (registration order in `Program.cs`):
 

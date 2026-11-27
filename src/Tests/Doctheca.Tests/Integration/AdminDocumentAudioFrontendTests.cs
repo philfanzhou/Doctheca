@@ -3,12 +3,14 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using Doctheca.Common.Oss;
+using Doctheca.Common.ObjectStorage;
 using Doctheca.Database;
 using Doctheca.Database.Entities;
 using Doctheca.Domain.Models;
 using Doctheca.Domain.Repositories;
 using Doctheca.Service;
+using Doctheca.Service.Endpoints;
+using global::Doctheca.Service.OpenSearch;
 using Doctheca.Service.StructaDoc;
 using Doctheca.Tests.OpenSearch;
 using Microsoft.EntityFrameworkCore;
@@ -30,10 +32,10 @@ public sealed partial class AdminHostedFrontendTests
         try
         {
             var source = Guid.NewGuid(); var upstream = new Mock<IStructaDocClient>();
-            upstream.Setup(u => u.UploadDocumentAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<Stream>(), It.IsAny<CancellationToken>())).ReturnsAsync(new StructaDocDocumentResponse { Id = source });
-            upstream.Setup(u => u.CreateParseRunAsync(source, It.IsAny<string>(), It.IsAny<Guid?>(), It.IsAny<CancellationToken>())).ReturnsAsync(() => new() { Id = Guid.NewGuid(), DocumentId = source, Status = "succeeded" });
-            upstream.Setup(u => u.GetParseRunAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>())).ReturnsAsync((Guid id, CancellationToken _) => new() { Id = id, DocumentId = source, Status = "succeeded" });
-            upstream.Setup(u => u.GetAllBlocksAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>())).ReturnsAsync(Enumerable.Range(0, 40).Select(i => new StructaDocBlockResponse { Id = Guid.NewGuid(), Sequence = i, PageNumber = 1, Type = "text", Content = "audio binding beacon " + i }).ToList());
+            upstream.Setup(u => u.UploadDocumentAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<Stream>(), It.IsAny<CancellationToken>())).ReturnsAsync(new DocumentResponse { Id = source });
+            upstream.Setup(u => u.CreateParseRunAsync(source, It.IsAny<string>(), It.IsAny<Guid?>(), It.IsAny<CancellationToken>())).ReturnsAsync(() => new() { Id = Guid.NewGuid(), Status = "succeeded" });
+            upstream.Setup(u => u.GetParseRunAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>())).ReturnsAsync((Guid id, CancellationToken _) => new() { Id = id, Status = "succeeded" });
+            upstream.Setup(u => u.GetAllBlocksAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>())).ReturnsAsync(Enumerable.Range(0, 40).Select(i => new BlockResponse { Id = Guid.NewGuid(), Sequence = i, PageNumber = 1, Type = "text", Content = "audio binding beacon " + i }).ToList());
             upstream.Setup(u => u.GetPagesAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>())).ReturnsAsync([]);
             upstream.Setup(u => u.GetAssetsAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>())).ReturnsAsync([]);
             upstream.Setup(u => u.GetMarkdownAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>())).ReturnsAsync("audio binding beacon");
@@ -43,9 +45,9 @@ public sealed partial class AdminHostedFrontendTests
             settings["OpenSearch:Url"] = search.Url; settings["OpenSearch:IndexName"] = index;
             await using var h = await Open(settings: settings, configureServices: services =>
             {
-                services.RemoveAll<IOssService>(); services.AddScoped<IOssService>(sp => new S3OssService(sp.GetRequiredService<IOptions<OssOptions>>().Value));
+                services.RemoveAll<IObjectStore>(); services.AddScoped<IObjectStore>(sp => new S3ObjectStore(sp.GetRequiredService<IOptions<StoreOptions>>().Value));
                 services.RemoveAll<IStructaDocClient>(); services.AddSingleton(upstream.Object);
-                services.RemoveAll<ISearchIndexService>(); services.AddSingleton<ISearchIndexService, OpenSearchIndexService>();
+                services.RemoveAll<ISearchIndexService>(); services.AddSingleton<ISearchIndexService, IndexService>();
             });
             await h.Factory.Services.GetRequiredService<ISearchIndexService>().EnsureIndexAsync();
             await h.Page.GotoAsync(h.Origin + "/#docs");

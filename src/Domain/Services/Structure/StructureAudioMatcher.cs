@@ -49,7 +49,7 @@ public sealed class StructureAudioMatcher
     private readonly ILookup<Guid?, Candidate> _children;
     private readonly Dictionary<Guid, Guid?> _parentOf;
 
-    public StructureAudioMatcher(IReadOnlyCollection<DocumentStructureNodeModel> nodes)
+    public StructureAudioMatcher(IReadOnlyCollection<DocumentStructureNode> nodes)
     {
         _parentOf = nodes.ToDictionary(node => node.Id, node => node.ParentId);
         _children = nodes

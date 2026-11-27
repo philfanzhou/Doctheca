@@ -1,4 +1,4 @@
-using Doctheca.Common.Oss;
+using Doctheca.Common.ObjectStorage;
 using Doctheca.Database;
 using Doctheca.Database.Repositories;
 using Doctheca.Domain.Models;
@@ -33,7 +33,7 @@ public sealed class DocumentOwnedAudioMigrationTests(PostgreSqlMigrationFixture 
             await minio.PutAsync(bucket, key, bytes);
             await new DocthecaMigrationExecutor(context).ExecuteAsync();
             var settings = new ConfigurationBuilder().AddInMemoryCollection(minio.Settings(bucket)).Build();
-            var storage = new S3OssService(settings.GetSection("Oss").Get<OssOptions>()!);
+            var storage = new S3ObjectStore(settings.GetSection("Oss").Get<StoreOptions>()!);
             var store = new StructureAudioStore(() => storage, new(true, null), NullLogger<StructureAudioStore>.Instance);
             var repository = new InternalStructureRepository(new DbContextOptionsBuilder<DocthecaDbContext>().UseNpgsql(postgres.GetConnectionString(database)).Options);
             var node = await context.DocumentStructureNodes.Select(item => item.Id).SingleAsync();

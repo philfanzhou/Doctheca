@@ -1,0 +1,139 @@
+using System.Text;
+using System.Text.Json;
+using Doctheca.Domain.Models;
+
+namespace Doctheca.Service.OpenSearch;
+
+internal static class ResponseParser
+{
+    /// <summary>
+    /// Parses the OpenSearch search response JSON (pure logic, testable).
+    /// </summary>
+    internal static (List<SearchResult> Results, int TotalCount, string? NextToken) ParseSearchResponse(
+        string responseJson, bool phrase, int pageSize)
+    {
+        using var doc = JsonDocument.Parse(responseJson);
+        var root = doc.RootElement;
+
+        var hasHits = root.TryGetProperty("hits", out var hitsEl);
+        var totalCount = hasHits
+            && hitsEl.TryGetProperty("total", out var totalEl)
+            && totalEl.TryGetProperty("value", out var valueEl)
+            ? valueEl.GetInt32()
+            : 0;
+
+        var results = new List<SearchResult>();
+        JsonElement lastSort = default;
+        var hasLastSort = false;
+
+        if (hasHits && hitsEl.TryGetProperty("hits", out var hitArray))
+        {
+            foreach (var hit in hitArray.EnumerateArray())
+            {
+                var source = hit.GetProperty("_source");
+
+                var segmentId = source.TryGetProperty("block_id", out var bidEl) ? bidEl.GetString() ?? "" : "";
+
+                var associatedText = SelectAssociatedText(hit, source);
+
+                var score = hit.TryGetProperty("_score", out var scoreEl) ? scoreEl.GetDouble() : 0;
+
+                var documentName = source.TryGetProperty("file_name", out var fnEl) ? fnEl.GetString() ?? "" : "";
+
+                // [Gen-2] minerU block-level fields from _source (null/defaults when absent — robust)
+                string? blockData = null;
+                if (source.TryGetProperty("_meta", out var metaEl)
+                    && metaEl.ValueKind == JsonValueKind.Object
+                    && metaEl.TryGetProperty("block_data", out var bdEl)
+                    && bdEl.ValueKind == JsonValueKind.String)
+                {
+                    blockData = bdEl.GetString();
+                }
+
+                float[]? bbox = null;
+                var x0 = JsonHelper.TryGetFloat(source, "x0");
+                var y0 = JsonHelper.TryGetFloat(source, "y0");
+                var x1 = JsonHelper.TryGetFloat(source, "x1");
+                var y1 = JsonHelper.TryGetFloat(source, "y1");
+                if (x0.HasValue || y0.HasValue || x1.HasValue || y1.HasValue)
+                {
+                    bbox = new float[4];
+                    bbox[0] = x0 ?? 0f;
+                    bbox[1] = y0 ?? 0f;
+                    bbox[2] = x1 ?? 0f;
+                    bbox[3] = y1 ?? 0f;
+                }
+
+                var mineruScore = JsonHelper.TryGetDouble(source, "score");
+                var subType = JsonHelper.TryGetString(source, "sub_type");
+                var textLevel = JsonHelper.TryGetInt(source, "text_level");
+                var textFormat = JsonHelper.TryGetString(source, "text_format");
+                var caption = JsonHelper.TryGetString(source, "caption");
+                var footnote = JsonHelper.TryGetString(source, "footnote");
+                var structurePath = JsonHelper.TryGetString(source, "structure_path");
+
+                results.Add(new SearchResult
+                {
+                    DocumentName = documentName,
+                    PageNumber = source.TryGetProperty("page_number", out var pnEl) ? pnEl.GetInt32() : 0,
+                    AssociatedText = associatedText,
+                    Score = score,
+                    MatchType = phrase ? SearchMatchType.ExactPhrase : SearchMatchType.Stemmed,
+                    SegmentId = segmentId,
+                    StartOffset = 0,
+                    EndOffset = 0,
+                    CreatedAt = source.TryGetProperty("created_at", out var caEl) && DateTimeOffset.TryParse(caEl.GetString(), out var ca) ? ca : null,
+                    // [Gen-2] minerU fields
+                    BlockData = blockData,
+                    Bbox = bbox,
+                    MineruScore = mineruScore,
+                    SubType = subType,
+                    TextLevel = textLevel,
+                    TextFormat = textFormat,
+                    Caption = caption,
+                    Footnote = footnote,
+                    StructurePath = string.IsNullOrEmpty(structurePath) ? null : structurePath
+                });
+
+                if (hit.TryGetProperty("sort", out var sortEl))
+                {
+                    lastSort = sortEl;
+                    hasLastSort = true;
+                }
+            }
+        }
+
+        string? nextToken = null;
+        if (hasLastSort && results.Count == pageSize)
+        {
+            nextToken = Convert.ToBase64String(Encoding.UTF8.GetBytes(lastSort.GetRawText()));
+        }
+
+        return (results, totalCount, nextToken);
+    }
+
+    private static string SelectAssociatedText(JsonElement hit, JsonElement source)
+    {
+        string[] fields = ["text", "caption", "footnote"];
+        if (hit.TryGetProperty("highlight", out var highlights))
+        {
+            foreach (var field in fields)
+            {
+                if ((highlights.TryGetProperty(field, out var fragments)
+                     || highlights.TryGetProperty(field + ".exact", out fragments))
+                    && fragments.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var fragment in fragments.EnumerateArray())
+                        if (fragment.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(fragment.GetString()))
+                            return fragment.GetString()!;
+                }
+            }
+        }
+        foreach (var field in fields)
+        {
+            var text = JsonHelper.TryGetString(source, field);
+            if (!string.IsNullOrWhiteSpace(text)) return text;
+        }
+        return string.Empty;
+    }
+}

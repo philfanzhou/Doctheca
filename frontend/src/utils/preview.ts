@@ -10,7 +10,7 @@ export function escHtml(s: string): string {
     .replace(/'/g, '&#39;')
 }
 
-export function escAttr(s: string): string {
+function escAttr(s: string): string {
   return String(s)
     .replace(/&/g, '&amp;')
     .replace(/"/g, '&quot;')

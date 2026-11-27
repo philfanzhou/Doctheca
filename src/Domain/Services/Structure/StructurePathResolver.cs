@@ -10,10 +10,10 @@ public sealed class StructurePathResolver
 {
     public const string PathSeparator = " > ";
 
-    private readonly IReadOnlyList<DocumentStructureNodeModel> _nodes;
-    private readonly IReadOnlyDictionary<Guid, DocumentStructureNodeModel> _byId;
+    private readonly IReadOnlyList<DocumentStructureNode> _nodes;
+    private readonly IReadOnlyDictionary<Guid, DocumentStructureNode> _byId;
 
-    public StructurePathResolver(IReadOnlyCollection<DocumentStructureNodeModel> nodes)
+    public StructurePathResolver(IReadOnlyCollection<DocumentStructureNode> nodes)
     {
         _byId = nodes.ToDictionary(node => node.Id);
         // Deeper nodes are narrower: check the narrowest ranges first.
@@ -23,8 +23,6 @@ public sealed class StructurePathResolver
             .ToList();
     }
 
-    public bool IsEmpty => _nodes.Count == 0;
-
     /// <summary>The block's position, or null when no node contains <paramref name="sequence"/>.</summary>
     public BlockStructurePosition? Resolve(int? sequence)
     {
@@ -32,7 +30,7 @@ public sealed class StructurePathResolver
         var deepest = _nodes.FirstOrDefault(node => node.StartSequence <= value && value <= node.EndSequence);
         if (deepest == null) return null;
 
-        var chain = new List<DocumentStructureNodeModel>();
+        var chain = new List<DocumentStructureNode>();
         for (var node = deepest; node != null; node = node.ParentId is { } parent && _byId.TryGetValue(parent, out var p) ? p : null)
         {
             chain.Add(node);
@@ -43,7 +41,7 @@ public sealed class StructurePathResolver
             string.Join(PathSeparator, chain.Select(node => node.Name)));
     }
 
-    private int Depth(DocumentStructureNodeModel node)
+    private int Depth(DocumentStructureNode node)
     {
         var depth = 0;
         for (var current = node; current.ParentId is { } parent && _byId.TryGetValue(parent, out var p); current = p)

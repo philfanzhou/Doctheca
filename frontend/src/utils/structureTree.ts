@@ -34,16 +34,16 @@ const contains = (node: TreeNode, start: number, end: number) =>
 const overlaps = (node: TreeNode, start: number, end: number) =>
   node.startSequence !== null && node.endSequence !== null && node.startSequence <= end && start <= node.endSequence
 
-export const byStart = (a: TreeNode, b: TreeNode) => a.startSequence !== null && b.startSequence !== null
+const byStart = (a: TreeNode, b: TreeNode) => a.startSequence !== null && b.startSequence !== null
   ? a.startSequence - b.startSequence : (a.sortOrder ?? 0) - (b.sortOrder ?? 0)
 
 /** Deep copy so edits never mutate the caller's reactive state. */
-export function cloneTree(nodes: TreeNode[]): TreeNode[] {
+function cloneTree(nodes: TreeNode[]): TreeNode[] {
   return nodes.map((node) => ({ ...node, children: cloneTree(node.children) }))
 }
 
 /** The chain of nodes (root first) whose ranges contain the whole [start, end] range. */
-export function containingPath(nodes: TreeNode[], start: number, end: number): TreeNode[] {
+function containingPath(nodes: TreeNode[], start: number, end: number): TreeNode[] {
   const path: TreeNode[] = []
   let level = nodes
   for (;;) {

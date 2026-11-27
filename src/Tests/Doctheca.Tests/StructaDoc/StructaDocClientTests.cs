@@ -159,7 +159,6 @@ public class StructaDocClientTests
 
         assets.Should().ContainSingle();
         assets[0].Name.Should().Be("img.jpg");
-        assets[0].Width.Should().Be(100);
     }
 
     [Fact]

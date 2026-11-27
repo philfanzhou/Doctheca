@@ -338,7 +338,7 @@ public sealed partial class InternalCatalogEndpointTests(PostgreSqlFixture datab
 
     private static async Task DeleteFilesAsync(DocthecaDbContext db, IEnumerable<Guid> ids)
     {
-        foreach (var id in ids) await new DocumentFileRepository(db).DeleteAsync(id);
+        foreach (var id in ids) await new DocumentFileRepository(db).DeleteWithAudioAsync(id);
     }
 
     private static async Task CleanupAsync(WebApplicationFactory<Program> factory, Seed seed)

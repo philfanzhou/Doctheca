@@ -9,6 +9,7 @@ using Doctheca.Domain.Models;
 using Doctheca.Domain.Models.Structure;
 using Doctheca.Domain.Repositories;
 using Doctheca.Service;
+using global::Doctheca.Service.OpenSearch;
 using Xunit;
 
 namespace Doctheca.Tests.OpenSearch;
@@ -55,7 +56,7 @@ public sealed class OpenSearchStructureSearchTests(OpenSearchFixture fixture)
     public async Task StructureFilter_SelectsSubtrees_AndUnfilteredHitsAreUnchanged()
     {
         var indexName = "doctheca-structure-" + Guid.NewGuid().ToString("N");
-        var blocks = Enumerable.Range(0, 120).Select(i => new DocumentParseBlockModel
+        var blocks = Enumerable.Range(0, 120).Select(i => new DocumentParseBlock
         {
             Id = Guid.NewGuid(),
             ParseId = ParseId,
@@ -67,15 +68,15 @@ public sealed class OpenSearchStructureSearchTests(OpenSearchFixture fixture)
             TextContent = i % 5 == 0 ? $"the changing world block {i}" : $"filler {i}",
             BlockData = "{}",
         }).ToList();
-        var nodes = new List<DocumentStructureNodeModel>();
+        var nodes = new List<DocumentStructureNode>();
         var store = new FakeRepositories(blocks, nodes);
         var services = new ServiceCollection()
             .AddScoped<IDocumentParseBlockRepository>(_ => store)
             .AddScoped<IDocumentStructureRepository>(_ => store)
             .BuildServiceProvider();
-        var index = new OpenSearchIndexService(
+        var index = new IndexService(
             Options.Create(new OpenSearchOptions { Url = fixture.Url, IndexName = indexName }),
-            services, NullLogger<OpenSearchIndexService>.Instance);
+            services, NullLogger<IndexService>.Instance);
         await index.EnsureIndexAsync();
 
         // Before any structure: the baseline hits.
@@ -88,10 +89,10 @@ public sealed class OpenSearchStructureSearchTests(OpenSearchFixture fixture)
         // Three units of 40 blocks, each with sections of 20.
         for (var u = 0; u < 3; u++)
         {
-            var unit = new DocumentStructureNodeModel { Id = Guid.NewGuid(), ParseId = ParseId, Name = $"Unit {u + 1}", StartSequence = u * 40, EndSequence = u * 40 + 39 };
+            var unit = new DocumentStructureNode { Id = Guid.NewGuid(), ParseId = ParseId, Name = $"Unit {u + 1}", StartSequence = u * 40, EndSequence = u * 40 + 39 };
             nodes.Add(unit);
-            nodes.Add(new DocumentStructureNodeModel { Id = Guid.NewGuid(), ParseId = ParseId, ParentId = unit.Id, Name = "Section A", StartSequence = u * 40, EndSequence = u * 40 + 19 });
-            nodes.Add(new DocumentStructureNodeModel { Id = Guid.NewGuid(), ParseId = ParseId, ParentId = unit.Id, Name = "Section B", StartSequence = u * 40 + 20, EndSequence = u * 40 + 39 });
+            nodes.Add(new DocumentStructureNode { Id = Guid.NewGuid(), ParseId = ParseId, ParentId = unit.Id, Name = "Section A", StartSequence = u * 40, EndSequence = u * 40 + 19 });
+            nodes.Add(new DocumentStructureNode { Id = Guid.NewGuid(), ParseId = ParseId, ParentId = unit.Id, Name = "Section B", StartSequence = u * 40 + 20, EndSequence = u * 40 + 39 });
         }
         (await index.IndexParseBlocksAsync(ParseId, FileId, "book.pdf", null, null, null)).Should().BeTrue();
         await RefreshAsync(indexName);
@@ -120,9 +121,9 @@ public sealed class OpenSearchStructureSearchTests(OpenSearchFixture fixture)
         (await SearchAsync(index, null)).Should().OnlyContain(hit => hit.StructurePath == null);
     }
 
-    private static async Task<List<SearchResultModel>> SearchAsync(OpenSearchIndexService index, Guid? nodeId)
+    private static async Task<List<SearchResult>> SearchAsync(IndexService index, Guid? nodeId)
     {
-        var filter = nodeId is null ? null : new SearchFilterModel { StructureNodeId = nodeId };
+        var filter = nodeId is null ? null : new SearchFilter { StructureNodeId = nodeId };
         var (results, _, _) = await index.ExactSearchAsync("changing", phrase: false, filter, pageSize: 100, pageToken: null);
         return results;
     }
@@ -133,18 +134,15 @@ public sealed class OpenSearchStructureSearchTests(OpenSearchFixture fixture)
         (await http.PostAsync($"{fixture.Url}/{indexName}/_refresh", null)).EnsureSuccessStatusCode();
     }
 
-    private sealed class FakeRepositories(List<DocumentParseBlockModel> blocks, List<DocumentStructureNodeModel> nodes)
+    private sealed class FakeRepositories(List<DocumentParseBlock> blocks, List<DocumentStructureNode> nodes)
         : IDocumentParseBlockRepository, IDocumentStructureRepository
     {
-        public Task<List<DocumentParseBlockModel>> GetByParseIdAsync(Guid parseId) => Task.FromResult(blocks.ToList());
-        public Task<List<DocumentStructureNodeModel>> GetCurrentBindingsAsync(Guid parseId) => Task.FromResult(nodes.Where(n => n.ParseId == parseId).ToList());
-        Task<List<DocumentStructureNodeModel>> IDocumentStructureRepository.GetByParseIdAsync(Guid parseId) => Task.FromResult(nodes.ToList());
-        public Task AddBlocksAsync(Guid parseId, IEnumerable<DocumentParseBlockModel> items) => throw new NotSupportedException();
-        public Task<List<DocumentParseBlockModel>> GetByParseAndPageAsync(Guid parseId, int pageId) => throw new NotSupportedException();
-        public Task<List<DocumentParseBlockModel>> GetPageBySequenceAsync(Guid parseId, int? afterSequence, int limit, int? fromSequence = null, int? toSequence = null) => throw new NotSupportedException();
+        public Task<List<DocumentParseBlock>> GetByParseIdAsync(Guid parseId) => Task.FromResult(blocks.ToList());
+        public Task<List<DocumentStructureNode>> GetCurrentBindingsAsync(Guid parseId) => Task.FromResult(nodes.Where(n => n.ParseId == parseId).ToList());
+        Task<List<DocumentStructureNode>> IDocumentStructureRepository.GetByParseIdAsync(Guid parseId) => Task.FromResult(nodes.ToList());
+        public Task<List<DocumentParseBlock>> GetPageBySequenceAsync(Guid parseId, int? afterSequence, int limit, int? fromSequence = null, int? toSequence = null) => throw new NotSupportedException();
         public Task<HashSet<int>> GetSequencesAsync(Guid parseId) => throw new NotSupportedException();
-        public Task<bool> ReplaceAsync(Guid parseId, IReadOnlyList<DocumentStructureNodeModel> items) => throw new NotSupportedException();
+        public Task<bool> ReplaceAsync(Guid parseId, IReadOnlyList<DocumentStructureNode> items) => throw new NotSupportedException();
         public Task<HashSet<Guid>> GetForeignNodeIdsAsync(Guid parseId, IReadOnlyCollection<Guid> nodeIds) => throw new NotSupportedException();
-        public Task<bool> DocumentFileHasNodesAsync(Guid documentFileId) => throw new NotSupportedException();
     }
 }

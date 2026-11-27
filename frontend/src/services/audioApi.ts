@@ -59,39 +59,6 @@ export interface AudioLinkInput {
   nodeId: string | null
 }
 
-export async function listParseAudio(parseId: string): Promise<ApiResponse<ParseAudioList>> {
-  const response = await httpClient.get(`/admin/document-parses/${parseId}/audio`)
-  return response.data
-}
-
-/** Uploads audio files and ZIP archives; each file carries its relative path (folders included). */
-export async function importParseAudio(
-  parseId: string,
-  files: { file: File; path: string }[],
-  onUploadProgress?: (progressEvent: { loaded: number; total?: number }) => void
-): Promise<ApiResponse<AudioImportResult>> {
-  const formData = new FormData()
-  for (const { file, path } of files) {
-    formData.append('files', file, file.name)
-    formData.append('paths', path)
-  }
-  const response = await httpClient.post(`/admin/document-parses/${parseId}/audio`, formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-    timeout: 600000,
-    onUploadProgress,
-  })
-  return response.data
-}
-
-export async function saveParseAudio(
-  parseId: string,
-  links: AudioLinkInput[],
-  removeIds: string[]
-): Promise<ApiResponse<{ parseId: string; items: StructureAudio[] }>> {
-  const response = await httpClient.put(`/admin/document-parses/${parseId}/audio`, { links, removeIds })
-  return response.data
-}
-
 /** The per-file reasons of a rejected import, if any. */
 export function getAudioFileErrors(error: unknown): AudioFileError[] {
   const data = (error as { response?: { data?: { errors?: unknown } } })?.response?.data
@@ -102,17 +69,6 @@ export interface AudioPlaybackLink {
   url: string
   expiresAt: string
   expiresInSeconds: number
-}
-
-/** A fresh temporary credential for one play action; keep only in component memory. */
-export async function getAudioPlaybackLink(parseId: string, audioId: string, signal: AbortSignal): Promise<ApiResponse<AudioPlaybackLink>> {
-  const response = await httpClient.get(`/admin/document-parses/${parseId}/audio/${audioId}/playback-link`, { signal })
-  return response.data
-}
-
-export async function listNodeAudio(parseId: string, nodeId: string): Promise<ApiResponse<{ parseId: string; nodeId: string; items: StructureAudio[] }>> {
-  const response = await httpClient.get(`/admin/document-parses/${parseId}/structure/nodes/${nodeId}/audio`)
-  return response.data
 }
 
 export interface AudioProposal {
@@ -151,6 +107,7 @@ export async function commitAudio(id: string, document: boolean, files: AudioFil
 export async function saveAudio(id: string, document: boolean, links: AudioLinkInput[], removeIds: string[], signal: AbortSignal): Promise<ApiResponse<{ items: StructureAudio[] }>> {
   return (await httpClient.put(audioBase(id, document), { links, removeIds }, { signal })).data
 }
+/** A fresh temporary credential for one play action; keep only in component memory. */
 export async function getOwnerAudioPlaybackLink(id: string, document: boolean, audioId: string, signal: AbortSignal): Promise<ApiResponse<AudioPlaybackLink>> {
   return (await httpClient.get(`${audioBase(id, document)}/${audioId}/playback-link`, { signal })).data
 }

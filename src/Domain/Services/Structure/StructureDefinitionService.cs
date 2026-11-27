@@ -6,10 +6,10 @@ namespace Doctheca.Domain.Services.Structure;
 
 public interface IStructureDefinitionService
 {
-    Task<List<StructureDefinitionModel>> ListAsync();
-    Task<StructureDefinitionModel?> GetByIdAsync(Guid id);
-    Task<StructureResult<StructureDefinitionModel>> CreateAsync(StructureDefinitionInput input);
-    Task<StructureResult<StructureDefinitionModel>> UpdateAsync(Guid id, StructureDefinitionInput input);
+    Task<List<StructureDefinition>> ListAsync();
+    Task<StructureDefinition?> GetByIdAsync(Guid id);
+    Task<StructureResult<StructureDefinition>> CreateAsync(StructureDefinitionInput input);
+    Task<StructureResult<StructureDefinition>> UpdateAsync(Guid id, StructureDefinitionInput input);
     Task<StructureResult<bool>> DeleteAsync(Guid id);
 }
 
@@ -38,18 +38,18 @@ public sealed class StructureDefinitionService : IStructureDefinitionService
         _timeProvider = timeProvider ?? TimeProvider.System;
     }
 
-    public Task<List<StructureDefinitionModel>> ListAsync() => _repository.ListAsync();
+    public Task<List<StructureDefinition>> ListAsync() => _repository.ListAsync();
 
-    public Task<StructureDefinitionModel?> GetByIdAsync(Guid id) => _repository.GetByIdAsync(id);
+    public Task<StructureDefinition?> GetByIdAsync(Guid id) => _repository.GetByIdAsync(id);
 
-    public async Task<StructureResult<StructureDefinitionModel>> CreateAsync(StructureDefinitionInput input)
+    public async Task<StructureResult<StructureDefinition>> CreateAsync(StructureDefinitionInput input)
     {
         var definitionId = Guid.NewGuid();
         var (levels, errors) = await ValidateAsync(definitionId, input);
-        if (errors.Count > 0) return StructureResult<StructureDefinitionModel>.Invalid(errors);
+        if (errors.Count > 0) return StructureResult<StructureDefinition>.Invalid(errors);
 
         var now = _timeProvider.GetUtcNow();
-        var definition = new StructureDefinitionModel
+        var definition = new StructureDefinition
         {
             Id = definitionId,
             Name = input.Name!.Trim(),
@@ -60,18 +60,18 @@ public sealed class StructureDefinitionService : IStructureDefinitionService
         await _repository.AddAsync(definition);
         _logger.LogInformation("Structure definition created: {DefinitionId} with {LevelCount} levels",
             definition.Id, levels.Count);
-        return StructureResult<StructureDefinitionModel>.Ok((await _repository.GetByIdAsync(definitionId))!);
+        return StructureResult<StructureDefinition>.Ok((await _repository.GetByIdAsync(definitionId))!);
     }
 
-    public async Task<StructureResult<StructureDefinitionModel>> UpdateAsync(Guid id, StructureDefinitionInput input)
+    public async Task<StructureResult<StructureDefinition>> UpdateAsync(Guid id, StructureDefinitionInput input)
     {
         var current = await _repository.GetByIdAsync(id);
         if (current == null)
-            return StructureResult<StructureDefinitionModel>.NotFound(
+            return StructureResult<StructureDefinition>.NotFound(
                 StructureErrorCodes.DefinitionNotFound, "Structure definition not found");
 
         var (levels, errors) = await ValidateAsync(id, input);
-        if (errors.Count > 0) return StructureResult<StructureDefinitionModel>.Invalid(errors);
+        if (errors.Count > 0) return StructureResult<StructureDefinition>.Invalid(errors);
 
         // Levels that marked nodes use may be renamed or reordered, but not removed or moved to
         // another parent: either would silently invalidate saved trees.
@@ -80,14 +80,14 @@ public sealed class StructureDefinitionService : IStructureDefinitionService
         {
             var next = levels.FirstOrDefault(level => level.Id == usedLevel.Id);
             if (next == null)
-                return StructureResult<StructureDefinitionModel>.Conflict(StructureErrorCodes.LevelInUse,
+                return StructureResult<StructureDefinition>.Conflict(StructureErrorCodes.LevelInUse,
                     $"Level '{usedLevel.Name}' is used by marked structure nodes and cannot be deleted");
             if (next.ParentLevelId != usedLevel.ParentLevelId)
-                return StructureResult<StructureDefinitionModel>.Conflict(StructureErrorCodes.LevelInUse,
+                return StructureResult<StructureDefinition>.Conflict(StructureErrorCodes.LevelInUse,
                     $"Level '{usedLevel.Name}' is used by marked structure nodes and cannot change its parent level");
         }
 
-        var definition = new StructureDefinitionModel
+        var definition = new StructureDefinition
         {
             Id = id,
             Name = input.Name!.Trim(),
@@ -96,12 +96,12 @@ public sealed class StructureDefinitionService : IStructureDefinitionService
             Levels = levels,
         };
         if (!await _repository.UpdateAsync(definition))
-            return StructureResult<StructureDefinitionModel>.NotFound(
+            return StructureResult<StructureDefinition>.NotFound(
                 StructureErrorCodes.DefinitionNotFound, "Structure definition not found");
 
         _logger.LogInformation("Structure definition updated: {DefinitionId} with {LevelCount} levels",
             id, levels.Count);
-        return StructureResult<StructureDefinitionModel>.Ok((await _repository.GetByIdAsync(id))!);
+        return StructureResult<StructureDefinition>.Ok((await _repository.GetByIdAsync(id))!);
     }
 
     public async Task<StructureResult<bool>> DeleteAsync(Guid id)
@@ -119,7 +119,7 @@ public sealed class StructureDefinitionService : IStructureDefinitionService
         return StructureResult<bool>.Ok(true);
     }
 
-    private async Task<(List<StructureLevelModel> Levels, List<StructureFieldError> Errors)> ValidateAsync(
+    private async Task<(List<StructureLevel> Levels, List<StructureFieldError> Errors)> ValidateAsync(
         Guid definitionId, StructureDefinitionInput input)
     {
         var errors = new List<StructureFieldError>();
@@ -141,7 +141,7 @@ public sealed class StructureDefinitionService : IStructureDefinitionService
             return ([], errors);
         }
 
-        var levels = new List<StructureLevelModel>(inputs.Count);
+        var levels = new List<StructureLevel>(inputs.Count);
         var seen = new HashSet<Guid>();
         for (var i = 0; i < inputs.Count; i++)
         {
@@ -163,7 +163,7 @@ public sealed class StructureDefinitionService : IStructureDefinitionService
                     errors.Add(new($"{path}.id", "belongs to another structure definition"));
             }
 
-            levels.Add(new StructureLevelModel
+            levels.Add(new StructureLevel
             {
                 Id = id,
                 DefinitionId = definitionId,

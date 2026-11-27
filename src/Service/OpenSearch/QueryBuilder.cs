@@ -1,0 +1,113 @@
+using System.Text;
+using System.Text.Json;
+using Microsoft.Extensions.Logging;
+using Doctheca.Domain.Models;
+
+namespace Doctheca.Service.OpenSearch;
+
+internal static class QueryBuilder
+{
+    /// <summary>
+    /// Builds the OpenSearch search request body (pure logic, testable).
+    /// </summary>
+    internal static Dictionary<string, object> BuildSearchBody(
+        string query, bool phrase, SearchFilter? filter, int pageSize, string? pageToken, ILogger? logger = null)
+    {
+        // Each phrase stays inside one field; never concatenate body and annotations.
+        // All three fields use the same analyzer and have no field-specific boost.
+        var clauses = new[] { "text", "caption", "footnote" }.Select(field =>
+            new Dictionary<string, object>
+            {
+                [phrase ? "match_phrase" : "match"] = new Dictionary<string, object>
+                {
+                    [phrase ? field + ".exact" : field] = new { query }
+                }
+            }).ToArray();
+        object mainQuery = new { @bool = new { should = clauses, minimum_should_match = 1 } };
+
+        // Build filter clauses
+        var filterClauses = new List<object>();
+        if (filter != null)
+        {
+            // V1 filters (unchanged — zero regression)
+            if (!string.IsNullOrEmpty(filter.Subject))
+                filterClauses.Add(new { term = new { subject = new { value = filter.Subject } } });
+            if (!string.IsNullOrEmpty(filter.Grade))
+                filterClauses.Add(new { term = new { grade = new { value = filter.Grade } } });
+            if (!string.IsNullOrEmpty(filter.Year))
+                filterClauses.Add(new { term = new { year = new { value = filter.Year } } });
+            // file_name is a keyword field; use term for exact matching
+            if (!string.IsNullOrEmpty(filter.DocumentTitle))
+                filterClauses.Add(new { term = new { file_name = new { value = filter.DocumentTitle } } });
+
+            // [Gen-2] minerU block-level filters (all term+filter; null → not added → zero regression)
+            if (!string.IsNullOrEmpty(filter.BlockType))
+                filterClauses.Add(new { term = new { block_type = new { value = filter.BlockType } } });
+            if (!string.IsNullOrEmpty(filter.BlockSubType))
+                filterClauses.Add(new { term = new { sub_type = new { value = filter.BlockSubType } } });
+            if (filter.PageNumber.HasValue)
+                filterClauses.Add(new { term = new { page_number = new { value = filter.PageNumber.Value } } });
+            if (filter.TextLevel.HasValue)
+                filterClauses.Add(new { term = new { text_level = new { value = filter.TextLevel.Value } } });
+            if (!string.IsNullOrEmpty(filter.TextFormat))
+                filterClauses.Add(new { term = new { text_format = new { value = filter.TextFormat } } });
+            if (filter.ParseId.HasValue)
+                filterClauses.Add(new { term = new { parse_id = new { value = filter.ParseId.Value.ToString() } } });
+            if (filter.DocumentFileId.HasValue)
+                filterClauses.Add(new { term = new { document_file_id = new { value = filter.DocumentFileId.Value.ToString() } } });
+            if (filter.HasImage.HasValue)
+                filterClauses.Add(new { term = new { has_image = new { value = filter.HasImage.Value } } });
+            // Ancestors are indexed with every block, so a node matches its whole subtree.
+            if (filter.StructureNodeId.HasValue)
+                filterClauses.Add(new { term = new { structure_node_ids = new { value = filter.StructureNodeId.Value.ToString() } } });
+        }
+
+        object queryObj = filterClauses.Count > 0
+            ? new { @bool = new { must = mainQuery, filter = filterClauses } }
+            : mainQuery;
+
+        // Decode page token for search_after
+        List<object>? searchAfter = null;
+        if (!string.IsNullOrEmpty(pageToken))
+        {
+            try
+            {
+                var decoded = Encoding.UTF8.GetString(Convert.FromBase64String(pageToken));
+                searchAfter = JsonSerializer.Deserialize<List<object>>(decoded);
+            }
+            catch (Exception)
+            {
+                // pageToken is opaque client input; invalid tokens are expected occasionally
+                logger?.LogDebug("Invalid search page token; starting from first page");
+                searchAfter = null;
+            }
+        }
+
+        var searchBody = new Dictionary<string, object>
+        {
+            ["size"] = pageSize,
+            ["query"] = queryObj,
+            ["sort"] = new object[]
+            {
+                new { _score = new { order = "desc" } },
+                new { block_id = new { order = "asc" } }
+            },
+            ["highlight"] = new
+            {
+                // Highlight the field actually queried; OpenSearch does not treat a base
+                // field as a match on its .exact multi-field when require_field_match is true.
+                fields = new[] { "text", "caption", "footnote" }.ToDictionary(
+                    field => phrase ? field + ".exact" : field, _ => new { }),
+                pre_tags = new[] { "<em>" },
+                post_tags = new[] { "</em>" }
+            }
+        };
+
+        if (searchAfter != null)
+        {
+            searchBody["search_after"] = searchAfter;
+        }
+
+        return searchBody;
+    }
+}

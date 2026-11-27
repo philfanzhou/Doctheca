@@ -13,7 +13,7 @@ namespace Doctheca.Service;
 /// LLM-based document metadata analysis service implementation.
 /// Uses OpenAI-compatible API (via shared OpenAiCompatibleClient) to analyze
 /// document subject/grade/year metadata when MinerU parse completes and metadata is missing.
-/// Dynamically fetches model capabilities at startup to optimize parameters.
+/// Resolves the model context length at startup to decide whether analysis is possible.
 /// </summary>
 public class DocumentAnalysisService : IDocumentAnalysisService
 {
@@ -21,12 +21,8 @@ public class DocumentAnalysisService : IDocumentAnalysisService
     private readonly DocumentAnalysisOptions _options;
     private readonly ILogger<DocumentAnalysisService> _logger;
     private bool _initialized;
-    private int _contextLengthTokens;
     private int _maxTokensValue;
     private int _chunkSize;
-
-    public int ChunkSize => _chunkSize;
-    public int MaxConcurrency => _options.MaxConcurrency;
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -102,7 +98,6 @@ public class DocumentAnalysisService : IDocumentAnalysisService
         }
         finally
         {
-            _contextLengthTokens = contextLength;
             _maxTokensValue = maxTokensValue;
             _chunkSize = chunkSize;
             _initialized = true;
@@ -189,9 +184,9 @@ public class DocumentAnalysisService : IDocumentAnalysisService
             // Truncate to first 2000 chars — enough for title/subject/grade identification
             var preview = textPreview.Length > 2000 ? textPreview[..2000] : textPreview;
 
-            var prompt = DocumentAnalysisPromptBuilder.BuildMetadataAnalysisPrompt(preview);
+            var prompt = DocumentAnalysisPromptBuilder.Build(preview);
             var response = await _client.CallStreamingAsync(BuildRequestBody(prompt), cancellationToken);
-            return DocumentAnalysisResponseParser.ParseMetadataAnalysis(response, _logger, JsonOptions);
+            return DocumentAnalysisResponseParser.Parse(response, _logger, JsonOptions);
         }
         catch (Exception ex)
         {

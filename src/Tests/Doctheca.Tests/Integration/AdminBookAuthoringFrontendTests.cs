@@ -31,10 +31,10 @@ public sealed partial class AdminHostedFrontendTests
     public async Task SourceFreeBook_FourteenUnitsReloadAttachParseAndBindThroughTheRealConsole()
     {
         var upstream = new Mock<IStructaDocClient>(); var source = Guid.NewGuid();
-        upstream.Setup(u => u.UploadDocumentAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<Stream>(), It.IsAny<CancellationToken>())).ReturnsAsync(new StructaDocDocumentResponse { Id = source });
-        upstream.Setup(u => u.CreateParseRunAsync(source, It.IsAny<string>(), It.IsAny<Guid?>(), It.IsAny<CancellationToken>())).ReturnsAsync(() => new() { Id = Guid.NewGuid(), DocumentId = source, Status = "succeeded" });
-        upstream.Setup(u => u.GetParseRunAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>())).ReturnsAsync((Guid id, CancellationToken _) => new() { Id = id, DocumentId = source, Status = "succeeded" });
-        upstream.Setup(u => u.GetAllBlocksAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>())).ReturnsAsync(Enumerable.Range(0, 40).Select(i => new StructaDocBlockResponse { Id = Guid.NewGuid(), Sequence = i, PageNumber = 1, Type = "text", Content = "Paragraph " + i }).ToList());
+        upstream.Setup(u => u.UploadDocumentAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<Stream>(), It.IsAny<CancellationToken>())).ReturnsAsync(new DocumentResponse { Id = source });
+        upstream.Setup(u => u.CreateParseRunAsync(source, It.IsAny<string>(), It.IsAny<Guid?>(), It.IsAny<CancellationToken>())).ReturnsAsync(() => new() { Id = Guid.NewGuid(), Status = "succeeded" });
+        upstream.Setup(u => u.GetParseRunAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>())).ReturnsAsync((Guid id, CancellationToken _) => new() { Id = id, Status = "succeeded" });
+        upstream.Setup(u => u.GetAllBlocksAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>())).ReturnsAsync(Enumerable.Range(0, 40).Select(i => new BlockResponse { Id = Guid.NewGuid(), Sequence = i, PageNumber = 1, Type = "text", Content = "Paragraph " + i }).ToList());
         upstream.Setup(u => u.GetPagesAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>())).ReturnsAsync([]);
         upstream.Setup(u => u.GetAssetsAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>())).ReturnsAsync([]);
         upstream.Setup(u => u.GetMarkdownAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>())).ReturnsAsync("Paragraph");

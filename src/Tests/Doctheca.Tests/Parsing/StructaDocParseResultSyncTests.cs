@@ -22,14 +22,14 @@ public class StructaDocParseResultSyncTests
         var parseService = new Mock<IDocumentParseService>();
         var (sync, _) = CreateSync(parseService, assets:
         [
-            new StructaDocAssetResponse { Id = AssetId, Name = "img-1.jpg", MediaType = "image/png", SizeBytes = 10 },
-            new StructaDocAssetResponse { Id = Guid.NewGuid(), Name = "img-2.bin", MediaType = "", SizeBytes = 5 },
+            new AssetResponse { Id = AssetId, Name = "img-1.jpg", MediaType = "image/png" },
+            new AssetResponse { Id = Guid.NewGuid(), Name = "img-2.bin", MediaType = "" },
         ]);
 
         await sync.SyncAsync(CreateParse(), RunId, CancellationToken.None);
 
         var completion = parseService.Invocations.Single(call => call.Method.Name == nameof(IDocumentParseService.CompleteAsync));
-        var images = (IReadOnlyList<DocumentParseImageModel>)completion.Arguments[4]!;
+        var images = (IReadOnlyList<DocumentParseImage>)completion.Arguments[4]!;
         images.Should().HaveCount(2);
         images[0].ParseId.Should().Be(ParseId);
         images[0].ImageName.Should().Be("img-1.jpg");
@@ -45,18 +45,18 @@ public class StructaDocParseResultSyncTests
         var (sync, _) = CreateSync(service);
         await sync.SyncAsync(CreateParse(), RunId, CancellationToken.None);
         var call = service.Invocations.Single(item => item.Method.Name == nameof(IDocumentParseService.CompleteAsync));
-        ((IReadOnlyCollection<DocumentParsePageModel>)call.Arguments[3]!).Should().BeEmpty();
-        ((IReadOnlyList<DocumentParseImageModel>)call.Arguments[4]!).Should().BeEmpty();
-        ((IReadOnlyList<DocumentParseBlockModel>)call.Arguments[5]!).Should().BeEmpty();
+        ((IReadOnlyCollection<DocumentParsePage>)call.Arguments[3]!).Should().BeEmpty();
+        ((IReadOnlyList<DocumentParseImage>)call.Arguments[4]!).Should().BeEmpty();
+        ((IReadOnlyList<DocumentParseBlock>)call.Arguments[5]!).Should().BeEmpty();
     }
 
     [Fact]
     public async Task SyncAsync_MapsBlocksToLocalConventions()
     {
-        List<DocumentParseBlockModel>? inserted = null;
+        List<DocumentParseBlock>? inserted = null;
         var parseService = CompletionCapture(rows => inserted = rows);
 
-        var blocks = new List<StructaDocBlockResponse>
+        var blocks = new List<BlockResponse>
         {
             new()
             {
@@ -66,7 +66,7 @@ public class StructaDocParseResultSyncTests
                 Subtype = "heading-2",
                 Content = "Chapter",
                 ContentFormat = "plain",
-                BoundingBox = new StructaDocBoundingBox { X0 = 0.1, Y0 = 0.2, X1 = 0.5, Y1 = 0.25 },
+                BoundingBox = new BoundingBox { X0 = 0.1, Y0 = 0.2, X1 = 0.5, Y1 = 0.25 },
                 Confidence = 0.87,
             },
             new()
@@ -88,7 +88,7 @@ public class StructaDocParseResultSyncTests
         var (sync, _) = CreateSync(
             parseService: parseService,
             blocks: blocks,
-            assets: [new StructaDocAssetResponse { Id = AssetId, Name = "img.jpg", MediaType = "image/jpeg" }]);
+            assets: [new AssetResponse { Id = AssetId, Name = "img.jpg", MediaType = "image/jpeg" }]);
 
         await sync.SyncAsync(CreateParse(), RunId, CancellationToken.None);
 
@@ -129,7 +129,7 @@ public class StructaDocParseResultSyncTests
     public async Task SyncAsync_ClassifiesUsingFullTypeAndSubtypeBeforeStorageTruncation()
     {
         var longSubtype = "heading-" + new string('0', 60) + "2";
-        List<DocumentParseBlockModel>? inserted = null;
+        List<DocumentParseBlock>? inserted = null;
         var service = CompletionCapture(rows => inserted = rows);
         var (sync, _) = CreateSync(parseService: service, blocks:
         [
@@ -166,19 +166,19 @@ public class StructaDocParseResultSyncTests
 
     // ── helpers ──
 
-    private static Mock<IDocumentParseService> CompletionCapture(Action<List<DocumentParseBlockModel>> capture)
+    private static Mock<IDocumentParseService> CompletionCapture(Action<List<DocumentParseBlock>> capture)
     {
         var service = new Mock<IDocumentParseService>();
         service.Setup(value => value.CompleteAsync(ParseId, RunId, It.IsAny<string>(),
-                It.IsAny<IReadOnlyCollection<DocumentParsePageModel>>(), It.IsAny<IReadOnlyList<DocumentParseImageModel>>(),
-                It.IsAny<IReadOnlyList<DocumentParseBlockModel>>(), It.IsAny<CancellationToken>()))
-            .Callback<Guid, Guid, string, IReadOnlyCollection<DocumentParsePageModel>, IReadOnlyList<DocumentParseImageModel>, IReadOnlyList<DocumentParseBlockModel>, CancellationToken>(
+                It.IsAny<IReadOnlyCollection<DocumentParsePage>>(), It.IsAny<IReadOnlyList<DocumentParseImage>>(),
+                It.IsAny<IReadOnlyList<DocumentParseBlock>>(), It.IsAny<CancellationToken>()))
+            .Callback<Guid, Guid, string, IReadOnlyCollection<DocumentParsePage>, IReadOnlyList<DocumentParseImage>, IReadOnlyList<DocumentParseBlock>, CancellationToken>(
                 (_, _, _, _, _, rows, _) => capture(rows.ToList()))
             .ReturnsAsync("# markdown");
         return service;
     }
 
-    private static DocumentParseModel CreateParse() => new()
+    private static DocumentParse CreateParse() => new()
     {
         Id = ParseId,
         DocumentFileId = Guid.NewGuid(),
@@ -188,8 +188,8 @@ public class StructaDocParseResultSyncTests
 
     private static (StructaDocParseResultSync Sync, Mock<IStructaDocClient> Client) CreateSync(
         Mock<IDocumentParseService>? parseService = null,
-        List<StructaDocAssetResponse>? assets = null,
-        List<StructaDocBlockResponse>? blocks = null,
+        List<AssetResponse>? assets = null,
+        List<BlockResponse>? blocks = null,
         string markdown = "# markdown")
     {
         var client = new Mock<IStructaDocClient>();

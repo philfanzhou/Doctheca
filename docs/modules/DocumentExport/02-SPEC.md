@@ -15,7 +15,7 @@ GET /admin/document-files/{id:guid}/export/markdown
 2. `parseService.GetLatestByFileIdAsync(id)` → 422 if null or `Status != parsed`
 3. `parseService.GetImagesByParseIdAsync(parse.Id)` — fetch the image list
 4. `MarkdownExportHelper.ReplaceImagePathsRelative(markdownContent, images)` — rewrite paths
-5. `MarkdownExportHelper.BuildMarkdownZipAsync(fileName, markdown, images, ossService, logger)` — build the ZIP
+5. `MarkdownExportHelper.BuildMarkdownZipAsync(fileName, markdown, images, objectStore, logger)` — build the ZIP
 6. `Results.Stream(zipStream, "application/zip", "{name}_markdown.zip")`
 
 **Responses**:
@@ -32,7 +32,7 @@ GET /admin/document-files/{id:guid}/export/html
 **Processing flow**:
 1. Same as steps 1-2 in 1.1
 2. `parseService.GetImagesByParseIdAsync(parse.Id)`
-3. `await MarkdownExportHelper.ReplaceImagePathsBase64Async(markdownContent, images, ossService, logger)` — inline images as Base64
+3. `await MarkdownExportHelper.ReplaceImagePathsBase64Async(markdownContent, images, objectStore, logger)` — inline images as Base64
 4. `MarkdownExportHelper.BuildHtmlStream(fileName, markdown)` — convert to HTML
 5. `Results.Stream(htmlStream, "text/html", "{name}.html")`
 
@@ -72,8 +72,8 @@ GET /admin/document-parses/{parseId:guid}/export/html
 ## 2. Route Registration
 
 ```csharp
-// DocumentExportEndpoints.cs
-public static WebApplication MapDocumentExportEndpoints(this WebApplication app)
+// DocumentExport.cs
+public static WebApplication MapDocumentExport(this WebApplication app)
 {
     var fileGroup = app.MapGroup("/admin/document-files");
     fileGroup.MapGet("/{id:guid}/export/markdown", ExportMarkdown);
@@ -87,7 +87,7 @@ public static WebApplication MapDocumentExportEndpoints(this WebApplication app)
 }
 ```
 
-Registered in `Program.cs`: app.MapDocumentExportEndpoints();
+Registered in `Program.cs`: app.MapDocumentExport();
 
 ## 3. Specification of the Three Image Path Modes
 
@@ -111,7 +111,7 @@ Downloads images and converts them to Base64 data URIs; used for HTML export.
 
 ```
 For each img:
-  1. ossService.DownloadAsync(img.ImagePath) → Stream
+  1. objectStore.DownloadAsync(img.ImagePath) → Stream
   2. CopyTo MemoryStream → byte[]
   3. Convert.ToBase64String → base64
   4. dataUri = $"data:{img.ContentType};base64,{base64}"
@@ -126,7 +126,7 @@ For each img:
 ```
 
 - The replacement formats cover OSS paths, relative paths, and single/double quotes, so already-rewritten paths can be processed again
-- `img.ContentType` defaults to `"image/jpeg"` (the `DocumentParseImageModel` default)
+- `img.ContentType` defaults to `"image/jpeg"` (the `DocumentParseImage` default)
 
 ### 3.3 ReplaceImagePathsPresignedAsync (asynchronous, not currently wired into any endpoint)
 
@@ -134,7 +134,7 @@ Generates presigned URLs for browser viewing.
 
 ```
 For each img:
-  1. ossService.GetPresignedUrlAsync(img.ImagePath, 3600) → presignedUrl (valid for 1 hour)
+  1. objectStore.GetPresignedUrlAsync(img.ImagePath, 3600) → presignedUrl (valid for 1 hour)
   2. Replace (4 formats):
      "({img.ImagePath})"                        → "({presignedUrl})"
      "(images/{img.ImageName})"                 → "({presignedUrl})"
@@ -148,7 +148,7 @@ For each img:
 ## 4. ZIP Packaging Specification — BuildMarkdownZipAsync
 
 ```
-Input: fileName, markdownContent, images, ossService, logger
+Input: fileName, markdownContent, images, objectStore, logger
 Output: MemoryStream (Position = 0)
 
 1. new MemoryStream()
@@ -156,7 +156,7 @@ Output: MemoryStream (Position = 0)
 3. Create entry "{Path.GetFileNameWithoutExtension(fileName)}.md" (CompressionLevel.Optimal)
    - Write markdownContent with StreamWriter
 4. For each img:
-   - ossService.DownloadAsync(img.ImagePath)
+   - objectStore.DownloadAsync(img.ImagePath)
    - Create entry $"images/{img.ImageName}" (CompressionLevel.Fastest)
    - Write via CopyToAsync
    catch Exception → logger.LogWarning, skip
@@ -190,7 +190,7 @@ Output: MemoryStream
 ```
 1. parseService.GetImagesByParseIdAsync(parse.Id) → images
 2. MarkdownExportHelper.ReplaceImagePathsRelative(parse.MarkdownContent ?? "", images) → markdownContent
-3. MarkdownExportHelper.BuildMarkdownZipAsync(fileName, markdownContent, images, ossService, logger) → zipStream
+3. MarkdownExportHelper.BuildMarkdownZipAsync(fileName, markdownContent, images, objectStore, logger) → zipStream
 4. zipFileName = $"{Path.GetFileNameWithoutExtension(fileName)}_markdown.zip"
 5. Results.Stream(zipStream, "application/zip", zipFileName)
 ```
@@ -199,7 +199,7 @@ Output: MemoryStream
 
 ```
 1. parseService.GetImagesByParseIdAsync(parse.Id) → images
-2. await MarkdownExportHelper.ReplaceImagePathsBase64Async(parse.MarkdownContent ?? "", images, ossService, logger) → markdownContent
+2. await MarkdownExportHelper.ReplaceImagePathsBase64Async(parse.MarkdownContent ?? "", images, objectStore, logger) → markdownContent
 3. MarkdownExportHelper.BuildHtmlStream(fileName, markdownContent) → htmlStream
 4. htmlFileName = $"{Path.GetFileNameWithoutExtension(fileName)}.html"
 5. Results.Stream(htmlStream, "text/html", htmlFileName)
@@ -256,9 +256,9 @@ Pure logic tests with no dependency on HTTP / OSS / database. Located in `Docume
 
 | Component | Impact |
 |------|------|
-| `DocumentExportEndpoints` | Add 4 endpoints + `MapDocumentExportEndpoints` |
+| `DocumentExport` | Add 4 endpoints + `MapDocumentExport` |
 | `MarkdownExportHelper` | Add 5 static methods |
-| `Program.cs` | Register `MapDocumentExportEndpoints` |
+| `Program.cs` | Register `MapDocumentExport` |
 | `document_parses` table | Read-only, not modified |
 | `document_parse_images` table | Read-only, not modified |
 | `document_files` table | Read-only, not modified |

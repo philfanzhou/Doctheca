@@ -6,7 +6,8 @@ namespace Doctheca.Domain.Models;
 public sealed class DocumentAudioOptions
 {
     public const string SectionName = "DocumentAudio";
-    public const string ObjectPrefix = Doctheca.Common.Constants.OssPathPrefixConstants.Audio;
+    /// <summary>Object storage prefix of every audio object, inside the configured bucket.</summary>
+    public const string ObjectPrefix = "audio/";
     public const int MaxFilesPerImport = 1000;
     public const int MaxArchiveEntries = 4000;
     public const long MultipartOverheadBytes = 1024 * 1024;

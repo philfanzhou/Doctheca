@@ -76,4 +76,4 @@ You will get:
 
 | Feature | Service | Config section | Behavior when missing |
 |------|------|--------|-------------|
-| Full-text search | OpenSearch | `OpenSearch` | Search returns empty results (`SearchDomainService` returns empty + LogWarning); a warning is logged during index initialization |
+| Full-text search | OpenSearch | `OpenSearch` | Search returns empty results (`SearchService` returns empty + LogWarning); a warning is logged during index initialization |

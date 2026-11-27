@@ -114,7 +114,7 @@ export async function setDocumentStructureDefinition(
   return response.data
 }
 
-export async function getParseBlocks(
+async function getParseBlocks(
   parseId: string,
   afterSequence?: number,
   limit: number = 500

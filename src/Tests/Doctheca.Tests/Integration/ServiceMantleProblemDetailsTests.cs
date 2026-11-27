@@ -15,7 +15,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
-using Doctheca.Common.Oss;
+using Doctheca.Common.ObjectStorage;
 using Doctheca.Database;
 using Doctheca.Database.Entities;
 using Doctheca.Domain.Models;
@@ -368,7 +368,7 @@ public sealed class ServiceMantleProblemDetailsTests : ServiceMantleIntegrationT
             {
                 await Task.Delay(
                     Timeout.InfiniteTimeSpan, accessor.HttpContext!.RequestAborted);
-                return (new List<DocumentFileModel>(), 0);
+                return (new List<DocumentFile>(), 0);
             }));
         using var client = factory.CreateClient();
         using var cts = new CancellationTokenSource();
@@ -497,13 +497,13 @@ public sealed class ServiceMantleProblemDetailsTests : ServiceMantleIntegrationT
         // The unmarked image content proxy with a failing legacy OSS download: the failure
         // must surface to the caller exactly as today — the branch is never entered, so no
         // problem response is produced.
-        var oss = new Mock<IOssService>();
+        var oss = new Mock<IObjectStore>();
         oss.Setup(service => service.DownloadAsync(It.IsAny<string>()))
             .ThrowsAsync(CanaryException());
 
         using var factory = CreateFactory(configureTestServices: services =>
         {
-            services.RemoveAll<IOssService>();
+            services.RemoveAll<IObjectStore>();
             services.AddSingleton(oss.Object);
         });
         var (fileId, parseId, imageId) = await SeedParsedDocumentAsync(factory, withImage: true);
@@ -532,14 +532,14 @@ public sealed class ServiceMantleProblemDetailsTests : ServiceMantleIntegrationT
         // are never rewritten into a problem, and the failure surfaces to the caller
         // unconverted. (TestServer discards already-flushed bytes when the server side
         // faults, so the sent-byte content itself is not asserted here.)
-        var oss = new Mock<IOssService>();
+        var oss = new Mock<IObjectStore>();
         oss.Setup(service => service.DownloadAsync(It.IsAny<string>()))
             .ReturnsAsync(() => (Stream)new FailingAfterFirstChunkStream(
                 new byte[] { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A }));
 
         using var factory = CreateFactory(configureTestServices: services =>
         {
-            services.RemoveAll<IOssService>();
+            services.RemoveAll<IObjectStore>();
             services.AddSingleton(oss.Object);
         });
         var (fileId, parseId, imageId) = await SeedParsedDocumentAsync(factory, withImage: true);
@@ -637,7 +637,7 @@ public sealed class ServiceMantleProblemDetailsTests : ServiceMantleIntegrationT
     /// </summary>
     private static void UseProbeFileRepository(
         IServiceCollection services,
-        Func<IHttpContextAccessor, Task<(List<DocumentFileModel> Items, int TotalCount)>> behavior)
+        Func<IHttpContextAccessor, Task<(List<DocumentFile> Items, int TotalCount)>> behavior)
     {
         services.AddHttpContextAccessor();
         services.RemoveAll<IDocumentFileRepository>();
@@ -652,14 +652,6 @@ public sealed class ServiceMantleProblemDetailsTests : ServiceMantleIntegrationT
         HttpClient client, string url, string role)
     {
         var request = new HttpRequestMessage(HttpMethod.Get, url);
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", CreateToken(role));
-        return await client.SendAsync(request);
-    }
-
-    private static async Task<HttpResponseMessage> SendPostAsync(
-        HttpClient client, string url, HttpContent content, string role)
-    {
-        var request = new HttpRequestMessage(HttpMethod.Post, url) { Content = content };
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", CreateToken(role));
         return await client.SendAsync(request);
     }
@@ -837,31 +829,21 @@ public sealed class ServiceMantleProblemDetailsTests : ServiceMantleIntegrationT
     /// or write a partial response); every other member is inert.
     /// </summary>
     private sealed class ProbeDocumentFileRepository(
-        Func<Task<(List<DocumentFileModel> Items, int TotalCount)>> getListBehavior)
+        Func<Task<(List<DocumentFile> Items, int TotalCount)>> getListBehavior)
         : IDocumentFileRepository
     {
-        public Task AddAsync(DocumentFileModel model) => Task.CompletedTask;
+        public Task AddAsync(DocumentFile model) => Task.CompletedTask;
 
-        public Task<DocumentFileModel?> GetByIdAsync(Guid id) =>
-            Task.FromResult<DocumentFileModel?>(null);
+        public Task<DocumentFile?> GetByIdAsync(Guid id) =>
+            Task.FromResult<DocumentFile?>(null);
 
-        public Task<(List<DocumentFileModel> Items, int TotalCount)> GetListAsync(
+        public Task<(List<DocumentFile> Items, int TotalCount)> GetListAsync(
             int page, int size, string? fileName = null) => getListBehavior();
-
-        public Task<bool> UpdateAsync(DocumentFileModel model) => Task.FromResult(false);
-
-        public Task<bool> UpdateMetadataAsync(Guid id, string? subject, string? grade, string? year) =>
-            Task.FromResult(false);
 
         public Task<bool> AttachStructaDocDocumentAsync(Guid id, Guid structaDocDocumentId) =>
             Task.FromResult(false);
 
-        public Task<bool> SetStructureDefinitionAsync(Guid id, Guid? structureDefinitionId) =>
-            Task.FromResult(false);
-
         public Task<IReadOnlyList<string>?> DeleteWithAudioAsync(Guid id) => throw new NotSupportedException();
-
-        public Task<bool> DeleteAsync(Guid id) => Task.FromResult(false);
     }
 
     /// <summary>

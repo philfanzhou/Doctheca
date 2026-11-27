@@ -71,87 +71,6 @@ public partial class DocumentStructureAudioRepository : IDocumentStructureAudioR
         public ValueTask DisposeAsync() => Interlocked.Exchange(ref _disposed, 1) == 0 ? release() : ValueTask.CompletedTask;
     }
 
-    public async Task<List<DocumentStructureAudioModel>> GetByParseIdAsync(Guid parseId)
-    {
-        var treeId = await StructureOwnership.TreeForParseAsync(_context, parseId);
-        return await _context.DocumentStructureAudio
-            .AsNoTracking()
-            .Where(audio => audio.TreeId == treeId)
-            .OrderBy(audio => audio.SourcePath)
-            .Select(audio => MapToModel(audio))
-            .ToListAsync();
-    }
-
-    public async Task<List<DocumentStructureAudioModel>> GetByNodeIdAsync(Guid parseId, Guid nodeId)
-    {
-        var treeId = await StructureOwnership.TreeForParseAsync(_context, parseId);
-        return await _context.DocumentStructureAudio
-            .AsNoTracking()
-            .Where(audio => audio.TreeId == treeId && audio.NodeId == nodeId)
-            .OrderBy(audio => audio.SourcePath)
-            .Select(audio => MapToModel(audio))
-            .ToListAsync();
-    }
-
-    public async Task<DocumentStructureAudioModel?> GetByIdAsync(Guid parseId, Guid audioId)
-    {
-        var treeId = await StructureOwnership.TreeForParseAsync(_context, parseId);
-        var entity = await _context.DocumentStructureAudio
-            .AsNoTracking()
-            .FirstOrDefaultAsync(audio => audio.TreeId == treeId && audio.Id == audioId);
-        return entity == null ? null : MapToModel(entity);
-    }
-
-    public async Task<HashSet<string>> GetExistingSourcePathsAsync(Guid parseId, IReadOnlyCollection<string> sourcePaths)
-    {
-        if (sourcePaths.Count == 0) return [];
-        var treeId = await StructureOwnership.TreeForParseAsync(_context, parseId);
-        var paths = sourcePaths.ToList();
-        var existing = await _context.DocumentStructureAudio
-            .Where(audio => audio.TreeId == treeId && paths.Contains(audio.SourcePath))
-            .Select(audio => audio.SourcePath)
-            .ToListAsync();
-        return [.. existing];
-    }
-
-    public async Task<bool> InsertAsync(Guid parseId, IReadOnlyList<DocumentStructureAudioModel> items, CancellationToken cancellationToken = default)
-    {
-        var scope = await GetScopeAsync(new(parseId), cancellationToken);
-        if (scope?.TreeId is not { } treeId) return false;
-        foreach (var item in items)
-        {
-            item.DocumentFileId = scope.DocumentFileId;
-            item.TreeId = treeId;
-            item.ParseId = parseId;
-            // Compatibility for direct legacy repository callers; explicit API targets reject stale nodes.
-            if (item.NodeId is { } id && !scope.Nodes.Any(n => n.Id == id))
-            { item.NodeId = null; item.LinkSource = null; item.MatchStatus = AudioMatchStatus.NodeRemoved; }
-        }
-        var result = await CommitAsync(new(parseId), items, [], [], DateTimeOffset.UtcNow, ct: cancellationToken);
-        return result.Status == AudioLinkUpdateStatus.Ok;
-    }
-
-    public Task<AudioLinkUpdateResult> UpdateLinksAsync(Guid parseId, IReadOnlyList<AudioLinkChange> changes,
-        IReadOnlyCollection<Guid> removeIds, DateTimeOffset now, CancellationToken cancellationToken = default) =>
-        CommitAsync(new(parseId), [], changes, removeIds, now, ct: cancellationToken);
-
-    public async Task<List<string>> GetObjectKeysByParseIdAsync(Guid parseId)
-    {
-        var treeId = await StructureOwnership.TreeForParseAsync(_context, parseId);
-        return await _context.DocumentStructureAudio
-            .Where(audio => audio.TreeId == treeId)
-            .Select(audio => audio.ObjectKey)
-            .ToListAsync();
-    }
-
-    public async Task<List<string>> GetObjectKeysByDocumentFileIdAsync(Guid documentFileId)
-    {
-        return await _context.DocumentStructureAudio
-            .Where(audio => audio.DocumentFileId == documentFileId)
-            .Select(audio => audio.ObjectKey)
-            .ToListAsync();
-    }
-
     public async Task<HashSet<string>> GetReferencedObjectKeysAsync(IReadOnlyCollection<string> objectKeys)
     {
         if (objectKeys.Count == 0) return [];
@@ -167,17 +86,7 @@ public partial class DocumentStructureAudioRepository : IDocumentStructureAudioR
         finally { await _context.Database.CloseConnectionAsync(); }
     }
 
-
-    private async Task<HashSet<Guid>> NodeIdsAsync(Guid? treeId, CancellationToken cancellationToken)
-    {
-        var ids = await _context.DocumentStructureNodes
-            .Where(node => node.TreeId == treeId)
-            .Select(node => node.Id)
-            .ToListAsync(cancellationToken);
-        return [.. ids];
-    }
-
-    private static DocumentStructureAudioModel MapToModel(DocumentStructureAudioEntity entity) => new()
+    private static DocumentStructureAudio MapToModel(DocumentStructureAudioEntity entity) => new()
     {
         Id = entity.Id,
         ParseId = entity.ParseId,
