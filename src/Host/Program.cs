@@ -3,7 +3,7 @@ using System.Data.Common;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Doctheca.Ai;
-using Doctheca.Common.Oss;
+using Doctheca.Common.ObjectStorage;
 using Doctheca.Database;
 using Doctheca.Database.Repositories;
 using Doctheca.Domain.Models;
@@ -11,8 +11,10 @@ using Doctheca.Domain.Repositories;
 using Doctheca.Domain.Services;
 using Doctheca.Domain.Services.Structure;
 using Doctheca.Service;
+using Doctheca.Service.Endpoints;
 using Doctheca.Service.Audio;
 using Doctheca.Service.InternalApi;
+using Doctheca.Service.OpenSearch;
 using Doctheca.Service.Parsing;
 using Doctheca.Service.StructaDoc;
 using Doctheca.Host;
@@ -75,7 +77,7 @@ serviceMantle.AddConditionalExceptionMapping<BadHttpRequestException>(
         "The request could not be processed."),
 ]);
 
-builder.Configuration.AddRuoyuConsulConfiguration(builder.Configuration);
+builder.Configuration.AddConsulConfiguration(builder.Configuration);
 
 // ========== ServiceMantle logging (Console + optional Grafana Loki) ==========
 // Registered after the Consul configuration source so Loki:Uri from Consul KV is visible.
@@ -86,8 +88,8 @@ var documentAudioOptions = DocumentAudioOptions.Read(key => builder.Configuratio
 var obsoleteAudioKeys = new[] { "InternalApi:Enabled", "DocumentAudio:Enabled" }
     .Where(key => builder.Configuration[key] is not null).ToArray();
 
-var consulOptions = RuoyuConsulOptions.Bind(builder.Configuration);
-var consulRuntimeState = RuoyuConsulRuntimeState.Instance;
+var consulOptions = ConsulOptions.Bind(builder.Configuration);
+var consulRuntimeState = RuntimeState.Instance;
 
 var httpPort = builder.Configuration.GetValue<int?>("Endpoints:Http") ?? 5012;
 
@@ -118,15 +120,15 @@ var useLocalOss = Environment.GetEnvironmentVariable("USE_LOCAL_OSS") == "1";
 if (useLocalOss)
 {
     var localPath = Environment.GetEnvironmentVariable("OSS_LOCAL_PATH") ?? "data/oss";
-    builder.Services.AddSingleton<IOssService>(new LocalFileOssService(localPath));
+    builder.Services.AddSingleton<IObjectStore>(new LocalFileStore(localPath));
 }
 else
 {
-    builder.Services.Configure<OssOptions>(builder.Configuration.GetSection("Oss"));
-    builder.Services.AddScoped<IOssService, S3OssService>(sp =>
+    builder.Services.Configure<StoreOptions>(builder.Configuration.GetSection("Oss"));
+    builder.Services.AddScoped<IObjectStore, S3ObjectStore>(sp =>
     {
-        var options = sp.GetRequiredService<IOptions<OssOptions>>().Value;
-        return new S3OssService(options);
+        var options = sp.GetRequiredService<IOptions<StoreOptions>>().Value;
+        return new S3ObjectStore(options);
     });
 }
 
@@ -139,17 +141,17 @@ var documentAudioPlayback = DocumentAudioPlaybackSettings.Evaluate(documentAudio
     documentAudioOptions.PlaybackLinkSeconds, builder.Configuration["Oss:PublicBaseUrl"]);
 // Do not construct an S3 client just to report disabled/missing audio configuration.
 builder.Services.AddScoped(sp => new StructureAudioStore(
-    () => sp.GetRequiredService<IOssService>(), documentAudioStatus,
+    () => sp.GetRequiredService<IObjectStore>(), documentAudioStatus,
     sp.GetRequiredService<ILogger<StructureAudioStore>>(), documentAudioPlayback));
 builder.Services.AddScoped<StructureAudioService>();
-builder.Services.AddSingleton(InternalAudioSettings.Evaluate(documentAudioStatus, documentAudioOptions.PlaybackLinkSeconds));
+builder.Services.AddSingleton(AudioSettings.Evaluate(documentAudioStatus, documentAudioOptions.PlaybackLinkSeconds));
 builder.Services.TryAddSingleton(TimeProvider.System);
-builder.Services.AddSingleton<InternalAudioTokens>();
+builder.Services.AddSingleton<AudioTokens>();
 builder.Services.AddSingleton<AudioScratchSpace>();
 
 // Search Index Services
 builder.Services.Configure<OpenSearchOptions>(builder.Configuration.GetSection("OpenSearch"));
-builder.Services.AddSingleton<ISearchIndexService, OpenSearchIndexService>();
+builder.Services.AddSingleton<ISearchIndexService, IndexService>();
 
 // LLM document analysis service (optional)
 var llmSection = builder.Configuration.GetSection(DocumentAnalysisOptions.SectionName);
@@ -187,15 +189,14 @@ builder.Services.AddScoped<IInternalCatalogRepository, InternalCatalogRepository
 builder.Services.AddScoped<IInternalStructureRepository, InternalStructureRepository>();
 builder.Services.AddScoped<IInternalContentRepository, InternalStructureRepository>();
 builder.Services.AddScoped<IInternalAudioRepository, InternalStructureRepository>();
-builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
 
 // Domain Services
-builder.Services.AddScoped<ISearchDomainService, SearchDomainService>();
+builder.Services.AddScoped<ISearchService, SearchService>();
 builder.Services.AddScoped<IDocumentFileService, DocumentFileService>();
 builder.Services.AddScoped<IDocumentParseService, DocumentParseService>();
 builder.Services.AddScoped<IStructureDefinitionService, StructureDefinitionService>();
 builder.Services.AddScoped<IDocumentStructureService, DocumentStructureService>();
-builder.Services.AddScoped<ParseSearchIndexer>();
+builder.Services.AddScoped<SearchIndexer>();
 
 // StructaDoc parsing service client (ADR-0009): named HttpClient + Singleton wrapper so the
 // polling worker does not recreate the client (HttpClientFactory pools the handler).
@@ -220,7 +221,7 @@ builder.Services.AddSingleton<IStructaDocClient>(sp =>
 
 // Background Workers
 builder.Services.AddScoped<IStructaDocParseResultSync, StructaDocParseResultSync>();
-builder.Services.AddScoped<ParseImageContentSource>();
+builder.Services.AddScoped<ImageContentSource>();
 builder.Services.AddHostedService<StructaDocParseWorker>();
 
 var app = builder.Build();
@@ -359,7 +360,7 @@ app.UseServiceMantleCorrelationId();
 app.UseRouting();
 // Reserve every /internal path before static files and SPA handling, including unknown
 // paths and unsupported methods. Only explicitly marked endpoints may pass.
-app.UseInternalApiBoundary();
+app.Reserve();
 app.UseServiceMantleSecurityResponseHeaders();
 
 // Safe Problem Details boundary for marked JSON admin and internal endpoints: the UseWhen branch
@@ -395,18 +396,18 @@ app.MapAdminAuthEndpoints();
 app.MapAdminOidcEndpoints();
 
 // Web Admin API endpoints
-app.MapDocumentFileEndpoints();
-app.MapDocumentParseEndpoints();
-app.MapDocumentExportEndpoints();
-app.MapDocumentSearchEndpoints();
-app.MapStructureDefinitionEndpoints();
-app.MapDocumentStructureEndpoints();
-app.MapStructureAudioEndpoints();
-app.MapInternalCatalogEndpoints();
-app.MapInternalStructureEndpoints();
-app.MapInternalContentEndpoints();
-app.MapInternalAudioEndpoints();
-app.MapInternalSearchEndpoints();
+app.MapDocumentFiles();
+app.MapDocumentParses();
+app.MapDocumentExport();
+app.MapDocumentSearch();
+app.MapStructureDefinitions();
+app.MapDocumentStructure();
+app.MapStructureAudio();
+app.MapInternalCatalog();
+app.MapInternalStructure();
+app.MapInternalContent();
+app.MapInternalAudio();
+app.MapInternalSearch();
 
 // ServiceMantle fixed health endpoints: GET /health/live (liveness, never touches the
 // database), GET /health/ready and the GET /health alias (readiness projection). All three

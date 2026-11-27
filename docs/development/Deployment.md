@@ -418,7 +418,7 @@ The post-deployment smoke check should hit `http://127.0.0.1:5012/health/live` f
 The service automatically performs the following at startup:
 1. `IDocumentAnalysisService.InitializeAsync` — LLM initialization (if an ApiKey is configured)
 2. Shared `StartupDatabaseGate` — deployment validation, explicit target preparation, and `DocthecaMigrationExecutor` under the PostgreSQL session advisory lock; the gate publishes success only after the held-lock final inspection passes (see [Migrations](../database/migrations.md))
-3. `OpenSearchIndexService.EnsureIndexAsync` — create the search index (best-effort)
+3. `IndexService.EnsureIndexAsync` — create the search index (best-effort)
 
 ## Prebuilt Images & Version Releases
 

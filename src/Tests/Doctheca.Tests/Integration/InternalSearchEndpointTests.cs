@@ -11,6 +11,8 @@ using Doctheca.Domain.Models;
 using Doctheca.Domain.Repositories;
 using Doctheca.Domain.Services;
 using Doctheca.Service;
+using Doctheca.Service.Endpoints;
+using global::Doctheca.Service.OpenSearch;
 using Doctheca.Tests.OpenSearch;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
@@ -33,23 +35,23 @@ public sealed class InternalSearchEndpointTests(PostgreSqlFixture database) : Se
     private static string Token(string json) => Convert.ToBase64String(Encoding.UTF8.GetBytes(json));
     private WebApplicationFactory<Program> Factory(Action<IServiceCollection>? services = null, string? enabled = null) =>
         CreateFactory(configureTestServices: services, settings: new Dictionary<string, string?> { ["InternalApi:Enabled"] = enabled });
-    private static Mock<ISearchDomainService> EmptySearch()
+    private static Mock<ISearchService> EmptySearch()
     {
-        var search = new Mock<ISearchDomainService>();
-        search.Setup(item => item.ExactSearchAsync(It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<SearchFilterModel?>(), It.IsAny<int>(), It.IsAny<string?>()))
-            .ReturnsAsync((new List<SearchResultModel>(), 0, null));
+        var search = new Mock<ISearchService>();
+        search.Setup(item => item.ExactSearchAsync(It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<SearchFilter?>(), It.IsAny<int>(), It.IsAny<string?>()))
+            .ReturnsAsync((new List<SearchResult>(), 0, null));
         return search;
     }
-    private static void ReplaceSearch(IServiceCollection services, ISearchDomainService search)
+    private static void ReplaceSearch(IServiceCollection services, ISearchService search)
     {
-        services.RemoveAll<ISearchDomainService>();
+        services.RemoveAll<ISearchService>();
         services.AddSingleton(search);
     }
 
     [Fact]
     public async Task SuccessfulReparse_UnboundNodeSearchReturnsEmptyWithoutCallingTheEngine()
     {
-        var search = new Mock<ISearchDomainService>(MockBehavior.Strict);
+        var search = new Mock<ISearchService>(MockBehavior.Strict);
         using var factory = Factory(services => ReplaceSearch(services, search.Object));
         using var client = factory.CreateClient(); var seed = await SeedAsync(factory);
         try
@@ -88,7 +90,7 @@ public sealed class InternalSearchEndpointTests(PostgreSqlFixture database) : Se
             using var factory = CreateFactory(configureTestServices: services =>
             {
                 services.RemoveAll<ISearchIndexService>();
-                services.AddSingleton<ISearchIndexService, OpenSearchIndexService>();
+                services.AddSingleton<ISearchIndexService, IndexService>();
                 services.AddDbContext<DocthecaDbContext>(options => options.AddInterceptors(probe));
                 CaptureLogs(services, capture);
             }, settings: new Dictionary<string, string?> { ["InternalApi:Enabled"] = "true", ["OpenSearch:Url"] = engine.Url, ["OpenSearch:IndexName"] = indexName });
@@ -141,7 +143,7 @@ public sealed class InternalSearchEndpointTests(PostgreSqlFixture database) : Se
                     token = data.GetProperty("nextPageToken").GetString();
                     if (token is null) break;
                     Assert.InRange(token.Length, 1, 4096);
-                    Assert.True(Service.InternalApi.InternalSearchInput.ValidToken(token));
+                    Assert.True(Service.InternalApi.SearchInput.ValidToken(token));
                 }
                 Assert.Null(token);
                 Assert.Equal(12, ids.Count);
@@ -201,7 +203,7 @@ public sealed class InternalSearchEndpointTests(PostgreSqlFixture database) : Se
             Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
             Assert.Equal(InvalidBody, await response.Content.ReadAsStringAsync());
         }
-        search.Verify(item => item.ExactSearchAsync(It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<SearchFilterModel?>(), It.IsAny<int>(), It.IsAny<string?>()), Times.Never);
+        search.Verify(item => item.ExactSearchAsync(It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<SearchFilter?>(), It.IsAny<int>(), It.IsAny<string?>()), Times.Never);
     }
 
     [Fact]
@@ -238,7 +240,7 @@ public sealed class InternalSearchEndpointTests(PostgreSqlFixture database) : Se
             foreach (var header in headers) Assert.Equal(header.Value, Assert.Single(response.Headers.GetValues(header.Name)));
             Assert.DoesNotContain(capture.Messages, log => log.Contains(token, StringComparison.Ordinal) || log.Contains(json, StringComparison.Ordinal));
         }
-        search.Verify(item => item.ExactSearchAsync(It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<SearchFilterModel?>(), It.IsAny<int>(), It.IsAny<string?>()), Times.Never);
+        search.Verify(item => item.ExactSearchAsync(It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<SearchFilter?>(), It.IsAny<int>(), It.IsAny<string?>()), Times.Never);
         Assert.DoesNotContain(capture.Messages, log => log.Contains("canary", StringComparison.Ordinal));
 
         // Both the input and returned continuation retain valid supplementary characters.
@@ -246,7 +248,7 @@ public sealed class InternalSearchEndpointTests(PostgreSqlFixture database) : Se
         {
             var token = Token(json);
             search.Setup(item => item.ExactSearchAsync("changing", false, null, 20, token))
-                .ReturnsAsync((new List<SearchResultModel>(), 0, token));
+                .ReturnsAsync((new List<SearchResult>(), 0, token));
             using var response = await client.GetAsync(Url() + "&pageToken=" + Uri.EscapeDataString(token));
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);
             using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
@@ -260,7 +262,7 @@ public sealed class InternalSearchEndpointTests(PostgreSqlFixture database) : Se
     {
         var search = EmptySearch();
         var token = Token("[1.25,\"block-id\"]");
-        search.Setup(item => item.ExactSearchAsync("hello", true, null, 100, token)).ReturnsAsync((new List<SearchResultModel>
+        search.Setup(item => item.ExactSearchAsync("hello", true, null, 100, token)).ReturnsAsync((new List<SearchResult>
         {
             new() { DocumentName = "book.pdf", AssociatedText = "<script>untrusted</script>", PageNumber = 0, Score = 1.25,
                 MatchType = "exact_phrase", SegmentId = "block-id", StructurePath = "Unit", BlockData = "raw-provider-canary",
@@ -317,7 +319,7 @@ public sealed class InternalSearchEndpointTests(PostgreSqlFixture database) : Se
             await Missing(newestNode);
             await db.DocumentFiles.Where(item => item.Id == seed.File).ExecuteUpdateAsync(set => set.SetProperty(item => item.StructureDefinitionId, (Guid?)null));
             await Missing(seed.Unit);
-            search.Verify(item => item.ExactSearchAsync(It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<SearchFilterModel?>(), It.IsAny<int>(), It.IsAny<string?>()), Times.Never);
+            search.Verify(item => item.ExactSearchAsync(It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<SearchFilter?>(), It.IsAny<int>(), It.IsAny<string?>()), Times.Never);
         }
         finally { await CleanupAsync(factory, seed); }
     }
@@ -328,10 +330,10 @@ public sealed class InternalSearchEndpointTests(PostgreSqlFixture database) : Se
         var search = EmptySearch();
         var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var resume = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        SearchFilterModel? actual = null;
-        search.Setup(item => item.ExactSearchAsync(It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<SearchFilterModel?>(), It.IsAny<int>(), It.IsAny<string?>()))
-            .Returns(async (string text, bool phrase, SearchFilterModel? filter, int size, string? token) =>
-            { actual = filter; entered.TrySetResult(); await resume.Task; return (new List<SearchResultModel>(), 0, (string?)null); });
+        SearchFilter? actual = null;
+        search.Setup(item => item.ExactSearchAsync(It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<SearchFilter?>(), It.IsAny<int>(), It.IsAny<string?>()))
+            .Returns(async (string text, bool phrase, SearchFilter? filter, int size, string? token) =>
+            { actual = filter; entered.TrySetResult(); await resume.Task; return (new List<SearchResult>(), 0, (string?)null); });
         using var factory = Factory(services => ReplaceSearch(services, search.Object));
         using var client = factory.CreateClient();
         var seed = await SeedAsync(factory);
@@ -351,7 +353,7 @@ public sealed class InternalSearchEndpointTests(PostgreSqlFixture database) : Se
             Assert.Equal(HttpStatusCode.OK, completed.StatusCode);
             using var next = await client.GetAsync(Url(node: seed.Unit));
             Assert.Equal(HttpStatusCode.NotFound, next.StatusCode);
-            search.Verify(item => item.ExactSearchAsync(It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<SearchFilterModel?>(), It.IsAny<int>(), It.IsAny<string?>()), Times.Once);
+            search.Verify(item => item.ExactSearchAsync(It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<SearchFilter?>(), It.IsAny<int>(), It.IsAny<string?>()), Times.Once);
         }
         finally { resume.TrySetResult(); await CleanupAsync(factory, seed); }
     }
@@ -376,7 +378,7 @@ public sealed class InternalSearchEndpointTests(PostgreSqlFixture database) : Se
         Assert.Contains("http.internal_server_error", await response.Content.ReadAsStringAsync());
         Assert.DoesNotContain("canary", await response.Content.ReadAsStringAsync());
         Assert.DoesNotContain(capture.Messages, log => log.Contains("canary", StringComparison.Ordinal));
-        search.Verify(item => item.ExactSearchAsync(It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<SearchFilterModel?>(), It.IsAny<int>(), It.IsAny<string?>()), Times.Never);
+        search.Verify(item => item.ExactSearchAsync(It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<SearchFilter?>(), It.IsAny<int>(), It.IsAny<string?>()), Times.Never);
     }
 
     [Fact]
@@ -386,8 +388,8 @@ public sealed class InternalSearchEndpointTests(PostgreSqlFixture database) : Se
         var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var resume = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var completed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        search.Setup(item => item.ExactSearchAsync(It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<SearchFilterModel?>(), It.IsAny<int>(), It.IsAny<string?>()))
-            .Returns(async () => { entered.TrySetResult(); await resume.Task; completed.TrySetResult(); return (new List<SearchResultModel>(), 0, (string?)null); });
+        search.Setup(item => item.ExactSearchAsync(It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<SearchFilter?>(), It.IsAny<int>(), It.IsAny<string?>()))
+            .Returns(async () => { entered.TrySetResult(); await resume.Task; completed.TrySetResult(); return (new List<SearchResult>(), 0, (string?)null); });
         using var factory = Factory(services => ReplaceSearch(services, search.Object));
         using var client = factory.CreateClient();
         using var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(10));
@@ -416,8 +418,8 @@ public sealed class InternalSearchEndpointTests(PostgreSqlFixture database) : Se
         var index = new Mock<ISearchIndexService>();
         var capture = new LogCapture();
         using var loggerFactory = LoggerFactory.Create(builder => builder.SetMinimumLevel(LogLevel.Debug).AddProvider(capture));
-        var domain = new SearchDomainService(index.Object, loggerFactory.CreateLogger<SearchDomainService>());
-        index.Setup(item => item.ExactSearchAsync(It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<SearchFilterModel?>(), It.IsAny<int>(), It.IsAny<string?>()))
+        var domain = new SearchService(index.Object, loggerFactory.CreateLogger<SearchService>());
+        index.Setup(item => item.ExactSearchAsync(It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<SearchFilter?>(), It.IsAny<int>(), It.IsAny<string?>()))
             .ThrowsAsync(new InvalidOperationException("raw-provider-canary query-canary secret-canary"));
         var result = await domain.ExactSearchAsync("query-canary", false, null, 20, "token-canary");
         Assert.Empty(result.Results);
@@ -425,7 +427,7 @@ public sealed class InternalSearchEndpointTests(PostgreSqlFixture database) : Se
         Assert.Null(result.NextToken);
         Assert.Contains(capture.Messages, log => log.Contains("Warning:OpenSearch query failed; returning empty results", StringComparison.Ordinal));
         Assert.DoesNotContain(capture.Messages, log => log.Contains("canary", StringComparison.Ordinal));
-        index.Setup(item => item.ExactSearchAsync(It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<SearchFilterModel?>(), It.IsAny<int>(), It.IsAny<string?>()))
+        index.Setup(item => item.ExactSearchAsync(It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<SearchFilter?>(), It.IsAny<int>(), It.IsAny<string?>()))
             .ThrowsAsync(new OperationCanceledException("cancel-canary"));
         // This interface has no caller token. An engine timeout retains the existing empty
         // failure outcome; the HTTP endpoint separately observes RequestAborted after await.
@@ -434,7 +436,7 @@ public sealed class InternalSearchEndpointTests(PostgreSqlFixture database) : Se
         Assert.Equal(0, timeout.TotalCount);
         Assert.Null(timeout.NextToken);
         // Administrative invalid-token fallback stays compatible, with no raw JSON error.
-        var body = Service.OpenSearch.OpenSearchQueryBuilder.BuildSearchBody("query-canary", false, null, 20, Token("[raw-token-canary"), loggerFactory.CreateLogger("query"));
+        var body = Service.OpenSearch.QueryBuilder.BuildSearchBody("query-canary", false, null, 20, Token("[raw-token-canary"), loggerFactory.CreateLogger("query"));
         Assert.False(body.ContainsKey("search_after"));
         Assert.DoesNotContain(capture.Messages, log => log.Contains("canary", StringComparison.Ordinal));
     }
@@ -493,7 +495,7 @@ public sealed class InternalSearchEndpointTests(PostgreSqlFixture database) : Se
     {
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<DocthecaDbContext>();
-        await new DocumentFileRepository(db).DeleteAsync(seed.File);
+        await new DocumentFileRepository(db).DeleteWithAudioAsync(seed.File);
         await db.StructureLevels.Where(item => item.DefinitionId == seed.Definition).ExecuteUpdateAsync(set => set.SetProperty(item => item.ParentLevelId, (Guid?)null));
         await db.StructureDefinitions.Where(item => item.Id == seed.Definition).ExecuteDeleteAsync();
     }

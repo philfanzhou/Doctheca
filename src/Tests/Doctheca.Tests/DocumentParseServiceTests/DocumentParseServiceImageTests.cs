@@ -27,30 +27,11 @@ public class DocumentParseServiceImageTests
     }
 
     [Fact]
-    public async Task AddImageAsync_CallsRepository()
-    {
-        // Arrange
-        var image = new DocumentParseImageModel
-        {
-            ParseId = Guid.NewGuid(),
-            ImageName = "img1.jpg",
-            ImagePath = "doctheca-images/abc/img1.jpg",
-        };
-        _imageRepoMock.Setup(r => r.AddAsync(image)).ReturnsAsync(image);
-
-        // Act
-        await _service.AddImageAsync(image);
-
-        // Assert
-        _imageRepoMock.Verify(r => r.AddAsync(image), Times.Once);
-    }
-
-    [Fact]
     public async Task GetImagesByParseIdAsync_ReturnsImages()
     {
         // Arrange
         var parseId = Guid.NewGuid();
-        var images = new List<DocumentParseImageModel>
+        var images = new List<DocumentParseImage>
         {
             new() { Id = Guid.NewGuid(), ParseId = parseId, ImageName = "img1.jpg" },
             new() { Id = Guid.NewGuid(), ParseId = parseId, ImageName = "img2.png" },
@@ -62,23 +43,5 @@ public class DocumentParseServiceImageTests
 
         // Assert
         result.Should().HaveCount(2);
-    }
-
-    [Fact]
-    public async Task GetImagesByFileIdAsync_ReturnsImages()
-    {
-        // Arrange
-        var fileId = Guid.NewGuid();
-        var images = new List<DocumentParseImageModel>
-        {
-            new() { Id = Guid.NewGuid(), ParseId = Guid.NewGuid(), ImageName = "img1.jpg" },
-        };
-        _imageRepoMock.Setup(r => r.GetByFileIdAsync(fileId)).ReturnsAsync(images);
-
-        // Act
-        var result = await _service.GetImagesByFileIdAsync(fileId);
-
-        // Assert
-        result.Should().HaveCount(1);
     }
 }

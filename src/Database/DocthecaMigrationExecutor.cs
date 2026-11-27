@@ -72,7 +72,6 @@ public sealed class DocthecaMigrationExecutor : IDatabaseMigrationExecutor
     internal const string AddDocumentOwnedStructureMigrationId = "20261024053658_AddDocumentOwnedStructure";
     internal const string HistoryTableName = "__EFMigrationsHistory";
     internal const string IncompatibleErrorCode = "DOCTHECA_DB_SCHEMA_INCOMPATIBLE";
-    internal const string UpdatedAtTriggerName = "set_document_files_updated_at";
 
     /// <summary>The ordered migration contract this executor supports.</summary>
     internal static readonly IReadOnlyList<string> KnownMigrationIds =

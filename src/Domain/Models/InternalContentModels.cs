@@ -9,4 +9,4 @@ public enum InternalContentStatus { Found, NotFound, InvalidCursor, Changed }
 public sealed record InternalContentRead(InternalContentStatus Status, InternalContentPage? Page = null);
 
 // Server-side source references. These records must never be serialized into an HTTP response.
-public sealed record InternalImageRead(InternalContentStatus Status, DocumentParseModel? Parse = null, DocumentParseImageModel? Image = null);
+public sealed record InternalImageRead(InternalContentStatus Status, DocumentParse? Parse = null, DocumentParseImage? Image = null);

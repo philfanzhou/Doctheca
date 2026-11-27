@@ -31,9 +31,9 @@ public class DocumentParseServiceUpdateStatusTests
     {
         // Arrange
         var id = Guid.NewGuid();
-        var model = new DocumentParseModel { Id = id, Status = DocumentParseStatus.Pending };
+        var model = new DocumentParse { Id = id, Status = DocumentParseStatus.Pending };
         _parseRepoMock.Setup(r => r.GetByIdAsync(id)).ReturnsAsync(model);
-        _parseRepoMock.Setup(r => r.UpdateAsync(It.IsAny<DocumentParseModel>())).ReturnsAsync(model);
+        _parseRepoMock.Setup(r => r.UpdateAsync(It.IsAny<DocumentParse>())).ReturnsAsync(model);
 
         // Act
         var result = await _service.UpdateStatusAsync(id, DocumentParseStatus.Parsing, externalTaskId: "task-123");
@@ -41,7 +41,7 @@ public class DocumentParseServiceUpdateStatusTests
         // Assert
         result.Status.Should().Be(DocumentParseStatus.Parsing);
         result.ExternalTaskId.Should().Be("task-123");
-        _parseRepoMock.Verify(r => r.UpdateAsync(It.Is<DocumentParseModel>(m =>
+        _parseRepoMock.Verify(r => r.UpdateAsync(It.Is<DocumentParse>(m =>
             m.Status == DocumentParseStatus.Parsing && m.ExternalTaskId == "task-123")), Times.Once);
     }
 
@@ -50,9 +50,9 @@ public class DocumentParseServiceUpdateStatusTests
     {
         // Arrange
         var id = Guid.NewGuid();
-        var model = new DocumentParseModel { Id = id, Status = DocumentParseStatus.Parsing };
+        var model = new DocumentParse { Id = id, Status = DocumentParseStatus.Parsing };
         _parseRepoMock.Setup(r => r.GetByIdAsync(id)).ReturnsAsync(model);
-        _parseRepoMock.Setup(r => r.UpdateAsync(It.IsAny<DocumentParseModel>())).ReturnsAsync(model);
+        _parseRepoMock.Setup(r => r.UpdateAsync(It.IsAny<DocumentParse>())).ReturnsAsync(model);
 
         // Act
         var result = await _service.UpdateStatusAsync(id, DocumentParseStatus.Parsed, markdownContent: "# Hello");
@@ -67,7 +67,7 @@ public class DocumentParseServiceUpdateStatusTests
     {
         // Arrange
         var id = Guid.NewGuid();
-        _parseRepoMock.Setup(r => r.GetByIdAsync(id)).ReturnsAsync((DocumentParseModel?)null);
+        _parseRepoMock.Setup(r => r.GetByIdAsync(id)).ReturnsAsync((DocumentParse?)null);
 
         // Act
         var act = () => _service.UpdateStatusAsync(id, DocumentParseStatus.Parsing);
@@ -81,9 +81,9 @@ public class DocumentParseServiceUpdateStatusTests
     {
         // Arrange
         var id = Guid.NewGuid();
-        var model = new DocumentParseModel { Id = id, Status = DocumentParseStatus.Parsing };
+        var model = new DocumentParse { Id = id, Status = DocumentParseStatus.Parsing };
         _parseRepoMock.Setup(r => r.GetByIdAsync(id)).ReturnsAsync(model);
-        _parseRepoMock.Setup(r => r.UpdateAsync(It.IsAny<DocumentParseModel>())).ReturnsAsync(model);
+        _parseRepoMock.Setup(r => r.UpdateAsync(It.IsAny<DocumentParse>())).ReturnsAsync(model);
 
         // Act
         var result = await _service.UpdateStatusAsync(id, DocumentParseStatus.Failed, errorMessage: "Parse error");
@@ -97,9 +97,9 @@ public class DocumentParseServiceUpdateStatusTests
     {
         // Arrange
         var id = Guid.NewGuid();
-        var model = new DocumentParseModel { Id = id, Status = DocumentParseStatus.Parsing };
+        var model = new DocumentParse { Id = id, Status = DocumentParseStatus.Parsing };
         _parseRepoMock.Setup(r => r.GetByIdAsync(id)).ReturnsAsync(model);
-        _parseRepoMock.Setup(r => r.UpdateAsync(It.IsAny<DocumentParseModel>())).ReturnsAsync(model);
+        _parseRepoMock.Setup(r => r.UpdateAsync(It.IsAny<DocumentParse>())).ReturnsAsync(model);
 
         // Act
         var result = await _service.UpdateStatusAsync(
@@ -116,14 +116,14 @@ public class DocumentParseServiceUpdateStatusTests
     {
         // Arrange
         var id = Guid.NewGuid();
-        var model = new DocumentParseModel
+        var model = new DocumentParse
         {
             Id = id,
             Status = DocumentParseStatus.Parsing,
             LayoutJson = "{\"pages\":[1]}"
         };
         _parseRepoMock.Setup(r => r.GetByIdAsync(id)).ReturnsAsync(model);
-        _parseRepoMock.Setup(r => r.UpdateAsync(It.IsAny<DocumentParseModel>())).ReturnsAsync(model);
+        _parseRepoMock.Setup(r => r.UpdateAsync(It.IsAny<DocumentParse>())).ReturnsAsync(model);
 
         // Act
         var result = await _service.UpdateStatusAsync(id, DocumentParseStatus.Parsed, markdownContent: "# Hello");
@@ -133,29 +133,10 @@ public class DocumentParseServiceUpdateStatusTests
     }
 
     [Fact]
-    public async Task GetPendingJobsAsync_ReturnsOnlyPendingJobs()
-    {
-        // Arrange
-        var items = new List<DocumentParseModel>
-        {
-            new() { Id = Guid.NewGuid(), Status = DocumentParseStatus.Pending },
-        };
-        _parseRepoMock.Setup(r => r.GetByStatusAsync(DocumentParseStatus.Pending))
-            .ReturnsAsync(items);
-
-        // Act
-        var result = await _service.GetPendingJobsAsync();
-
-        // Assert
-        result.Should().HaveCount(1);
-        result[0].Status.Should().Be(DocumentParseStatus.Pending);
-    }
-
-    [Fact]
     public async Task GetActiveJobsAsync_ReturnsPendingAndParsingJobs()
     {
         // Arrange
-        var items = new List<DocumentParseModel>
+        var items = new List<DocumentParse>
         {
             new() { Id = Guid.NewGuid(), Status = DocumentParseStatus.Pending },
             new() { Id = Guid.NewGuid(), Status = DocumentParseStatus.Parsing },
@@ -178,9 +159,9 @@ public class DocumentParseServiceUpdateStatusTests
         // Arrange
         var id = Guid.NewGuid();
         var runId = Guid.NewGuid();
-        var model = new DocumentParseModel { Id = id, Status = DocumentParseStatus.Pending };
+        var model = new DocumentParse { Id = id, Status = DocumentParseStatus.Pending };
         _parseRepoMock.Setup(r => r.GetByIdAsync(id)).ReturnsAsync(model);
-        _parseRepoMock.Setup(r => r.UpdateAsync(It.IsAny<DocumentParseModel>())).ReturnsAsync(model);
+        _parseRepoMock.Setup(r => r.UpdateAsync(It.IsAny<DocumentParse>())).ReturnsAsync(model);
 
         // Act
         var result = await _service.UpdateStatusAsync(

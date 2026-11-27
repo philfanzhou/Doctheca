@@ -6,7 +6,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Security.Cryptography;
 using System.Text.Json;
-using Doctheca.Common.Oss;
+using Doctheca.Common.ObjectStorage;
 using Doctheca.Database;
 using Doctheca.Database.Entities;
 using Doctheca.Domain.Models;
@@ -41,8 +41,8 @@ public sealed partial class InternalAudioEndpointTests(PostgreSqlFixture databas
         foreach (var (key, value) in extra ?? []) settings[key] = value;
         return CreateFactory(settings: settings, configureTestServices: services =>
         {
-            services.RemoveAll<IOssService>();
-            services.AddScoped<IOssService>(sp => new S3OssService(sp.GetRequiredService<IOptions<OssOptions>>().Value));
+            services.RemoveAll<IObjectStore>();
+            services.AddScoped<IObjectStore>(sp => new S3ObjectStore(sp.GetRequiredService<IOptions<StoreOptions>>().Value));
             configure?.Invoke(services);
         });
     }
@@ -72,7 +72,7 @@ public sealed partial class InternalAudioEndpointTests(PostgreSqlFixture databas
     private static async Task Cleanup(IServiceProvider services, Seed s)
     {
         using var scope = services.CreateScope(); var db = scope.ServiceProvider.GetRequiredService<DocthecaDbContext>();
-        await new DocumentFileRepository(db).DeleteAsync(s.File);
+        await new DocumentFileRepository(db).DeleteWithAudioAsync(s.File);
         await db.StructureDefinitions.Where(x => x.Id == s.Definition).ExecuteDeleteAsync();
     }
     private static void Keys(JsonElement value, params string[] expected) =>
@@ -141,8 +141,8 @@ public sealed partial class InternalAudioEndpointTests(PostgreSqlFixture databas
     [InlineData("Oss:BucketName", "")]
     public async Task Misconfiguration_IsSafeAndDoesNotConstructStorage(string key, string value)
     {
-        var oss = new Mock<IOssService>(MockBehavior.Strict);
-        using var factory = Factory(services => { services.RemoveAll<IOssService>(); services.AddSingleton(oss.Object); }, new() { [key] = value });
+        var oss = new Mock<IObjectStore>(MockBehavior.Strict);
+        using var factory = Factory(services => { services.RemoveAll<IObjectStore>(); services.AddSingleton(oss.Object); }, new() { [key] = value });
         using var client = factory.CreateClient(); var s = await SeedAsync(factory.Services, PlayableWave.Bytes());
         try
         {
@@ -157,9 +157,9 @@ public sealed partial class InternalAudioEndpointTests(PostgreSqlFixture databas
     [Fact]
     public async Task InputAndTokens_RejectBeforeStorageAndNeverEchoCapabilities()
     {
-        var provider = new EphemeralDataProtectionProvider(); var tokens = new InternalAudioTokens(provider, TimeProvider.System);
-        var oss = new Mock<IOssService>(MockBehavior.Strict); var logs = new Capture();
-        using var factory = Factory(services => { services.RemoveAll<IOssService>(); services.AddSingleton(oss.Object); services.AddSingleton(tokens); services.AddSingleton<ILoggerProvider>(logs); });
+        var provider = new EphemeralDataProtectionProvider(); var tokens = new AudioTokens(provider, TimeProvider.System);
+        var oss = new Mock<IObjectStore>(MockBehavior.Strict); var logs = new Capture();
+        using var factory = Factory(services => { services.RemoveAll<IObjectStore>(); services.AddSingleton(oss.Object); services.AddSingleton(tokens); services.AddSingleton<ILoggerProvider>(logs); });
         using var client = factory.CreateClient(); var s = await SeedAsync(factory.Services, PlayableWave.Bytes());
         try
         {
@@ -167,7 +167,7 @@ public sealed partial class InternalAudioEndpointTests(PostgreSqlFixture databas
             var valid = tokens.Create(binding, DateTimeOffset.UtcNow.AddMinutes(2));
             var expired = tokens.Create(binding, DateTimeOffset.UtcNow.AddSeconds(-1));
             var wrongPurpose = WebEncoders.Base64UrlEncode(provider.CreateProtector("unrelated").ToTimeLimitedDataProtector().Protect(new byte[65], DateTimeOffset.UtcNow.AddMinutes(2)));
-            var fresh = new InternalAudioTokens(TimeProvider.System).Create(binding, DateTimeOffset.UtcNow.AddMinutes(2));
+            var fresh = new AudioTokens(TimeProvider.System).Create(binding, DateTimeOffset.UtcNow.AddMinutes(2));
             var content = ListUrl(s.Node) + $"/{s.Audio:D}/content";
             foreach (var token in new[] { "", "*", valid + "=", valid[..^1], expired, wrongPurpose, fresh, new string('x', 2049) })
             {
@@ -182,11 +182,11 @@ public sealed partial class InternalAudioEndpointTests(PostgreSqlFixture databas
             foreach (var method in new[] { HttpMethod.Head, HttpMethod.Post, HttpMethod.Delete })
             { using var request = new HttpRequestMessage(method, content + "?token=" + valid); using var response = await client.SendAsync(request); Assert.Equal(HttpStatusCode.NotFound, response.StatusCode); }
             oss.VerifyNoOtherCalls(); Safe(string.Join('\n', logs.Messages), valid, expired, wrongPurpose, fresh);
-            var decoded = provider.CreateProtector(InternalAudioTokens.Purpose).ToTimeLimitedDataProtector().Unprotect(WebEncoders.Base64UrlDecode(valid), out var expiry);
+            var decoded = provider.CreateProtector(AudioTokens.Purpose).ToTimeLimitedDataProtector().Unprotect(WebEncoders.Base64UrlDecode(valid), out var expiry);
             Assert.Equal(65, decoded.Length); Assert.Equal(2, decoded[0]); Assert.Equal(s.File, new Guid(decoded.AsSpan(1, 16)));
             Assert.True(expiry > DateTimeOffset.UtcNow);
-            Assert.Throws<CryptographicException>(() => provider.CreateProtector(InternalAudioTokens.Purpose).ToTimeLimitedDataProtector().Unprotect(WebEncoders.Base64UrlDecode(expired), out _));
-            Assert.False(new InternalAudioTokens(TimeProvider.System).TryRead(valid, s.Node, s.Audio, out _));
+            Assert.Throws<CryptographicException>(() => provider.CreateProtector(AudioTokens.Purpose).ToTimeLimitedDataProtector().Unprotect(WebEncoders.Base64UrlDecode(expired), out _));
+            Assert.False(new AudioTokens(TimeProvider.System).TryRead(valid, s.Node, s.Audio, out _));
         }
         finally { await Cleanup(factory.Services, s); }
     }
@@ -195,8 +195,8 @@ public sealed partial class InternalAudioEndpointTests(PostgreSqlFixture databas
     [InlineData("unlink")][InlineData("reassign")][InlineData("audio")][InlineData("node")][InlineData("document")][InlineData("current")][InlineData("replace")]
     public async Task CommittedRevocation_IsNotALeaseAndNeverReadsStorage(string mutation)
     {
-        var oss = new Mock<IOssService>(MockBehavior.Strict);
-        using var factory = Factory(services => { services.RemoveAll<IOssService>(); services.AddSingleton(oss.Object); });
+        var oss = new Mock<IObjectStore>(MockBehavior.Strict);
+        using var factory = Factory(services => { services.RemoveAll<IObjectStore>(); services.AddSingleton(oss.Object); });
         using var client = factory.CreateClient(); var s = await SeedAsync(factory.Services, PlayableWave.Bytes());
         try
         {
@@ -219,7 +219,7 @@ public sealed partial class InternalAudioEndpointTests(PostgreSqlFixture databas
         if (mutation == "audio") await selected.ExecuteDeleteAsync();
         if (mutation == "node") await db.DocumentStructureNodes.Where(x => x.Id == s.Node || x.ParentId == s.Node).ExecuteDeleteAsync();
         if (mutation == "parse") await new DocumentParseRepository(db).DeleteAsync(s.Parse);
-        if (mutation == "document") await new DocumentFileRepository(db).DeleteAsync(s.File);
+        if (mutation == "document") await new DocumentFileRepository(db).DeleteWithAudioAsync(s.File);
         if (mutation == "replace")
             await scope.ServiceProvider.GetRequiredService<IDocumentStructureRepository>().ReplaceAsync(s.Parse,
                 [new() { Id = Guid.NewGuid(), ParseId = s.Parse, LevelId = s.Level, Name = "replacement", StartSequence = 0, EndSequence = 1 }]);
@@ -237,7 +237,7 @@ public sealed partial class InternalAudioEndpointTests(PostgreSqlFixture databas
     public async Task BufferingRechecksFreshMembershipAndExpiry(string mutation)
     {
         Seed? seed = null; IServiceProvider? services = null; var clock = new Clock(); var scratch = new Scratch();
-        var bytes = PlayableWave.Bytes(); var oss = new Mock<IOssService>(MockBehavior.Strict);
+        var bytes = PlayableWave.Bytes(); var oss = new Mock<IObjectStore>(MockBehavior.Strict);
         oss.Setup(x => x.CopyToAsync(It.IsAny<string>(), It.IsAny<Stream>(), It.IsAny<CancellationToken>())).Returns(async (string _, Stream target, CancellationToken cancellation) =>
         {
             await target.WriteAsync(bytes, cancellation);
@@ -245,7 +245,7 @@ public sealed partial class InternalAudioEndpointTests(PostgreSqlFixture databas
         });
         using var factory = Factory(collection =>
         {
-            collection.RemoveAll<IOssService>(); collection.AddSingleton(oss.Object);
+            collection.RemoveAll<IObjectStore>(); collection.AddSingleton(oss.Object);
             collection.RemoveAll<TimeProvider>(); collection.AddSingleton<TimeProvider>(clock);
             collection.RemoveAll<AudioScratchSpace>(); collection.AddSingleton<AudioScratchSpace>(scratch);
         });
@@ -264,7 +264,7 @@ public sealed partial class InternalAudioEndpointTests(PostgreSqlFixture databas
     public async Task TransferFailures_AreFixedAndDisposeScratch(string failure)
     {
         var bytes = PlayableWave.Bytes(); var scratch = new Scratch { FailOpen = failure == "disk" }; var logs = new Capture();
-        var oss = new Mock<IOssService>(MockBehavior.Strict);
+        var oss = new Mock<IObjectStore>(MockBehavior.Strict);
         oss.Setup(x => x.CopyToAsync(It.IsAny<string>(), It.IsAny<Stream>(), It.IsAny<CancellationToken>())).Returns(async (string _, Stream target, CancellationToken cancellation) =>
         {
             if (failure is "throw" or "wrapped" or "missing") throw new IOException("provider-private-canary", failure == "wrapped" ? new OperationCanceledException() : null);
@@ -278,7 +278,7 @@ public sealed partial class InternalAudioEndpointTests(PostgreSqlFixture databas
         });
         using var factory = Factory(services =>
         {
-            services.RemoveAll<IOssService>(); services.AddSingleton(oss.Object); services.AddSingleton<ILoggerProvider>(logs);
+            services.RemoveAll<IObjectStore>(); services.AddSingleton(oss.Object); services.AddSingleton<ILoggerProvider>(logs);
             services.RemoveAll<AudioScratchSpace>(); services.AddSingleton<AudioScratchSpace>(scratch);
         });
         using var client = factory.CreateClient(); var s = await SeedAsync(factory.Services, bytes);
@@ -295,8 +295,8 @@ public sealed partial class InternalAudioEndpointTests(PostgreSqlFixture databas
     [InlineData("key")][InlineData("type")][InlineData("size")][InlineData("limit")]
     public async Task InvalidStoredIdentity_RejectsBeforeObjectIo(string invalid)
     {
-        var oss = new Mock<IOssService>(MockBehavior.Strict);
-        using var factory = Factory(services => { services.RemoveAll<IOssService>(); services.AddSingleton(oss.Object); });
+        var oss = new Mock<IObjectStore>(MockBehavior.Strict);
+        using var factory = Factory(services => { services.RemoveAll<IObjectStore>(); services.AddSingleton(oss.Object); });
         using var client = factory.CreateClient(); var s = await SeedAsync(factory.Services, PlayableWave.Bytes());
         try
         {
@@ -338,13 +338,13 @@ public sealed partial class InternalAudioEndpointTests(PostgreSqlFixture databas
     public async Task RequestCancellation_ReleasesUnderlyingCopyAndScratchWithoutSuccess()
     {
         var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously); var released = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously); var scratch = new Scratch();
-        var oss = new Mock<IOssService>(MockBehavior.Strict);
+        var oss = new Mock<IObjectStore>(MockBehavior.Strict);
         oss.Setup(x => x.CopyToAsync(It.IsAny<string>(), It.IsAny<Stream>(), It.IsAny<CancellationToken>())).Returns(async (string _, Stream target, CancellationToken cancellation) =>
         {
             entered.SetResult(); try { await Task.Delay(Timeout.Infinite, cancellation); }
             catch (OperationCanceledException) { released.SetResult(); throw new IOException("wrapped-private-canary"); }
         });
-        using var factory = Factory(services => { services.RemoveAll<IOssService>(); services.AddSingleton(oss.Object); services.RemoveAll<AudioScratchSpace>(); services.AddSingleton<AudioScratchSpace>(scratch); });
+        using var factory = Factory(services => { services.RemoveAll<IObjectStore>(); services.AddSingleton(oss.Object); services.RemoveAll<AudioScratchSpace>(); services.AddSingleton<AudioScratchSpace>(scratch); });
         using var client = factory.CreateClient(); var s = await SeedAsync(factory.Services, PlayableWave.Bytes());
         try
         {

@@ -10,7 +10,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using Doctheca.Common.Oss;
+using Doctheca.Common.ObjectStorage;
 using Doctheca.Database;
 using Doctheca.Database.Entities;
 using Doctheca.Domain.Repositories;
@@ -50,8 +50,8 @@ public sealed partial class StructureAudioEndpointTests(PostgreSqlFixture databa
             if (storage)
             {
                 // The real S3 client against the test container replaces the base double.
-                services.RemoveAll<IOssService>();
-                services.AddScoped<IOssService>(sp => new S3OssService(sp.GetRequiredService<IOptions<OssOptions>>().Value));
+                services.RemoveAll<IObjectStore>();
+                services.AddScoped<IObjectStore>(sp => new S3ObjectStore(sp.GetRequiredService<IOptions<StoreOptions>>().Value));
             }
             if (audioTime != null)
             {

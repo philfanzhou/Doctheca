@@ -124,11 +124,11 @@ public sealed class AdminOidcStoresTests
     [InlineData("http", "https")][InlineData("https", "http")][InlineData("http", "http")]
     public void BearerHttpMetadataStillRequiresExplicitFalse(string authorityScheme, string issuerScheme)
     {
-        var options = new Doctheca.Common.Authentication.IdentityAuthenticationOptions {
+        var options = new Doctheca.Common.Authentication.IdentityOptions {
             Authority = authorityScheme + "://fictitious-authority-canary.test",
             Issuer = issuerScheme + "://fictitious-issuer-canary.test", Audience = "fake-app"
         };
-        var validator = new Doctheca.Common.Authentication.IdentityAuthenticationOptionsValidator();
+        var validator = new Doctheca.Common.Authentication.IdentityOptionsValidator();
         var rejected = validator.Validate(null, options);
         Assert.True(rejected.Failed);
         Assert.Contains(rejected.Failures!, value => value.Contains("IdentityService:RequireHttpsMetadata"));

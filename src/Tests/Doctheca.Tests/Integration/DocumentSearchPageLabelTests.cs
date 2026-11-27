@@ -13,6 +13,8 @@ using Doctheca.Domain.Models;
 using Doctheca.Domain.Repositories;
 using Doctheca.Domain.Services;
 using Doctheca.Service;
+using Doctheca.Service.Endpoints;
+using global::Doctheca.Service.OpenSearch;
 using Doctheca.Tests.OpenSearch;
 using FluentAssertions;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -42,7 +44,7 @@ public sealed class DocumentSearchPageLabelTests(PostgreSqlFixture database) : S
             using var factory = Factory(probe, logs, services =>
             {
                 services.RemoveAll<ISearchIndexService>();
-                services.AddSingleton<ISearchIndexService, OpenSearchIndexService>();
+                services.AddSingleton<ISearchIndexService, IndexService>();
             }, new Dictionary<string, string?> { ["OpenSearch:Url"] = engine.Url, ["OpenSearch:IndexName"] = name });
             using var client = Admin(factory);
             var first = await SeedAsync(factory, "封面\niv");
@@ -91,7 +93,7 @@ public sealed class DocumentSearchPageLabelTests(PostgreSqlFixture database) : S
             }
             token.Should().BeNull();
             allIds.Should().HaveCount(45);
-            var filter = new SearchFilterModel { ParseId = first.Parse, PageNumber = 0, Subject = "test" };
+            var filter = new SearchFilter { ParseId = first.Parse, PageNumber = 0, Subject = "test" };
             AssertPage(await SearchAsync(client, $"query=changing%20world&phrase=true&parseId={first.Parse}&pageNumber=0&subject=test&pageSize=100"),
                 await index.ExactSearchAsync("changing world", true, filter, 100, null), expectedLabels);
             probe.Reads.Should().OnlyContain(read => read == IsolationLevel.RepeatableRead);
@@ -124,11 +126,11 @@ public sealed class DocumentSearchPageLabelTests(PostgreSqlFixture database) : S
     {
         var probe = new ReadProbe();
         var logs = new LogCapture();
-        var hits = new List<SearchResultModel>();
+        var hits = new List<SearchResult>();
         using var factory = Factory(probe, logs, services => ReplaceSearch(services, Search(hits)));
         using var client = Admin(factory);
         var seed = await SeedAsync(factory, "label");
-        hits.AddRange(seed.Blocks.Take(2).Select(id => new SearchResultModel { SegmentId = id.ToString(), PageNumber = 0, AssociatedText = "synthetic", PageLabel = "untrusted" }));
+        hits.AddRange(seed.Blocks.Take(2).Select(id => new SearchResult { SegmentId = id.ToString(), PageNumber = 0, AssociatedText = "synthetic", PageLabel = "untrusted" }));
         probe.Active = probe.Fail = true;
         logs.Messages.Clear();
         var result = await SearchAsync(client, "query=private-query-canary");
@@ -146,7 +148,7 @@ public sealed class DocumentSearchPageLabelTests(PostgreSqlFixture database) : S
     {
         var probe = new ReadProbe();
         var logs = new LogCapture();
-        var hits = new List<SearchResultModel>();
+        var hits = new List<SearchResult>();
         using var factory = Factory(probe, logs, services => ReplaceSearch(services, Search(hits)));
         using var client = Admin(factory);
         var seed = await SeedAsync(factory, "label");
@@ -168,11 +170,11 @@ public sealed class DocumentSearchPageLabelTests(PostgreSqlFixture database) : S
         var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var resume = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var completed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var search = new Mock<ISearchDomainService>();
+        var search = new Mock<ISearchService>();
         search.Setup(service => service.ExactSearchAsync(It.IsAny<string>(), false, null, 20, null)).Returns(async () =>
         {
             entered.TrySetResult(); await resume.Task; completed.TrySetResult();
-            return (new List<SearchResultModel> { new() { SegmentId = Guid.NewGuid().ToString() } }, 1, (string?)null);
+            return (new List<SearchResult> { new() { SegmentId = Guid.NewGuid().ToString() } }, 1, (string?)null);
         });
         using var factory = Factory(probe, new(), services => ReplaceSearch(services, search.Object));
         using var client = Admin(factory);
@@ -189,12 +191,12 @@ public sealed class DocumentSearchPageLabelTests(PostgreSqlFixture database) : S
     public async Task ConcurrentParseReplacement_DoesNotCrossAssociateLabelsOrBlockWriter()
     {
         var probe = new ReadProbe();
-        var hits = new List<SearchResultModel>();
+        var hits = new List<SearchResult>();
         using var factory = Factory(probe, new(), services => ReplaceSearch(services, Search(hits)));
         using var client = Admin(factory);
         var old = await SeedAsync(factory, "old");
         var foreign = await SeedAsync(factory, "foreign");
-        hits.AddRange(new[] { old, foreign }.Select(seed => new SearchResultModel { SegmentId = seed.Blocks[0].ToString(), PageNumber = 0 }));
+        hits.AddRange(new[] { old, foreign }.Select(seed => new SearchResult { SegmentId = seed.Blocks[0].ToString(), PageNumber = 0 }));
         probe.Active = probe.PauseAfterRead = true;
         var pending = SearchAsync(client, "query=changing");
         await probe.Entered.Task.WaitAsync(TimeSpan.FromSeconds(10));
@@ -214,7 +216,7 @@ public sealed class DocumentSearchPageLabelTests(PostgreSqlFixture database) : S
     public async Task ExistingAuthorizationValidationAndNoIdentityPaths_AvoidLookup()
     {
         var probe = new ReadProbe();
-        var hits = new List<SearchResultModel> { new() { SegmentId = "invalid", PageLabel = "untrusted" }, new() { SegmentId = "", PageNumber = 0 } };
+        var hits = new List<SearchResult> { new() { SegmentId = "invalid", PageLabel = "untrusted" }, new() { SegmentId = "", PageNumber = 0 } };
         using var factory = Factory(probe, new(), services => ReplaceSearch(services, Search(hits)));
         using var client = factory.CreateClient();
         (await client.GetAsync("/admin/documents/search?query=x")).StatusCode.Should().Be(HttpStatusCode.Unauthorized);
@@ -244,16 +246,16 @@ public sealed class DocumentSearchPageLabelTests(PostgreSqlFixture database) : S
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", CreateToken("admin"));
         return client;
     }
-    private static ISearchDomainService Search(List<SearchResultModel> hits)
+    private static ISearchService Search(List<SearchResult> hits)
     {
-        var search = new Mock<ISearchDomainService>();
-        search.Setup(service => service.ExactSearchAsync(It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<SearchFilterModel?>(), It.IsAny<int>(), It.IsAny<string?>()))
+        var search = new Mock<ISearchService>();
+        search.Setup(service => service.ExactSearchAsync(It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<SearchFilter?>(), It.IsAny<int>(), It.IsAny<string?>()))
             .ReturnsAsync(() => (hits.ToList(), hits.Count, "next"));
         return search.Object;
     }
-    private static void ReplaceSearch(IServiceCollection services, ISearchDomainService search)
+    private static void ReplaceSearch(IServiceCollection services, ISearchService search)
     {
-        services.RemoveAll<ISearchDomainService>(); services.AddSingleton(search);
+        services.RemoveAll<ISearchService>(); services.AddSingleton(search);
     }
     private static async Task<JsonNode> SearchAsync(HttpClient client, string query)
     {
@@ -261,7 +263,7 @@ public sealed class DocumentSearchPageLabelTests(PostgreSqlFixture database) : S
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         return JsonNode.Parse(await response.Content.ReadAsStringAsync())!;
     }
-    private static void AssertPage(JsonNode response, (List<SearchResultModel> Results, int TotalCount, string? NextToken) baseline,
+    private static void AssertPage(JsonNode response, (List<SearchResult> Results, int TotalCount, string? NextToken) baseline,
         IReadOnlyDictionary<SearchBlockPageKey, string?> labels)
     {
         response["totalCount"]!.GetValue<int>().Should().Be(baseline.TotalCount);
@@ -296,9 +298,10 @@ public sealed class DocumentSearchPageLabelTests(PostgreSqlFixture database) : S
             TextContent = "the changing world block " + i,
             BlockData = new JsonObject { ["pageNumber"] = page }.ToJsonString(),
         }).ToArray();
-        db.AddRange(file, parse); db.DocumentParseBlocks.AddRange(blocks); await db.SaveChangesAsync();
-        if (pages) await new DocumentParsePageRepository(db).ReplaceAsync(parse.Id,
-            [new(parse.Id, 1, label, null), new(parse.Id, 2, label, null), new(parse.Id, 3, "", null), new(parse.Id, 4, null, null), new(parse.Id, 6, "last", null)]);
+        db.AddRange(file, parse); db.DocumentParseBlocks.AddRange(blocks);
+        if (pages) db.DocumentParsePages.AddRange(new[] { (1, (string?)label), (2, label), (3, ""), (4, (string?)null), (6, "last") }
+            .Select(page => new DocumentParsePageEntity { ParseId = parse.Id, PageNumber = page.Item1, Label = page.Item2 }));
+        await db.SaveChangesAsync();
         return new(file.Id, parse.Id, blocks.Select(block => block.Id).ToArray(), blocks.Select(block => block.PageId).ToArray(),
             [label, label, label, null, "", null, null, "last"]);
     }

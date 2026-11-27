@@ -9,7 +9,7 @@ Host
         │
 Service
   AdminAuthEndpoints / AdminOidcEndpoints / server session and CSRF
-  Document*Endpoints
+  Endpoint classes (DocumentFiles, DocumentParses, ...) under Doctheca.Service.Endpoints
   StructaDoc client+worker / OpenSearch / analysis
         │
 Domain
@@ -19,7 +19,7 @@ Database
   EF Core repositories + EF Core migrations (DocthecaMigrationExecutor)
 ```
 
-Tech stack: .NET, ASP.NET Core Minimal APIs, EF Core 10/Npgsql, Mapster, OpenSearch.Net, Vue 3.5/TypeScript/Vite/Element Plus.
+Tech stack: .NET, ASP.NET Core Minimal APIs, EF Core 10/Npgsql, OpenSearch.Net, Vue 3.5/TypeScript/Vite/Element Plus.
 
 ## Access Control Architecture
 

@@ -47,7 +47,7 @@ public class OpenSearchResponseParserTests
             }
         }";
 
-        var (results, totalCount, _) = OpenSearchResponseParser.ParseSearchResponse(
+        var (results, totalCount, _) = ResponseParser.ParseSearchResponse(
             responseJson, phrase: false, pageSize: 10);
 
         totalCount.Should().Be(2);
@@ -92,7 +92,7 @@ public class OpenSearchResponseParserTests
             }
         }";
 
-        var (results, _, _) = OpenSearchResponseParser.ParseSearchResponse(
+        var (results, _, _) = ResponseParser.ParseSearchResponse(
             responseJson, phrase: true, pageSize: 10);
 
         results.Should().HaveCount(1);
@@ -125,7 +125,7 @@ public class OpenSearchResponseParserTests
             }
         }";
 
-        var (results, _, _) = OpenSearchResponseParser.ParseSearchResponse(
+        var (results, _, _) = ResponseParser.ParseSearchResponse(
             responseJson, phrase: false, pageSize: 10);
 
         results.Should().HaveCount(1);
@@ -155,7 +155,7 @@ public class OpenSearchResponseParserTests
             }
         }";
 
-        var (_, _, nextToken) = OpenSearchResponseParser.ParseSearchResponse(
+        var (_, _, nextToken) = ResponseParser.ParseSearchResponse(
             responseJson, phrase: false, pageSize: 1);
 
         nextToken.Should().NotBeNull();
@@ -185,7 +185,7 @@ public class OpenSearchResponseParserTests
             }
         }";
 
-        var (_, _, nextToken) = OpenSearchResponseParser.ParseSearchResponse(
+        var (_, _, nextToken) = ResponseParser.ParseSearchResponse(
             responseJson, phrase: false, pageSize: 10);
 
         nextToken.Should().BeNull();
@@ -203,7 +203,7 @@ public class OpenSearchResponseParserTests
             }
         }";
 
-        var (results, totalCount, nextToken) = OpenSearchResponseParser.ParseSearchResponse(
+        var (results, totalCount, nextToken) = ResponseParser.ParseSearchResponse(
             responseJson, phrase: false, pageSize: 10);
 
         results.Should().BeEmpty();
@@ -226,7 +226,7 @@ public class OpenSearchResponseParserTests
             }
         }";
 
-        var (results, _, _) = OpenSearchResponseParser.ParseSearchResponse(
+        var (results, _, _) = ResponseParser.ParseSearchResponse(
             responseJson, phrase: false, pageSize: 1);
 
         results.Should().HaveCount(1);
@@ -257,7 +257,7 @@ public class OpenSearchResponseParserTests
             }
         }";
 
-        var (results, _, _) = OpenSearchResponseParser.ParseSearchResponse(
+        var (results, _, _) = ResponseParser.ParseSearchResponse(
             responseJson, phrase: false, pageSize: 10);
 
         results.Should().HaveCount(1);
@@ -270,7 +270,7 @@ public class OpenSearchResponseParserTests
         // Response without "hits" at root level — tests the hasHits guard
         var responseJson = @"{ ""error"": ""something"" }";
 
-        var (results, totalCount, nextToken) = OpenSearchResponseParser.ParseSearchResponse(
+        var (results, totalCount, nextToken) = ResponseParser.ParseSearchResponse(
             responseJson, phrase: false, pageSize: 10);
 
         results.Should().BeEmpty();
@@ -308,7 +308,7 @@ public class OpenSearchResponseParserTests
             }
         }";
 
-        var (results, _, _) = OpenSearchResponseParser.ParseSearchResponse(
+        var (results, _, _) = ResponseParser.ParseSearchResponse(
             responseJson, phrase: false, pageSize: 10);
 
         results.Should().HaveCount(1);
@@ -346,7 +346,7 @@ public class OpenSearchResponseParserTests
             }
         }";
 
-        var (results, _, _) = OpenSearchResponseParser.ParseSearchResponse(
+        var (results, _, _) = ResponseParser.ParseSearchResponse(
             responseJson, phrase: false, pageSize: 10);
 
         results.Should().HaveCount(1);
@@ -382,7 +382,7 @@ public class OpenSearchResponseParserTests
             }
         }";
 
-        var (results, _, _) = OpenSearchResponseParser.ParseSearchResponse(
+        var (results, _, _) = ResponseParser.ParseSearchResponse(
             responseJson, phrase: false, pageSize: 10);
 
         results.Should().HaveCount(1);
@@ -421,7 +421,7 @@ public class OpenSearchResponseParserTests
             }
         }";
 
-        var (results, _, _) = OpenSearchResponseParser.ParseSearchResponse(
+        var (results, _, _) = ResponseParser.ParseSearchResponse(
             responseJson, phrase: false, pageSize: 10);
 
         results.Should().HaveCount(1);
@@ -448,7 +448,7 @@ public class OpenSearchResponseParserTests
             }
         }";
 
-        var (results, _, _) = OpenSearchResponseParser.ParseSearchResponse(responseJson, phrase: false, pageSize: 10);
+        var (results, _, _) = ResponseParser.ParseSearchResponse(responseJson, phrase: false, pageSize: 10);
 
         results[0].StructurePath.Should().Be("Unit 3 > Section B");
         results[1].StructurePath.Should().BeNull();

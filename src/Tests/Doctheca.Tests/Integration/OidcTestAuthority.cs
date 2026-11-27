@@ -101,21 +101,6 @@ internal sealed class OidcTestAuthority : HttpMessageHandler
         return Json(response);
     }
 
-    internal SecurityKey SigningKey => new RsaSecurityKey(_rsa) { KeyId = "test-kid" };
-
-    /// <summary>
-    /// A Bearer token for the legacy JwtBearer path (shared platform audience), minted with the
-    /// same key so the static in-memory configuration manager validates it.
-    /// </summary>
-    internal string LegacyBearer()
-    {
-        var header = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes("{\"alg\":\"RS256\",\"typ\":\"at+jwt\",\"kid\":\"test-kid\"}"));
-        var payload = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new
-        { iss = Issuer, aud = "PlatformAudience", sub = "fake-user", role = "admin", exp = DateTimeOffset.UtcNow.AddMinutes(5).ToUnixTimeSeconds() })));
-        var input = header + "." + payload;
-        return input + "." + WebEncoders.Base64UrlEncode(_rsa.SignData(Encoding.ASCII.GetBytes(input), HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1));
-    }
-
     // The access token stays a real signed JWT with the application id as audience: the generic
     // handler stores it (SaveTokens) for the end-session id_token_hint flow, and the host keeps
     // it server-side in the session ticket for the session's whole life.

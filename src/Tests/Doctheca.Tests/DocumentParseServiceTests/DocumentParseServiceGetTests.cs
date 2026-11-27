@@ -30,7 +30,7 @@ public class DocumentParseServiceGetTests
     {
         // Arrange
         var id = Guid.NewGuid();
-        var model = new DocumentParseModel { Id = id };
+        var model = new DocumentParse { Id = id };
         _parseRepoMock.Setup(r => r.GetByIdAsync(id)).ReturnsAsync(model);
 
         // Act
@@ -46,7 +46,7 @@ public class DocumentParseServiceGetTests
     {
         // Arrange
         var fileId = Guid.NewGuid();
-        var model = new DocumentParseModel { Id = Guid.NewGuid(), DocumentFileId = fileId, ModelVersion = "pipeline" };
+        var model = new DocumentParse { Id = Guid.NewGuid(), DocumentFileId = fileId, ModelVersion = "pipeline" };
         _parseRepoMock.Setup(r => r.GetLatestByFileIdAndModelAsync(fileId, "pipeline")).ReturnsAsync(model);
 
         // Act
@@ -62,7 +62,7 @@ public class DocumentParseServiceGetTests
     {
         // Arrange
         var fileId = Guid.NewGuid();
-        var model = new DocumentParseModel { Id = Guid.NewGuid(), DocumentFileId = fileId };
+        var model = new DocumentParse { Id = Guid.NewGuid(), DocumentFileId = fileId };
         _parseRepoMock.Setup(r => r.GetLatestByFileIdAsync(fileId)).ReturnsAsync(model);
 
         // Act

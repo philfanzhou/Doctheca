@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using Doctheca.Service;
+using Doctheca.Service.Endpoints;
 
 namespace Doctheca.Host.Authentication;
 
@@ -14,7 +15,7 @@ public static class AdminAuthEndpoints
         group.MapPost("/refresh", Retired).AllowAnonymous();
         group.MapPost("/logout", Retired).AllowAnonymous();
         group.MapGet("/session", GetSession)
-            .RequireAuthorization(DocthecaAuthorizationPolicies.Admin);
+            .RequireAuthorization(AuthorizationPolicies.Admin);
         return app;
     }
 

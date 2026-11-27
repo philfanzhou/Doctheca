@@ -60,7 +60,6 @@ public sealed class StructaDocAnnotationSyncTests(PostgreSqlMigrationFixture fix
         var all = await repository.GetByParseIdAsync(MigrationGoldenStates.ParseId);
         all.Should().HaveCount(4);
         foreach (var read in new[] { all,
-                     await repository.GetByParseAndPageAsync(MigrationGoldenStates.ParseId, 0),
                      await repository.GetPageBySequenceAsync(MigrationGoldenStates.ParseId, null, 100) })
         {
             var image = read.Single(block => block.Sequence == 0);
@@ -121,7 +120,7 @@ public sealed class StructaDocAnnotationSyncTests(PostgreSqlMigrationFixture fix
         using var loggerFactory = LoggerFactory.Create(builder => builder.AddProvider(logs));
         var client = Client(loggerFactory, _ => Task.FromResult(Json(BlocksJson())));
         var fileService = new Mock<IDocumentFileService>();
-        fileService.Setup(service => service.GetByIdAsync(MigrationGoldenStates.FileId)).ReturnsAsync(new DocumentFileModel
+        fileService.Setup(service => service.GetByIdAsync(MigrationGoldenStates.FileId)).ReturnsAsync(new DocumentFile
         {
             Id = MigrationGoldenStates.FileId, FileName = "synthetic.pdf", Subject = "math", Grade = "g7", Year = "2025"
         });
@@ -136,8 +135,8 @@ public sealed class StructaDocAnnotationSyncTests(PostgreSqlMigrationFixture fix
         var worker = new StructaDocParseWorker(services, loggerFactory.CreateLogger<StructaDocParseWorker>(),
             new ServiceLogContext(ServiceId.Parse("doctheca"), InstanceId.Parse("annotation-test"), "1.0.0"));
         await worker.PollAsync(Model(), services, default);
-        var reindex = new ParseSearchIndexer(ParseService(context, loggerFactory), fileService.Object,
-            index.Object, loggerFactory.CreateLogger<ParseSearchIndexer>());
+        var reindex = new SearchIndexer(ParseService(context, loggerFactory), fileService.Object,
+            index.Object, loggerFactory.CreateLogger<SearchIndexer>());
         (await reindex.ReindexAsync(MigrationGoldenStates.ParseId)).Should().BeFalse();
         (await reindex.ReindexAllAsync(default)).Should().Be((1, 0));
         context.ChangeTracker.Clear();
@@ -158,7 +157,7 @@ public sealed class StructaDocAnnotationSyncTests(PostgreSqlMigrationFixture fix
             "{\"items\":[{\"sequence\":0,\"pageNumber\":1,\"type\":\"title\",\"content\":\"synthetic heading\"}]}")));
         var fileService = new Mock<IDocumentFileService>();
         fileService.Setup(service => service.GetByIdAsync(MigrationGoldenStates.FileId))
-            .ReturnsAsync(new DocumentFileModel { Id=MigrationGoldenStates.FileId,FileName="synthetic.pdf" });
+            .ReturnsAsync(new DocumentFile { Id=MigrationGoldenStates.FileId,FileName="synthetic.pdf" });
         var index = new Mock<ISearchIndexService>();
         index.Setup(service => service.IndexParseBlocksAsync(It.IsAny<Guid>(),It.IsAny<Guid>(),It.IsAny<string>(),
             It.IsAny<string?>(),It.IsAny<string?>(),It.IsAny<string?>()))
@@ -175,7 +174,7 @@ public sealed class StructaDocAnnotationSyncTests(PostgreSqlMigrationFixture fix
         string.Join('\n',logs.Messages).Should().NotContain("synthetic heading").And.NotContain("synthetic index failure");
     }
 
-    private DocumentParseModel Model() => new()
+    private DocumentParse Model() => new()
     {
         Id = MigrationGoldenStates.ParseId, DocumentFileId = MigrationGoldenStates.FileId,
         Status = DocumentParseStatus.Parsing, StructaDocParseRunId = _run

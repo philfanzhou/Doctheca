@@ -1,6 +1,7 @@
 using System.Net;
 using System.Text;
 using Doctheca.Database;
+using Doctheca.Database.Entities;
 using Doctheca.Database.Repositories;
 using Doctheca.Domain.Models;
 using Doctheca.Domain.Repositories;
@@ -80,7 +81,7 @@ public sealed class StructaDocPagesSyncTests(PostgreSqlMigrationFixture fixture)
     {
         using var context = fixture.CreateContext(_database);
         var repository = new DocumentParsePageRepository(context);
-        await repository.ReplaceAsync(Parse, [new(Parse, 1, "stale", null), new(Parse, 2, "stale", null)]);
+        await SeedPagesAsync(context, (1, "stale"), (2, "stale"));
         var logger = new CaptureLogger();
         var sync = Sync(context, _ => failure switch
         {
@@ -108,7 +109,7 @@ public sealed class StructaDocPagesSyncTests(PostgreSqlMigrationFixture fixture)
     {
         using var context = fixture.CreateContext(_database);
         var repository = new DocumentParsePageRepository(context);
-        await repository.ReplaceAsync(Parse, [new(Parse, 1, "old", null)]);
+        await SeedPagesAsync(context, (1, "old"));
         await MigrationGoldenStates.ExecuteRawAsync(context, """
             CREATE FUNCTION reject_pages() RETURNS trigger AS $$ BEGIN RAISE EXCEPTION 'synthetic-provider-canary'; END; $$ LANGUAGE plpgsql;
             CREATE TRIGGER reject_pages BEFORE INSERT ON document_parse_pages FOR EACH ROW EXECUTE FUNCTION reject_pages();
@@ -128,7 +129,7 @@ public sealed class StructaDocPagesSyncTests(PostgreSqlMigrationFixture fixture)
     {
         using var context = fixture.CreateContext(_database);
         var repository = new DocumentParsePageRepository(context);
-        await repository.ReplaceAsync(Parse, [new(Parse, 1, "old", null)]);
+        await SeedPagesAsync(context, (1, "old"));
         using var cancellation = new CancellationTokenSource();
         var logger = new CaptureLogger();
         var sync = Sync(context, _ =>
@@ -146,7 +147,7 @@ public sealed class StructaDocPagesSyncTests(PostgreSqlMigrationFixture fixture)
     public async Task CancellationDuringLocalReplacement_RollsBackPagesBlocksAndStatusTogether()
     {
         using var setup = fixture.CreateContext(_database);
-        await new DocumentParsePageRepository(setup).ReplaceAsync(Parse, [new(Parse, 1, "old", null)]);
+        await SeedPagesAsync(setup, (1, "old"));
         using var cancellation = new CancellationTokenSource();
         using var context = new DocthecaDbContext(new DbContextOptionsBuilder<DocthecaDbContext>()
             .UseNpgsql(fixture.GetConnectionString(_database)).AddInterceptors(new CancelReplacement(cancellation)).Options);
@@ -157,7 +158,13 @@ public sealed class StructaDocPagesSyncTests(PostgreSqlMigrationFixture fixture)
         (await setup.DocumentParseBlocks.SingleAsync()).TextContent.Should().Be("legacy text");
     }
 
-    private DocumentParseModel Model() => new() { Id = Parse, DocumentFileId = MigrationGoldenStates.FileId, Status = DocumentParseStatus.Parsing, StructaDocParseRunId = _run };
+    private static async Task SeedPagesAsync(DocthecaDbContext context, params (int Number, string? Label)[] pages)
+    {
+        context.DocumentParsePages.AddRange(pages.Select(page => new DocumentParsePageEntity { ParseId = Parse, PageNumber = page.Number, Label = page.Label }));
+        await context.SaveChangesAsync();
+    }
+
+    private DocumentParse Model() => new() { Id = Parse, DocumentFileId = MigrationGoldenStates.FileId, Status = DocumentParseStatus.Parsing, StructaDocParseRunId = _run };
 
     private StructaDocParseResultSync Sync(DocthecaDbContext context,
         Func<CancellationToken, Task<HttpResponseMessage>> pages, CaptureLogger logger)

@@ -53,7 +53,7 @@ Doctheca/
 └── README.md
 ```
 
-> `src/Common`, `src/Ai`, and `src/Consul` are **vendored copies** (2026-09-26 snapshot) of Ruoyu.Study's `ruoyu.common`. They have no compile-time upstream sync; evaluate upstream fixes manually.
+> `src/Common`, `src/Ai`, and `src/Consul` are **vendored copies** (2026-09-26 snapshot) of Ruoyu.Study's `ruoyu.common`. They have no compile-time upstream sync; evaluate upstream fixes manually. They have since been trimmed to what Doctheca uses and renamed to this repository's conventions, so map upstream changes through the renames before porting them.
 
 ## Quick Start
 

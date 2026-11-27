@@ -22,9 +22,9 @@ public class StructureDefinitionServiceTests
     [Fact]
     public async Task Create_StoresLevelsInOrderWithParents()
     {
-        StructureDefinitionModel? stored = null;
-        _repository.Setup(r => r.AddAsync(It.IsAny<StructureDefinitionModel>()))
-            .Callback<StructureDefinitionModel>(model => stored = model)
+        StructureDefinition? stored = null;
+        _repository.Setup(r => r.AddAsync(It.IsAny<StructureDefinition>()))
+            .Callback<StructureDefinition>(model => stored = model)
             .Returns(Task.CompletedTask);
         _repository.Setup(r => r.GetByIdAsync(It.IsAny<Guid>())).ReturnsAsync(() => stored);
         var top = Guid.NewGuid();
@@ -62,7 +62,7 @@ public class StructureDefinitionServiceTests
 
         result.Status.Should().Be(StructureResultStatus.Invalid);
         result.Errors.Should().Contain(error => error.Field == field);
-        _repository.Verify(r => r.AddAsync(It.IsAny<StructureDefinitionModel>()), Times.Never);
+        _repository.Verify(r => r.AddAsync(It.IsAny<StructureDefinition>()), Times.Never);
     }
 
     [Fact]
@@ -80,9 +80,9 @@ public class StructureDefinitionServiceTests
     public async Task Update_RemovingOrReparentingAUsedLevel_IsConflict()
     {
         var id = Guid.NewGuid();
-        var top = new StructureLevelModel { Id = Guid.NewGuid(), DefinitionId = id, Name = "T" };
-        var used = new StructureLevelModel { Id = Guid.NewGuid(), DefinitionId = id, Name = "U", ParentLevelId = top.Id };
-        _repository.Setup(r => r.GetByIdAsync(id)).ReturnsAsync(new StructureDefinitionModel { Id = id, Name = "D", Levels = [top, used] });
+        var top = new StructureLevel { Id = Guid.NewGuid(), DefinitionId = id, Name = "T" };
+        var used = new StructureLevel { Id = Guid.NewGuid(), DefinitionId = id, Name = "U", ParentLevelId = top.Id };
+        _repository.Setup(r => r.GetByIdAsync(id)).ReturnsAsync(new StructureDefinition { Id = id, Name = "D", Levels = [top, used] });
         _repository.Setup(r => r.GetDefinitionIdOfLevelAsync(It.IsAny<Guid>())).ReturnsAsync(id);
         _repository.Setup(r => r.GetUsedLevelIdsAsync(id)).ReturnsAsync([used.Id]);
 
@@ -93,7 +93,7 @@ public class StructureDefinitionServiceTests
         removed.Status.Should().Be(StructureResultStatus.Conflict);
         removed.ErrorCode.Should().Be(StructureErrorCodes.LevelInUse);
         reparented.Status.Should().Be(StructureResultStatus.Conflict);
-        _repository.Verify(r => r.UpdateAsync(It.Is<StructureDefinitionModel>(m => m.Name == "D")), Times.Never);
+        _repository.Verify(r => r.UpdateAsync(It.Is<StructureDefinition>(m => m.Name == "D")), Times.Never);
         renamed.Status.Should().NotBe(StructureResultStatus.Conflict);
     }
 
@@ -101,7 +101,7 @@ public class StructureDefinitionServiceTests
     public async Task Delete_InUse_IsConflict_AndMissing_IsNotFound()
     {
         var id = Guid.NewGuid();
-        _repository.Setup(r => r.GetByIdAsync(id)).ReturnsAsync(new StructureDefinitionModel { Id = id });
+        _repository.Setup(r => r.GetByIdAsync(id)).ReturnsAsync(new StructureDefinition { Id = id });
         _repository.Setup(r => r.GetUsedLevelIdsAsync(id)).ReturnsAsync([Guid.NewGuid()]);
 
         (await _service.DeleteAsync(id)).Status.Should().Be(StructureResultStatus.Conflict);

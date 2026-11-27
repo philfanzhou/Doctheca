@@ -4,11 +4,9 @@ namespace Doctheca.Domain.Services;
 
 public interface IDocumentFileService
 {
-    Task<DocumentFileModel> CreateAsync(DocumentFileModel model);
-    Task<DocumentFileModel?> GetByIdAsync(Guid id);
-    Task<(List<DocumentFileModel> Items, int TotalCount)> GetListAsync(int page, int size, string? fileName = null);
-    Task<DocumentFileModel?> UpdateMetadataAsync(Guid id, string? subject, string? grade, string? year);
-    Task<DocumentFileModel?> AttachStructaDocDocumentAsync(Guid id, Guid structaDocDocumentId);
-    Task<bool> DeleteAsync(Guid id);
+    Task<DocumentFile> CreateAsync(DocumentFile model);
+    Task<DocumentFile?> GetByIdAsync(Guid id);
+    Task<(List<DocumentFile> Items, int TotalCount)> GetListAsync(int page, int size, string? fileName = null);
+    Task<DocumentFile?> AttachStructaDocDocumentAsync(Guid id, Guid structaDocDocumentId);
     Task<IReadOnlyList<string>?> DeleteWithAudioAsync(Guid id);
 }

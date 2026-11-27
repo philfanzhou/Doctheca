@@ -68,7 +68,7 @@ public sealed class DocumentOwnedStructureTests(PostgreSqlMigrationFixture fixtu
         var expected = ids.Take(2).Max();
         (await context.DocumentStructureTrees.SingleAsync(tree => tree.Id == current.CurrentStructureTreeId)).OriginParseId.Should().Be(expected);
         (await context.DocumentStructureAudio.Select(audio => audio.TreeId).Distinct().CountAsync()).Should().Be(6);
-        (await new DocumentStructureAudioRepository(context).GetByParseIdAsync(ids[2])).Should().ContainSingle();
+        (await context.DocumentStructureAudio.AsNoTracking().CountAsync(audio => audio.ParseId == ids[2])).Should().Be(1);
         var stable = current.CurrentStructureTreeId;
         await context.DocumentParses.Where(parse => parse.Id == ids[3]).ExecuteUpdateAsync(set => set.SetProperty(parse => parse.ParsedAt, DateTimeOffset.UtcNow));
         (await context.DocumentFiles.AsNoTracking().SingleAsync(file => file.Id == MigrationGoldenStates.FileId)).CurrentStructureTreeId.Should().Be(stable);
@@ -282,8 +282,11 @@ public sealed class DocumentOwnedStructureTests(PostgreSqlMigrationFixture fixtu
     {
         var seed = await SeedAsync();
         var barrier = new OwnerBarrier(); using var delayed = Context(barrier);
-        var item = new DocumentStructureAudioModel { Id = Guid.NewGuid(), ParseId = seed.Parse, NodeId = seed.Node, SourcePath = "new.wav", ObjectKey = "audio/new.wav", ContentType = "audio/wav" };
-        var insert = new DocumentStructureAudioRepository(delayed).InsertAsync(seed.Parse, [item]);
+        var scope = await new DocumentStructureAudioRepository(delayed).GetScopeAsync(new(seed.Parse));
+        scope!.TreeId.Should().NotBeNull();
+        var item = new DocumentStructureAudio { Id = Guid.NewGuid(), DocumentFileId = scope.DocumentFileId, TreeId = scope.TreeId!.Value,
+            ParseId = seed.Parse, NodeId = seed.Node, SourcePath = "new.wav", ObjectKey = "audio/new.wav", ContentType = "audio/wav" };
+        var insert = new DocumentStructureAudioRepository(delayed).CommitAsync(new(seed.Parse), [item], [], [], DateTimeOffset.UtcNow);
         await barrier.Entered.Task.WaitAsync(TimeSpan.FromSeconds(10));
         using var setup = fixture.CreateContext(_database);
         try
@@ -294,7 +297,7 @@ public sealed class DocumentOwnedStructureTests(PostgreSqlMigrationFixture fixtu
         }
         finally { barrier.Resume.TrySetResult(); }
         // New imports require current nodes at commit as well as preflight; a removed whole tree now rejects the insert.
-        (await insert).Should().BeFalse();
+        (await insert).Status.Should().NotBe(AudioLinkUpdateStatus.Ok);
         (await setup.DocumentStructureAudio.AnyAsync(audio => audio.Id == item.Id)).Should().BeFalse();
     }
 
@@ -392,7 +395,7 @@ public sealed class DocumentOwnedStructureTests(PostgreSqlMigrationFixture fixtu
         var seed = await SeedAsync(); using var setup = fixture.CreateContext(_database);
         var audio = await setup.DocumentStructureAudio.AsNoTracking().SingleAsync();
         var barrier = new OwnerBarrier(); using var delayed = Context(barrier);
-        var saving = new DocumentStructureAudioRepository(delayed).UpdateLinksAsync(seed.Parse, [new(audio.Id, seed.Node)], [], DateTimeOffset.UtcNow);
+        var saving = new DocumentStructureAudioRepository(delayed).CommitAsync(new(seed.Parse), [], [new(audio.Id, seed.Node)], [], DateTimeOffset.UtcNow);
         await barrier.Entered.Task.WaitAsync(TimeSpan.FromSeconds(10));
         try { (await new DocumentStructureRepository(setup).ReplaceAsync(seed.Parse, [])).Should().BeTrue(); }
         finally { barrier.Resume.TrySetResult(); }
@@ -421,8 +424,8 @@ public sealed class DocumentOwnedStructureTests(PostgreSqlMigrationFixture fixtu
         var backend = ((Npgsql.NpgsqlConnection)context.Database.GetDbConnection()).ProcessID;
         using var control = fixture.CreateContext(_database);
         await control.Database.ExecuteSqlAsync($"SELECT pg_terminate_backend({backend})");
-        var item = new DocumentStructureAudioModel { Id=Guid.NewGuid(), ParseId=seed.Parse, SourcePath="lost.wav", ObjectKey=key, ContentType="audio/wav" };
-        (await Record.ExceptionAsync(() => repo.InsertAsync(seed.Parse, [item]))).Should().NotBeNull();
+        var item = new DocumentStructureAudio { Id=Guid.NewGuid(), ParseId=seed.Parse, SourcePath="lost.wav", ObjectKey=key, ContentType="audio/wav" };
+        (await Record.ExceptionAsync(() => repo.CommitAsync(new(seed.Parse), [item], [], [], DateTimeOffset.UtcNow))).Should().NotBeNull();
         (await control.DocumentStructureAudio.AnyAsync(audio => audio.Id == item.Id)).Should().BeFalse();
         (await Record.ExceptionAsync(() => repo.GetReferencedObjectKeysAsync([key]))).Should().NotBeNull();
     }
@@ -438,7 +441,7 @@ public sealed class DocumentOwnedStructureTests(PostgreSqlMigrationFixture fixtu
     }
     private DocthecaDbContext Context(IInterceptor interceptor) => new(new DbContextOptionsBuilder<DocthecaDbContext>()
         .UseNpgsql(fixture.GetConnectionString(_database)).AddInterceptors(interceptor).Options);
-    private static DocumentParseBlockModel Block(Guid parse, int sequence) => new() { Id = Guid.NewGuid(), ParseId = parse, Sequence = sequence, BlockType = "text", BlockData = "{}" };
+    private static DocumentParseBlock Block(Guid parse, int sequence) => new() { Id = Guid.NewGuid(), ParseId = parse, Sequence = sequence, BlockType = "text", BlockData = "{}" };
     private static Task<List<string>> LegacyRowsAsync(DocthecaDbContext context) => RowsAsync(context, false);
     private static Task<List<string>> AllRowsAsync(DocthecaDbContext context) => RowsAsync(context, true);
     private static async Task<List<string>> RowsAsync(DocthecaDbContext context, bool all)

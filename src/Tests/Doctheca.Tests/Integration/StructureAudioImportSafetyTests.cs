@@ -6,7 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Moq;
-using Doctheca.Common.Oss;
+using Doctheca.Common.ObjectStorage;
 using Doctheca.Domain.Models;
 using Doctheca.Domain.Models.Structure;
 using Doctheca.Domain.Repositories;
@@ -191,7 +191,6 @@ public sealed partial class StructureAudioEndpointTests
         using var scope = factory.Services.CreateScope();
         var actual = scope.ServiceProvider.GetRequiredService<IDocumentStructureAudioRepository>();
         var repo = new Mock<IDocumentStructureAudioRepository>();
-        repo.Setup(r => r.GetExistingSourcePathsAsync(parseId, It.IsAny<IReadOnlyCollection<string>>())).ReturnsAsync([]);
         repo.Setup(r => r.GetReferencedObjectKeysAsync(It.IsAny<IReadOnlyCollection<string>>()))
             .Returns((IReadOnlyCollection<string> keys) => failure.StartsWith("unknown-")
                 ? Task.FromException<HashSet<string>>(new IOException("synthetic reference outage"))
@@ -205,8 +204,8 @@ public sealed partial class StructureAudioEndpointTests
             if (failure == "cancel-during-reload") { cancellation.Cancel(); token.ThrowIfCancellationRequested(); }
             return rows;
         });
-        repo.Setup(r => r.CommitAsync(It.IsAny<AudioOwner>(), It.IsAny<IReadOnlyList<DocumentStructureAudioModel>>(), It.IsAny<IReadOnlyList<AudioLinkChange>>(), It.IsAny<IReadOnlyCollection<Guid>>(), It.IsAny<DateTimeOffset>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
-            .Returns(async (AudioOwner owner, IReadOnlyList<DocumentStructureAudioModel> rows, IReadOnlyList<AudioLinkChange> links, IReadOnlyCollection<Guid> remove, DateTimeOffset now, bool deleteOnly, CancellationToken token) =>
+        repo.Setup(r => r.CommitAsync(It.IsAny<AudioOwner>(), It.IsAny<IReadOnlyList<DocumentStructureAudio>>(), It.IsAny<IReadOnlyList<AudioLinkChange>>(), It.IsAny<IReadOnlyCollection<Guid>>(), It.IsAny<DateTimeOffset>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
+            .Returns(async (AudioOwner owner, IReadOnlyList<DocumentStructureAudio> rows, IReadOnlyList<AudioLinkChange> links, IReadOnlyCollection<Guid> remove, DateTimeOffset now, bool deleteOnly, CancellationToken token) =>
             {
                 if (failure == "parse-removed") (await client.DeleteAsync($"/admin/document-parses/{parseId}")).StatusCode.Should().Be(HttpStatusCode.OK);
                 if (failure == "unknown-reference-before-commit") throw new IOException("synthetic database outage");
@@ -221,12 +220,12 @@ public sealed partial class StructureAudioEndpointTests
         var store = realStore;
         if (failure is "upload" or "cancel-upload")
         {
-            var realOss = scope.ServiceProvider.GetRequiredService<IOssService>();
-            var oss = new Mock<IOssService>();
+            var realOss = scope.ServiceProvider.GetRequiredService<IObjectStore>();
+            var oss = new Mock<IObjectStore>();
             var uploads = 0;
-            oss.Setup(o => o.UploadAsync(It.IsAny<Stream>(), It.IsAny<string>(), It.IsAny<string>(), OssBucket.Audio,
+            oss.Setup(o => o.UploadAsync(It.IsAny<Stream>(), It.IsAny<string>(), It.IsAny<string>(), Bucket.Audio,
                     It.IsAny<string>(), It.IsAny<CancellationToken>()))
-                .Returns(async (Stream content, string name, string type, OssBucket bucket, string? folder, CancellationToken token) =>
+                .Returns(async (Stream content, string name, string type, Bucket bucket, string? folder, CancellationToken token) =>
                 {
                     var key = await realOss.UploadAsync(content, name, type, bucket, folder, token);
                     if (failure == "cancel-upload") { cancellation.Cancel(); token.ThrowIfCancellationRequested(); }
@@ -236,18 +235,17 @@ public sealed partial class StructureAudioEndpointTests
             oss.Setup(o => o.DeleteAsync(It.IsAny<string>())).Returns((string key) => realOss.DeleteAsync(key));
             store = new StructureAudioStore(() => oss.Object, realStore.Status, NullLogger<StructureAudioStore>.Instance);
         }
-        var service = new StructureAudioService(scope.ServiceProvider.GetRequiredService<IDocumentParseRepository>(),
-            scope.ServiceProvider.GetRequiredService<IDocumentStructureRepository>(), repo.Object, store,
-            NullLogger<StructureAudioService>.Instance);
+        var service = new StructureAudioService(repo.Object, store, NullLogger<StructureAudioService>.Instance);
         using var batch = new AudioImportBatch();
         var bytes = Mp3("safe");
         batch.Entries.Add(new("unit1/SectionA.mp3", new(".mp3", "audio/mpeg"), bytes.Length, () => new MemoryStream(bytes)));
         batch.Entries.Add(new("unit1/SectionB.mp3", new(".mp3", "audio/mpeg"), bytes.Length,
             () => failure == "read" ? throw new IOException("synthetic second read failure") : new MemoryStream(bytes)));
+        var owner = new AudioOwner(parseId);
         if (failure.StartsWith("cancel-"))
-            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => service.ImportAsync(parseId, batch, new(), cancellation.Token));
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => service.ImportAsync(owner, batch, new(), null, [], [], [], cancellation.Token));
         else
-            (await service.ImportAsync(parseId, batch, new())).Status.Should().Be(failure == "parse-removed" ? AudioResultStatus.NotFound : AudioResultStatus.StorageUnavailable);
+            (await service.ImportAsync(owner, batch, new(), null, [], [], [])).Status.Should().Be(failure == "parse-removed" ? AudioResultStatus.NotFound : AudioResultStatus.StorageUnavailable);
 
         var retained = failure is "cancel-after-commit" or "cancel-during-reload" or "unknown-commit" ? 2 : 0;
         (await CountAudioAsync(factory, parseText)).Should().Be(retained);
@@ -255,9 +253,7 @@ public sealed partial class StructureAudioEndpointTests
         if (failure == "unknown-reference-before-commit")
         {
             var time = new ShiftedTime { Shift = TimeSpan.FromHours(2) };
-            var recovery = new StructureAudioService(scope.ServiceProvider.GetRequiredService<IDocumentParseRepository>(),
-                scope.ServiceProvider.GetRequiredService<IDocumentStructureRepository>(), actual, realStore,
-                NullLogger<StructureAudioService>.Instance, time);
+            var recovery = new StructureAudioService(actual, realStore, NullLogger<StructureAudioService>.Instance, time);
             (await recovery.SweepOrphansAsync()).Value!.Deleted.Should().Be(2);
             (await minio.KeysAsync(_bucket)).Should().BeEmpty();
         }

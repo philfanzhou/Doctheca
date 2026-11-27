@@ -14,7 +14,6 @@
     <PackageReference Include="Microsoft.AspNetCore.Authentication.OpenIdConnect" Version="10.0.13" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.13" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
-    <PackageReference Include="OpenSearch.Net" Version="2.2.0" />
     <PackageReference Include="ServiceMantle.Diagnostics" Version="0.3.3" />
     <!-- PostgreSQL migration capabilities for the startup orchestration (issue #53): the
          session advisory lock provider (PostgreSqlMigrationLockProvider) and the target

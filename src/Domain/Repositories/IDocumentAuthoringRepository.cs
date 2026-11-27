@@ -1,5 +1,4 @@
 using Doctheca.Domain.Models;
-using Doctheca.Domain.Models.Structure;
 using Doctheca.Domain.Services.Structure;
 
 namespace Doctheca.Domain.Repositories;
@@ -14,14 +13,13 @@ public sealed record DocumentTreeSave(DocumentStructureTree Tree, IReadOnlyColle
 
 public interface IDocumentAuthoringRepository
 {
-    Task<StructureResult<DocumentFileModel>> CreateAsync(DocumentMetadataInput input, Guid? createdBy, CancellationToken ct);
-    Task<StructureResult<DocumentFileModel>> UpdateAsync(Guid id, DocumentMetadataInput input, CancellationToken ct);
-    Task<DocumentFileModel?> FillMissingAsync(Guid id, string? subject, string? grade, string? year, CancellationToken ct);
-    Task<StructureResult<DocumentFileModel>> AttachSourceAsync(Guid id, Guid sourceId, string mediaType, CancellationToken ct);
+    Task<StructureResult<DocumentFile>> CreateAsync(DocumentMetadataInput input, Guid? createdBy, CancellationToken ct);
+    Task<StructureResult<DocumentFile>> UpdateAsync(Guid id, DocumentMetadataInput input, CancellationToken ct);
+    Task<DocumentFile?> FillMissingAsync(Guid id, string? subject, string? grade, string? year, CancellationToken ct);
+    Task<StructureResult<DocumentFile>> AttachSourceAsync(Guid id, Guid sourceId, string mediaType, CancellationToken ct);
     Task<bool> IsSourceReferencedAsync(Guid documentId, Guid sourceId, CancellationToken ct);
     Task<DocumentStructureTree?> GetTreeAsync(Guid documentId, CancellationToken ct);
     Task<StructureResult<DocumentTreeSave>> SaveTreeAsync(Guid documentId, IReadOnlyList<DocumentNodeInput> nodes, CancellationToken ct);
-    Task<List<DocumentStructureNodeModel>> GetCurrentBindingsAsync(Guid parseId);
 }
 
 public sealed class DocumentSourceRequiredException : InvalidOperationException

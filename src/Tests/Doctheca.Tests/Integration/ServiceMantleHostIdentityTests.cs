@@ -93,7 +93,7 @@ public sealed partial class ServiceMantleHostIdentityTests : ServiceMantleIntegr
         Assert.DoesNotContain(snapshot, descriptor =>
             InNamespace(descriptor.ServiceType, "Steeltoe.Discovery") ||
             InNamespace(descriptor.ImplementationType, "Steeltoe.Discovery"));
-        Assert.NotEqual("Consul", RuoyuConsulRuntimeState.Instance.Source);
+        Assert.NotEqual("Consul", RuntimeState.Instance.Source);
     }
 
     [Fact]

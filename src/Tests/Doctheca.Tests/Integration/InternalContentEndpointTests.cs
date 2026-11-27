@@ -4,7 +4,7 @@ using System.Data.Common;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text.Json;
-using Doctheca.Common.Oss;
+using Doctheca.Common.ObjectStorage;
 using Doctheca.Database;
 using Doctheca.Database.Entities;
 using Doctheca.Database.Repositories;
@@ -174,8 +174,8 @@ public sealed class InternalContentEndpointTests(PostgreSqlFixture database) : S
     [InlineData("definition")]
     public async Task MutationsBetweenPages_AreDetectedBeforeSuccessOrStorage(string mutation)
     {
-        var source = new Mock<IOssService>(MockBehavior.Strict);
-        using var factory = Factory(services => { services.RemoveAll<IOssService>(); services.AddSingleton(source.Object); });
+        var source = new Mock<IObjectStore>(MockBehavior.Strict);
+        using var factory = Factory(services => { services.RemoveAll<IObjectStore>(); services.AddSingleton(source.Object); });
         using var client = factory.CreateClient();
         var seed = await SeedAsync(factory);
         try
@@ -191,8 +191,10 @@ public sealed class InternalContentEndpointTests(PostgreSqlFixture database) : S
                 if (mutation == "sibling") db.DocumentStructureNodes.Add(new DocumentStructureNodeEntity { ParseId = seed.Parse, LevelId = seed.Level, Name = "new-sibling", StartSequence = 20, EndSequence = 21 });
                 if (mutation == "sync")
                 {
-                    var repository = scope.ServiceProvider.GetRequiredService<IDocumentParseBlockRepository>();
-                    await repository.AddBlocksAsync(seed.Parse, new[] { 2, 3, 5, 8, 10 }.Select(seq => new DocumentParseBlockModel { Id = Guid.NewGuid(), ParseId = seed.Parse, Sequence = seq, BlockType = "text", ImageId = seq == 5 ? seed.Image : null }));
+                    // A re-sync replaces the parse's whole block set.
+                    await db.DocumentParseBlocks.Where(block => block.ParseId == seed.Parse).ExecuteDeleteAsync();
+                    db.DocumentParseBlocks.AddRange(new[] { 2, 3, 5, 8, 10 }.Select(seq => new DocumentParseBlockEntity { Id = Guid.NewGuid(), ParseId = seed.Parse, Sequence = seq, BlockType = "text", ImageId = seq == 5 ? seed.Image : null }));
+                    await db.SaveChangesAsync();
                 }
                 if (mutation == "replace") Assert.True(await scope.ServiceProvider.GetRequiredService<IDocumentStructureRepository>().ReplaceAsync(seed.Parse, [new() { Id = Guid.NewGuid(), ParseId = seed.Parse, LevelId = seed.Level, Name = "replacement", StartSequence = 2, EndSequence = 10 }]));
                 if (mutation == "current")
@@ -201,7 +203,7 @@ public sealed class InternalContentEndpointTests(PostgreSqlFixture database) : S
                     db.DocumentParses.Add(new() { Id = parse, DocumentFileId = seed.File, Status = DocumentParseStatus.Parsed, ParsedAt = DateTimeOffset.UtcNow.AddDays(1) });
                     db.DocumentStructureNodes.Add(new() { ParseId = parse, LevelId = seed.Level, Name = "current", StartSequence = 2, EndSequence = 10 });
                 }
-                if (mutation == "delete") await new DocumentFileRepository(db).DeleteAsync(seed.File);
+                if (mutation == "delete") await new DocumentFileRepository(db).DeleteWithAudioAsync(seed.File);
                 if (mutation == "definition") await db.DocumentFiles.Where(item => item.Id == seed.File).ExecuteUpdateAsync(set => set.SetProperty(item => item.StructureDefinitionId, (Guid?)null));
                 await db.SaveOwnedChangesAsync();
                 if (mutation == "current")
@@ -234,11 +236,11 @@ public sealed class InternalContentEndpointTests(PostgreSqlFixture database) : S
         upstream.Headers.Location = new Uri("http://private-canary.invalid/bucket/key");
         upstream.Content.Headers.ContentType = new MediaTypeHeaderValue("text/html");
         var handler = new AssetHandler(_ => Task.FromResult(upstream));
-        var oss = new Mock<IOssService>(MockBehavior.Strict);
+        var oss = new Mock<IObjectStore>(MockBehavior.Strict);
         oss.Setup(service => service.DownloadAsync("private-canary/key")).ReturnsAsync(stream);
         using var factory = Factory(services =>
         {
-            services.RemoveAll<IOssService>(); services.AddSingleton(oss.Object);
+            services.RemoveAll<IObjectStore>(); services.AddSingleton(oss.Object);
             services.RemoveAll<IStructaDocClient>(); services.AddSingleton<IStructaDocClient>(new StructaDocClient(new HttpClient(handler) { BaseAddress = new Uri("http://upstream.invalid/") }, Options.Create(new StructaDocOptions { ApiKey = "synthetic" }), NullLogger<StructaDocClient>.Instance));
         });
         using var client = factory.CreateClient();
@@ -280,11 +282,11 @@ public sealed class InternalContentEndpointTests(PostgreSqlFixture database) : S
     [Fact]
     public async Task ForgedCrossNodeCrossParseAndMalformedImageReferences_NeverOpenStorage()
     {
-        var oss = new Mock<IOssService>(MockBehavior.Strict);
+        var oss = new Mock<IObjectStore>(MockBehavior.Strict);
         var remote = new Mock<IStructaDocClient>(MockBehavior.Strict);
         using var factory = Factory(services =>
         {
-            services.RemoveAll<IOssService>(); services.AddSingleton(oss.Object);
+            services.RemoveAll<IObjectStore>(); services.AddSingleton(oss.Object);
             services.RemoveAll<IStructaDocClient>(); services.AddSingleton(remote.Object);
         });
         using var client = factory.CreateClient();
@@ -323,7 +325,7 @@ public sealed class InternalContentEndpointTests(PostgreSqlFixture database) : S
     public async Task ImageFailures_HaveSafeFixedBodiesHeadersAndLogs(string mode, int status)
     {
         var capture = new LogCapture();
-        var oss = new Mock<IOssService>();
+        var oss = new Mock<IObjectStore>();
         var remote = new Mock<IStructaDocClient>();
         var stream = new TrackedStream([1]) { ThrowOnRead = mode == "copy" };
         oss.Setup(service => service.DownloadAsync(It.IsAny<string>())).Returns(() => mode switch
@@ -335,7 +337,7 @@ public sealed class InternalContentEndpointTests(PostgreSqlFixture database) : S
         });
         using var factory = Factory(services =>
         {
-            services.RemoveAll<IOssService>(); services.AddSingleton(oss.Object);
+            services.RemoveAll<IObjectStore>(); services.AddSingleton(oss.Object);
             services.RemoveAll<IStructaDocClient>(); services.AddSingleton(remote.Object);
             services.RemoveAll<ILoggerFactory>(); services.AddSingleton<ILoggerFactory>(LoggerFactory.Create(logging => logging.AddProvider(capture)));
         });
@@ -464,12 +466,12 @@ public sealed class InternalContentEndpointTests(PostgreSqlFixture database) : S
         var bytes = new byte[] { 1, 2, 3, 4, 5, 6 };
         var streams = new List<TrackedStream>();
         Stream Fresh() { var stream = new TrackedStream(bytes); streams.Add(stream); return stream; }
-        var oss = new Mock<IOssService>();
+        var oss = new Mock<IObjectStore>();
         oss.Setup(service => service.DownloadAsync(It.IsAny<string>())).ReturnsAsync(Fresh);
         var handler = new AssetHandler(_ => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new TrackingContent(Fresh()) }));
         using var factory = Factory(services =>
         {
-            services.RemoveAll<IOssService>(); services.AddSingleton(oss.Object);
+            services.RemoveAll<IObjectStore>(); services.AddSingleton(oss.Object);
             services.RemoveAll<IStructaDocClient>(); services.AddSingleton<IStructaDocClient>(new StructaDocClient(new HttpClient(handler) { BaseAddress = new Uri("http://upstream.invalid/") }, Options.Create(new StructaDocOptions()), NullLogger<StructaDocClient>.Instance));
         });
         using var client = factory.CreateClient();
@@ -536,12 +538,12 @@ public sealed class InternalContentEndpointTests(PostgreSqlFixture database) : S
     public async Task StartedImageCancellationOrReadFailure_AbortsAndDisposes(bool fail)
     {
         var stream = new InterruptStream(fail);
-        var oss = new Mock<IOssService>();
+        var oss = new Mock<IObjectStore>();
         oss.Setup(service => service.DownloadAsync(It.IsAny<string>())).ReturnsAsync(stream);
         var capture = new LogCapture();
         using var factory = Factory(services =>
         {
-            services.RemoveAll<IOssService>(); services.AddSingleton(oss.Object);
+            services.RemoveAll<IObjectStore>(); services.AddSingleton(oss.Object);
             services.RemoveAll<ILoggerFactory>(); services.AddSingleton<ILoggerFactory>(LoggerFactory.Create(logging => logging.AddProvider(capture)));
         });
         using var client = factory.CreateClient();
@@ -622,7 +624,7 @@ public sealed class InternalContentEndpointTests(PostgreSqlFixture database) : S
     {
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<DocthecaDbContext>();
-        await new DocumentFileRepository(db).DeleteAsync(seed.File);
+        await new DocumentFileRepository(db).DeleteWithAudioAsync(seed.File);
         await db.StructureDefinitions.Where(item => item.Id == seed.Definition).ExecuteDeleteAsync();
     }
     private sealed class TrackedStream(byte[] bytes) : MemoryStream(bytes)

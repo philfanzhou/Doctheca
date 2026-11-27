@@ -32,7 +32,7 @@ export function captionPreview(caption?: string): string {
   return caption.length > 30 ? caption.slice(0, 30) + '…' : caption
 }
 
-export function matchTypeLabel(matchType: string): string {
+function matchTypeLabel(matchType: string): string {
   if (matchType === 'exact_phrase') return '精确短语'
   if (matchType === 'exact_word') return '精确词'
   if (matchType === 'stem_match') return '词干匹配'

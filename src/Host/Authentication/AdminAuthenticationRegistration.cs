@@ -2,6 +2,7 @@ using System.Security.Claims;
 using System.Text.Encodings.Web;
 using Doctheca.Common.Authentication;
 using Doctheca.Service;
+using Doctheca.Service.Endpoints;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
@@ -24,7 +25,7 @@ internal static class AdminAuthenticationRegistration
         {
             if (configuration["IdentityService:ClockSkewSeconds"] is { } skew && !int.TryParse(skew, out _))
                 throw new InvalidOperationException("IdentityService:ClockSkewSeconds");
-            services.AddRuoyuJwtBearer(configuration, environment, consumer =>
+            services.AddIdentityJwtBearer(configuration, environment, consumer =>
             {
                 consumer.MapInboundClaims = false;
                 consumer.NameClaimType = "unique_name";
@@ -34,7 +35,7 @@ internal static class AdminAuthenticationRegistration
         services.AddAuthorization(options =>
         {
             options.FallbackPolicy = new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build();
-            options.AddPolicy(DocthecaAuthorizationPolicies.Admin, policy =>
+            options.AddPolicy(AuthorizationPolicies.Admin, policy =>
             {
                 // The role assertion itself is unchanged; the session scheme of the policy is the
                 // host's forwarding scheme, so a verified Bearer header is served by the host's

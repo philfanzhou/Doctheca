@@ -16,7 +16,7 @@ Whole-tree saves unlink only removed nodes and preserve kept IDs/audio. Successf
 
 ## Storage boundary and configuration
 
-`StructureAudioStore` alone writes/deletes `audio/` through the existing `IOssService`/`S3OssService`.
+`StructureAudioStore` alone writes/deletes `audio/` through the existing `IObjectStore`/`S3ObjectStore`.
 It refuses non-audio keys. Legacy upload/image prefixes remain read-only except for existing cleanup.
 Audio storage is available when the internal S3 endpoint,
 access/secret keys and bucket are complete; local-file storage is unsupported. A public storage URL is not required for import or cleanup. Administrator playback additionally requires an explicitly valid `Oss:PublicBaseUrl` and `DocumentAudio:PlaybackLinkSeconds` (default 300, allowed 60–3600); missing/invalid public addressing disables only administrator playback, which never falls back to the internal endpoint. These settings are acquired at startup; restart to apply changes. Invalid numeric settings refuse startup before database initialization or HTTP listening, even without S3. Missing S3 settings disable recovery without

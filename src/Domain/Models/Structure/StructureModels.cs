@@ -1,19 +1,19 @@
 namespace Doctheca.Domain.Models.Structure;
 
 /// <summary>A runtime-configured kind of document structure and its levels.</summary>
-public sealed class StructureDefinitionModel
+public sealed class StructureDefinition
 {
     public Guid Id { get; set; }
     public string Name { get; set; } = string.Empty;
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
 
-    /// <summary>Levels in display order (<see cref="StructureLevelModel.SortOrder"/>).</summary>
-    public List<StructureLevelModel> Levels { get; set; } = [];
+    /// <summary>Levels in display order (<see cref="StructureLevel.SortOrder"/>).</summary>
+    public List<StructureLevel> Levels { get; set; } = [];
 }
 
 /// <summary>One configured level; a null <see cref="ParentLevelId"/> marks a top level.</summary>
-public sealed class StructureLevelModel
+public sealed class StructureLevel
 {
     public Guid Id { get; set; }
     public Guid DefinitionId { get; set; }
@@ -27,7 +27,7 @@ public sealed class StructureLevelModel
 /// A hand-marked node of one parse: the inclusive block <c>sequence</c> range
 /// [<see cref="StartSequence"/>, <see cref="EndSequence"/>] at one configured level.
 /// </summary>
-public sealed class DocumentStructureNodeModel
+public sealed class DocumentStructureNode
 {
     public Guid Id { get; set; }
     public Guid DocumentFileId { get; set; }

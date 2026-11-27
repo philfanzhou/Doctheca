@@ -15,6 +15,8 @@ using Moq;
 using Doctheca.Domain.Models;
 using Doctheca.Domain.Services;
 using Doctheca.Service;
+using Doctheca.Service.Endpoints;
+using global::Doctheca.Service.OpenSearch;
 using Doctheca.Service.StructaDoc;
 using Xunit;
 
@@ -30,15 +32,15 @@ public class DocumentFileUploadAuthorizationTests
     {
         var accountId = Guid.NewGuid();
         var structaDocDocumentId = Guid.NewGuid();
-        DocumentFileModel? captured = null;
+        DocumentFile? captured = null;
         var fileService = new Mock<IDocumentFileService>();
-        fileService.Setup(x => x.CreateAsync(It.IsAny<DocumentFileModel>()))
-            .Callback<DocumentFileModel>(model => captured = model)
-            .ReturnsAsync((DocumentFileModel model) => model);
+        fileService.Setup(x => x.CreateAsync(It.IsAny<DocumentFile>()))
+            .Callback<DocumentFile>(model => captured = model)
+            .ReturnsAsync((DocumentFile model) => model);
         var structaDocClient = new Mock<IStructaDocClient>();
         structaDocClient.Setup(x => x.UploadDocumentAsync(
                 It.IsAny<string>(), It.IsAny<string>(), It.IsAny<Stream>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new StructaDocDocumentResponse
+            .ReturnsAsync(new DocumentResponse
             {
                 Id = structaDocDocumentId,
                 MediaType = "application/pdf",
@@ -71,15 +73,15 @@ public class DocumentFileUploadAuthorizationTests
     [InlineData("not-a-uuid")]
     public async Task Upload_MissingOrInvalidSubject_KeepsCreatedByNull(string? subject)
     {
-        DocumentFileModel? captured = null;
+        DocumentFile? captured = null;
         var fileService = new Mock<IDocumentFileService>();
-        fileService.Setup(x => x.CreateAsync(It.IsAny<DocumentFileModel>()))
-            .Callback<DocumentFileModel>(model => captured = model)
-            .ReturnsAsync((DocumentFileModel model) => model);
+        fileService.Setup(x => x.CreateAsync(It.IsAny<DocumentFile>()))
+            .Callback<DocumentFile>(model => captured = model)
+            .ReturnsAsync((DocumentFile model) => model);
         var structaDocClient = new Mock<IStructaDocClient>();
         structaDocClient.Setup(x => x.UploadDocumentAsync(
                 It.IsAny<string>(), It.IsAny<string>(), It.IsAny<Stream>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new StructaDocDocumentResponse
+            .ReturnsAsync(new DocumentResponse
             {
                 Id = Guid.NewGuid(),
                 MediaType = "application/pdf",
@@ -159,7 +161,7 @@ public class DocumentFileUploadAuthorizationTests
             });
         builder.Services.AddAuthorization(options =>
         {
-            options.AddPolicy(DocthecaAuthorizationPolicies.Admin, policy =>
+            options.AddPolicy(AuthorizationPolicies.Admin, policy =>
             {
                 policy.RequireAuthenticatedUser();
                 policy.RequireClaim("role", "admin");
@@ -170,7 +172,7 @@ public class DocumentFileUploadAuthorizationTests
         app.UseAuthentication();
         app.UseAuthorization();
         var group = app.MapGroup("/admin/document-files")
-            .RequireAuthorization(DocthecaAuthorizationPolicies.Admin);
+            .RequireAuthorization(AuthorizationPolicies.Admin);
         group.MapUpload();
         await app.StartAsync();
         return app;

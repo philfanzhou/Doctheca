@@ -30,9 +30,8 @@ public class DocumentParseServiceDeleteTests
     {
         // Arrange
         var parseId = Guid.NewGuid();
-        var model = new DocumentParseModel { Id = parseId, DocumentFileId = Guid.NewGuid() };
+        var model = new DocumentParse { Id = parseId, DocumentFileId = Guid.NewGuid() };
         _parseRepoMock.Setup(r => r.GetByIdAsync(parseId)).ReturnsAsync(model);
-        _imageRepoMock.Setup(r => r.DeleteByParseIdAsync(parseId)).Returns(Task.CompletedTask);
         _parseRepoMock.Setup(r => r.DeleteAsync(parseId)).Returns(Task.CompletedTask);
 
         // Act
@@ -40,7 +39,6 @@ public class DocumentParseServiceDeleteTests
 
         // Assert
         result.Should().BeTrue();
-        _imageRepoMock.Verify(r => r.DeleteByParseIdAsync(parseId), Times.Never);
         _parseRepoMock.Verify(r => r.DeleteAsync(parseId), Times.Once);
     }
 
@@ -49,14 +47,13 @@ public class DocumentParseServiceDeleteTests
     {
         // Arrange
         var parseId = Guid.NewGuid();
-        _parseRepoMock.Setup(r => r.GetByIdAsync(parseId)).ReturnsAsync((DocumentParseModel?)null);
+        _parseRepoMock.Setup(r => r.GetByIdAsync(parseId)).ReturnsAsync((DocumentParse?)null);
 
         // Act
         var result = await _service.DeleteParseAsync(parseId);
 
         // Assert
         result.Should().BeFalse();
-        _imageRepoMock.Verify(r => r.DeleteByParseIdAsync(It.IsAny<Guid>()), Times.Never);
         _parseRepoMock.Verify(r => r.DeleteAsync(It.IsAny<Guid>()), Times.Never);
     }
 }

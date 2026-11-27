@@ -26,7 +26,7 @@ public sealed partial class DocumentStructureEndpointTests
         var id = (await ReadData(await originalClient.PostAsJsonAsync("/admin/document-files", new { fileName = "Retained book" })))!["id"]!.GetValue<string>();
         var source = Guid.NewGuid(); var repository = new Mock<IDocumentAuthoringRepository>();
         if (outcome == "other-reference") { using var scope = original.Services.CreateScope(); var otherDb = scope.ServiceProvider.GetRequiredService<DocthecaDbContext>(); otherDb.DocumentFiles.Add(new() { FileName = "Other source owner", StructaDocDocumentId = source, ContentType = "application/pdf" }); await otherDb.SaveChangesAsync(); }
-        _authoringUpstream.Setup(u => u.UploadDocumentAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<Stream>(), It.IsAny<CancellationToken>())).ReturnsAsync(new StructaDocDocumentResponse { Id = source });
+        _authoringUpstream.Setup(u => u.UploadDocumentAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<Stream>(), It.IsAny<CancellationToken>())).ReturnsAsync(new DocumentResponse { Id = source });
         _authoringUpstream.Setup(u => u.DeleteDocumentAsync(source, It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
         repository.Setup(r => r.AttachSourceAsync(Guid.Parse(id), source, "application/pdf", It.IsAny<CancellationToken>())).Returns(async () =>
         {

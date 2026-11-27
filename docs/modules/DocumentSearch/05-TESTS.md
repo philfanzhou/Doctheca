@@ -5,8 +5,8 @@ Test tooling: `xUnit` + `Moq` + `FluentAssertions`.
 Existing test files (actually present in code):
 - `src/Tests/Doctheca.Tests/OpenSearch/OpenSearchQueryBuilderTests.cs`
 - `src/Tests/Doctheca.Tests/OpenSearch/OpenSearchResponseParserTests.cs`
-- `src/Tests/Doctheca.Tests/OpenSearchIndexServiceTests.cs`
-- `src/Tests/Doctheca.Tests/SearchDomainServiceTests.cs`
+- `src/Tests/Doctheca.Tests/IndexManagerTests.cs`
+- `src/Tests/Doctheca.Tests/SearchServiceTests.cs`
 - `src/Tests/Doctheca.Tests/Integration/DocumentSearchPageLabelTests.cs`
 - `src/Tests/Doctheca.Tests/Integration/InternalSearchEndpointTests.cs`
 
@@ -23,14 +23,14 @@ the existing explicit field list still excludes it. Docker is required for these
 ```bash
 dotnet test src/Tests/Doctheca.Tests \
   --configuration Release \
-  --filter "FullyQualifiedName~OpenSearchQueryBuilderTests|FullyQualifiedName~OpenSearchResponseParserTests|FullyQualifiedName~OpenSearchIndexServiceTests|FullyQualifiedName~SearchDomainServiceTests"
+  --filter "FullyQualifiedName~OpenSearchQueryBuilderTests|FullyQualifiedName~OpenSearchResponseParserTests|FullyQualifiedName~IndexManagerTests|FullyQualifiedName~SearchServiceTests"
 ```
 
 ## Unit Test Inventory (actual method names)
 
 ### OpenSearchQueryBuilderTests (`OpenSearch/OpenSearchQueryBuilderTests.cs`)
 
-Pure logic tests (`OpenSearchQueryBuilder.BuildSearchBody`), no OpenSearch HTTP dependency.
+Pure logic tests (`QueryBuilder.BuildSearchBody`), no OpenSearch HTTP dependency.
 
 | Test method | Coverage |
 |---------|------|
@@ -47,7 +47,7 @@ Pure logic tests (`OpenSearchQueryBuilder.BuildSearchBody`), no OpenSearch HTTP 
 
 ### OpenSearchResponseParserTests (`OpenSearch/OpenSearchResponseParserTests.cs`)
 
-Pure logic tests (`OpenSearchResponseParser.ParseSearchResponse`), no OpenSearch HTTP dependency.
+Pure logic tests (`ResponseParser.ParseSearchResponse`), no OpenSearch HTTP dependency.
 
 | Test method | Coverage |
 |---------|------|
@@ -61,9 +61,9 @@ Pure logic tests (`OpenSearchResponseParser.ParseSearchResponse`), no OpenSearch
 | `ParseSearchResponse_WithMissingScore_DefaultsToZero` | Defaults to 0 when `_score` is missing (FR-07) |
 | `ParseSearchResponse_WithNoHitsProperty_ReturnsEmptyResults` | Returns empty results when the `hits` property is absent (robustness) |
 
-### OpenSearchIndexServiceTests (`OpenSearchIndexServiceTests.cs`)
+### IndexManagerTests (`IndexManagerTests.cs`)
 
-Pure logic tests (`OpenSearchIndexService.BuildIndexBody` passes through to `OpenSearchIndexManager`), no OpenSearch HTTP dependency.
+Pure logic tests (`IndexService.BuildIndexBody` passes through to `IndexManager`), no OpenSearch HTTP dependency.
 
 | Test method | Coverage |
 |---------|------|
@@ -71,7 +71,7 @@ Pure logic tests (`OpenSearchIndexService.BuildIndexBody` passes through to `Ope
 | `BuildIndexBody_DoesNotContainLegacyFields` | Mapping contains no legacy fields (FR-06) |
 | `BuildIndexBody_RetainsSharedFieldsAndAnalyzers` | Retains shared fields and analyzers (`english_custom`/`english_phrase`/sub-field `exact`) (FR-06) |
 
-### SearchDomainServiceTests (`SearchDomainServiceTests.cs`)
+### SearchServiceTests (`SearchServiceTests.cs`)
 
 Mocks `ISearchIndexService` to verify domain service delegation and degradation.
 
@@ -126,7 +126,7 @@ Mocks `ISearchIndexService` to verify domain service delegation and degradation.
 | `ExactSearchAsync_PropagatesMinerUFilterToIndexService` | FR-10 | — |
 | `ExactSearchAsync_WithMinerUFilterAndIndexServiceThrow_ReturnsEmpty` | Degradation | — |
 
-### Generation 2 Unit Tests (added to `OpenSearch/OpenSearchQueryBuilderTests.cs`, `OpenSearch/OpenSearchResponseParserTests.cs`, `OpenSearchIndexServiceTests.cs` / `SearchDomainServiceTests.cs` / `DocumentParseBlockServiceTests.cs`, implemented)
+### Generation 2 Unit Tests (added to `OpenSearch/OpenSearchQueryBuilderTests.cs`, `OpenSearch/OpenSearchResponseParserTests.cs`, `IndexManagerTests.cs` / `SearchServiceTests.cs` / `DocumentParseBlockServiceTests.cs`, implemented)
 
 minerU assertions added within the existing V1 test method sets (no standalone test classes). 15 test methods in total, distributed as follows:
 
@@ -149,13 +149,13 @@ minerU assertions added within the existing V1 test method sets (no standalone t
 | `ParseSearchResponse_WithMissingMinerUFields_FallsBackToNull` | `BlockData`/`Bbox`/`MineruScore` = null when minerU fields are missing (robustness) |
 | `ParseSearchResponse_WithPartialBbox_StillConstructsArray` | Constructs float[4] even when only some bbox components exist (robustness) |
 
-#### OpenSearchIndexServiceTests (1)
+#### IndexManagerTests (1)
 
 | Test method | Coverage |
 |---------|------|
 | `BuildIndexBody_IncludesMinerUFields` | Mapping contains x0/y0/x1/y1/score/has_image/sub_type/text_level/text_format/caption/_meta (FR-12) |
 
-#### SearchDomainServiceTests (2)
+#### SearchServiceTests (2)
 
 | Test method | Coverage |
 |---------|------|

@@ -48,9 +48,9 @@ public static class AudioErrorCodes
 /// <summary>The audio of a parse together with the nodes they link to, for projection.</summary>
 public sealed record ParseAudio(
     Guid? ParseId,
-    IReadOnlyList<DocumentStructureAudioModel> Items,
-    IReadOnlyDictionary<Guid, DocumentStructureNodeModel> Nodes,
-    Guid DocumentFileId = default, Guid? TreeId = null, IReadOnlyList<StructureLevelModel>? Levels = null);
+    IReadOnlyList<DocumentStructureAudio> Items,
+    IReadOnlyDictionary<Guid, DocumentStructureNode> Nodes,
+    Guid DocumentFileId = default, Guid? TreeId = null, IReadOnlyList<StructureLevel>? Levels = null);
 
 public sealed record AudioImportOutcome(ParseAudio Imported, IReadOnlyList<string> Skipped);
 public sealed record AudioPreviewEntry(string SourcePath, string ContentType, long SizeBytes, string MatchStatus,
@@ -69,23 +69,17 @@ public sealed class StructureAudioService
     /// <summary>Recovery grace period, in addition to exact-key leases and reference checks.</summary>
     internal static readonly TimeSpan OrphanGracePeriod = TimeSpan.FromHours(1);
 
-    private readonly IDocumentParseRepository _parseRepository;
-    private readonly IDocumentStructureRepository _structureRepository;
     private readonly IDocumentStructureAudioRepository _audioRepository;
     private readonly StructureAudioStore _store;
     private readonly ILogger<StructureAudioService> _logger;
     private readonly TimeProvider _timeProvider;
 
     public StructureAudioService(
-        IDocumentParseRepository parseRepository,
-        IDocumentStructureRepository structureRepository,
         IDocumentStructureAudioRepository audioRepository,
         StructureAudioStore store,
         ILogger<StructureAudioService> logger,
         TimeProvider? timeProvider = null)
     {
-        _parseRepository = parseRepository;
-        _structureRepository = structureRepository;
         _audioRepository = audioRepository;
         _store = store;
         _logger = logger;
@@ -94,9 +88,6 @@ public sealed class StructureAudioService
 
     public DocumentAudioStorageStatus StorageStatus => _store.Status;
 
-    public async Task<bool> ParseExistsAsync(Guid parseId) => await _parseRepository.GetByIdAsync(parseId) != null;
-
-    public Task<AudioResult<ParseAudio>> ListAsync(Guid parseId) => ListAsync(new AudioOwner(parseId));
     public async Task<AudioResult<ParseAudio>> ListAsync(AudioOwner owner, CancellationToken ct = default)
     {
         var scope = await _audioRepository.GetScopeAsync(owner, ct);
@@ -104,7 +95,6 @@ public sealed class StructureAudioService
         return AudioResult<ParseAudio>.Ok(Load(scope, await _audioRepository.GetByOwnerAsync(owner, ct)));
     }
 
-    public Task<AudioResult<ParseAudio>> ListNodeAsync(Guid parseId, Guid nodeId, CancellationToken ct) => ListNodeAsync(new AudioOwner(parseId), nodeId, ct);
     public async Task<AudioResult<ParseAudio>> ListNodeAsync(AudioOwner owner, Guid nodeId, CancellationToken ct)
     {
         var result = await ListAsync(owner, ct);
@@ -114,7 +104,6 @@ public sealed class StructureAudioService
         return AudioResult<ParseAudio>.Ok(result.Value with { Items = result.Value.Items.Where(a => a.NodeId == nodeId).ToArray() });
     }
 
-    public Task<AudioResult<AudioPlaybackLink>> PlaybackAsync(Guid parseId, Guid audioId, CancellationToken ct) => PlaybackAsync(new AudioOwner(parseId), audioId, ct);
     public async Task<AudioResult<AudioPlaybackLink>> PlaybackAsync(AudioOwner owner, Guid audioId, CancellationToken ct)
     {
         var scope = await _audioRepository.GetScopeAsync(owner, ct);
@@ -156,9 +145,6 @@ public sealed class StructureAudioService
         return AudioResult<AudioPreview>.Ok(new(items, batch.Skipped));
     }
 
-    public Task<AudioResult<AudioImportOutcome>> ImportAsync(Guid parseId, AudioImportBatch batch, DocumentAudioOptions options, CancellationToken ct = default) =>
-        ImportAsync(new AudioOwner(parseId), batch, options, null, [], [], [], ct);
-
     public async Task<AudioResult<AudioImportOutcome>> ImportAsync(AudioOwner owner, AudioImportBatch batch, DocumentAudioOptions options,
         Guid? commonTarget, IReadOnlyList<AudioTarget> targets, IReadOnlyList<AudioLinkChange> changes, IReadOnlyCollection<Guid> removeIds, CancellationToken ct = default)
     {
@@ -184,13 +170,13 @@ public sealed class StructureAudioService
         {
             var id = Guid.NewGuid();
             var match = matcher.Match(entry.SourcePath);
-            return new DocumentStructureAudioModel { Id = id, DocumentFileId = scope.DocumentFileId, TreeId = scope.TreeId!.Value,
+            return new DocumentStructureAudio { Id = id, DocumentFileId = scope.DocumentFileId, TreeId = scope.TreeId!.Value,
                 ParseId = owner.IsDocument ? null : owner.Id, NodeId = selected.TryGetValue(entry.SourcePath, out var target) ? target : commonTarget,
                 SourcePath = entry.SourcePath, ContentType = entry.Format.ContentType, SizeBytes = entry.SizeBytes,
                 ObjectKey = $"{(owner.IsDocument ? StructureAudioStore.DocumentPrefix(scope.DocumentFileId) : StructureAudioStore.ParsePrefix(owner.Id))}{id:N}{entry.Format.Extension}",
                 MatchStatus = match.Status, LinkSource = AudioLinkSource.Manual, CreatedAt = now, UpdatedAt = now };
         }).ToArray();
-        var stored = new List<DocumentStructureAudioModel>();
+        var stored = new List<DocumentStructureAudio>();
         AudioLinkUpdateResult committed;
         await using (var lease = await _audioRepository.AcquireObjectKeyLeaseAsync(planned.Select(a => a.ObjectKey).ToArray(), ct))
         {
@@ -245,8 +231,6 @@ public sealed class StructureAudioService
         return AudioResult<AudioImportOutcome>.Ok(new(reloaded.Value! with { Items = reloaded.Value!.Items.Where(a => ids.Contains(a.Id)).ToArray() }, batch.Skipped));
     }
 
-    public Task<AudioResult<ParseAudio>> UpdateAsync(Guid parseId, IReadOnlyList<AudioLinkChange> changes, IReadOnlyCollection<Guid> removeIds, CancellationToken ct = default) =>
-        UpdateAsync(new AudioOwner(parseId), changes, removeIds, false, ct);
     public async Task<AudioResult<ParseAudio>> UpdateAsync(AudioOwner owner, IReadOnlyList<AudioLinkChange> changes, IReadOnlyCollection<Guid> removeIds,
         bool deleteOnly, CancellationToken ct = default)
     {
@@ -272,20 +256,14 @@ public sealed class StructureAudioService
     private static AudioResult<TOut> CopyFailure<TIn, TOut>(AudioResult<TIn> result) => AudioResult<TOut>.Fail(result.Status, result.ErrorCode!, result.Message!, result.Errors);
     private static AudioResult<T> OwnerMissing<T>(AudioOwner owner) => AudioResult<T>.Fail(AudioResultStatus.NotFound,
         owner.IsDocument ? StructureErrorCodes.FileNotFound : StructureErrorCodes.ParseNotFound, owner.IsDocument ? "File not found" : "Parse record not found");
-    private static ParseAudio Load(AudioScope scope, IReadOnlyList<DocumentStructureAudioModel> items) =>
+    private static ParseAudio Load(AudioScope scope, IReadOnlyList<DocumentStructureAudio> items) =>
         new(scope.ParseId, items, scope.Nodes.ToDictionary(n => n.Id), scope.DocumentFileId, scope.TreeId, scope.Levels);
-    internal static string NodePath(DocumentStructureNodeModel node, IReadOnlyDictionary<Guid, DocumentStructureNodeModel> nodes)
+    internal static string NodePath(DocumentStructureNode node, IReadOnlyDictionary<Guid, DocumentStructureNode> nodes)
     {
         var names = new List<string>(); var seen = new HashSet<Guid>();
         for (var cursor = node; cursor is not null && seen.Add(cursor.Id); cursor = cursor.ParentId is { } parent ? nodes.GetValueOrDefault(parent) : null) names.Insert(0, cursor.Name);
         return string.Join(" > ", names);
     }
-
-    public Task<List<string>> GetParseObjectKeysAsync(Guid parseId) => _audioRepository.GetObjectKeysByParseIdAsync(parseId);
-    public Task<List<string>> GetDocumentObjectKeysAsync(Guid documentId) => _audioRepository.GetObjectKeysByDocumentFileIdAsync(documentId);
-
-    // Compatibility helper; never enumerate an origin prefix or delete a referenced key.
-    public Task<int> DeleteParseObjectsAsync(Guid parseId, IReadOnlyCollection<string> keys) => DeleteUnreferencedObjectsAsync(keys);
 
     public async Task<int> DeleteUnreferencedObjectsAsync(IReadOnlyCollection<string> keys) =>
         (await CleanupAsync(keys)).Failed;
@@ -317,7 +295,7 @@ public sealed class StructureAudioService
     public async Task<AudioResult<AudioSweepOutcome>> SweepOrphansAsync()
     {
         if (!_store.Status.Available) return NotConfigured<AudioSweepOutcome>();
-        List<Common.Oss.OssObjectInfo> objects;
+        List<Common.ObjectStorage.ObjectInfo> objects;
         try
         {
             objects = await _store.ListAllAsync();
@@ -335,7 +313,7 @@ public sealed class StructureAudioService
         return AudioResult<AudioSweepOutcome>.Ok(new AudioSweepOutcome(objects.Count, cleaned.Deleted, cleaned.Failed));
     }
 
-    private async Task DiscardAsync(Guid parseId, IReadOnlyCollection<DocumentStructureAudioModel> stored)
+    private async Task DiscardAsync(Guid parseId, IReadOnlyCollection<DocumentStructureAudio> stored)
     {
         if (stored.Count == 0) return;
         HashSet<string> referenced;

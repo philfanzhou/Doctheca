@@ -19,7 +19,7 @@ public sealed partial class DocumentAuthoringConcurrencyTests
         var s = await Seed(); using var setup = Context();
         var old = await setup.DocumentStructureAudio.AsNoTracking().SingleAsync();
         var tree = (await new DocumentAuthoringRepository(setup).GetTreeAsync(s.File, default))!;
-        var addition = new DocumentStructureAudioModel { Id = Guid.NewGuid(), DocumentFileId = s.File, TreeId = tree.TreeId!.Value,
+        var addition = new DocumentStructureAudio { Id = Guid.NewGuid(), DocumentFileId = s.File, TreeId = tree.TreeId!.Value,
             NodeId = action == "policy" ? null : s.Node, SourcePath = "new.wav", ObjectKey = "audio/new-exact-key.wav", ContentType = "audio/wav", SizeBytes = 48044,
             MatchStatus = AudioMatchStatus.Matched, LinkSource = AudioLinkSource.Manual, CreatedAt = DateTimeOffset.UtcNow, UpdatedAt = DateTimeOffset.UtcNow };
         var barrier = new OwnerBarrier(); using var delayed = Context(barrier);
@@ -34,7 +34,7 @@ public sealed partial class DocumentAuthoringConcurrencyTests
                 (await new StructureDefinitionRepository(setup).UpdateAsync(definition)).Should().BeTrue();
             }
             if (action == "node") await new DocumentAuthoringRepository(setup).SaveTreeAsync(s.File, [Node(s.Level, "Replacement")], default);
-            if (action == "document") await new DocumentFileRepository(setup).DeleteAsync(s.File);
+            if (action == "document") await new DocumentFileRepository(setup).DeleteWithAudioAsync(s.File);
             if (action == "other-review") (await new DocumentStructureAudioRepository(setup).CommitAsync(new(s.File, true), [], [new(s.Audio, null)], [], DateTimeOffset.UtcNow)).Status.Should().Be(AudioLinkUpdateStatus.Ok);
             if (action == "parse-delete") await new DocumentParseRepository(setup).DeleteAsync(s.Parse);
             if (action == "parse-complete")

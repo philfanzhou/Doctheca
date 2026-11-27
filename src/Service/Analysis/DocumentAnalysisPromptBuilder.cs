@@ -9,7 +9,7 @@ internal static class DocumentAnalysisPromptBuilder
     /// Build a focused prompt for metadata-only analysis (subject, grade, year).
     /// Internal for unit testing.
     /// </summary>
-    internal static string BuildMetadataAnalysisPrompt(string textPreview)
+    internal static string Build(string textPreview)
     {
         return $$"""
             你是一个文档分析专家。分析以下文档内容，识别学科和年级。

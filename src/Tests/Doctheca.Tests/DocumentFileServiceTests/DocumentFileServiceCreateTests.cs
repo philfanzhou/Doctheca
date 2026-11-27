@@ -27,15 +27,15 @@ public class DocumentFileServiceCreateTests
     public async Task CreateAsync_SetsCreatedAtAndReturnsModel()
     {
         // Arrange
-        var model = new DocumentFileModel
+        var model = new DocumentFile
         {
             FileName = "test.pdf",
             FilePath = "doctheca-files/abc.pdf",
             ContentType = "application/pdf",
         };
 
-        _fileRepoMock.Setup(r => r.AddAsync(It.IsAny<DocumentFileModel>()))
-            .Callback<DocumentFileModel>(m => m.Id = Guid.NewGuid())
+        _fileRepoMock.Setup(r => r.AddAsync(It.IsAny<DocumentFile>()))
+            .Callback<DocumentFile>(m => m.Id = Guid.NewGuid())
             .Returns(Task.CompletedTask);
 
         // Act
@@ -43,7 +43,7 @@ public class DocumentFileServiceCreateTests
 
         // Assert
         result.CreatedAt.Should().BeCloseTo(DateTimeOffset.UtcNow, TimeSpan.FromSeconds(5));
-        _fileRepoMock.Verify(r => r.AddAsync(It.Is<DocumentFileModel>(m =>
+        _fileRepoMock.Verify(r => r.AddAsync(It.Is<DocumentFile>(m =>
             m.FileName == "test.pdf")), Times.Once);
     }
 }

@@ -14,7 +14,7 @@ public class StructureDefinitionRepository : IStructureDefinitionRepository
         _context = context;
     }
 
-    public async Task<List<StructureDefinitionModel>> ListAsync()
+    public async Task<List<StructureDefinition>> ListAsync()
     {
         var entities = await _context.StructureDefinitions
             .AsNoTracking()
@@ -25,7 +25,7 @@ public class StructureDefinitionRepository : IStructureDefinitionRepository
         return entities.Select(MapToModel).ToList();
     }
 
-    public async Task<StructureDefinitionModel?> GetByIdAsync(Guid id)
+    public async Task<StructureDefinition?> GetByIdAsync(Guid id)
     {
         var entity = await _context.StructureDefinitions
             .AsNoTracking()
@@ -42,7 +42,7 @@ public class StructureDefinitionRepository : IStructureDefinitionRepository
             .FirstOrDefaultAsync();
     }
 
-    public async Task AddAsync(StructureDefinitionModel definition)
+    public async Task AddAsync(StructureDefinition definition)
     {
         var entity = new StructureDefinitionEntity
         {
@@ -61,7 +61,7 @@ public class StructureDefinitionRepository : IStructureDefinitionRepository
         await _context.SaveChangesAsync();
     }
 
-    public async Task<bool> UpdateAsync(StructureDefinitionModel definition)
+    public async Task<bool> UpdateAsync(StructureDefinition definition)
     {
         await using var transaction = await _context.Database.BeginTransactionAsync();
         // Serialize complete replacements before reading tracked levels, including unchanged flags.
@@ -156,7 +156,7 @@ public class StructureDefinitionRepository : IStructureDefinitionRepository
         return [.. used];
     }
 
-    private static IEnumerable<StructureLevelModel> OrderParentsFirst(IReadOnlyCollection<StructureLevelModel> levels)
+    private static IEnumerable<StructureLevel> OrderParentsFirst(IReadOnlyCollection<StructureLevel> levels)
     {
         var emitted = new HashSet<Guid>();
         var pending = levels.ToList();
@@ -180,7 +180,7 @@ public class StructureDefinitionRepository : IStructureDefinitionRepository
         }
     }
 
-    private static StructureLevelEntity MapToEntity(StructureLevelModel model) => new()
+    private static StructureLevelEntity MapToEntity(StructureLevel model) => new()
     {
         Id = model.Id,
         DefinitionId = model.DefinitionId,
@@ -190,7 +190,7 @@ public class StructureDefinitionRepository : IStructureDefinitionRepository
         Required = model.Required,
     };
 
-    private static StructureDefinitionModel MapToModel(StructureDefinitionEntity entity) => new()
+    private static StructureDefinition MapToModel(StructureDefinitionEntity entity) => new()
     {
         Id = entity.Id,
         Name = entity.Name,
@@ -198,7 +198,7 @@ public class StructureDefinitionRepository : IStructureDefinitionRepository
         UpdatedAt = entity.UpdatedAt,
         Levels = entity.Levels
             .OrderBy(level => level.SortOrder)
-            .Select(level => new StructureLevelModel
+            .Select(level => new StructureLevel
             {
                 Id = level.Id,
                 DefinitionId = level.DefinitionId,

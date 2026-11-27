@@ -14,7 +14,7 @@ internal static class DocumentAnalysisResponseParser
     /// Parse LLM metadata analysis response into DocumentMetadataAnalysis.
     /// Returns null on parse failure.
     /// </summary>
-    internal static DocumentMetadataAnalysis? ParseMetadataAnalysis(
+    internal static DocumentMetadataAnalysis? Parse(
         string response,
         ILogger<DocumentAnalysisService> logger,
         JsonSerializerOptions jsonOptions)
@@ -89,9 +89,6 @@ internal static class DocumentAnalysisResponseParser
     /// </summary>
     internal record ModelInfoResponse
     {
-        [JsonPropertyName("id")]
-        public string? Id { get; init; }
-
         [JsonPropertyName("context_length")]
         public int ContextLength { get; init; }
     }

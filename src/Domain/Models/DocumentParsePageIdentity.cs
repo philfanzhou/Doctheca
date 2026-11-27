@@ -5,7 +5,7 @@ namespace Doctheca.Domain.Models;
 /// <summary>Distinguishes a known canonical page from the legacy null-page fallback.</summary>
 public static class DocumentParsePageIdentity
 {
-    public static DocumentParsePageKey? FromBlock(DocumentParseModel parse, DocumentParseBlockModel block)
+    public static DocumentParsePageKey? FromBlock(DocumentParse parse, DocumentParseBlock block)
     {
         if (parse.Id != block.ParseId || !parse.StructaDocParseRunId.HasValue
             || parse.StructaDocParseRunId == Guid.Empty || block.PageId < 0 || block.PageId == int.MaxValue

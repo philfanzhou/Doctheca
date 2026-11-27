@@ -1,0 +1,80 @@
+using System;
+using System.Threading.Tasks;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
+using Doctheca.Domain.Repositories;
+using Doctheca.Domain.Services;
+using Doctheca.Domain.Services.Structure;
+using Doctheca.Service.Parsing;
+
+namespace Doctheca.Service.Endpoints;
+
+public static partial class DocumentFiles
+{
+
+    private static async Task<IResult> UpdateMetadata(
+        Guid id,
+        HttpRequest request,
+        IDocumentAuthoringRepository repository,
+        ISearchIndexService searchIndexService,
+        IDocumentParseService parseService,
+        SearchIndexer searchIndexer,
+        [FromServices] ILoggerFactory loggerFactory)
+    {
+        var logger = loggerFactory.CreateLogger(nameof(DocumentFiles));
+
+        UpdateMetadataRequest? body;
+        try
+        {
+            body = await request.ReadFromJsonAsync<UpdateMetadataRequest>();
+        }
+        catch (Exception)
+        {
+            logger.LogWarning("Failed to parse metadata update request for file {FileId}", id);
+            return Results.BadRequest(new { success = false, message = "Invalid request body" });
+        }
+
+        if (body == null)
+        {
+            return Results.BadRequest(new { success = false, message = "Request body is required" });
+        }
+
+        if (!TryMetadata(new(body.FileName, body.Subject, body.Grade, body.Year, body.StructureDefinitionId), out var input))
+            return InvalidDefinition();
+        var result = await repository.UpdateAsync(id, input!, request.HttpContext.RequestAborted);
+        if (result.Status != StructureResultStatus.Ok) return StructureHttpResults.From(result, Project);
+        var updated = result.Value!;
+
+        // Best-effort: sync OpenSearch index with new metadata
+        try
+        {
+            if (updated.HasSource)
+            {
+                await searchIndexService.UpdateDocumentFileMetadataAsync(id, updated.Subject, updated.Grade, updated.Year);
+                if (body.FileName is not null)
+                    foreach (var parse in (await parseService.GetByFileIdAsync(id)).Where(p => p.Status == Doctheca.Domain.Models.DocumentParseStatus.Parsed))
+                        await searchIndexer.ReindexAsync(parse.Id);
+            }
+        }
+        catch (Exception)
+        {
+            logger.LogWarning("Failed to sync OpenSearch metadata for file {FileId}", id);
+        }
+
+        return Results.Ok(new
+        {
+            success = true,
+            data = new
+            {
+                id = updated.Id.ToString(),
+                fileName = updated.FileName,
+                subject = updated.Subject,
+                grade = updated.Grade,
+                year = updated.Year,
+                structureDefinitionId = updated.StructureDefinitionId?.ToString(),
+                updatedAt = updated.UpdatedAt
+            }
+        });
+    }
+}

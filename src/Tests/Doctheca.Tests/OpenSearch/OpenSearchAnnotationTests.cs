@@ -4,6 +4,7 @@ using Doctheca.Domain.Models.Structure;
 using Doctheca.Domain.Repositories;
 using Doctheca.Domain.Services;
 using Doctheca.Service;
+using global::Doctheca.Service.OpenSearch;
 using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -24,7 +25,7 @@ public sealed class OpenSearchAnnotationTests(OpenSearchFixture fixture)
         var parse = Guid.NewGuid();
         var otherParse = Guid.NewGuid();
         var file = Guid.NewGuid();
-        var blocks = new List<DocumentParseBlockModel>
+        var blocks = new List<DocumentParseBlock>
         {
             Block(parse, 0, null, "running quartz lantern\n图题", null, "image"),
             Block(parse, 1, null, null, "orbital cobalt signal", "table"),
@@ -46,7 +47,7 @@ public sealed class OpenSearchAnnotationTests(OpenSearchFixture fixture)
                 index.IndexParseBlocksAsync(otherParse, Guid.NewGuid(), "same.pdf", "other", "g8", "2026")))
                 .Should().OnlyContain(success => success);
             await RefreshAsync(name);
-            var filter = new SearchFilterModel { ParseId = parse };
+            var filter = new SearchFilter { ParseId = parse };
             var caption = await HitsAsync(index, phrase ? "quartz lantern" : "running", phrase, filter, blocks[0]);
             caption.Single().AssociatedText.Should().Contain("<em>");
             caption.Single().Caption.Should().Be(blocks[0].Caption);
@@ -65,14 +66,14 @@ public sealed class OpenSearchAnnotationTests(OpenSearchFixture fixture)
 
             // Real stemming remains available for annotation text.
             if (!phrase) await HitsAsync(index, "run", false, filter, blocks[0]);
-            await HitsAsync(index, "quartz", false, new SearchFilterModel
+            await HitsAsync(index, "quartz", false, new SearchFilter
             {
                 ParseId = parse, DocumentFileId = file, Subject = "math", Grade = "g7", Year = "2025",
                 DocumentTitle = "same.pdf", BlockType = "image", PageNumber = 0, HasImage = true,
                 BlockSubType = "synthetic", TextLevel = -1, TextFormat = "plain"
             }, blocks[0]);
-            await HitsAsync(index, "quartz", false, new SearchFilterModel { ParseId = parse, Subject = "other" });
-            await HitsAsync(index, "quartz", false, new SearchFilterModel { ParseId = otherParse }, blocks[7]);
+            await HitsAsync(index, "quartz", false, new SearchFilter { ParseId = parse, Subject = "other" });
+            await HitsAsync(index, "quartz", false, new SearchFilter { ParseId = otherParse }, blocks[7]);
 
             // Stable block_id sorting and search_after still produce every hit exactly once.
             var first = await index.ExactSearchAsync("quartz", false, null, 1, null);
@@ -124,8 +125,8 @@ public sealed class OpenSearchAnnotationTests(OpenSearchFixture fixture)
     {
         using var services = Repositories([]);
         var index = Index("doctheca-missing-" + Guid.NewGuid().ToString("N"), services);
-        var logs = new Mock<Microsoft.Extensions.Logging.ILogger<SearchDomainService>>();
-        var domain = new SearchDomainService(index, logs.Object);
+        var logs = new Mock<Microsoft.Extensions.Logging.ILogger<SearchService>>();
+        var domain = new SearchService(index, logs.Object);
         var result = await domain.ExactSearchAsync("synthetic annotation canary", true, null, 10, null);
         result.Results.Should().BeEmpty();
         result.TotalCount.Should().Be(0);
@@ -136,10 +137,10 @@ public sealed class OpenSearchAnnotationTests(OpenSearchFixture fixture)
         logged.Arguments[3].Should().BeNull();
     }
 
-    private OpenSearchIndexService Index(string name, IServiceProvider services) => new(
-        Options.Create(new OpenSearchOptions { Url = fixture.Url, IndexName = name }), services, NullLogger<OpenSearchIndexService>.Instance);
+    private IndexService Index(string name, IServiceProvider services) => new(
+        Options.Create(new OpenSearchOptions { Url = fixture.Url, IndexName = name }), services, NullLogger<IndexService>.Instance);
 
-    private static ServiceProvider Repositories(List<DocumentParseBlockModel> blocks)
+    private static ServiceProvider Repositories(List<DocumentParseBlock> blocks)
     {
         var repository = new Mock<IDocumentParseBlockRepository>();
         repository.Setup(value => value.GetByParseIdAsync(It.IsAny<Guid>()))
@@ -149,15 +150,15 @@ public sealed class OpenSearchAnnotationTests(OpenSearchFixture fixture)
         return new ServiceCollection().AddSingleton(repository.Object).AddSingleton(structure.Object).BuildServiceProvider();
     }
 
-    private static DocumentParseBlockModel Block(Guid parse, int sequence, string? text, string? caption, string? footnote, string type = "text") => new()
+    private static DocumentParseBlock Block(Guid parse, int sequence, string? text, string? caption, string? footnote, string type = "text") => new()
     {
         Id = Guid.NewGuid(), ParseId = parse, Sequence = sequence, PageId = 0, SortIndex = sequence,
         BlockType = type, TextContent = text, Caption = caption, Footnote = footnote,
         ImageId = type == "image" ? Guid.NewGuid() : null, SubType = "synthetic", TextFormat = "plain", BlockData = "{}"
     };
 
-    private static async Task<List<SearchResultModel>> HitsAsync(OpenSearchIndexService index, string query, bool phrase,
-        SearchFilterModel? filter, params DocumentParseBlockModel[] expected)
+    private static async Task<List<SearchResult>> HitsAsync(IndexService index, string query, bool phrase,
+        SearchFilter? filter, params DocumentParseBlock[] expected)
     {
         var (hits, total, _) = await index.ExactSearchAsync(query, phrase, filter, 100, null);
         total.Should().Be(expected.Length);

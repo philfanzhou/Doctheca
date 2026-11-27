@@ -1,7 +1,7 @@
 namespace Doctheca.Domain.Models.Structure;
 
 /// <summary>An imported recording owned by a document/tree; parse provenance is optional.</summary>
-public sealed class DocumentStructureAudioModel
+public sealed class DocumentStructureAudio
 {
     public Guid Id { get; set; }
     public Guid DocumentFileId { get; set; }
@@ -73,6 +73,6 @@ public sealed record AudioLinkUpdateResult(AudioLinkUpdateStatus Status, IReadOn
 /// <summary>Explicit adapter identity: document and parse IDs are never interchangeable.</summary>
 public sealed record AudioOwner(Guid Id, bool IsDocument = false);
 public sealed record AudioScope(Guid DocumentFileId, Guid? TreeId, Guid? ParseId, bool IsCurrent,
-    IReadOnlyList<DocumentStructureNodeModel> Nodes, IReadOnlyList<StructureLevelModel> Levels);
+    IReadOnlyList<DocumentStructureNode> Nodes, IReadOnlyList<StructureLevel> Levels);
 public sealed record AudioPolicyError(string File, string Reason);
 public sealed record AudioTarget(string? SourcePath, Guid? NodeId);

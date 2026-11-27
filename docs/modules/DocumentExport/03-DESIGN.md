@@ -7,10 +7,10 @@
 ├── src/
 │   ├── Domain/
 │   │   ├── Models/
-│   │   │   ├── DocumentParseModel.cs              # Parse record (MarkdownContent / Id / DocumentFileId)
-│   │   │   ├── DocumentParseImageModel.cs         # Image model (ImageName / ImagePath / ContentType)
+│   │   │   ├── DocumentParse.cs              # Parse record (MarkdownContent / Id / DocumentFileId)
+│   │   │   ├── DocumentParseImage.cs         # Image model (ImageName / ImagePath / ContentType)
 │   │   │   ├── DocumentParseStatus.cs             # Status constants (Pending / Parsing / Parsed / Failed)
-│   │   │   └── DocumentFileModel.cs               # File model (FileName)
+│   │   │   └── DocumentFile.cs               # File model (FileName)
 │   │   └── Services/
 │   │       ├── IDocumentParseService.cs           # Parse service interface
 │   │       ├── DocumentParseService.cs            # Parse service implementation
@@ -19,9 +19,9 @@
 │   ├── Service/
 │   │   ├── MarkdownExportHelper.cs                # Core export logic (image path handling / ZIP / HTML)
 │   │   └── Endpoints/
-│   │       └── DocumentExportEndpoints.cs         # 4 export endpoints
+│   │       └── DocumentExport.cs         # 4 export endpoints
 │   └── Host/
-│       └── Program.cs                             # Registers MapDocumentExportEndpoints
+│       └── Program.cs                             # Registers MapDocumentExport
 └── docs/modules/DocumentExport/
     ├── 01-FEATURE.md
     ├── 02-SPEC.md
@@ -36,18 +36,18 @@
 ### IDocumentParseService (reused; methods involved in export)
 
 ```csharp
-Task<DocumentParseModel?> GetByIdAsync(Guid id);
-Task<DocumentParseModel?> GetLatestByFileIdAsync(Guid documentFileId);
-Task<List<DocumentParseImageModel>> GetImagesByParseIdAsync(Guid parseId);
+Task<DocumentParse?> GetByIdAsync(Guid id);
+Task<DocumentParse?> GetLatestByFileIdAsync(Guid documentFileId);
+Task<List<DocumentParseImage>> GetImagesByParseIdAsync(Guid parseId);
 ```
 
 ### IDocumentFileService (reused)
 
 ```csharp
-Task<DocumentFileModel?> GetByIdAsync(Guid id);
+Task<DocumentFile?> GetByIdAsync(Guid id);
 ```
 
-### IOssService (reused, vendored Doctheca.Common)
+### IObjectStore (reused, vendored Doctheca.Common)
 
 ```csharp
 Task<Stream> DownloadAsync(string objectPath);
@@ -57,10 +57,10 @@ Task<string> GetPresignedUrlAsync(string objectPath, int expirySeconds = 3600);
 ### MarkdownExportHelper (new, internal static)
 
 ```csharp
-public static string ReplaceImagePathsRelative(string markdown, IReadOnlyList<DocumentParseImageModel> images);
-public static Task<string> ReplaceImagePathsBase64Async(string markdown, IReadOnlyList<DocumentParseImageModel> images, IOssService ossService, ILogger logger);
-public static Task<string> ReplaceImagePathsPresignedAsync(string markdown, IReadOnlyList<DocumentParseImageModel> images, IOssService ossService, ILogger logger);
-public static Task<MemoryStream> BuildMarkdownZipAsync(string fileName, string markdownContent, IReadOnlyList<DocumentParseImageModel> images, IOssService ossService, ILogger logger);
+public static string ReplaceImagePathsRelative(string markdown, IReadOnlyList<DocumentParseImage> images);
+public static Task<string> ReplaceImagePathsBase64Async(string markdown, IReadOnlyList<DocumentParseImage> images, IObjectStore objectStore, ILogger logger);
+public static Task<string> ReplaceImagePathsPresignedAsync(string markdown, IReadOnlyList<DocumentParseImage> images, IObjectStore objectStore, ILogger logger);
+public static Task<MemoryStream> BuildMarkdownZipAsync(string fileName, string markdownContent, IReadOnlyList<DocumentParseImage> images, IObjectStore objectStore, ILogger logger);
 public static MemoryStream BuildHtmlStream(string fileName, string markdownContent);
 ```
 
@@ -79,7 +79,7 @@ GET /admin/document-parses/{parseId}/export/html     → HTML (Base64 inline)
 
 ```
 HTTP Request
-  → DocumentExportEndpoints.ExportMarkdown
+  → DocumentExport.ExportMarkdown
   → fileService.GetByIdAsync(id)                    [validate file exists]
   → parseService.GetLatestByFileIdAsync(id)         [validate parsed]
   → parseService.GetImagesByParseIdAsync(parse.Id)  [fetch image list]
@@ -92,7 +92,7 @@ HTTP Request
 
 ```
 HTTP Request
-  → DocumentExportEndpoints.ExportHtml
+  → DocumentExport.ExportHtml
   → fileService.GetByIdAsync(id)                    [validate file exists]
   → parseService.GetLatestByFileIdAsync(id)         [validate parsed]
   → parseService.GetImagesByParseIdAsync(parse.Id)  [fetch image list]
@@ -117,7 +117,7 @@ Shares `ExportMarkdownCore` / `ExportHtmlCore` with the file level; only the ent
 | Base64 inline | HTML export | Single self-contained file; opens directly in a browser with no external dependencies |
 | Presigned URL | In-browser preview (reserved) | Avoids Base64 bloat and saves bandwidth for large images; not currently wired into any endpoint |
 
-All three modes share the `ImagePath` / `ImageName` / `ImageType` fields of `DocumentParseImageModel`; differences are isolated in helper methods, so the endpoint layer does not need to care about image handling details.
+All three modes share the `ImagePath` / `ImageName` / `ImageType` fields of `DocumentParseImage`; differences are isolated in helper methods, so the endpoint layer does not need to care about image handling details.
 
 ### HTML conversion approach
 
@@ -160,14 +160,14 @@ Export is a best-effort scenario: a single image failure should not block the ex
 |------|---------|---------|
 | `IDocumentParseService` | Parse record / image list queries | `Doctheca.Domain.Services` |
 | `IDocumentFileService` | File queries | `Doctheca.Domain.Services` |
-| `IOssService` | File upload/download / presigned URLs | `Doctheca.Common.Oss` (vendored from ruoyu.common) |
+| `IObjectStore` | File upload/download / presigned URLs | `Doctheca.Common.Oss` (vendored from ruoyu.common) |
 | `Markdig` | Markdown → HTML conversion | NuGet package |
 
 ## DI Registration
 
 ```csharp
 // Program.cs — endpoint registration (no authentication; internal admin backend)
-app.MapDocumentExportEndpoints();
+app.MapDocumentExport();
 ```
 
-`MarkdownExportHelper` is `internal static` and needs no DI registration. `IDocumentParseService` / `IDocumentFileService` / `IOssService` are already registered in Program.cs, and the export endpoints use them directly via parameter injection.
+`MarkdownExportHelper` is `internal static` and needs no DI registration. `IDocumentParseService` / `IDocumentFileService` / `IObjectStore` are already registered in Program.cs, and the export endpoints use them directly via parameter injection.

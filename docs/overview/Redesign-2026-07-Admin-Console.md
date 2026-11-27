@@ -158,7 +158,6 @@ Main (.view, 200ms blur transition)
 | `frontend/src/components/ChartLine.vue` | SVG line chart (drawing animation) |
 | `frontend/src/components/ChartDonut.vue` | SVG donut chart (drawing animation) |
 | `frontend/src/components/AppDrawer.vue` | Generic drawer (spring entrance) |
-| `frontend/src/components/AppModal.vue` | Generic modal (spring entrance) |
 | `frontend/src/components/AppToast.vue` | Toast container (spring entrance) |
 | `frontend/src/components/StatCard.vue` | Stat card (hover lift + number roll-up) |
 | `frontend/src/components/StatusStrip.vue` | Status strip |

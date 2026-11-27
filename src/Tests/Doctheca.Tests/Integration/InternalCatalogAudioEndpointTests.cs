@@ -3,7 +3,7 @@ using System.Net;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
-using Doctheca.Common.Oss;
+using Doctheca.Common.ObjectStorage;
 using Doctheca.Database;
 using Doctheca.Database.Entities;
 using Doctheca.Domain.Models;
@@ -38,10 +38,10 @@ public sealed partial class InternalCatalogEndpointTests
             ["Oss:InternalEndpoint"] = "", ["Oss:PublicBaseUrl"] = "invalid-public-address"
         }, configureTestServices: services =>
         {
-            services.RemoveAll<IOssService>();
-            services.AddScoped<IOssService>(_ => throw new InvalidOperationException("Storage must not be constructed."));
-            services.RemoveAll<InternalAudioTokens>();
-            services.AddSingleton(_ => { Interlocked.Increment(ref tokens); return new InternalAudioTokens(TimeProvider.System); });
+            services.RemoveAll<IObjectStore>();
+            services.AddScoped<IObjectStore>(_ => throw new InvalidOperationException("Storage must not be constructed."));
+            services.RemoveAll<AudioTokens>();
+            services.AddSingleton(_ => { Interlocked.Increment(ref tokens); return new AudioTokens(TimeProvider.System); });
             services.AddDbContext<DocthecaDbContext>(options => options.AddInterceptors(sql));
         });
         using var client = factory.CreateClient();

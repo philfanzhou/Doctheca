@@ -12,7 +12,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.IdentityModel.Protocols;
 using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 using Microsoft.IdentityModel.Tokens;
-using Doctheca.Common.Oss;
+using Doctheca.Common.ObjectStorage;
 using Doctheca.Domain.Repositories;
 using Doctheca.Host.Authentication;
 using Doctheca.Service.StructaDoc;
@@ -202,8 +202,8 @@ public abstract class ServiceMantleIntegrationTestBase
                 services.AddSingleton(Mock.Of<ISearchIndexService>());
                 services.RemoveAll<IStructaDocClient>();
                 services.AddSingleton(Mock.Of<IStructaDocClient>());
-                services.RemoveAll<IOssService>();
-                services.AddSingleton(Mock.Of<IOssService>());
+                services.RemoveAll<IObjectStore>();
+                services.AddSingleton(Mock.Of<IObjectStore>());
 
                 // Replace the OIDC-discovery-backed JwtBearer configuration manager with a
                 // static in-memory one carrying the synthetic signing key, so admin Bearer and

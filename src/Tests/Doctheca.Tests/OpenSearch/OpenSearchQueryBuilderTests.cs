@@ -13,7 +13,7 @@ public class OpenSearchQueryBuilderTests
     [Fact]
     public void PhraseQuery_UsesIndependentExactFieldsWithoutBoosts()
     {
-        var body = OpenSearchQueryBuilder.BuildSearchBody("two words", true, null, 10, null);
+        var body = QueryBuilder.BuildSearchBody("two words", true, null, 10, null);
         using var document = JsonDocument.Parse(JsonSerializer.Serialize(body));
         var query = document.RootElement.GetProperty("query").GetProperty("bool");
         query.GetProperty("minimum_should_match").GetInt32().Should().Be(1);
@@ -29,7 +29,7 @@ public class OpenSearchQueryBuilderTests
     [Fact]
     public void BuildSearchBody_WithPhraseQuery_UsesMatchPhraseOnTextExact()
     {
-        var body = OpenSearchQueryBuilder.BuildSearchBody(
+        var body = QueryBuilder.BuildSearchBody(
             "machine learning", phrase: true, filter: null, pageSize: 10, pageToken: null);
 
         var json = JsonSerializer.Serialize(body);
@@ -41,7 +41,7 @@ public class OpenSearchQueryBuilderTests
     [Fact]
     public void BuildSearchBody_WithStemmedQuery_UsesMatchOnText()
     {
-        var body = OpenSearchQueryBuilder.BuildSearchBody(
+        var body = QueryBuilder.BuildSearchBody(
             "machine", phrase: false, filter: null, pageSize: 10, pageToken: null);
 
         var json = JsonSerializer.Serialize(body);
@@ -56,7 +56,7 @@ public class OpenSearchQueryBuilderTests
     [Fact]
     public void BuildSearchBody_WithFullFilter_WrapsInBoolWithAllClauses()
     {
-        var filter = new SearchFilterModel
+        var filter = new SearchFilter
         {
             Subject = "英语",
             Grade = "G10",
@@ -64,7 +64,7 @@ public class OpenSearchQueryBuilderTests
             DocumentTitle = "exam.pdf"
         };
 
-        var body = OpenSearchQueryBuilder.BuildSearchBody(
+        var body = QueryBuilder.BuildSearchBody(
             "test", phrase: false, filter, pageSize: 10, pageToken: null);
 
         var json = JsonSerializer.Serialize(body);
@@ -81,7 +81,7 @@ public class OpenSearchQueryBuilderTests
     [Fact]
     public void BuildSearchBody_WithNullFilter_RequiresAnyBodyOrAnnotationField()
     {
-        var body = OpenSearchQueryBuilder.BuildSearchBody(
+        var body = QueryBuilder.BuildSearchBody(
             "test", phrase: false, filter: null, pageSize: 10, pageToken: null);
 
         var json = JsonSerializer.Serialize(body);
@@ -96,7 +96,7 @@ public class OpenSearchQueryBuilderTests
     [Fact]
     public void BuildSearchBody_WithPartialFilter_OnlyIncludesNonEmptyFields()
     {
-        var filter = new SearchFilterModel
+        var filter = new SearchFilter
         {
             Subject = "英语",
             Grade = "",
@@ -104,7 +104,7 @@ public class OpenSearchQueryBuilderTests
             DocumentTitle = ""
         };
 
-        var body = OpenSearchQueryBuilder.BuildSearchBody(
+        var body = QueryBuilder.BuildSearchBody(
             "test", phrase: false, filter, pageSize: 10, pageToken: null);
 
         var json = JsonSerializer.Serialize(body);
@@ -123,7 +123,7 @@ public class OpenSearchQueryBuilderTests
         var sortArray = "[1.5, \"blk-abc\"]";
         var pageToken = Convert.ToBase64String(Encoding.UTF8.GetBytes(sortArray));
 
-        var body = OpenSearchQueryBuilder.BuildSearchBody(
+        var body = QueryBuilder.BuildSearchBody(
             "test", phrase: false, filter: null, pageSize: 10, pageToken);
 
         body.Should().ContainKey("search_after");
@@ -132,7 +132,7 @@ public class OpenSearchQueryBuilderTests
     [Fact]
     public void BuildSearchBody_WithInvalidPageToken_DoesNotIncludeSearchAfter()
     {
-        var body = OpenSearchQueryBuilder.BuildSearchBody(
+        var body = QueryBuilder.BuildSearchBody(
             "test", phrase: false, filter: null, pageSize: 10, pageToken: "!!!invalid base64!!!");
 
         body.Should().NotContainKey("search_after");
@@ -141,11 +141,11 @@ public class OpenSearchQueryBuilderTests
     [Fact]
     public void BuildSearchBody_WithNullOrEmptyPageToken_DoesNotIncludeSearchAfter()
     {
-        var body1 = OpenSearchQueryBuilder.BuildSearchBody(
+        var body1 = QueryBuilder.BuildSearchBody(
             "test", phrase: false, filter: null, pageSize: 10, pageToken: null);
         body1.Should().NotContainKey("search_after");
 
-        var body2 = OpenSearchQueryBuilder.BuildSearchBody(
+        var body2 = QueryBuilder.BuildSearchBody(
             "test", phrase: false, filter: null, pageSize: 10, pageToken: "");
         body2.Should().NotContainKey("search_after");
     }
@@ -155,7 +155,7 @@ public class OpenSearchQueryBuilderTests
     [Fact]
     public void BuildSearchBody_AlwaysIncludesSizeSortAndHighlight()
     {
-        var body = OpenSearchQueryBuilder.BuildSearchBody(
+        var body = QueryBuilder.BuildSearchBody(
             "test", phrase: false, filter: null, pageSize: 25, pageToken: null);
 
         body.Should().ContainKey("size");
@@ -168,7 +168,7 @@ public class OpenSearchQueryBuilderTests
     public void BuildSearchBody_SortUsesBlockIdNotLegacyFields()
     {
         // sort must use block_id (new pipeline), not document_id/segment_type (legacy)
-        var body = OpenSearchQueryBuilder.BuildSearchBody(
+        var body = QueryBuilder.BuildSearchBody(
             "test", phrase: false, filter: null, pageSize: 10, pageToken: null);
 
         var json = JsonSerializer.Serialize(body);
@@ -182,9 +182,9 @@ public class OpenSearchQueryBuilderTests
     [Fact]
     public void BuildSearchBody_WithBlockTypeFilter_IncludesTerm()
     {
-        var filter = new SearchFilterModel { BlockType = "image" };
+        var filter = new SearchFilter { BlockType = "image" };
 
-        var body = OpenSearchQueryBuilder.BuildSearchBody(
+        var body = QueryBuilder.BuildSearchBody(
             "test", phrase: false, filter, pageSize: 10, pageToken: null);
 
         var json = JsonSerializer.Serialize(body);
@@ -197,9 +197,9 @@ public class OpenSearchQueryBuilderTests
     [Fact]
     public void BuildSearchBody_WithPageNumberAndHasImage_WrapsAllInFilter()
     {
-        var filter = new SearchFilterModel { PageNumber = 3, HasImage = true };
+        var filter = new SearchFilter { PageNumber = 3, HasImage = true };
 
-        var body = OpenSearchQueryBuilder.BuildSearchBody(
+        var body = QueryBuilder.BuildSearchBody(
             "test", phrase: false, filter, pageSize: 10, pageToken: null);
 
         var json = JsonSerializer.Serialize(body);
@@ -214,13 +214,13 @@ public class OpenSearchQueryBuilderTests
     public void BuildSearchBody_WithNoMinerUFilter_OutputEqualsV1()
     {
         // AC-17 zero regression: when all minerU filters are null, output must not contain minerU filter clauses
-        var filter = new SearchFilterModel
+        var filter = new SearchFilter
         {
             Subject = "英语",  // V1 filter only
             // All minerU fields null/default
         };
 
-        var body = OpenSearchQueryBuilder.BuildSearchBody(
+        var body = QueryBuilder.BuildSearchBody(
             "test", phrase: false, filter, pageSize: 10, pageToken: null);
 
         var json = JsonSerializer.Serialize(body);
@@ -239,14 +239,14 @@ public class OpenSearchQueryBuilderTests
     [Fact]
     public void BuildSearchBody_WithKeywordAndMinerUFilter_SplitsMustAndFilter()
     {
-        var filter = new SearchFilterModel
+        var filter = new SearchFilter
         {
             BlockType = "text",
             BlockSubType = "image_caption",
             ParseId = Guid.Parse("12345678-1234-1234-1234-123456789012")
         };
 
-        var body = OpenSearchQueryBuilder.BuildSearchBody(
+        var body = QueryBuilder.BuildSearchBody(
             "keyword", phrase: false, filter, pageSize: 10, pageToken: null);
 
         var json = JsonSerializer.Serialize(body);
@@ -262,7 +262,7 @@ public class OpenSearchQueryBuilderTests
     [Fact]
     public void BuildSearchBody_WithAllMinerUFilters_IncludesAllTerms()
     {
-        var filter = new SearchFilterModel
+        var filter = new SearchFilter
         {
             BlockType = "image",
             BlockSubType = "image_body",
@@ -274,7 +274,7 @@ public class OpenSearchQueryBuilderTests
             HasImage = true
         };
 
-        var body = OpenSearchQueryBuilder.BuildSearchBody(
+        var body = QueryBuilder.BuildSearchBody(
             "test", phrase: false, filter, pageSize: 10, pageToken: null);
 
         var json = JsonSerializer.Serialize(body);
@@ -294,8 +294,8 @@ public class OpenSearchQueryBuilderTests
     public void BuildSearchBody_WithStructureNodeId_AddsTermOnStructureNodeIds()
     {
         var nodeId = Guid.NewGuid();
-        var body = OpenSearchQueryBuilder.BuildSearchBody(
-            "test", phrase: false, new SearchFilterModel { StructureNodeId = nodeId }, pageSize: 10, pageToken: null);
+        var body = QueryBuilder.BuildSearchBody(
+            "test", phrase: false, new SearchFilter { StructureNodeId = nodeId }, pageSize: 10, pageToken: null);
 
         var json = JsonSerializer.Serialize(body);
         json.Should().Contain("\"structure_node_ids\":{\"value\":\"" + nodeId + "\"}");
@@ -305,10 +305,10 @@ public class OpenSearchQueryBuilderTests
     [Fact]
     public void BuildSearchBody_WithoutStructureNodeId_IsUnchanged()
     {
-        var withoutFilter = JsonSerializer.Serialize(OpenSearchQueryBuilder.BuildSearchBody(
+        var withoutFilter = JsonSerializer.Serialize(QueryBuilder.BuildSearchBody(
             "test", phrase: false, filter: null, pageSize: 10, pageToken: null));
-        var withEmptyFilter = JsonSerializer.Serialize(OpenSearchQueryBuilder.BuildSearchBody(
-            "test", phrase: false, new SearchFilterModel(), pageSize: 10, pageToken: null));
+        var withEmptyFilter = JsonSerializer.Serialize(QueryBuilder.BuildSearchBody(
+            "test", phrase: false, new SearchFilter(), pageSize: 10, pageToken: null));
 
         withoutFilter.Should().NotContain("structure_node_ids");
         withEmptyFilter.Should().Be(withoutFilter);

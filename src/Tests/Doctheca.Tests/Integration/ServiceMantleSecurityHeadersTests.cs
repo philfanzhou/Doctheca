@@ -10,7 +10,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Primitives;
 using ServiceMantle.Web.Http;
-using Doctheca.Common.Oss;
+using Doctheca.Common.ObjectStorage;
 using Doctheca.Database;
 using Doctheca.Database.Entities;
 using Doctheca.Domain.Models;
@@ -182,10 +182,10 @@ public sealed class ServiceMantleSecurityHeadersTests : ServiceMantleIntegration
             .Setup(index => index.ExactSearchAsync(
                 It.IsAny<string>(),
                 It.IsAny<bool>(),
-                It.IsAny<SearchFilterModel?>(),
+                It.IsAny<SearchFilter?>(),
                 It.IsAny<int>(),
                 It.IsAny<string?>()))
-            .ReturnsAsync((new List<SearchResultModel>(), 0, null));
+            .ReturnsAsync((new List<SearchResult>(), 0, null));
         using var factory = CreateFactory(configureTestServices: services =>
         {
             services.RemoveAll<ISearchIndexService>();
@@ -302,14 +302,14 @@ public sealed class ServiceMantleSecurityHeadersTests : ServiceMantleIntegration
     public async Task ExportHtml_Zip_AndImageContent_AreUnmarked_AndRenderUnchanged()
     {
         var imageBytes = new byte[] { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A };
-        var ossMock = new Mock<IOssService>();
+        var ossMock = new Mock<IObjectStore>();
         ossMock
             .Setup(oss => oss.DownloadAsync(It.IsAny<string>()))
             .ReturnsAsync(() => (Stream)new MemoryStream(imageBytes));
 
         using var factory = CreateFactory(configureTestServices: services =>
         {
-            services.RemoveAll<IOssService>();
+            services.RemoveAll<IObjectStore>();
             services.AddSingleton(ossMock.Object);
         });
         using var client = factory.CreateClient();

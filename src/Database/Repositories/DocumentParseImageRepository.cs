@@ -14,16 +14,7 @@ public class DocumentParseImageRepository : IDocumentParseImageRepository
         _context = context;
     }
 
-    public async Task<DocumentParseImageModel> AddAsync(DocumentParseImageModel image)
-    {
-        var entity = MapToEntity(image);
-        _context.DocumentParseImages.Add(entity);
-        await _context.SaveChangesAsync();
-        image.Id = entity.Id;
-        return image;
-    }
-
-    public async Task<List<DocumentParseImageModel>> GetByParseIdAsync(Guid parseId)
+    public async Task<List<DocumentParseImage>> GetByParseIdAsync(Guid parseId)
     {
         return await _context.DocumentParseImages
             .Where(e => e.ParseId == parseId)
@@ -31,24 +22,7 @@ public class DocumentParseImageRepository : IDocumentParseImageRepository
             .ToListAsync();
     }
 
-    public async Task<List<DocumentParseImageModel>> GetByFileIdAsync(Guid documentFileId)
-    {
-        return await _context.DocumentParseImages
-            .Where(e => e.Parse!.DocumentFileId == documentFileId)
-            .Select(e => MapToModel(e))
-            .ToListAsync();
-    }
-
-    public async Task DeleteByParseIdAsync(Guid parseId)
-    {
-        var images = await _context.DocumentParseImages
-            .Where(e => e.ParseId == parseId)
-            .ToListAsync();
-        _context.DocumentParseImages.RemoveRange(images);
-        await _context.SaveChangesAsync();
-    }
-
-    internal static DocumentParseImageEntity MapToEntity(DocumentParseImageModel model) => new()
+    internal static DocumentParseImageEntity MapToEntity(DocumentParseImage model) => new()
     {
         Id = model.Id,
         ParseId = model.ParseId,
@@ -57,7 +31,7 @@ public class DocumentParseImageRepository : IDocumentParseImageRepository
         ContentType = model.ContentType,
     };
 
-    private static DocumentParseImageModel MapToModel(DocumentParseImageEntity entity) => new()
+    private static DocumentParseImage MapToModel(DocumentParseImageEntity entity) => new()
     {
         Id = entity.Id,
         ParseId = entity.ParseId,

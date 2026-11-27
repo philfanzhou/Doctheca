@@ -28,7 +28,7 @@ public class DocumentFileServiceGetByIdTests
     {
         // Arrange
         var id = Guid.NewGuid();
-        var model = new DocumentFileModel { Id = id, FileName = "test.pdf" };
+        var model = new DocumentFile { Id = id, FileName = "test.pdf" };
         _fileRepoMock.Setup(r => r.GetByIdAsync(id)).ReturnsAsync(model);
 
         // Act
@@ -44,7 +44,7 @@ public class DocumentFileServiceGetByIdTests
     {
         // Arrange
         var id = Guid.NewGuid();
-        _fileRepoMock.Setup(r => r.GetByIdAsync(id)).ReturnsAsync((DocumentFileModel?)null);
+        _fileRepoMock.Setup(r => r.GetByIdAsync(id)).ReturnsAsync((DocumentFile?)null);
 
         // Act
         var result = await _service.GetByIdAsync(id);

@@ -30,7 +30,7 @@ public class DocumentParseServiceListTests
     public async Task GetListAsync_ReturnsPagedResults_WithSearch()
     {
         // Arrange
-        var items = new List<DocumentParseModel>
+        var items = new List<DocumentParse>
         {
             new() { Id = Guid.NewGuid(), Status = DocumentParseStatus.Parsed },
             new() { Id = Guid.NewGuid(), Status = DocumentParseStatus.Failed },
@@ -51,7 +51,7 @@ public class DocumentParseServiceListTests
     public async Task GetListAsync_ReturnsPagedResults_WithoutSearch()
     {
         // Arrange
-        var items = new List<DocumentParseModel>
+        var items = new List<DocumentParse>
         {
             new() { Id = Guid.NewGuid(), Status = DocumentParseStatus.Parsed },
         };

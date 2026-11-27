@@ -52,7 +52,7 @@ public sealed class DocthecaMigrationExecutorTests : IAsyncLifetime
 
         (await MigrationGoldenStates.ScalarAsync<bool>(
             context,
-            $"SELECT EXISTS (SELECT 1 FROM pg_trigger t JOIN pg_class c ON c.oid = t.tgrelid WHERE c.relname = 'document_files' AND t.tgname = '{DocthecaMigrationExecutor.UpdatedAtTriggerName}')"))
+            $"SELECT EXISTS (SELECT 1 FROM pg_trigger t JOIN pg_class c ON c.oid = t.tgrelid WHERE c.relname = 'document_files' AND t.tgname = 'set_document_files_updated_at')"))
             .Should().BeTrue();
         var constraints = await MigrationGoldenStates.ReadConstraintShapeAsync(context);
         constraints.Should().Contain(name => name.StartsWith("IX_document_files_file_name:index:"));

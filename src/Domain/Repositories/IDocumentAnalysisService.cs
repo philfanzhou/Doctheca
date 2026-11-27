@@ -10,20 +10,8 @@ namespace Doctheca.Domain.Repositories;
 public interface IDocumentAnalysisService
 {
     /// <summary>
-    /// Maximum text chunk size in characters for LLM calls.
-    /// Dynamically calculated from model context length at initialization.
-    /// </summary>
-    int ChunkSize { get; }
-
-    /// <summary>
-    /// Maximum number of concurrent LLM calls.
-    /// Controls parallelism to balance speed vs. provider rate limits.
-    /// </summary>
-    int MaxConcurrency { get; }
-
-    /// <summary>
     /// Initialize model parameters. Called at startup and lazily on first use.
-    /// Parses ContextLength config, computes ChunkSize.
+    /// Parses ContextLength config and fetches the model context length when it is not configured.
     /// </summary>
     Task InitializeAsync(CancellationToken cancellationToken = default);
 

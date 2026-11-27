@@ -193,9 +193,8 @@ Import order in `main.ts` (later imports override earlier ones):
 | Cards (`.card` / `.hoverable` / `.card-head` / `.card-title` / `.card-sub`) | Hand-written SCSS classes |
 | Tables (`table.data-table` / `.table-wrap`) | Hand-written native `<table>` + SCSS |
 | Badges (`.badge.gray/green/amber/red/blue/indigo` + `.dot` + `.pulse`) | Hand-written SCSS classes |
-| Chips / Strip / Stat / Feed | Hand-written SCSS classes (used by components such as `StatusStrip.vue` / `StatCard.vue`) |
+| Strip / Stat / Feed | Hand-written SCSS classes (used by components such as `StatusStrip.vue` / `StatCard.vue`) |
 | Drawer (`AppDrawer.vue` + `.drawer` + `.overlay`) | Teleport + hand-written SCSS, spring entrance 0.3s |
-| Modal (`AppModal.vue` + `.modal` + `.overlay`) | Teleport + hand-written SCSS, scale + translateY spring entrance |
 | Toast (`AppToast.vue` + `.toast` + `useToast`) | Teleport + global singleton, success/error states, spring entrance 0.3s |
 | Charts (`ChartLine.vue` / `ChartDonut.vue`) | Native SVG, stroke-dashoffset/dasharray drawing animation; `ChartLine`'s `labels` are HTML/SVG-escaped before being spliced into the SVG |
 | Icons (`Icon` / `iconHtml(name)`) | `utils/icons.ts`, 27 linear SVGs, stroke 1.6 round |
@@ -291,7 +290,7 @@ Backend unit tests are unaffected by the frontend refactor (the frontend refacto
 ### 2026-07-20: High-Fidelity Mockup Redesign
 
 - **Input**: `prototype/admin-console-redesign.html` (mockup, Doctheca portion)
-- **Output**: 5 views (OverviewPage new / DocManagePage rewritten / DocDetailPage new / ParseResultsPage rewritten / SearchPage rewritten) + 8 components (Sidebar / Topbar / AppDrawer / AppModal / AppToast / ChartLine / ChartDonut / StatCard / StatusStrip) + 3 composables (useToast / useCountUp) + 1 icons utility
+- **Output**: 5 views (OverviewPage new / DocManagePage rewritten / DocDetailPage new / ParseResultsPage rewritten / SearchPage rewritten) + 9 components (Sidebar / Topbar / AppDrawer / AppToast / BookMetadataForm / ChartLine / ChartDonut / StatCard / StatusStrip) + 3 composables (useToast / useCountUp) + 1 icons utility
 - **Styles**: `tokens.scss` (CSS variables) + `app.scss` (component class library) + `element-variables.scss` (EP primary color `#4F46E5`) + `style.css` (typography helpers)
 - **Routing**: hash routing (4 main pages + detail subpage), provide/inject cross-level communication
 - **Zero business-logic changes**: `git diff` is purely presentation-layer; API endpoints/parameters/validation/polling/confirm dialogs fully equivalent (self-check: see `Redesign-2026-07-Admin-Console.md` §zero-business-change self-check checklist)

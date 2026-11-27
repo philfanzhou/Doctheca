@@ -8,7 +8,7 @@ using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
-using Doctheca.Common.Oss;
+using Doctheca.Common.ObjectStorage;
 using Doctheca.Domain.Models;
 using Doctheca.Service.Audio;
 using Xunit;
@@ -25,8 +25,8 @@ public sealed partial class StructureAudioEndpointTests
         {
             using var factory = CreateFactory(contentRoot: root, settings: minio.Settings(_bucket), configureTestServices: services =>
             {
-                services.RemoveAll<IOssService>();
-                services.AddScoped<IOssService>(sp => new S3OssService(sp.GetRequiredService<IOptions<OssOptions>>().Value));
+                services.RemoveAll<IObjectStore>();
+                services.AddScoped<IObjectStore>(sp => new S3ObjectStore(sp.GetRequiredService<IOptions<StoreOptions>>().Value));
             });
             using var client = Admin(factory);
             var (_, parseId) = await SeedTextbookAsync(factory, client);
@@ -115,7 +115,7 @@ public sealed partial class StructureAudioEndpointTests
         // The existing non-audio presigning method still signs with its original client behavior.
         using (var scope = factory.Services.CreateScope())
         {
-            var legacy = await scope.ServiceProvider.GetRequiredService<IOssService>()
+            var legacy = await scope.ServiceProvider.GetRequiredService<IObjectStore>()
                 .GetPresignedUrlAsync((await minio.KeysAsync(_bucket)).Single(), 60);
             using var legacyBytes = await download.GetAsync(legacy);
             Assert.True(legacyBytes.StatusCode == HttpStatusCode.OK, "Existing S3 presigning behavior changed.");
@@ -174,7 +174,7 @@ public sealed partial class StructureAudioEndpointTests
         // A failed internal Stat must refuse signing even though the public signer itself needs no network.
         using (var scope = factory.Services.CreateScope())
         {
-            var oss = scope.ServiceProvider.GetRequiredService<IOssService>();
+            var oss = scope.ServiceProvider.GetRequiredService<IObjectStore>();
             await oss.DeleteAsync((await minio.KeysAsync(_bucket)).Single());
         }
         await AssertUnavailable(await client.GetAsync($"/admin/document-parses/{parseId}/audio/{item["id"]}/playback-link"));
@@ -205,7 +205,7 @@ public sealed partial class StructureAudioEndpointTests
     [InlineData(true)]
     public async Task PlaybackCancellationBeforeAndDuringStorageNeverReturnsALink(bool wrappedSdkFailure)
     {
-        var oss = new Mock<IOssService>(MockBehavior.Strict);
+        var oss = new Mock<IObjectStore>(MockBehavior.Strict);
         using var cancellation = new CancellationTokenSource();
         var key = $"audio/{Guid.NewGuid():N}/{Guid.NewGuid():N}.wav";
         var store = new StructureAudioStore(() => oss.Object, new(true, null), NullLogger<StructureAudioStore>.Instance, new(true, 60));
@@ -224,7 +224,7 @@ public sealed partial class StructureAudioEndpointTests
     [Fact]
     public async Task SigningFailureDiscardsProviderDiagnosticsAndCancelledSigningReturnsNoSuccess()
     {
-        var oss = new Mock<IOssService>(MockBehavior.Strict);
+        var oss = new Mock<IObjectStore>(MockBehavior.Strict);
         var key = $"audio/{Guid.NewGuid():N}/{Guid.NewGuid():N}.wav";
         var logs = new RequestScopeCapture();
         using var loggerFactory = new LoggerFactory([logs]);

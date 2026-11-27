@@ -253,12 +253,12 @@ public sealed class InternalStructureEndpointTests(PostgreSqlFixture database) :
             using (var scope = seedFactory.Services.CreateScope())
             {
                 var db = scope.ServiceProvider.GetRequiredService<DocthecaDbContext>();
-                if (delete) await new DocumentFileRepository(db).DeleteAsync(seed.File).WaitAsync(TimeSpan.FromSeconds(5));
+                if (delete) await new DocumentFileRepository(db).DeleteWithAudioAsync(seed.File).WaitAsync(TimeSpan.FromSeconds(5));
                 else
                 {
                     var repository = scope.ServiceProvider.GetRequiredService<IDocumentStructureRepository>();
                     Assert.True(await repository.ReplaceAsync(seed.Parse,
-                        [new DocumentStructureNodeModel { Id = Guid.NewGuid(), ParseId = seed.Parse, LevelId = seed.Levels[0], Name = "replacement", StartSequence = 0, EndSequence = 3 }]).WaitAsync(TimeSpan.FromSeconds(5)));
+                        [new DocumentStructureNode { Id = Guid.NewGuid(), ParseId = seed.Parse, LevelId = seed.Levels[0], Name = "replacement", StartSequence = 0, EndSequence = 3 }]).WaitAsync(TimeSpan.FromSeconds(5)));
                     await db.StructureLevels.Where(item => item.DefinitionId == seed.Definition).ExecuteUpdateAsync(set => set.SetProperty(item => item.Name, "renamed-level"));
                     await db.DocumentParseBlocks.Where(item => item.ParseId == seed.Parse).ExecuteUpdateAsync(set => set.SetProperty(item => item.PageId, 99));
                 }
@@ -443,7 +443,7 @@ public sealed class InternalStructureEndpointTests(PostgreSqlFixture database) :
     {
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<DocthecaDbContext>();
-        await new DocumentFileRepository(db).DeleteAsync(seed.File);
+        await new DocumentFileRepository(db).DeleteWithAudioAsync(seed.File);
         await db.StructureLevels.Where(item => item.DefinitionId == seed.Definition).ExecuteUpdateAsync(set => set.SetProperty(item => item.ParentLevelId, (Guid?)null));
         await db.StructureDefinitions.Where(item => item.Id == seed.Definition).ExecuteDeleteAsync();
     }

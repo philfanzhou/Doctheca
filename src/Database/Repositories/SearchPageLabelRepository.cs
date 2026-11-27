@@ -39,8 +39,8 @@ public sealed class SearchPageLabelRepository(DbContextOptions<DocthecaDbContext
         {
             var key = new SearchBlockPageKey(row.Id, row.PageId);
             if (!requested.Contains(key)) continue;
-            var parse = new DocumentParseModel { Id = row.ParseId, StructaDocParseRunId = row.StructaDocParseRunId };
-            var block = new DocumentParseBlockModel { ParseId = row.ParseId, PageId = row.PageId, BlockData = row.BlockData };
+            var parse = new DocumentParse { Id = row.ParseId, StructaDocParseRunId = row.StructaDocParseRunId };
+            var block = new DocumentParseBlock { ParseId = row.ParseId, PageId = row.PageId, BlockData = row.BlockData };
             if (DocumentParsePageIdentity.FromBlock(parse, block).HasValue)
                 labels.Add(key, row.Label);
         }

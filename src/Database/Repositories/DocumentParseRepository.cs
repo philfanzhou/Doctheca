@@ -14,7 +14,7 @@ public class DocumentParseRepository : IDocumentParseRepository
         _context = context;
     }
 
-    public async Task<DocumentParseModel> AddAsync(DocumentParseModel model)
+    public async Task<DocumentParse> AddAsync(DocumentParse model)
     {
         await using var transaction = await _context.Database.BeginTransactionAsync();
         var file = await StructureOwnership.LockDocumentAsync(_context, model.DocumentFileId)
@@ -31,13 +31,13 @@ public class DocumentParseRepository : IDocumentParseRepository
         return model;
     }
 
-    public async Task<DocumentParseModel?> GetByIdAsync(Guid id)
+    public async Task<DocumentParse?> GetByIdAsync(Guid id)
     {
         var entity = await _context.DocumentParses.FindAsync(id);
         return entity != null ? MapToModel(entity) : null;
     }
 
-    public async Task<DocumentParseModel?> GetLatestByFileIdAsync(Guid documentFileId)
+    public async Task<DocumentParse?> GetLatestByFileIdAsync(Guid documentFileId)
     {
         var entity = await _context.DocumentParses
             .Where(e => e.DocumentFileId == documentFileId)
@@ -46,7 +46,7 @@ public class DocumentParseRepository : IDocumentParseRepository
         return entity != null ? MapToModel(entity) : null;
     }
 
-    public async Task<DocumentParseModel> UpdateAsync(DocumentParseModel model)
+    public async Task<DocumentParse> UpdateAsync(DocumentParse model)
     {
         await using var transaction = await _context.Database.BeginTransactionAsync();
         _ = await StructureOwnership.LockParseOwnerAsync(_context, model.Id)
@@ -76,7 +76,7 @@ public class DocumentParseRepository : IDocumentParseRepository
         return MapToModel(entity);
     }
 
-    public async Task<List<DocumentParseModel>> GetByStatusAsync(string status)
+    public async Task<List<DocumentParse>> GetByStatusAsync(string status)
     {
         return await _context.DocumentParses
             .Where(e => e.Status == status)
@@ -84,7 +84,7 @@ public class DocumentParseRepository : IDocumentParseRepository
             .ToListAsync();
     }
 
-    public async Task<List<DocumentParseModel>> GetByStatusesAsync(IReadOnlyCollection<string> statuses)
+    public async Task<List<DocumentParse>> GetByStatusesAsync(IReadOnlyCollection<string> statuses)
     {
         return await _context.DocumentParses
             .Where(e => statuses.Contains(e.Status))
@@ -92,7 +92,7 @@ public class DocumentParseRepository : IDocumentParseRepository
             .ToListAsync();
     }
 
-    public async Task<(List<DocumentParseModel> Items, int TotalCount)> GetListAsync(int page, int size, string? search = null)
+    public async Task<(List<DocumentParse> Items, int TotalCount)> GetListAsync(int page, int size, string? search = null)
     {
         var query = _context.DocumentParses
             .Include(e => e.DocumentFile)
@@ -134,8 +134,8 @@ public class DocumentParseRepository : IDocumentParseRepository
     }
 
     public async Task<string> CompleteAsync(Guid parseId, Guid runId, string markdown,
-        IReadOnlyCollection<DocumentParsePageModel> pages, IReadOnlyList<DocumentParseImageModel> images,
-        IReadOnlyList<DocumentParseBlockModel> blocks, CancellationToken ct = default)
+        IReadOnlyCollection<DocumentParsePage> pages, IReadOnlyList<DocumentParseImage> images,
+        IReadOnlyList<DocumentParseBlock> blocks, CancellationToken ct = default)
     {
         if (pages.Any(page => page.ParseId != parseId || page.PageNumber <= 0) ||
             pages.Select(page => page.PageNumber).Distinct().Count() != pages.Count ||
@@ -177,7 +177,7 @@ public class DocumentParseRepository : IDocumentParseRepository
         finally { _context.ChangeTracker.Clear(); }
     }
 
-    public async Task<DocumentParseModel?> GetLatestByFileIdAndModelAsync(Guid documentFileId, string modelVersion)
+    public async Task<DocumentParse?> GetLatestByFileIdAndModelAsync(Guid documentFileId, string modelVersion)
     {
         var entity = await _context.DocumentParses
             .Where(e => e.DocumentFileId == documentFileId && e.ModelVersion == modelVersion)
@@ -186,7 +186,7 @@ public class DocumentParseRepository : IDocumentParseRepository
         return entity != null ? MapToModel(entity) : null;
     }
 
-    public async Task<List<DocumentParseModel>> GetByFileIdAsync(Guid documentFileId)
+    public async Task<List<DocumentParse>> GetByFileIdAsync(Guid documentFileId)
     {
         return await _context.DocumentParses
             .Where(e => e.DocumentFileId == documentFileId)
@@ -195,7 +195,7 @@ public class DocumentParseRepository : IDocumentParseRepository
             .ToListAsync();
     }
 
-    private static DocumentParseEntity MapToEntity(DocumentParseModel model) => new()
+    private static DocumentParseEntity MapToEntity(DocumentParse model) => new()
     {
         Id = model.Id,
         DocumentFileId = model.DocumentFileId,
@@ -214,7 +214,7 @@ public class DocumentParseRepository : IDocumentParseRepository
         ParsedAt = model.ParsedAt,
     };
 
-    private static DocumentParseModel MapToModel(DocumentParseEntity entity) => new()
+    private static DocumentParse MapToModel(DocumentParseEntity entity) => new()
     {
         Id = entity.Id,
         DocumentFileId = entity.DocumentFileId,

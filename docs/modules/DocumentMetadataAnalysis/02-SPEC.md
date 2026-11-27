@@ -6,7 +6,7 @@
 
 | Column | Type | Constraint | Description |
 |------|------|------|------|
-| `subject` | varchar(50) | nullable | Subject: English/Chinese/Math/Physics/Chemistry/Biology/Other (stored values are the Chinese literals defined in `DocthecaConstants`) |
+| `subject` | varchar(50) | nullable | Subject: English/Chinese/Math/Physics/Chemistry/Biology/Other (stored as free-form text; the LLM prompt suggests the Chinese subject names) |
 | `grade` | varchar(20) | nullable | Grade: K/G1-G12 |
 | `year` | varchar(10) | nullable | Year: 4 digits, e.g. 2024 |
 
@@ -44,7 +44,7 @@ public string? Grade { get; set; }
 public string? Year { get; set; }
 ```
 
-`DocumentFileModel` adds the corresponding fields in sync. The `private static MapToEntity` / `MapToModel` inside `DocumentFileRepository` map them in sync (matching the Entity's Subject/Grade/Year).
+`DocumentFile` adds the corresponding fields in sync. The `private static MapToEntity` / `MapToModel` inside `DocumentFileRepository` map them in sync (matching the Entity's Subject/Grade/Year).
 
 ## 2. Interface changes
 
@@ -64,7 +64,7 @@ Task<bool> UpdateMetadataAsync(Guid id, string? subject, string? grade, string? 
 /// Update subject/grade/year metadata. Null parameters are ignored (not cleared).
 /// Returns the updated model, or null if not found.
 /// </summary>
-Task<DocumentFileModel?> UpdateMetadataAsync(Guid id, string? subject, string? grade, string? year);
+Task<DocumentFile?> UpdateMetadataAsync(Guid id, string? subject, string? grade, string? year);
 ```
 
 ### 2.3 IDocumentAnalysisService
@@ -133,7 +133,7 @@ Response 200:
 Response 404: { "success": false, "message": "File not found", "errorCode": "DOCTHECA_FILE_NOT_FOUND" }
 ```
 
-**DTO definition** (`DocumentFileEndpoints.cs`):
+**DTO definition** (`DocumentFiles.cs`):
 
 ```csharp
 /// <summary>
@@ -224,11 +224,11 @@ Document content:
 2. if textPreview is null/whitespace → return null, log warning "Empty text preview provided for metadata analysis"
 3. if ChunkSize <= 0 || MaxTokensValue <= 0 (LLM initialization failed/not configured) → return null, log info
 4. truncate textPreview to first 2000 chars
-5. DocumentAnalysisPromptBuilder.BuildMetadataAnalysisPrompt(preview)
+5. DocumentAnalysisPromptBuilder.Build(preview)
 6. BuildRequestBody(prompt) → system="Return JSON directly, no explanation." + user prompt, stream=true
 7. try:
    - CallStreamingAsync(requestBody, ct)
-   - DocumentAnalysisResponseParser.ParseMetadataAnalysis(response, _logger, JsonOptions): strip markdown code block wrapping, deserialize, empty string/whitespace/"null" literal → null
+   - DocumentAnalysisResponseParser.Parse(response, _logger, JsonOptions): strip markdown code block wrapping, deserialize, empty string/whitespace/"null" literal → null
    - return result
 8. catch any exception:
    - log warning(ex) "LLM metadata analysis failed, returning null"
@@ -271,7 +271,7 @@ AnalyzeMetadataIfMissingAsync(documentFileId, markdownContent, scopeProvider, ct
 12. catch any other exception → log warning(ex) "LLM metadata analysis failed for file {FileId}", return (do not throw)
 ```
 
-### 5.3 DocumentFileEndpoints — PUT /{id}/metadata
+### 5.3 DocumentFiles — PUT /{id}/metadata
 
 ```
 1. parse request body { subject?, grade?, year? }
@@ -282,7 +282,7 @@ AnalyzeMetadataIfMissingAsync(documentFileId, markdownContent, scopeProvider, ct
 6. return 200 with updated model
 ```
 
-### 5.4 OpenSearchIndexService.UpdateDocumentFileMetadataAsync
+### 5.4 IndexService.UpdateDocumentFileMetadataAsync
 
 Uses the OpenSearch `_update_by_query` API to match by `document_file_id` and update subject/grade/year:
 
@@ -307,7 +307,7 @@ Uses the OpenSearch `_update_by_query` API to match by `document_file_id` and up
 | LLM returns empty strings/whitespace/"null" literals | Treated as null; only fields with actual values are filled | `DocumentAnalysisService.ParseMetadataAnalysis:277-285` |
 | OpenSearch update fails | inner try/catch, logs Warning (syncEx), does not block | `StructaDocParseWorker` |
 | Document does not exist | `GetByIdAsync` → null, logs Warning, does not block | `StructaDocParseWorker` |
-| HTTP request body parse failure | endpoint layer catch → 400 `"Invalid request body"` | `DocumentFileEndpoints:285-289` |
+| HTTP request body parse failure | endpoint layer catch → 400 `"Invalid request body"` | `DocumentFiles:285-289` |
 
 ## 7. Test strategy
 
@@ -319,8 +319,8 @@ Uses the OpenSearch `_update_by_query` API to match by `document_file_id` and up
 
 The following test directions are designed around pure-logic `internal` testable methods, with no dependency on LLM HTTP or the database:
 
-- `DocumentAnalysisPromptBuilder.BuildMetadataAnalysisPrompt(string textPreview)`
-- `DocumentAnalysisResponseParser.ParseMetadataAnalysis(string response, ILogger<DocumentAnalysisService> logger, JsonSerializerOptions jsonOptions)`
+- `DocumentAnalysisPromptBuilder.Build(string textPreview)`
+- `DocumentAnalysisResponseParser.Parse(string response, ILogger<DocumentAnalysisService> logger, JsonSerializerOptions jsonOptions)`
 - `DocumentAnalysisService.ParseTokenCount(string? value)`
 
 | # | Suggested coverage | Methods involved | Covers |
@@ -353,10 +353,10 @@ The following test directions are designed around pure-logic `internal` testable
 | Component | Impact |
 |------|------|
 | `document_files` table | 3 new columns (nullable) |
-| `DocumentFileEndpoints` | New PUT endpoint |
+| `DocumentFiles` | New PUT endpoint |
 | `StructaDocParseWorker` | Metadata analysis step added after parsing completes |
 | `DocumentAnalysisService` | New AnalyzeMetadataAsync method (existing methods unchanged) |
-| `OpenSearchIndexService` | New UpdateDocumentFileMetadataAsync method |
+| `IndexService` | New UpdateDocumentFileMetadataAsync method |
 | Admin frontend page | Metadata display/edit can be added later (not implemented in this iteration) |
 | Deployment scripts | No change (reuses the existing LLM configuration) |
 

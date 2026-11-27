@@ -4,11 +4,11 @@ namespace Doctheca.Domain.Services;
 
 public interface IDocumentParseService
 {
-    Task<DocumentParseModel> CreateAsync(Guid documentFileId, string modelVersion = "vlm");
-    Task<DocumentParseModel?> GetByIdAsync(Guid id);
-    Task<DocumentParseModel?> GetLatestByFileIdAsync(Guid documentFileId);
-    Task<DocumentParseModel?> GetLatestByFileIdAndModelAsync(Guid documentFileId, string modelVersion);
-    Task<DocumentParseModel> UpdateStatusAsync(
+    Task<DocumentParse> CreateAsync(Guid documentFileId, string modelVersion = "vlm");
+    Task<DocumentParse?> GetByIdAsync(Guid id);
+    Task<DocumentParse?> GetLatestByFileIdAsync(Guid documentFileId);
+    Task<DocumentParse?> GetLatestByFileIdAndModelAsync(Guid documentFileId, string modelVersion);
+    Task<DocumentParse> UpdateStatusAsync(
         Guid id,
         string status,
         string? errorMessage = null,
@@ -20,17 +20,14 @@ public interface IDocumentParseService
         string? layoutJson = null,
         string? zipPath = null,
         Guid? structaDocParseRunId = null);
-    Task<List<DocumentParseModel>> GetPendingJobsAsync();
-    Task<List<DocumentParseModel>> GetByStatusAsync(string status);
-    Task<List<DocumentParseModel>> GetActiveJobsAsync();
-    Task AddImageAsync(DocumentParseImageModel image);
-    Task<List<DocumentParseImageModel>> GetImagesByParseIdAsync(Guid parseId);
-    Task<List<DocumentParseImageModel>> GetImagesByFileIdAsync(Guid documentFileId);
-    Task<(List<DocumentParseModel> Items, int TotalCount)> GetListAsync(int page, int size, string? search = null);
+    Task<List<DocumentParse>> GetByStatusAsync(string status);
+    Task<List<DocumentParse>> GetActiveJobsAsync();
+    Task<List<DocumentParseImage>> GetImagesByParseIdAsync(Guid parseId);
+    Task<(List<DocumentParse> Items, int TotalCount)> GetListAsync(int page, int size, string? search = null);
     Task<string> CompleteAsync(Guid parseId, Guid runId, string markdown,
-        IReadOnlyCollection<DocumentParsePageModel> pages, IReadOnlyList<DocumentParseImageModel> images,
-        IReadOnlyList<DocumentParseBlockModel> blocks, CancellationToken ct = default);
+        IReadOnlyCollection<DocumentParsePage> pages, IReadOnlyList<DocumentParseImage> images,
+        IReadOnlyList<DocumentParseBlock> blocks, CancellationToken ct = default);
 
     Task<bool> DeleteParseAsync(Guid parseId);
-    Task<List<DocumentParseModel>> GetByFileIdAsync(Guid documentFileId);
+    Task<List<DocumentParse>> GetByFileIdAsync(Guid documentFileId);
 }

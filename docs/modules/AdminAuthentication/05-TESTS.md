@@ -29,7 +29,7 @@ Build the release image and run `python3 scripts/verify-container-startup.py IMA
 container startup/refusal, health, missing-login configuration and graceful shutdown checks,
 including protocol query canaries at Trace level in the unconfigured-login container.
 
-`ExplicitIssuerTrustTests` uses the production `AddRuoyuJwtBearer` registration and real
+`ExplicitIssuerTrustTests` uses the production `AddIdentityJwtBearer` registration and real
 JwtBearerHandler with HTTPS discovery/JWKS over an in-memory HTTP backchannel. Both the
 default BaseConfigurationManager and a non-base discovery manager accept explicit/migration
 issuers and reject discovery-only, unknown, empty, case and slash variants. Key refresh retains

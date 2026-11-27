@@ -63,7 +63,7 @@ public sealed class RequiredPolicyRepositoryTests(PostgreSqlMigrationFixture fix
         using var attempt = new DocthecaDbContext(new DbContextOptionsBuilder<DocthecaDbContext>()
             .UseNpgsql(fixture.GetConnectionString(_database)).AddInterceptors(new FailCommit()).Options);
         var changed = Copy(initial, "Must roll back", false, false);
-        changed.Levels.Add(new StructureLevelModel { Id = Guid.NewGuid(), DefinitionId = initial.Id, Name = "New", SortOrder = 2 });
+        changed.Levels.Add(new StructureLevel { Id = Guid.NewGuid(), DefinitionId = initial.Id, Name = "New", SortOrder = 2 });
         await Assert.ThrowsAsync<InvalidOperationException>(() => new StructureDefinitionRepository(attempt).UpdateAsync(changed));
         var saved = (await new StructureDefinitionRepository(setup).GetByIdAsync(initial.Id))!;
         saved.Should().BeEquivalentTo(initial);
@@ -74,7 +74,7 @@ public sealed class RequiredPolicyRepositoryTests(PostgreSqlMigrationFixture fix
     private DocthecaDbContext Context(DbCommandInterceptor interceptor) => new(new DbContextOptionsBuilder<DocthecaDbContext>()
         .UseNpgsql(fixture.GetConnectionString(_database)).AddInterceptors(interceptor).Options);
 
-    private static StructureDefinitionModel Definition()
+    private static StructureDefinition Definition()
     {
         var id = Guid.NewGuid();
         var root = Guid.NewGuid();
@@ -85,10 +85,10 @@ public sealed class RequiredPolicyRepositoryTests(PostgreSqlMigrationFixture fix
         ] };
     }
 
-    private static StructureDefinitionModel Copy(StructureDefinitionModel initial, string name, bool root, bool child) => new()
+    private static StructureDefinition Copy(StructureDefinition initial, string name, bool root, bool child) => new()
     {
         Id = initial.Id, Name = name, CreatedAt = initial.CreatedAt, UpdatedAt = initial.UpdatedAt,
-        Levels = initial.Levels.Select((level, i) => new StructureLevelModel {
+        Levels = initial.Levels.Select((level, i) => new StructureLevel {
             Id = level.Id, DefinitionId = initial.Id, Name = level.Name, ParentLevelId = level.ParentLevelId,
             SortOrder = i, Required = i == 0 ? root : child
         }).ToList()

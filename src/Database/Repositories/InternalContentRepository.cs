@@ -61,11 +61,11 @@ public sealed partial class InternalStructureRepository
         var blocks = InRange(context, node);
         var image = await context.DocumentParseImages.AsNoTracking().Where(item => item.Id == imageId && item.ParseId == node.ParseId &&
                 blocks.Any(block => block.ImageId == item.Id))
-            .Select(item => new DocumentParseImageModel { Id = item.Id, ParseId = item.ParseId, ImagePath = item.ImagePath, ContentType = item.ContentType })
+            .Select(item => new DocumentParseImage { Id = item.Id, ParseId = item.ParseId, ImagePath = item.ImagePath, ContentType = item.ContentType })
             .SingleOrDefaultAsync(cancellationToken);
         if (image is null) return new(InternalContentStatus.NotFound);
         var parse = await context.DocumentParses.AsNoTracking().Where(item => item.Id == node.ParseId)
-            .Select(item => new DocumentParseModel { Id = item.Id, StructaDocParseRunId = item.StructaDocParseRunId }).SingleAsync(cancellationToken);
+            .Select(item => new DocumentParse { Id = item.Id, StructaDocParseRunId = item.StructaDocParseRunId }).SingleAsync(cancellationToken);
         cancellationToken.ThrowIfCancellationRequested();
         await transaction.CommitAsync(cancellationToken);
         return new(InternalContentStatus.Found, parse, image);

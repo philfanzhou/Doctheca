@@ -16,7 +16,7 @@ public sealed class DocumentAudioConfigurationTests
         Assert.Equal(300, options.PlaybackLinkSeconds);
         var storage = DocumentAudioStorageStatus.Evaluate(false, _ => "configured");
         Assert.True(storage.Available);
-        Assert.True(InternalAudioSettings.Evaluate(storage, options.PlaybackLinkSeconds).Available);
+        Assert.True(AudioSettings.Evaluate(storage, options.PlaybackLinkSeconds).Available);
         foreach (var address in new[] { null, "", "invalid", "https://user@example.invalid", "https://example.invalid/?x=1" })
             Assert.False(DocumentAudioPlaybackSettings.Evaluate(storage, options.PlaybackLinkSeconds, address).Available);
         Assert.True(DocumentAudioPlaybackSettings.Evaluate(storage, 300, "https://example.invalid/audio").Available);
@@ -37,7 +37,7 @@ public sealed class DocumentAudioConfigurationTests
         Assert.Null(options.Validate());
         Assert.Equal(long.MaxValue, checked(options.MaxArchiveBytes + DocumentAudioOptions.MultipartOverheadBytes));
         var storage = new DocumentAudioStorageStatus(true, null);
-        Assert.Equal(seconds, InternalAudioSettings.Evaluate(storage, options.PlaybackLinkSeconds).LinkSeconds);
+        Assert.Equal(seconds, AudioSettings.Evaluate(storage, options.PlaybackLinkSeconds).LinkSeconds);
         Assert.Equal(seconds, DocumentAudioPlaybackSettings.Evaluate(storage, options.PlaybackLinkSeconds, "https://example.invalid").LinkSeconds);
     }
 
@@ -71,7 +71,7 @@ public sealed class DocumentAudioConfigurationTests
         var status = DocumentAudioStorageStatus.Evaluate(false, key => key == missing ? " " : "storage-value-canary");
         Assert.False(status.Available);
         Assert.Equal("missing Oss:" + missing, status.Reason);
-        Assert.False(InternalAudioSettings.Evaluate(status, 300).Available);
+        Assert.False(AudioSettings.Evaluate(status, 300).Available);
         Assert.False(DocumentAudioPlaybackSettings.Evaluate(status, 300, "https://example.invalid").Available);
     }
 

@@ -1,5 +1,5 @@
 using Microsoft.Extensions.Logging;
-using Doctheca.Common.Oss;
+using Doctheca.Common.ObjectStorage;
 using Doctheca.Domain.Models;
 using Doctheca.Domain.Models.Structure;
 
@@ -9,22 +9,22 @@ namespace Doctheca.Service.Audio;
 public sealed class AudioStorageException() : Exception("Audio storage is unavailable.");
 
 /// <summary>
-/// Structure audio objects in the existing S3-compatible storage (<see cref="IOssService"/>),
+/// Structure audio objects in the existing S3-compatible storage (<see cref="IObjectStore"/>),
 /// always under <see cref="DocumentAudioOptions.ObjectPrefix"/> as
 /// <c>audio/documents/{documentId}/{audioId}{extension}</c> or the retained legacy parse prefix. Keys are exposed only inside an authorized short-lived public playback URL.
 /// </summary>
 public sealed partial class StructureAudioStore
 {
-    private readonly Lazy<IOssService> _ossService;
+    private readonly Lazy<IObjectStore> _ossService;
     private readonly ILogger<StructureAudioStore> _logger;
 
     public StructureAudioStore(
-        Func<IOssService> ossService,
+        Func<IObjectStore> objectStore,
         DocumentAudioStorageStatus status,
         ILogger<StructureAudioStore> logger,
         DocumentAudioPlaybackSettings? playback = null)
     {
-        _ossService = new Lazy<IOssService>(ossService);
+        _ossService = new Lazy<IObjectStore>(objectStore);
         Status = status;
         _logger = logger;
         Playback = playback ?? new(false, 300);
@@ -65,7 +65,7 @@ public sealed partial class StructureAudioStore
     internal static string ParsePrefix(Guid parseId) => $"{DocumentAudioOptions.ObjectPrefix}{parseId:N}/";
     internal static string DocumentPrefix(Guid documentId) => $"{DocumentAudioOptions.ObjectPrefix}documents/{documentId:N}/";
 
-    public Task<AudioPlaybackLink> GetPlaybackLinkAsync(DocumentStructureAudioModel item, TimeProvider clock, CancellationToken ct)
+    public Task<AudioPlaybackLink> GetPlaybackLinkAsync(DocumentStructureAudio item, TimeProvider clock, CancellationToken ct)
     {
         if (!MatchesIdentity(item.DocumentFileId, item.ParseId, item.Id, item.ObjectKey, item.ContentType)) throw new AudioStorageException();
         return GetPlaybackLinkAsync(item.ObjectKey, clock, ct);
@@ -95,7 +95,7 @@ public sealed partial class StructureAudioStore
         string key;
         try
         {
-            key = await _ossService.Value.UploadAsync(content, $"{audioId:N}{extension}", contentType, OssBucket.Audio, folder, cancellationToken);
+            key = await _ossService.Value.UploadAsync(content, $"{audioId:N}{extension}", contentType, Bucket.Audio, folder, cancellationToken);
         }
         catch (OperationCanceledException) { throw; }
         catch (Exception ex)
@@ -125,7 +125,7 @@ public sealed partial class StructureAudioStore
     }
 
     /// <summary>Every stored audio object, for the orphan sweep.</summary>
-    public async Task<List<OssObjectInfo>> ListAllAsync()
+    public async Task<List<ObjectInfo>> ListAllAsync()
     {
         try
         {
