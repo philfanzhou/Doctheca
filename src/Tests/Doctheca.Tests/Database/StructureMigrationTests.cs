@@ -27,7 +27,7 @@ public sealed class StructureMigrationTests(PostgreSqlMigrationFixture fixture) 
 
     public Task DisposeAsync() => fixture.DropDatabaseAsync(_database);
 
-    private static DocthecaMigrationExecutor Executor(DocthecaDbContext context) => new(context, NullLogger.Instance);
+    private static MigrationExecutor Executor(DocthecaDbContext context) => new(context, NullLogger.Instance);
 
     [Fact]
     public async Task PopulatedBaseline_IsMigratedInPlace_BackfillingSequenceAndKeepingRows()
@@ -41,13 +41,13 @@ public sealed class StructureMigrationTests(PostgreSqlMigrationFixture fixture) 
         var parsesBefore = await RowsAsync(context, "SELECT (to_jsonb(p) - 'expected_binding_generation')::text FROM document_parses p ORDER BY id");
 
         var inspection = await Executor(context).InspectDetailedAsync(default);
-        inspection.State.Should().Be(DocthecaMigrationExecutor.DatabaseState.PendingMigrations);
-        DocthecaMigrationExecutor.ToObservationState(inspection.State).Should()
+        inspection.State.Should().Be(MigrationExecutor.DatabaseState.PendingMigrations);
+        MigrationExecutor.ToObservationState(inspection.State).Should()
             .Be(ServiceMantle.Migration.MigrationObservationState.PendingMigration);
 
         await Executor(context).ExecuteAsync();
 
-        (await Executor(context).InspectAsync()).Should().Be(DocthecaMigrationExecutor.DatabaseState.CurrentVersionCompatible);
+        (await Executor(context).InspectAsync()).Should().Be(MigrationExecutor.DatabaseState.CurrentVersionCompatible);
         (await MigrationGoldenStates.ReadAppliedHistoryAsync(context)).Should().Equal(MigrationGoldenStates.AllIds);
 
         // Every existing row is unchanged apart from the new nullable columns.
@@ -91,19 +91,19 @@ public sealed class StructureMigrationTests(PostgreSqlMigrationFixture fixture) 
 
             // Apply the documented down scripts newest first.
             await MigrationGoldenStates.ExecuteRawAsync(context, await File.ReadAllTextAsync(
-                RollbackScriptPath(DocthecaMigrationExecutor.AddDocumentOwnedStructureMigrationId)));
+                RollbackScriptPath(MigrationExecutor.AddDocumentOwnedStructureMigrationId)));
             await MigrationGoldenStates.ExecuteRawAsync(context, await File.ReadAllTextAsync(
-                RollbackScriptPath(DocthecaMigrationExecutor.AddRequiredStructureLevelsMigrationId)));
+                RollbackScriptPath(MigrationExecutor.AddRequiredStructureLevelsMigrationId)));
             await MigrationGoldenStates.ExecuteRawAsync(context, await File.ReadAllTextAsync(
-                RollbackScriptPath(DocthecaMigrationExecutor.ClassifyLevelLessTitlesMigrationId)));
+                RollbackScriptPath(MigrationExecutor.ClassifyLevelLessTitlesMigrationId)));
             await MigrationGoldenStates.ExecuteRawAsync(context, await File.ReadAllTextAsync(
-                RollbackScriptPath(DocthecaMigrationExecutor.AddBlockFootnotesMigrationId)));
+                RollbackScriptPath(MigrationExecutor.AddBlockFootnotesMigrationId)));
             await MigrationGoldenStates.ExecuteRawAsync(context, await File.ReadAllTextAsync(
-                RollbackScriptPath(DocthecaMigrationExecutor.AddDocumentParsePagesMigrationId)));
+                RollbackScriptPath(MigrationExecutor.AddDocumentParsePagesMigrationId)));
             await MigrationGoldenStates.ExecuteRawAsync(context, await File.ReadAllTextAsync(
-                RollbackScriptPath(DocthecaMigrationExecutor.AddStructureAudioMigrationId)));
+                RollbackScriptPath(MigrationExecutor.AddStructureAudioMigrationId)));
             await MigrationGoldenStates.ExecuteRawAsync(context, await File.ReadAllTextAsync(
-                RollbackScriptPath(DocthecaMigrationExecutor.AddDocumentStructureMigrationId)));
+                RollbackScriptPath(MigrationExecutor.AddDocumentStructureMigrationId)));
 
             (await MigrationGoldenStates.ReadAppliedHistoryAsync(context)).Should().Equal(MigrationGoldenStates.InitialId);
             (await MigrationGoldenStates.ReadLegacyColumnShapeAsync(context)).Should().Equal(await MigrationGoldenStates.ReadLegacyColumnShapeAsync(reference));
@@ -112,9 +112,9 @@ public sealed class StructureMigrationTests(PostgreSqlMigrationFixture fixture) 
             (await MigrationGoldenStates.CountRowsAsync(context, "document_parse_blocks")).Should().Be(1);
             // The baseline verifies exactly (the previous image's own current-version check);
             // this application would simply migrate it forward again.
-            (await Executor(context).InspectAsync()).Should().Be(DocthecaMigrationExecutor.DatabaseState.PendingMigrations);
+            (await Executor(context).InspectAsync()).Should().Be(MigrationExecutor.DatabaseState.PendingMigrations);
             await Executor(context).ExecuteAsync();
-            (await Executor(context).InspectAsync()).Should().Be(DocthecaMigrationExecutor.DatabaseState.CurrentVersionCompatible);
+            (await Executor(context).InspectAsync()).Should().Be(MigrationExecutor.DatabaseState.CurrentVersionCompatible);
         }
         finally
         {
@@ -130,7 +130,7 @@ public sealed class StructureMigrationTests(PostgreSqlMigrationFixture fixture) 
         await MigrationGoldenStates.ExecuteRawAsync(context, "CREATE TABLE structure_definitions (id uuid PRIMARY KEY)");
 
         var inspection = await Executor(context).InspectDetailedAsync(default);
-        inspection.State.Should().Be(DocthecaMigrationExecutor.DatabaseState.InspectionFailed);
+        inspection.State.Should().Be(MigrationExecutor.DatabaseState.InspectionFailed);
         inspection.Reason.Should().Contain("structure_definitions");
         await Assert.ThrowsAsync<InvalidOperationException>(() => Executor(context).ExecuteAsync());
         (await MigrationGoldenStates.ReadAppliedHistoryAsync(context)).Should().Equal(MigrationGoldenStates.InitialId);
@@ -145,7 +145,7 @@ public sealed class StructureMigrationTests(PostgreSqlMigrationFixture fixture) 
             $"DELETE FROM \"{MigrationGoldenStates.HistoryTable}\" WHERE \"MigrationId\" = '{MigrationGoldenStates.InitialId}'");
 
         var inspection = await Executor(context).InspectDetailedAsync(default);
-        inspection.State.Should().Be(DocthecaMigrationExecutor.DatabaseState.InspectionFailed);
+        inspection.State.Should().Be(MigrationExecutor.DatabaseState.InspectionFailed);
         inspection.Reason.Should().Contain("prefix");
     }
 
@@ -156,7 +156,7 @@ public sealed class StructureMigrationTests(PostgreSqlMigrationFixture fixture) 
         await MigrationGoldenStates.EnsureCreatedLegacyAsync(context);
         await MigrationGoldenStates.ExecuteRawAsync(context, "CREATE TABLE structure_levels (id uuid PRIMARY KEY)");
 
-        (await Executor(context).InspectAsync()).Should().Be(DocthecaMigrationExecutor.DatabaseState.InspectionFailed);
+        (await Executor(context).InspectAsync()).Should().Be(MigrationExecutor.DatabaseState.InspectionFailed);
     }
 
     internal static string RollbackScriptPath(string migrationId)

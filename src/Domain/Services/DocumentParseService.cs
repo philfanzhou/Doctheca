@@ -52,13 +52,7 @@ public class DocumentParseService : IDocumentParseService
         Guid id,
         string status,
         string? errorMessage = null,
-        string? markdownContent = null,
         string? externalTaskId = null,
-        string? contentList = null,
-        string? contentListV2 = null,
-        string? modelJson = null,
-        string? layoutJson = null,
-        string? zipPath = null,
         Guid? structaDocParseRunId = null)
     {
         var model = await _parseRepository.GetByIdAsync(id)
@@ -67,14 +61,8 @@ public class DocumentParseService : IDocumentParseService
         model.Status = status;
 
         if (errorMessage != null) model.ErrorMessage = errorMessage;
-        if (markdownContent != null) model.MarkdownContent = markdownContent;
         if (externalTaskId != null) model.ExternalTaskId = externalTaskId;
         if (structaDocParseRunId != null) model.StructaDocParseRunId = structaDocParseRunId;
-        if (contentList != null) model.ContentList = contentList;
-        if (contentListV2 != null) model.ContentListV2 = contentListV2;
-        if (modelJson != null) model.ModelJson = modelJson;
-        if (layoutJson != null) model.LayoutJson = layoutJson;
-        if (zipPath != null) model.ZipPath = zipPath;
         if (status == DocumentParseStatus.Parsed) model.ParsedAt = DateTimeOffset.UtcNow;
 
         var result = await _parseRepository.UpdateAsync(model);

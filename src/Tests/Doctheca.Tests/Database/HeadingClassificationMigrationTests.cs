@@ -25,17 +25,17 @@ public sealed class HeadingClassificationMigrationTests(PostgreSqlMigrationFixtu
         var before = await SnapshotAsync(context);
         var expected = await LevelsAsync(context);
         foreach (var row in rows) expected[row.Id] = row.After;
-        var columns = await MigrationGoldenStates.ReadLegacyColumnShapeAsync(context, DocthecaMigrationExecutor.AllTableNames);
-        var constraints = await MigrationGoldenStates.ReadLegacyConstraintShapeAsync(context, DocthecaMigrationExecutor.AllTableNames);
-        var executor = new DocthecaMigrationExecutor(context);
-        (await executor.InspectAsync()).Should().Be(DocthecaMigrationExecutor.DatabaseState.PendingMigrations);
+        var columns = await MigrationGoldenStates.ReadLegacyColumnShapeAsync(context, MigrationExecutor.AllTableNames);
+        var constraints = await MigrationGoldenStates.ReadLegacyConstraintShapeAsync(context, MigrationExecutor.AllTableNames);
+        var executor = new MigrationExecutor(context);
+        (await executor.InspectAsync()).Should().Be(MigrationExecutor.DatabaseState.PendingMigrations);
         await executor.ExecuteAsync();
         (await LevelsAsync(context)).Should().BeEquivalentTo(expected);
         (await SnapshotAsync(context)).Should().Equal(before);
-        (await MigrationGoldenStates.ReadLegacyColumnShapeAsync(context, DocthecaMigrationExecutor.AllTableNames)).Where(column => !column.StartsWith("structure_levels.required:")).Should().Equal(columns);
-        (await MigrationGoldenStates.ReadLegacyConstraintShapeAsync(context, DocthecaMigrationExecutor.AllTableNames)).Should().Equal(constraints);
+        (await MigrationGoldenStates.ReadLegacyColumnShapeAsync(context, MigrationExecutor.AllTableNames)).Where(column => !column.StartsWith("structure_levels.required:")).Should().Equal(columns);
+        (await MigrationGoldenStates.ReadLegacyConstraintShapeAsync(context, MigrationExecutor.AllTableNames)).Should().Equal(constraints);
         (await MigrationGoldenStates.ReadAppliedHistoryAsync(context)).Should().Equal(MigrationGoldenStates.AllIds);
-        (await executor.InspectAsync()).Should().Be(DocthecaMigrationExecutor.DatabaseState.CurrentVersionCompatible);
+        (await executor.InspectAsync()).Should().Be(MigrationExecutor.DatabaseState.CurrentVersionCompatible);
         // C# and SQL consume the same representable stored-input corpus, not separate examples.
         foreach (var row in rows.Where(row => row.FromCorpus && row.Type == "title"))
             expected[row.Id].Should().Be(row.RuntimeLevel > 0 ? -1 : -2);
@@ -51,14 +51,14 @@ public sealed class HeadingClassificationMigrationTests(PostgreSqlMigrationFixtu
         var before = await SnapshotAsync(context, legacy: true);
         var expected = await LevelsAsync(context);
         foreach (var row in rows) expected[row.Id] = row.After;
-        var executor = new DocthecaMigrationExecutor(context);
-        (await executor.InspectAsync()).Should().Be(DocthecaMigrationExecutor.DatabaseState.LegacyTakeoverRequired);
+        var executor = new MigrationExecutor(context);
+        (await executor.InspectAsync()).Should().Be(MigrationExecutor.DatabaseState.LegacyTakeoverRequired);
         var result = await MigrationOrchestration.OrchestrateAsync(context, fixture.GetConnectionString(_database));
         result.Succeeded.Should().BeTrue();
         (await LevelsAsync(context)).Should().BeEquivalentTo(expected);
         (await SnapshotAsync(context, legacy: true)).Should().Equal(before);
         (await MigrationGoldenStates.ReadAppliedHistoryAsync(context)).Should().Equal(MigrationGoldenStates.AllIds);
-        (await executor.InspectAsync()).Should().Be(DocthecaMigrationExecutor.DatabaseState.CurrentVersionCompatible);
+        (await executor.InspectAsync()).Should().Be(MigrationExecutor.DatabaseState.CurrentVersionCompatible);
     }
 
     [Theory]
@@ -68,7 +68,7 @@ public sealed class HeadingClassificationMigrationTests(PostgreSqlMigrationFixtu
     {
         using var context = fixture.CreateContext(_database);
         await EarlierVersionAsync(context);
-        var executor = new DocthecaMigrationExecutor(context);
+        var executor = new MigrationExecutor(context);
         await executor.ExecuteAsync();
         var before = await SnapshotAsync(context);
         var levels = await LevelsAsync(context);
@@ -79,18 +79,18 @@ public sealed class HeadingClassificationMigrationTests(PostgreSqlMigrationFixtu
         if (documentedSql)
         {
             await MigrationGoldenStates.ExecuteRawAsync(context, await File.ReadAllTextAsync(
-                StructureMigrationTests.RollbackScriptPath(DocthecaMigrationExecutor.AddDocumentOwnedStructureMigrationId)));
+                StructureMigrationTests.RollbackScriptPath(MigrationExecutor.AddDocumentOwnedStructureMigrationId)));
             await MigrationGoldenStates.ExecuteRawAsync(context, await File.ReadAllTextAsync(
-                StructureMigrationTests.RollbackScriptPath(DocthecaMigrationExecutor.AddRequiredStructureLevelsMigrationId)));
+                StructureMigrationTests.RollbackScriptPath(MigrationExecutor.AddRequiredStructureLevelsMigrationId)));
             await MigrationGoldenStates.ExecuteRawAsync(context, await File.ReadAllTextAsync(
-                StructureMigrationTests.RollbackScriptPath(DocthecaMigrationExecutor.ClassifyLevelLessTitlesMigrationId)));
+                StructureMigrationTests.RollbackScriptPath(MigrationExecutor.ClassifyLevelLessTitlesMigrationId)));
         }
         else
-            await context.GetService<IMigrator>().MigrateAsync(DocthecaMigrationExecutor.AddBlockFootnotesMigrationId);
+            await context.GetService<IMigrator>().MigrateAsync(MigrationExecutor.AddBlockFootnotesMigrationId);
         (await LevelsAsync(context)).Should().BeEquivalentTo(levels);
         (await SnapshotAsync(context)).Should().Equal(before);
         (await MigrationGoldenStates.ReadAppliedHistoryAsync(context)).Should().Equal(MigrationGoldenStates.AllIds.Take(5));
-        (await executor.InspectAsync()).Should().Be(DocthecaMigrationExecutor.DatabaseState.PendingMigrations);
+        (await executor.InspectAsync()).Should().Be(MigrationExecutor.DatabaseState.PendingMigrations);
         await executor.ExecuteAsync();
         (await LevelsAsync(context)).Should().BeEquivalentTo(afterForward);
         (await SnapshotAsync(context)).Should().Equal(before);
@@ -120,7 +120,7 @@ public sealed class HeadingClassificationMigrationTests(PostgreSqlMigrationFixtu
         if (cancel) options.AddInterceptors(new CancelAfterCorrection(cancellation));
         using (var attempt = new DocthecaDbContext(options.Options))
         {
-            var error = await Record.ExceptionAsync(() => new DocthecaMigrationExecutor(attempt).ExecuteAsync(cancellation.Token));
+            var error = await Record.ExceptionAsync(() => new MigrationExecutor(attempt).ExecuteAsync(cancellation.Token));
             error.Should().NotBeNull();
             if (cancel) error.Should().BeAssignableTo<OperationCanceledException>();
         }
@@ -158,7 +158,7 @@ public sealed class HeadingClassificationMigrationTests(PostgreSqlMigrationFixtu
 
     private static async Task<List<Row>> EarlierVersionAsync(DocthecaDbContext context)
     {
-        await context.GetService<IMigrator>().MigrateAsync(DocthecaMigrationExecutor.AddBlockFootnotesMigrationId);
+        await context.GetService<IMigrator>().MigrateAsync(MigrationExecutor.AddBlockFootnotesMigrationId);
         await PageMigrationTests.SeedAllEarlierTablesAsync(context);
         await context.Database.ExecuteSqlAsync($"""
             UPDATE document_parse_blocks SET caption={"caption α\n"}, footnote={"footnote β\r\n"};
@@ -202,7 +202,7 @@ public sealed class HeadingClassificationMigrationTests(PostgreSqlMigrationFixtu
     private static async Task<List<string>> SnapshotAsync(DocthecaDbContext context, bool legacy = false)
     {
         var rows = new List<string>();
-        foreach (var table in legacy ? DocthecaMigrationExecutor.KnownTableNames : DocthecaMigrationExecutor.PreOwnershipTableNames)
+        foreach (var table in legacy ? MigrationExecutor.KnownTableNames : MigrationExecutor.PreOwnershipTableNames)
         {
             await context.Database.OpenConnectionAsync();
             try

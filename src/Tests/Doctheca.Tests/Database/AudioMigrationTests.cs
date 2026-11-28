@@ -17,8 +17,8 @@ namespace Doctheca.Tests.Database;
 [Collection(MigrationIntegrationCollection.Name)]
 public sealed class AudioMigrationTests(PostgreSqlMigrationFixture fixture) : IAsyncLifetime
 {
-    private const string StructureId = DocthecaMigrationExecutor.AddDocumentStructureMigrationId;
-    private const string AudioId = DocthecaMigrationExecutor.AddStructureAudioMigrationId;
+    private const string StructureId = MigrationExecutor.AddDocumentStructureMigrationId;
+    private const string AudioId = MigrationExecutor.AddStructureAudioMigrationId;
 
     private string _database = null!;
 
@@ -26,7 +26,7 @@ public sealed class AudioMigrationTests(PostgreSqlMigrationFixture fixture) : IA
 
     public Task DisposeAsync() => fixture.DropDatabaseAsync(_database);
 
-    private static DocthecaMigrationExecutor Executor(DocthecaDbContext context) => new(context, NullLogger.Instance);
+    private static MigrationExecutor Executor(DocthecaDbContext context) => new(context, NullLogger.Instance);
 
     [Fact]
     public async Task PopulatedStructureVersion_IsMigratedInPlace_KeepingEveryRow()
@@ -38,11 +38,11 @@ public sealed class AudioMigrationTests(PostgreSqlMigrationFixture fixture) : IA
         var before = await SnapshotAsync(context);
 
         var inspection = await Executor(context).InspectDetailedAsync(default);
-        inspection.State.Should().Be(DocthecaMigrationExecutor.DatabaseState.PendingMigrations);
+        inspection.State.Should().Be(MigrationExecutor.DatabaseState.PendingMigrations);
 
         await Executor(context).ExecuteAsync();
 
-        (await Executor(context).InspectAsync()).Should().Be(DocthecaMigrationExecutor.DatabaseState.CurrentVersionCompatible);
+        (await Executor(context).InspectAsync()).Should().Be(MigrationExecutor.DatabaseState.CurrentVersionCompatible);
         (await MigrationGoldenStates.ReadAppliedHistoryAsync(context)).Should().Equal(MigrationGoldenStates.AllIds);
         (await SnapshotAsync(context)).Should().Equal(before);
         (await MigrationGoldenStates.CountRowsAsync(context, "document_structure_audio")).Should().Be(0);
@@ -70,27 +70,27 @@ public sealed class AudioMigrationTests(PostgreSqlMigrationFixture fixture) : IA
                 """);
 
             await MigrationGoldenStates.ExecuteRawAsync(context, await File.ReadAllTextAsync(
-                StructureMigrationTests.RollbackScriptPath(DocthecaMigrationExecutor.AddDocumentOwnedStructureMigrationId)));
+                StructureMigrationTests.RollbackScriptPath(MigrationExecutor.AddDocumentOwnedStructureMigrationId)));
             await MigrationGoldenStates.ExecuteRawAsync(context, await File.ReadAllTextAsync(
-                StructureMigrationTests.RollbackScriptPath(DocthecaMigrationExecutor.AddRequiredStructureLevelsMigrationId)));
+                StructureMigrationTests.RollbackScriptPath(MigrationExecutor.AddRequiredStructureLevelsMigrationId)));
             await MigrationGoldenStates.ExecuteRawAsync(context, await File.ReadAllTextAsync(
-                StructureMigrationTests.RollbackScriptPath(DocthecaMigrationExecutor.ClassifyLevelLessTitlesMigrationId)));
+                StructureMigrationTests.RollbackScriptPath(MigrationExecutor.ClassifyLevelLessTitlesMigrationId)));
             await MigrationGoldenStates.ExecuteRawAsync(context, await File.ReadAllTextAsync(
-                StructureMigrationTests.RollbackScriptPath(DocthecaMigrationExecutor.AddBlockFootnotesMigrationId)));
+                StructureMigrationTests.RollbackScriptPath(MigrationExecutor.AddBlockFootnotesMigrationId)));
             await MigrationGoldenStates.ExecuteRawAsync(context, await File.ReadAllTextAsync(
-                StructureMigrationTests.RollbackScriptPath(DocthecaMigrationExecutor.AddDocumentParsePagesMigrationId)));
+                StructureMigrationTests.RollbackScriptPath(MigrationExecutor.AddDocumentParsePagesMigrationId)));
             await MigrationGoldenStates.ExecuteRawAsync(context, await File.ReadAllTextAsync(StructureMigrationTests.RollbackScriptPath(AudioId)));
 
             (await MigrationGoldenStates.ReadAppliedHistoryAsync(context)).Should().Equal(MigrationGoldenStates.InitialId, StructureId);
-            var tables = DocthecaMigrationExecutor.StructureVersionTableNames;
+            var tables = MigrationExecutor.StructureVersionTableNames;
             (await MigrationGoldenStates.ReadLegacyColumnShapeAsync(context, tables)).Should().Equal(await MigrationGoldenStates.ReadLegacyColumnShapeAsync(referenceContext, tables));
             (await MigrationGoldenStates.ReadLegacyConstraintShapeAsync(context, tables)).Should().Equal(await MigrationGoldenStates.ReadLegacyConstraintShapeAsync(referenceContext, tables));
             (await MigrationGoldenStates.ScalarAsync<bool>(context, "SELECT to_regclass('public.document_structure_audio') IS NULL")).Should().BeTrue();
             (await SnapshotAsync(context)).Should().Equal(before);
             // The previous version verifies exactly; this application migrates it forward again.
-            (await Executor(context).InspectAsync()).Should().Be(DocthecaMigrationExecutor.DatabaseState.PendingMigrations);
+            (await Executor(context).InspectAsync()).Should().Be(MigrationExecutor.DatabaseState.PendingMigrations);
             await Executor(context).ExecuteAsync();
-            (await Executor(context).InspectAsync()).Should().Be(DocthecaMigrationExecutor.DatabaseState.CurrentVersionCompatible);
+            (await Executor(context).InspectAsync()).Should().Be(MigrationExecutor.DatabaseState.CurrentVersionCompatible);
         }
         finally
         {
@@ -106,7 +106,7 @@ public sealed class AudioMigrationTests(PostgreSqlMigrationFixture fixture) : IA
         await MigrationGoldenStates.ExecuteRawAsync(context, "CREATE TABLE document_structure_audio (id uuid PRIMARY KEY)");
 
         var inspection = await Executor(context).InspectDetailedAsync(default);
-        inspection.State.Should().Be(DocthecaMigrationExecutor.DatabaseState.InspectionFailed);
+        inspection.State.Should().Be(MigrationExecutor.DatabaseState.InspectionFailed);
         inspection.Reason.Should().Contain("document_structure_audio");
         await Assert.ThrowsAsync<InvalidOperationException>(() => Executor(context).ExecuteAsync());
         (await MigrationGoldenStates.ReadAppliedHistoryAsync(context)).Should().Equal(MigrationGoldenStates.InitialId, StructureId);
@@ -119,7 +119,7 @@ public sealed class AudioMigrationTests(PostgreSqlMigrationFixture fixture) : IA
         await Executor(context).ExecuteAsync();
         await MigrationGoldenStates.ExecuteRawAsync(context, "ALTER TABLE document_structure_audio ADD COLUMN extra text");
 
-        (await Executor(context).InspectAsync()).Should().Be(DocthecaMigrationExecutor.DatabaseState.InspectionFailed);
+        (await Executor(context).InspectAsync()).Should().Be(MigrationExecutor.DatabaseState.InspectionFailed);
     }
 
     private static async Task SeedStructureAsync(DocthecaDbContext context)
@@ -148,7 +148,7 @@ public sealed class AudioMigrationTests(PostgreSqlMigrationFixture fixture) : IA
     private static async Task<List<string>> SnapshotAsync(DocthecaDbContext context)
     {
         var rows = new List<string>();
-        foreach (var table in DocthecaMigrationExecutor.StructureVersionTableNames)
+        foreach (var table in MigrationExecutor.StructureVersionTableNames)
         {
             var connection = context.Database.GetDbConnection();
             await connection.OpenAsync();

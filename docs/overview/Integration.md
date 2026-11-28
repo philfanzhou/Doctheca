@@ -128,7 +128,7 @@ full protocol, fixed error codes, and explicit non-guarantees see
 Doctheca registers the ServiceMantle host foundation (`ServiceMantle.Web` /
 `ServiceMantle.Diagnostics` / `ServiceMantle.Logging` NuGet packages) through a single
 extension,
-`DocthecaServiceMantleExtensions.AddDocthecaServiceMantleFoundation()`, which later
+`ServiceMantleExtensions.AddServiceMantleFoundation()`, which later
 migration slices extend instead of re-registering:
 
 - **Identity fields**: `ServiceId` is the stable deployment identity `doctheca`;
@@ -167,7 +167,7 @@ migration slices extend instead of re-registering:
   configuration-KV-only for this service.
 - **Logging**: Console + Grafana Loki delivery runs through the `ServiceMantle.Logging`
   pipeline (release `0.3.3`), registered by
-  `DocthecaLoggingExtensions.AddDocthecaLogging()` after the Consul configuration source.
+  `LoggingExtensions.AddLoggingPipeline()` after the Consul configuration source.
   Every event passes the library's mandatory structured sanitizer before reaching either
   sink; per-category minimum levels are Information by default with Warning overrides for
   `Microsoft.AspNetCore` and `Microsoft.EntityFrameworkCore.Database.Command`. Identity comes

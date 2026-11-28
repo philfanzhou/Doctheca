@@ -18,7 +18,7 @@ public sealed class DocumentParsePageRepositoryTests(PostgreSqlMigrationFixture 
     {
         _database = await fixture.CreateDatabaseAsync();
         using var context = fixture.CreateContext(_database);
-        await new DocthecaMigrationExecutor(context).ExecuteAsync();
+        await new MigrationExecutor(context).ExecuteAsync();
         await MigrationGoldenStates.SeedBusinessRowsAsync(context);
         await context.Database.ExecuteSqlAsync($"""
             INSERT INTO document_parses (id,document_file_id,model_version,status)

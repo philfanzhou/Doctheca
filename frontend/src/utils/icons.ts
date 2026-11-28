@@ -1,11 +1,10 @@
-// SVG icon registry — ported verbatim from prototype/admin-console-redesign.html
-// Each icon is a Vue h() render function returning raw SVG markup via v-html.
+// SVG icon registry — the icons the console uses, ported from the
+// admin-console redesign prototype. Each icon renders raw SVG markup through v-html.
 // Stroke 1.6, line-cap/join round; matches the prototype's linear icon style.
 import { h, type VNode } from 'vue'
 
 type IconName =
   | 'grid'
-  | 'users'
   | 'app'
   | 'shield'
   | 'file'
@@ -13,7 +12,6 @@ type IconName =
   | 'upload'
   | 'back'
   | 'x'
-  | 'copy'
   | 'check'
   | 'clock'
   | 'refresh'
@@ -25,16 +23,13 @@ type IconName =
   | 'chev'
   | 'menu'
   | 'logout'
-  | 'key'
   | 'plus'
-  | 'db'
   | 'doc'
   | 'warnTri'
   | 'trash'
 
 const ICON_PATHS: Record<IconName, string> = {
   grid: '<rect x="3.5" y="3.5" width="7" height="7" rx="1.8"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.8"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.8"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.8"/>',
-  users: '<circle cx="9" cy="8" r="3.2"/><path d="M3.5 19.5c.6-3.2 2.8-4.8 5.5-4.8s4.9 1.6 5.5 4.8"/><circle cx="17" cy="9" r="2.4"/><path d="M15.6 14.9c2.6.1 4.3 1.5 4.9 4.1"/>',
   app: '<rect x="4" y="4" width="16" height="16" rx="3.5"/><path d="M9 12h6M12 9v6"/>',
   shield: '<path d="M12 3.5l7 2.6v5.2c0 4.4-2.9 7.6-7 9.2-4.1-1.6-7-4.8-7-9.2V6.1z"/><path d="M9.2 11.8l2 2 3.6-3.8"/>',
   file: '<path d="M6 3.5h7.5L18.5 9v11a1.5 1.5 0 0 1-1.5 1.5H6A1.5 1.5 0 0 1 4.5 20V5A1.5 1.5 0 0 1 6 3.5z"/><path d="M13.5 3.5V9H18.5"/>',
@@ -42,7 +37,6 @@ const ICON_PATHS: Record<IconName, string> = {
   upload: '<path d="M12 16V5.5M7.5 9.5L12 5l4.5 4.5"/><path d="M4.5 16.5v2A1.5 1.5 0 0 0 6 20h12a1.5 1.5 0 0 0 1.5-1.5v-2"/>',
   back: '<path d="M15 5.5L8.5 12l6.5 6.5"/>',
   x: '<path d="M6 6l12 12M18 6L6 18"/>',
-  copy: '<rect x="8.5" y="8.5" width="11" height="11" rx="2"/><path d="M15.5 5.5v-1a2 2 0 0 0-2-2h-9a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h1"/>',
   check: '<path d="M4.5 12.5l5 5 10-11"/>',
   clock: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
   refresh: '<path d="M20 12a8 8 0 1 1-2.3-5.6"/><path d="M20 3.5V8h-4.5"/>',
@@ -54,9 +48,7 @@ const ICON_PATHS: Record<IconName, string> = {
   chev: '<path d="M9 6l6 6-6 6"/>',
   menu: '<path d="M4 7h16M4 12h16M4 17h16"/>',
   logout: '<path d="M14 4.5H7A1.5 1.5 0 0 0 5.5 6v12A1.5 1.5 0 0 0 7 19.5h7"/><path d="M10 12h10M17 8.5l3.5 3.5-3.5 3.5"/>',
-  key: '<circle cx="8" cy="15.5" r="4"/><path d="M11 12.5L20 3.5M16.5 7l3 3M13.8 9.7l2.5 2.5"/>',
   plus: '<path d="M12 5v14M5 12h14"/>',
-  db: '<ellipse cx="12" cy="5.5" rx="7.5" ry="2.8"/><path d="M4.5 5.5v13c0 1.5 3.4 2.8 7.5 2.8s7.5-1.3 7.5-2.8v-13"/><path d="M4.5 12c0 1.5 3.4 2.8 7.5 2.8s7.5-1.3 7.5-2.8"/>',
   doc: '<path d="M6 3.5h7.5L18.5 9v11A1.5 1.5 0 0 1 17 21.5H6A1.5 1.5 0 0 1 4.5 20V5A1.5 1.5 0 0 1 6 3.5z"/><path d="M8.5 13h7M8.5 16.5h5"/>',
   warnTri: '<circle cx="12" cy="12" r="8.5"/><path d="M12 8v4.5M12 15.8v.2"/>',
   trash: '<path d="M4 7h16M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2M6 7l1 13a2 2 0 0 0 2 1.9h6a2 2 0 0 0 2-1.9L18 7"/>',

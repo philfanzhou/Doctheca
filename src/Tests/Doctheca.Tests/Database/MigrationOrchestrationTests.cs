@@ -46,9 +46,9 @@ public sealed class MigrationOrchestrationTests : IAsyncLifetime
         using var context1 = _fixture.CreateContext(_database);
         using var context2 = _fixture.CreateContext(_database);
         var orchestrator1 = MigrationOrchestration.CreateOrchestrator(
-            new DocthecaMigrationExecutor(context1, NullLogger.Instance));
+            new MigrationExecutor(context1, NullLogger.Instance));
         var orchestrator2 = MigrationOrchestration.CreateOrchestrator(
-            new DocthecaMigrationExecutor(context2, NullLogger.Instance));
+            new MigrationExecutor(context2, NullLogger.Instance));
         using var barrier = new Barrier(2);
 
         var runs = await Task.WhenAll(
@@ -77,7 +77,7 @@ public sealed class MigrationOrchestrationTests : IAsyncLifetime
 
         // The four business tables and exactly the baseline history row exist once.
         using var verify = _fixture.CreateContext(_database);
-        foreach (var table in DocthecaMigrationExecutor.KnownTableNames)
+        foreach (var table in MigrationExecutor.KnownTableNames)
         {
             (await MigrationGoldenStates.CountRowsAsync(verify, table)).Should().Be(0,
                 $"table '{table}' must exist after the concurrent startup");
@@ -94,7 +94,7 @@ public sealed class MigrationOrchestrationTests : IAsyncLifetime
     {
         using (var seed = _fixture.CreateContext(_database))
         {
-            await new DocthecaMigrationExecutor(seed, NullLogger.Instance).ExecuteAsync();
+            await new MigrationExecutor(seed, NullLogger.Instance).ExecuteAsync();
         }
 
         using var context = _fixture.CreateContext(_database);
@@ -381,7 +381,7 @@ public sealed class MigrationOrchestrationTests : IAsyncLifetime
     public async Task ExecutorInterface_MapsDatabaseStatesToObservationStates()
     {
         IDatabaseMigrationExecutor AsInterface(DocthecaDbContext context) =>
-            new DocthecaMigrationExecutor(context, NullLogger.Instance);
+            new MigrationExecutor(context, NullLogger.Instance);
 
         using (var empty = _fixture.CreateContext(_database))
         {

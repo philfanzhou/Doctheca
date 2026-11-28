@@ -26,7 +26,7 @@ function readContentType(response: ResponseLike | undefined): string {
 }
 
 /** True only when the response content type is application/problem+json. */
-export function isProblemDetailsResponse(response: ResponseLike | undefined): boolean {
+function isProblemDetailsResponse(response: ResponseLike | undefined): boolean {
   return readContentType(response).includes(PROBLEM_JSON_MEDIA_TYPE)
 }
 

@@ -18,13 +18,13 @@ public sealed class PageMigrationTests(PostgreSqlMigrationFixture fixture) : IAs
     public async Task PopulatedAudioVersion_UpgradesWithoutChangingAnyExistingRow()
     {
         using var context = fixture.CreateContext(_database);
-        await context.GetService<IMigrator>().MigrateAsync(DocthecaMigrationExecutor.AddStructureAudioMigrationId);
+        await context.GetService<IMigrator>().MigrateAsync(MigrationExecutor.AddStructureAudioMigrationId);
         await SeedAllEarlierTablesAsync(context);
         var before = await SnapshotAsync(context);
-        var executor = new DocthecaMigrationExecutor(context);
-        (await executor.InspectAsync()).Should().Be(DocthecaMigrationExecutor.DatabaseState.PendingMigrations);
+        var executor = new MigrationExecutor(context);
+        (await executor.InspectAsync()).Should().Be(MigrationExecutor.DatabaseState.PendingMigrations);
         await executor.ExecuteAsync();
-        (await executor.InspectAsync()).Should().Be(DocthecaMigrationExecutor.DatabaseState.CurrentVersionCompatible);
+        (await executor.InspectAsync()).Should().Be(MigrationExecutor.DatabaseState.CurrentVersionCompatible);
         (await MigrationGoldenStates.ReadAppliedHistoryAsync(context)).Should().Equal(MigrationGoldenStates.AllIds);
         (await SnapshotAsync(context)).Should().Equal(before);
         (await MigrationGoldenStates.CountRowsAsync(context, "document_parse_pages")).Should().Be(0);
@@ -37,9 +37,9 @@ public sealed class PageMigrationTests(PostgreSqlMigrationFixture fixture) : IAs
         try
         {
             using var previous = fixture.CreateContext(reference);
-            await previous.GetService<IMigrator>().MigrateAsync(DocthecaMigrationExecutor.AddStructureAudioMigrationId);
+            await previous.GetService<IMigrator>().MigrateAsync(MigrationExecutor.AddStructureAudioMigrationId);
             using var context = fixture.CreateContext(_database);
-            await new DocthecaMigrationExecutor(context).ExecuteAsync();
+            await new MigrationExecutor(context).ExecuteAsync();
             await SeedAllEarlierTablesAsync(context);
             var before = await SnapshotAsync(context);
             await context.Database.ExecuteSqlAsync($"""
@@ -47,26 +47,26 @@ public sealed class PageMigrationTests(PostgreSqlMigrationFixture fixture) : IAs
                 VALUES ({MigrationGoldenStates.ParseId}, 1, {"页一"}, {"pdf-page-labels"})
                 """);
             await MigrationGoldenStates.ExecuteRawAsync(context, await File.ReadAllTextAsync(
-                StructureMigrationTests.RollbackScriptPath(DocthecaMigrationExecutor.AddDocumentOwnedStructureMigrationId)));
+                StructureMigrationTests.RollbackScriptPath(MigrationExecutor.AddDocumentOwnedStructureMigrationId)));
             await MigrationGoldenStates.ExecuteRawAsync(context, await File.ReadAllTextAsync(
-                StructureMigrationTests.RollbackScriptPath(DocthecaMigrationExecutor.AddRequiredStructureLevelsMigrationId)));
+                StructureMigrationTests.RollbackScriptPath(MigrationExecutor.AddRequiredStructureLevelsMigrationId)));
             await MigrationGoldenStates.ExecuteRawAsync(context, await File.ReadAllTextAsync(
-                StructureMigrationTests.RollbackScriptPath(DocthecaMigrationExecutor.ClassifyLevelLessTitlesMigrationId)));
+                StructureMigrationTests.RollbackScriptPath(MigrationExecutor.ClassifyLevelLessTitlesMigrationId)));
             await MigrationGoldenStates.ExecuteRawAsync(context, await File.ReadAllTextAsync(
-                StructureMigrationTests.RollbackScriptPath(DocthecaMigrationExecutor.AddBlockFootnotesMigrationId)));
+                StructureMigrationTests.RollbackScriptPath(MigrationExecutor.AddBlockFootnotesMigrationId)));
             await MigrationGoldenStates.ExecuteRawAsync(context, await File.ReadAllTextAsync(
-                StructureMigrationTests.RollbackScriptPath(DocthecaMigrationExecutor.AddDocumentParsePagesMigrationId)));
+                StructureMigrationTests.RollbackScriptPath(MigrationExecutor.AddDocumentParsePagesMigrationId)));
             (await SnapshotAsync(context)).Should().Equal(before);
             (await MigrationGoldenStates.ReadAppliedHistoryAsync(context)).Should().Equal(MigrationGoldenStates.AllIds.Take(3));
-            var tables = DocthecaMigrationExecutor.AudioVersionTableNames;
+            var tables = MigrationExecutor.AudioVersionTableNames;
             (await MigrationGoldenStates.ReadLegacyColumnShapeAsync(context, tables)).Should().Equal(await MigrationGoldenStates.ReadLegacyColumnShapeAsync(previous, tables));
             (await MigrationGoldenStates.ReadLegacyConstraintShapeAsync(context, tables)).Should().Equal(await MigrationGoldenStates.ReadLegacyConstraintShapeAsync(previous, tables));
             (await MigrationGoldenStates.ScalarAsync<bool>(context, "SELECT to_regclass('public.document_parse_pages') IS NULL")).Should().BeTrue();
             // Inspection loads the audio migration's historical target model, not today's page table list.
-            var executor = new DocthecaMigrationExecutor(context);
-            (await executor.InspectAsync()).Should().Be(DocthecaMigrationExecutor.DatabaseState.PendingMigrations);
+            var executor = new MigrationExecutor(context);
+            (await executor.InspectAsync()).Should().Be(MigrationExecutor.DatabaseState.PendingMigrations);
             await executor.ExecuteAsync();
-            (await executor.InspectAsync()).Should().Be(DocthecaMigrationExecutor.DatabaseState.CurrentVersionCompatible);
+            (await executor.InspectAsync()).Should().Be(MigrationExecutor.DatabaseState.CurrentVersionCompatible);
             (await SnapshotAsync(context)).Should().Equal(before);
         }
         finally { await fixture.DropDatabaseAsync(reference); }
@@ -78,12 +78,12 @@ public sealed class PageMigrationTests(PostgreSqlMigrationFixture fixture) : IAs
     public async Task PageTableWithoutItsHistory_IsRefused(bool noHistory)
     {
         using var context = fixture.CreateContext(_database);
-        await context.GetService<IMigrator>().MigrateAsync(DocthecaMigrationExecutor.AddStructureAudioMigrationId);
+        await context.GetService<IMigrator>().MigrateAsync(MigrationExecutor.AddStructureAudioMigrationId);
         if (noHistory)
             await MigrationGoldenStates.ExecuteRawAsync(context, "DROP TABLE \"__EFMigrationsHistory\"");
         await MigrationGoldenStates.ExecuteRawAsync(context, "CREATE TABLE document_parse_pages (parse_id uuid PRIMARY KEY)");
-        var executor = new DocthecaMigrationExecutor(context);
-        (await executor.InspectAsync()).Should().Be(DocthecaMigrationExecutor.DatabaseState.InspectionFailed);
+        var executor = new MigrationExecutor(context);
+        (await executor.InspectAsync()).Should().Be(MigrationExecutor.DatabaseState.InspectionFailed);
         await Assert.ThrowsAsync<InvalidOperationException>(() => executor.ExecuteAsync());
     }
 
@@ -91,14 +91,14 @@ public sealed class PageMigrationTests(PostgreSqlMigrationFixture fixture) : IAs
     public async Task WrongCurrentPageShape_AndUnknownHistoryFailClosed()
     {
         using var context = fixture.CreateContext(_database);
-        var executor = new DocthecaMigrationExecutor(context);
+        var executor = new MigrationExecutor(context);
         await executor.ExecuteAsync();
         await MigrationGoldenStates.ExecuteRawAsync(context, "ALTER TABLE document_parse_pages ALTER COLUMN label TYPE varchar(100)");
-        (await executor.InspectAsync()).Should().Be(DocthecaMigrationExecutor.DatabaseState.InspectionFailed);
+        (await executor.InspectAsync()).Should().Be(MigrationExecutor.DatabaseState.InspectionFailed);
         await context.Database.ExecuteSqlAsync($"""
             INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion") VALUES ({"29990101000000_Unknown"}, {"10.0.13"})
             """);
-        (await executor.InspectAsync()).Should().Be(DocthecaMigrationExecutor.DatabaseState.VersionTooNew);
+        (await executor.InspectAsync()).Should().Be(MigrationExecutor.DatabaseState.VersionTooNew);
         await Assert.ThrowsAsync<InvalidOperationException>(() => executor.ExecuteAsync());
     }
 
@@ -136,7 +136,7 @@ public sealed class PageMigrationTests(PostgreSqlMigrationFixture fixture) : IAs
     internal static async Task<List<string>> SnapshotAsync(DocthecaDbContext context)
     {
         var rows = new List<string>();
-        foreach (var table in DocthecaMigrationExecutor.AudioVersionTableNames)
+        foreach (var table in MigrationExecutor.AudioVersionTableNames)
         {
             await context.Database.OpenConnectionAsync();
             try

@@ -2,7 +2,7 @@
 import { onMounted, ref, watch } from 'vue'
 import { formatTime } from '../../utils/format'
 import { useToast } from '../../composables/useToast'
-import type { DocumentFileDetail } from '../../services/docApi'
+import type { DocumentFileDetail } from '../../services/types'
 import {
   getApiMessage,
   listStructureDefinitions,

@@ -18,8 +18,8 @@ namespace Doctheca.Tests.Database;
 public sealed class DocumentOwnedStructureTests(PostgreSqlMigrationFixture fixture) : IAsyncLifetime
 {
     private string _database = null!;
-    private const string Previous = DocthecaMigrationExecutor.AddRequiredStructureLevelsMigrationId;
-    private const string Current = DocthecaMigrationExecutor.AddDocumentOwnedStructureMigrationId;
+    private const string Previous = MigrationExecutor.AddRequiredStructureLevelsMigrationId;
+    private const string Current = MigrationExecutor.AddDocumentOwnedStructureMigrationId;
     public async Task InitializeAsync() => _database = await fixture.CreateDatabaseAsync();
     public Task DisposeAsync() => fixture.DropDatabaseAsync(_database);
 
@@ -61,7 +61,7 @@ public sealed class DocumentOwnedStructureTests(PostgreSqlMigrationFixture fixtu
             FROM document_structure_audio WHERE parse_id={MigrationGoldenStates.ParseId};
             """);
         var before = await LegacyRowsAsync(context);
-        await new DocthecaMigrationExecutor(context).ExecuteAsync();
+        await new MigrationExecutor(context).ExecuteAsync();
         (await LegacyRowsAsync(context)).Should().Equal(before);
         (await context.DocumentStructureTrees.CountAsync()).Should().Be(6);
         var current = await context.DocumentFiles.AsNoTracking().SingleAsync(file => file.Id == MigrationGoldenStates.FileId);
@@ -72,7 +72,7 @@ public sealed class DocumentOwnedStructureTests(PostgreSqlMigrationFixture fixtu
         var stable = current.CurrentStructureTreeId;
         await context.DocumentParses.Where(parse => parse.Id == ids[3]).ExecuteUpdateAsync(set => set.SetProperty(parse => parse.ParsedAt, DateTimeOffset.UtcNow));
         (await context.DocumentFiles.AsNoTracking().SingleAsync(file => file.Id == MigrationGoldenStates.FileId)).CurrentStructureTreeId.Should().Be(stable);
-        (await new DocthecaMigrationExecutor(context).InspectAsync()).Should().Be(DocthecaMigrationExecutor.DatabaseState.CurrentVersionCompatible);
+        (await new MigrationExecutor(context).InspectAsync()).Should().Be(MigrationExecutor.DatabaseState.CurrentVersionCompatible);
     }
 
     [Theory]
@@ -84,16 +84,16 @@ public sealed class DocumentOwnedStructureTests(PostgreSqlMigrationFixture fixtu
         await context.GetService<IMigrator>().MigrateAsync(Previous);
         await PageMigrationTests.SeedAllEarlierTablesAsync(context);
         var rows = await LegacyRowsAsync(context);
-        var columns = await MigrationGoldenStates.ReadColumnShapeAsync(context, DocthecaMigrationExecutor.PreOwnershipTableNames);
-        var constraints = await MigrationGoldenStates.ReadConstraintShapeAsync(context, DocthecaMigrationExecutor.PreOwnershipTableNames);
-        await new DocthecaMigrationExecutor(context).ExecuteAsync();
+        var columns = await MigrationGoldenStates.ReadColumnShapeAsync(context, MigrationExecutor.PreOwnershipTableNames);
+        var constraints = await MigrationGoldenStates.ReadConstraintShapeAsync(context, MigrationExecutor.PreOwnershipTableNames);
+        await new MigrationExecutor(context).ExecuteAsync();
         if (sql) await MigrationGoldenStates.ExecuteRawAsync(context, await File.ReadAllTextAsync(StructureMigrationTests.RollbackScriptPath(Current)));
         else await context.GetService<IMigrator>().MigrateAsync(Previous);
         (await LegacyRowsAsync(context)).Should().Equal(rows);
-        (await MigrationGoldenStates.ReadColumnShapeAsync(context, DocthecaMigrationExecutor.PreOwnershipTableNames)).Should().Equal(columns);
-        (await MigrationGoldenStates.ReadConstraintShapeAsync(context, DocthecaMigrationExecutor.PreOwnershipTableNames)).Should().Equal(constraints);
-        (await MigrationGoldenStates.ReadAppliedHistoryAsync(context)).Should().Equal(DocthecaMigrationExecutor.KnownMigrationIds.Take(7));
-        await new DocthecaMigrationExecutor(context).ExecuteAsync();
+        (await MigrationGoldenStates.ReadColumnShapeAsync(context, MigrationExecutor.PreOwnershipTableNames)).Should().Equal(columns);
+        (await MigrationGoldenStates.ReadConstraintShapeAsync(context, MigrationExecutor.PreOwnershipTableNames)).Should().Equal(constraints);
+        (await MigrationGoldenStates.ReadAppliedHistoryAsync(context)).Should().Equal(MigrationExecutor.KnownMigrationIds.Take(7));
+        await new MigrationExecutor(context).ExecuteAsync();
         (await LegacyRowsAsync(context)).Should().Equal(rows);
     }
 
@@ -117,7 +117,7 @@ public sealed class DocumentOwnedStructureTests(PostgreSqlMigrationFixture fixtu
             await context.DocumentStructureNodes.ExecuteUpdateAsync(set => set.SetProperty(node => node.ParseId, (Guid?)parse.Id));
         }
         var before = await AllRowsAsync(context);
-        var columns = await MigrationGoldenStates.ReadColumnShapeAsync(context, DocthecaMigrationExecutor.AllTableNames);
+        var columns = await MigrationGoldenStates.ReadColumnShapeAsync(context, MigrationExecutor.AllTableNames);
         var history = await MigrationGoldenStates.ReadAppliedHistoryAsync(context);
         var exception = await Record.ExceptionAsync(async () =>
         {
@@ -128,7 +128,7 @@ public sealed class DocumentOwnedStructureTests(PostgreSqlMigrationFixture fixtu
         // A refused SQL script leaves its explicit transaction aborted; close it before fresh reads.
         await context.Database.CloseConnectionAsync();
         (await AllRowsAsync(context)).Should().Equal(before);
-        (await MigrationGoldenStates.ReadColumnShapeAsync(context, DocthecaMigrationExecutor.AllTableNames)).Should().Equal(columns);
+        (await MigrationGoldenStates.ReadColumnShapeAsync(context, MigrationExecutor.AllTableNames)).Should().Equal(columns);
         (await MigrationGoldenStates.ReadAppliedHistoryAsync(context)).Should().Equal(history);
     }
 
@@ -138,7 +138,7 @@ public sealed class DocumentOwnedStructureTests(PostgreSqlMigrationFixture fixtu
     public async Task ConflictingOwnershipSchema_IsRefusedWithoutRepair(string change)
     {
         using var context = fixture.CreateContext(_database);
-        await new DocthecaMigrationExecutor(context).ExecuteAsync();
+        await new MigrationExecutor(context).ExecuteAsync();
         await MigrationGoldenStates.ExecuteRawAsync(context, change switch
         {
             "missing-check" => "ALTER TABLE document_structure_nodes DROP CONSTRAINT \"CK_document_structure_nodes_content_binding\"",
@@ -151,8 +151,8 @@ public sealed class DocumentOwnedStructureTests(PostgreSqlMigrationFixture fixtu
         });
         var rows = await AllRowsAsync(context);
         var history = await MigrationGoldenStates.ReadAppliedHistoryAsync(context);
-        var executor = new DocthecaMigrationExecutor(context);
-        (await executor.InspectAsync()).Should().Be(change == "unknown" ? DocthecaMigrationExecutor.DatabaseState.VersionTooNew : DocthecaMigrationExecutor.DatabaseState.InspectionFailed);
+        var executor = new MigrationExecutor(context);
+        (await executor.InspectAsync()).Should().Be(change == "unknown" ? MigrationExecutor.DatabaseState.VersionTooNew : MigrationExecutor.DatabaseState.InspectionFailed);
         await Assert.ThrowsAsync<InvalidOperationException>(() => executor.ExecuteAsync());
         (await AllRowsAsync(context)).Should().Equal(rows);
         (await MigrationGoldenStates.ReadAppliedHistoryAsync(context)).Should().Equal(history);
@@ -343,7 +343,7 @@ public sealed class DocumentOwnedStructureTests(PostgreSqlMigrationFixture fixtu
         (await new DocumentStructureAudioRepository(reader).GetReferencedObjectKeysAsync([key])).Should().Contain(key);
     }
 
-    public static IEnumerable<object[]> EarlierHistories => DocthecaMigrationExecutor.KnownMigrationIds.Take(7).Select(id => new object[] { id });
+    public static IEnumerable<object[]> EarlierHistories => MigrationExecutor.KnownMigrationIds.Take(7).Select(id => new object[] { id });
 
     [Theory]
     [MemberData(nameof(EarlierHistories))]
@@ -352,17 +352,17 @@ public sealed class DocumentOwnedStructureTests(PostgreSqlMigrationFixture fixtu
         using var context = fixture.CreateContext(_database);
         await context.GetService<IMigrator>().MigrateAsync(history);
         await MigrationGoldenStates.SeedBusinessRowsAsync(context);
-        await new DocthecaMigrationExecutor(context).ExecuteAsync();
-        (await new DocthecaMigrationExecutor(context).InspectAsync()).Should().Be(DocthecaMigrationExecutor.DatabaseState.CurrentVersionCompatible);
-        (await MigrationGoldenStates.ReadAppliedHistoryAsync(context)).Should().Equal(DocthecaMigrationExecutor.KnownMigrationIds);
+        await new MigrationExecutor(context).ExecuteAsync();
+        (await new MigrationExecutor(context).InspectAsync()).Should().Be(MigrationExecutor.DatabaseState.CurrentVersionCompatible);
+        (await MigrationGoldenStates.ReadAppliedHistoryAsync(context)).Should().Equal(MigrationExecutor.KnownMigrationIds);
         var reference = await fixture.CreateDatabaseAsync();
         try
         {
             using var model = fixture.CreateContext(reference); await model.Database.EnsureCreatedAsync();
-            (await MigrationGoldenStates.ReadColumnShapeAsync(context, DocthecaMigrationExecutor.AllTableNames)).Order().Should()
-                .Equal((await MigrationGoldenStates.ReadColumnShapeAsync(model, DocthecaMigrationExecutor.AllTableNames)).Order());
-            (await MigrationGoldenStates.ReadConstraintShapeAsync(context, DocthecaMigrationExecutor.AllTableNames)).Should()
-                .Equal(await MigrationGoldenStates.ReadConstraintShapeAsync(model, DocthecaMigrationExecutor.AllTableNames));
+            (await MigrationGoldenStates.ReadColumnShapeAsync(context, MigrationExecutor.AllTableNames)).Order().Should()
+                .Equal((await MigrationGoldenStates.ReadColumnShapeAsync(model, MigrationExecutor.AllTableNames)).Order());
+            (await MigrationGoldenStates.ReadConstraintShapeAsync(context, MigrationExecutor.AllTableNames)).Should()
+                .Equal(await MigrationGoldenStates.ReadConstraintShapeAsync(model, MigrationExecutor.AllTableNames));
         }
         finally { await fixture.DropDatabaseAsync(reference); }
     }
@@ -374,18 +374,18 @@ public sealed class DocumentOwnedStructureTests(PostgreSqlMigrationFixture fixtu
         using var setup = fixture.CreateContext(_database);
         await setup.GetService<IMigrator>().MigrateAsync(Previous); await PageMigrationTests.SeedAllEarlierTablesAsync(setup);
         var rows = await LegacyRowsAsync(setup); var history = await MigrationGoldenStates.ReadAppliedHistoryAsync(setup);
-        var columns = await MigrationGoldenStates.ReadColumnShapeAsync(setup, DocthecaMigrationExecutor.PreOwnershipTableNames);
+        var columns = await MigrationGoldenStates.ReadColumnShapeAsync(setup, MigrationExecutor.PreOwnershipTableNames);
         using var cancellation = new CancellationTokenSource();
         using (var attempt = Context(new AbortOwnershipMigration(cancellation, cancel)))
         {
-            var error = await Record.ExceptionAsync(() => new DocthecaMigrationExecutor(attempt).ExecuteAsync(cancellation.Token));
+            var error = await Record.ExceptionAsync(() => new MigrationExecutor(attempt).ExecuteAsync(cancellation.Token));
             error.Should().NotBeNull(); if (cancel) error.Should().BeAssignableTo<OperationCanceledException>();
         }
         (await LegacyRowsAsync(setup)).Should().Equal(rows);
         (await MigrationGoldenStates.ReadAppliedHistoryAsync(setup)).Should().Equal(history);
-        (await MigrationGoldenStates.ReadColumnShapeAsync(setup, DocthecaMigrationExecutor.PreOwnershipTableNames)).Should().Equal(columns);
+        (await MigrationGoldenStates.ReadColumnShapeAsync(setup, MigrationExecutor.PreOwnershipTableNames)).Should().Equal(columns);
         (await MigrationGoldenStates.ScalarAsync<bool>(setup, "SELECT to_regclass('public.document_structure_trees') IS NULL")).Should().BeTrue();
-        await new DocthecaMigrationExecutor(setup).ExecuteAsync();
+        await new MigrationExecutor(setup).ExecuteAsync();
         (await LegacyRowsAsync(setup)).Should().Equal(rows);
     }
 
@@ -436,7 +436,7 @@ public sealed class DocumentOwnedStructureTests(PostgreSqlMigrationFixture fixtu
         await context.GetService<IMigrator>().MigrateAsync(Previous);
         await PageMigrationTests.SeedAllEarlierTablesAsync(context);
         await context.Database.ExecuteSqlAsync($"UPDATE document_parses SET status='parsed'");
-        await new DocthecaMigrationExecutor(context).ExecuteAsync();
+        await new MigrationExecutor(context).ExecuteAsync();
         return (MigrationGoldenStates.FileId, MigrationGoldenStates.ParseId, await context.DocumentStructureNodes.Select(node => node.Id).SingleAsync());
     }
     private DocthecaDbContext Context(IInterceptor interceptor) => new(new DbContextOptionsBuilder<DocthecaDbContext>()
@@ -447,7 +447,7 @@ public sealed class DocumentOwnedStructureTests(PostgreSqlMigrationFixture fixtu
     private static async Task<List<string>> RowsAsync(DocthecaDbContext context, bool all)
     {
         var rows = new List<string>();
-        foreach (var table in all ? DocthecaMigrationExecutor.AllTableNames : DocthecaMigrationExecutor.PreOwnershipTableNames)
+        foreach (var table in all ? MigrationExecutor.AllTableNames : MigrationExecutor.PreOwnershipTableNames)
         {
             await context.Database.OpenConnectionAsync();
             try

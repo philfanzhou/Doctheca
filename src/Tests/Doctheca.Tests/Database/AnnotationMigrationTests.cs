@@ -18,21 +18,21 @@ public sealed class AnnotationMigrationTests(PostgreSqlMigrationFixture fixture)
     public async Task PopulatedPageVersion_UpgradeAddsOnlyNullableFootnoteAndKeepsEveryExistingValue()
     {
         using var context = fixture.CreateContext(_database);
-        await context.GetService<IMigrator>().MigrateAsync(DocthecaMigrationExecutor.AddDocumentParsePagesMigrationId);
+        await context.GetService<IMigrator>().MigrateAsync(MigrationExecutor.AddDocumentParsePagesMigrationId);
         await SeedAsync(context);
         var before = await ExistingRowsAsync(context);
-        var columns = await MigrationGoldenStates.ReadLegacyColumnShapeAsync(context, DocthecaMigrationExecutor.AllTableNames);
-        var constraints = await MigrationGoldenStates.ReadLegacyConstraintShapeAsync(context, DocthecaMigrationExecutor.AllTableNames);
-        var executor = new DocthecaMigrationExecutor(context);
-        (await executor.InspectAsync()).Should().Be(DocthecaMigrationExecutor.DatabaseState.PendingMigrations);
+        var columns = await MigrationGoldenStates.ReadLegacyColumnShapeAsync(context, MigrationExecutor.AllTableNames);
+        var constraints = await MigrationGoldenStates.ReadLegacyConstraintShapeAsync(context, MigrationExecutor.AllTableNames);
+        var executor = new MigrationExecutor(context);
+        (await executor.InspectAsync()).Should().Be(MigrationExecutor.DatabaseState.PendingMigrations);
         await executor.ExecuteAsync();
-        (await executor.InspectAsync()).Should().Be(DocthecaMigrationExecutor.DatabaseState.CurrentVersionCompatible);
+        (await executor.InspectAsync()).Should().Be(MigrationExecutor.DatabaseState.CurrentVersionCompatible);
         (await MigrationGoldenStates.ReadAppliedHistoryAsync(context)).Should().Equal(MigrationGoldenStates.AllIds);
         (await ExistingRowsAsync(context)).Should().Equal(before);
-        var afterColumns = await MigrationGoldenStates.ReadLegacyColumnShapeAsync(context, DocthecaMigrationExecutor.AllTableNames);
+        var afterColumns = await MigrationGoldenStates.ReadLegacyColumnShapeAsync(context, MigrationExecutor.AllTableNames);
         afterColumns.Should().Contain("document_parse_blocks.footnote:text:null");
         afterColumns.Where(column => !column.StartsWith("document_parse_blocks.footnote:") && !column.StartsWith("structure_levels.required:")).Should().Equal(columns);
-        (await MigrationGoldenStates.ReadLegacyConstraintShapeAsync(context, DocthecaMigrationExecutor.AllTableNames)).Should().Equal(constraints);
+        (await MigrationGoldenStates.ReadLegacyConstraintShapeAsync(context, MigrationExecutor.AllTableNames)).Should().Equal(constraints);
         (await context.DocumentParseBlocks.SingleAsync()).Footnote.Should().BeNull();
     }
 
@@ -45,35 +45,35 @@ public sealed class AnnotationMigrationTests(PostgreSqlMigrationFixture fixture)
         try
         {
             using var previous = fixture.CreateContext(reference);
-            await previous.GetService<IMigrator>().MigrateAsync(DocthecaMigrationExecutor.AddDocumentParsePagesMigrationId);
+            await previous.GetService<IMigrator>().MigrateAsync(MigrationExecutor.AddDocumentParsePagesMigrationId);
             using var context = fixture.CreateContext(_database);
-            await new DocthecaMigrationExecutor(context).ExecuteAsync();
+            await new MigrationExecutor(context).ExecuteAsync();
             await SeedAsync(context);
             await context.Database.ExecuteSqlAsync($"UPDATE document_parse_blocks SET footnote = {"新注释\nα"}");
             var before = await ExistingRowsAsync(context);
             if (documentedSql)
             {
                 await MigrationGoldenStates.ExecuteRawAsync(context, await File.ReadAllTextAsync(
-                    StructureMigrationTests.RollbackScriptPath(DocthecaMigrationExecutor.AddDocumentOwnedStructureMigrationId)));
+                    StructureMigrationTests.RollbackScriptPath(MigrationExecutor.AddDocumentOwnedStructureMigrationId)));
                 await MigrationGoldenStates.ExecuteRawAsync(context, await File.ReadAllTextAsync(
-                    StructureMigrationTests.RollbackScriptPath(DocthecaMigrationExecutor.AddRequiredStructureLevelsMigrationId)));
+                    StructureMigrationTests.RollbackScriptPath(MigrationExecutor.AddRequiredStructureLevelsMigrationId)));
                 await MigrationGoldenStates.ExecuteRawAsync(context, await File.ReadAllTextAsync(
-                    StructureMigrationTests.RollbackScriptPath(DocthecaMigrationExecutor.ClassifyLevelLessTitlesMigrationId)));
+                    StructureMigrationTests.RollbackScriptPath(MigrationExecutor.ClassifyLevelLessTitlesMigrationId)));
                 await MigrationGoldenStates.ExecuteRawAsync(context, await File.ReadAllTextAsync(
-                    StructureMigrationTests.RollbackScriptPath(DocthecaMigrationExecutor.AddBlockFootnotesMigrationId)));
+                    StructureMigrationTests.RollbackScriptPath(MigrationExecutor.AddBlockFootnotesMigrationId)));
             }
             else
-                await context.GetService<IMigrator>().MigrateAsync(DocthecaMigrationExecutor.AddDocumentParsePagesMigrationId);
+                await context.GetService<IMigrator>().MigrateAsync(MigrationExecutor.AddDocumentParsePagesMigrationId);
             (await ExistingRowsAsync(context)).Should().Equal(before);
             (await MigrationGoldenStates.ReadAppliedHistoryAsync(context)).Should().Equal(MigrationGoldenStates.AllIds.Take(4));
-            (await MigrationGoldenStates.ReadLegacyColumnShapeAsync(context, DocthecaMigrationExecutor.AllTableNames)).Should()
-                .Equal(await MigrationGoldenStates.ReadLegacyColumnShapeAsync(previous, DocthecaMigrationExecutor.AllTableNames));
-            (await MigrationGoldenStates.ReadLegacyConstraintShapeAsync(context, DocthecaMigrationExecutor.AllTableNames)).Should()
-                .Equal(await MigrationGoldenStates.ReadLegacyConstraintShapeAsync(previous, DocthecaMigrationExecutor.AllTableNames));
-            var executor = new DocthecaMigrationExecutor(context);
-            (await executor.InspectAsync()).Should().Be(DocthecaMigrationExecutor.DatabaseState.PendingMigrations);
+            (await MigrationGoldenStates.ReadLegacyColumnShapeAsync(context, MigrationExecutor.AllTableNames)).Should()
+                .Equal(await MigrationGoldenStates.ReadLegacyColumnShapeAsync(previous, MigrationExecutor.AllTableNames));
+            (await MigrationGoldenStates.ReadLegacyConstraintShapeAsync(context, MigrationExecutor.AllTableNames)).Should()
+                .Equal(await MigrationGoldenStates.ReadLegacyConstraintShapeAsync(previous, MigrationExecutor.AllTableNames));
+            var executor = new MigrationExecutor(context);
+            (await executor.InspectAsync()).Should().Be(MigrationExecutor.DatabaseState.PendingMigrations);
             await executor.ExecuteAsync();
-            (await executor.InspectAsync()).Should().Be(DocthecaMigrationExecutor.DatabaseState.CurrentVersionCompatible);
+            (await executor.InspectAsync()).Should().Be(MigrationExecutor.DatabaseState.CurrentVersionCompatible);
             (await ExistingRowsAsync(context)).Should().Equal(before);
             (await context.DocumentParseBlocks.SingleAsync()).Footnote.Should().BeNull();
         }
@@ -90,12 +90,12 @@ public sealed class AnnotationMigrationTests(PostgreSqlMigrationFixture fixture)
         using var context = fixture.CreateContext(_database);
         if (scenario == "unrecorded")
         {
-            await context.GetService<IMigrator>().MigrateAsync(DocthecaMigrationExecutor.AddDocumentParsePagesMigrationId);
+            await context.GetService<IMigrator>().MigrateAsync(MigrationExecutor.AddDocumentParsePagesMigrationId);
             await MigrationGoldenStates.ExecuteRawAsync(context, "ALTER TABLE document_parse_blocks ADD COLUMN footnote text");
         }
         else
         {
-            await new DocthecaMigrationExecutor(context).ExecuteAsync();
+            await new MigrationExecutor(context).ExecuteAsync();
             await MigrationGoldenStates.ExecuteRawAsync(context, scenario switch
             {
                 "missing" => "ALTER TABLE document_parse_blocks DROP COLUMN footnote",
@@ -104,13 +104,13 @@ public sealed class AnnotationMigrationTests(PostgreSqlMigrationFixture fixture)
             });
         }
         var history = await MigrationGoldenStates.ReadAppliedHistoryAsync(context);
-        var columns = await MigrationGoldenStates.ReadLegacyColumnShapeAsync(context, DocthecaMigrationExecutor.AllTableNames);
-        var executor = new DocthecaMigrationExecutor(context);
+        var columns = await MigrationGoldenStates.ReadLegacyColumnShapeAsync(context, MigrationExecutor.AllTableNames);
+        var executor = new MigrationExecutor(context);
         (await executor.InspectAsync()).Should().Be(scenario == "unknown-history"
-            ? DocthecaMigrationExecutor.DatabaseState.VersionTooNew : DocthecaMigrationExecutor.DatabaseState.InspectionFailed);
+            ? MigrationExecutor.DatabaseState.VersionTooNew : MigrationExecutor.DatabaseState.InspectionFailed);
         await Assert.ThrowsAsync<InvalidOperationException>(() => executor.ExecuteAsync());
         (await MigrationGoldenStates.ReadAppliedHistoryAsync(context)).Should().Equal(history);
-        (await MigrationGoldenStates.ReadLegacyColumnShapeAsync(context, DocthecaMigrationExecutor.AllTableNames)).Should().Equal(columns);
+        (await MigrationGoldenStates.ReadLegacyColumnShapeAsync(context, MigrationExecutor.AllTableNames)).Should().Equal(columns);
     }
 
     private static async Task SeedAsync(DocthecaDbContext context)
@@ -123,7 +123,7 @@ public sealed class AnnotationMigrationTests(PostgreSqlMigrationFixture fixture)
     private static async Task<List<string>> ExistingRowsAsync(DocthecaDbContext context)
     {
         var rows = new List<string>();
-        foreach (var table in DocthecaMigrationExecutor.PreOwnershipTableNames)
+        foreach (var table in MigrationExecutor.PreOwnershipTableNames)
         {
             await context.Database.OpenConnectionAsync();
             try

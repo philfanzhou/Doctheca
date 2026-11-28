@@ -8,10 +8,7 @@ namespace Doctheca.Database.Repositories;
 
 public sealed partial class InternalStructureRepository(DbContextOptions<DocthecaDbContext> options) : IInternalStructureRepository, IInternalContentRepository
 {
-    // Anonymous reads use the same safe logging boundary as the internal catalogs.
-    // Keep provider messages out of EF diagnostics without changing administrative logging.
-    private DocthecaDbContext CreateContext() => new(new DbContextOptionsBuilder<DocthecaDbContext>(options)
-        .UseLoggerFactory(NullLoggerFactory.Instance).EnableSensitiveDataLogging(false).EnableDetailedErrors(false).Options);
+    private DocthecaDbContext CreateContext() => DocthecaDbContext.CreateUnlogged(options);
 
     private static Task<Guid?> CurrentTreeAsync(DocthecaDbContext context, Guid documentFileId, CancellationToken cancellationToken) =>
         context.DocumentFiles.AsNoTracking().Where(file => file.Id == documentFileId)

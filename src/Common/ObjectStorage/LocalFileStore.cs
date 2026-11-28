@@ -1,11 +1,9 @@
-using System;
-using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using System.Threading.Tasks;
 
 namespace Doctheca.Common.ObjectStorage;
 
+/// <summary>Keeps objects as files under one root directory; the object key is the relative path.</summary>
 public class LocalFileStore : IObjectStore
 {
     private readonly string _rootPath;
@@ -14,20 +12,15 @@ public class LocalFileStore : IObjectStore
     {
         _rootPath = Path.GetFullPath(rootPath);
         Directory.CreateDirectory(_rootPath);
-        foreach (Bucket bucket in Enum.GetValues(typeof(Bucket)))
-        {
-            var prefix = BucketToPrefix(bucket);
-            Directory.CreateDirectory(Path.Combine(_rootPath, prefix));
-        }
     }
 
-    public Task<string> UploadAsync(Stream stream, string fileName, string contentType, Bucket bucket = Bucket.Uploads, string? folder = null)
+    public Task<string> UploadAsync(string objectPath, Stream content, string contentType, CancellationToken cancellationToken)
     {
-        var objectPath = GenerateObjectPath(fileName, bucket, folder);
+        cancellationToken.ThrowIfCancellationRequested();
         var fullPath = GetFullPath(objectPath);
         Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
         using var fs = new FileStream(fullPath, FileMode.Create, FileAccess.Write);
-        stream.CopyTo(fs);
+        content.CopyTo(fs);
         return Task.FromResult(objectPath);
     }
 
@@ -65,24 +58,5 @@ public class LocalFileStore : IObjectStore
     {
         var normalized = objectPath.Replace('\\', '/').TrimStart('/');
         return Path.GetFullPath(Path.Combine(_rootPath, normalized));
-    }
-
-    private static string BucketToPrefix(Bucket bucket) => bucket switch
-    {
-        Bucket.Uploads => "uploads",
-        Bucket.Mistakes => "mistakes",
-        Bucket.Questions => "questions",
-        Bucket.Documents => "documents",
-        Bucket.Audio => "audio",
-        _ => "others"
-    };
-
-    private static string GenerateObjectPath(string fileName, Bucket bucket, string? folder = null)
-    {
-        var prefix = BucketToPrefix(bucket);
-        if (!string.IsNullOrWhiteSpace(folder))
-            return $"{prefix}/{folder}/{fileName}";
-        var now = DateTime.UtcNow;
-        return $"{prefix}/{now.Year}/{now.Month:D2}/{now.Day:D2}/{Guid.NewGuid():N}/{fileName}";
     }
 }

@@ -2,8 +2,8 @@ namespace Doctheca.Host.Authentication;
 
 /// <summary>
 /// Bound and validated configuration of the SignaCore hosted-login slice. The availability
-/// precheck runs before the official client package is registered: without the required keys the
-/// package is never wired and every hosted-login endpoint answers the fixed 503 result.
+/// precheck runs before the OpenID Connect handler is registered: without the required keys
+/// nothing is wired and every hosted-login endpoint answers the fixed 503 result.
 /// </summary>
 public sealed record AdminOidcSettings(bool Available, string Authority, string ClientId, string ClientSecret,
     string RedirectUri, string PostLogoutRedirectUri = "")
@@ -36,7 +36,7 @@ public sealed record AdminOidcSettings(bool Available, string Authority, string 
         if (string.IsNullOrWhiteSpace(clientId)) throw new InvalidOperationException("IdentityService:AppId");
         if (string.IsNullOrWhiteSpace(secret)) throw new InvalidOperationException("IdentityService:AppSecret");
         // The key stays part of the startup contract: an unparseable value still fails startup,
-        // even though the host pins the package's token lifetime skew to 30 seconds.
+        // even though the handler's token lifetime skew is pinned to 30 seconds.
         var rawSkew = config["IdentityService:ClockSkewSeconds"];
         var skew = 30;
         if (rawSkew is not null && !int.TryParse(rawSkew, out skew))

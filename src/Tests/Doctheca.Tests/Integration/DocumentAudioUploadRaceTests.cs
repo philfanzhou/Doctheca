@@ -30,10 +30,10 @@ public sealed partial class StructureAudioEndpointTests
             services.RemoveAll<IObjectStore>(); services.AddScoped<IObjectStore>(sp =>
             {
                 var actual = new S3ObjectStore(sp.GetRequiredService<IOptions<StoreOptions>>().Value); var proxy = new Mock<IObjectStore>(MockBehavior.Strict);
-                proxy.Setup(x => x.UploadAsync(It.IsAny<Stream>(), It.IsAny<string>(), It.IsAny<string>(), Bucket.Audio, It.IsAny<string>(), It.IsAny<CancellationToken>()))
-                    .Returns(async (Stream bytes, string name, string type, Bucket bucket, string? folder, CancellationToken ct) =>
+                proxy.Setup(x => x.UploadAsync(It.IsAny<string>(), It.IsAny<Stream>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+                    .Returns(async (string key, Stream bytes, string type, CancellationToken ct) =>
                     {
-                        var key = await actual.UploadAsync(bytes, name, type, bucket, folder, ct);
+                        await actual.UploadAsync(key, bytes, type, ct);
                         if (Interlocked.Increment(ref calls) == 1) { uploaded.TrySetResult(); await release.Task.WaitAsync(ct); }
                         return key;
                     });

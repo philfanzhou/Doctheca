@@ -45,7 +45,7 @@
     └── 06-CONVENTIONS.md
 ```
 
-> Historical record: `src/Database/DatabaseInitializer.cs` shown above has been retired. Since 2026-09-30 the schema has been managed by the EF Core migration baseline (`20260930161548_InitialCreate`) with `DocthecaMigrationExecutor` takeover rules; see [Migration History](../../database/migrations.md).
+> Historical record: `src/Database/DatabaseInitializer.cs` shown above has been retired. Since 2026-09-30 the schema has been managed by the EF Core migration baseline (`20260930161548_InitialCreate`) with `MigrationExecutor` takeover rules; see [Migration History](../../database/migrations.md).
 
 ## Key interface signatures
 

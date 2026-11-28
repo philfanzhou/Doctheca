@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, inject } from 'vue'
-import { createDocApiClient, type DocumentFile, type DocumentParse } from '../services/docApi'
+import { listDocumentFiles } from '../services/documentApi'
+import { listDocumentParses } from '../services/parseApi'
+import type { DocumentFile, DocumentParse } from '../services/types'
 import { formatTime, getFileStatusLabel } from '../utils/format'
 import { useToast } from '../composables/useToast'
 import { useCountUp } from '../composables/useCountUp'
@@ -9,7 +11,6 @@ import ChartDonut from '../components/ChartDonut.vue'
 import { iconHtml } from '../utils/icons'
 import { fileIconCls, fileExtLabel } from '../utils/file'
 
-const client = createDocApiClient()
 const { error: toastError } = useToast()
 
 const rootRef = ref<HTMLElement | null>(null)
@@ -88,8 +89,8 @@ async function load() {
   loading.value = true
   try {
     const [filesResp, parsesResp] = await Promise.all([
-      client.listDocumentFiles(1, 100),
-      client.listDocumentParses(1, 100),
+      listDocumentFiles(1, 100),
+      listDocumentParses(1, 100),
     ])
     files.value = filesResp.data as DocumentFile[]
     parses.value = parsesResp.data as DocumentParse[]

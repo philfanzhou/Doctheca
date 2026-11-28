@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { DocumentFileDetail } from '../../services/docApi'
+import type { DocumentFileDetail } from '../../services/types'
 
 const props = defineProps<{
   detail: DocumentFileDetail

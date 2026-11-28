@@ -24,14 +24,14 @@ public sealed class DocumentOwnedAudioMigrationTests(PostgreSqlMigrationFixture 
         try
         {
             using var context = postgres.CreateContext(database);
-            await context.GetService<IMigrator>().MigrateAsync(DocthecaMigrationExecutor.AddRequiredStructureLevelsMigrationId);
+            await context.GetService<IMigrator>().MigrateAsync(MigrationExecutor.AddRequiredStructureLevelsMigrationId);
             await PageMigrationTests.SeedAllEarlierTablesAsync(context);
             var id = await context.Database.SqlQuery<Guid>($"SELECT id AS \"Value\" FROM document_structure_audio").SingleAsync();
             var key = $"audio/{MigrationGoldenStates.ParseId:N}/{id:N}.wav"; var bytes = PlayableWave.Bytes();
             await context.Database.ExecuteSqlAsync($"UPDATE document_parses SET status='parsed'");
             await context.Database.ExecuteSqlAsync($"UPDATE document_structure_audio SET object_key={key},size_bytes={bytes.LongLength}");
             await minio.PutAsync(bucket, key, bytes);
-            await new DocthecaMigrationExecutor(context).ExecuteAsync();
+            await new MigrationExecutor(context).ExecuteAsync();
             var settings = new ConfigurationBuilder().AddInMemoryCollection(minio.Settings(bucket)).Build();
             var storage = new S3ObjectStore(settings.GetSection("Oss").Get<StoreOptions>()!);
             var store = new StructureAudioStore(() => storage, new(true, null), NullLogger<StructureAudioStore>.Instance);

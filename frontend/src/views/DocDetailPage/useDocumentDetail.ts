@@ -1,9 +1,10 @@
 import { ref, onMounted, onUnmounted, watch, inject } from 'vue'
 import { ElMessageBox } from 'element-plus'
-import { createDocApiClient, type DocumentFileDetail } from '../../services/docApi'
+import { deleteDocumentFile, getDocumentFile, parseDocumentFile } from '../../services/documentApi'
+import { deleteDocumentParse } from '../../services/parseApi'
+import type { DocumentFileDetail } from '../../services/types'
 import { useToast } from '../../composables/useToast'
 
-const client = createDocApiClient()
 
 export function useDocumentDetail(docId: string | null | undefined) {
   const { success: toastSuccess, error: toastError } = useToast()
@@ -19,7 +20,7 @@ export function useDocumentDetail(docId: string | null | undefined) {
     if (!docId) return
     loading.value = true
     try {
-      const resp = await client.getDocumentFile(docId)
+      const resp = await getDocumentFile(docId)
       detail.value = resp.data
       const hasActive = detail.value?.parses.some(
         (p) => p.status === 'pending' || p.status === 'parsing'
@@ -37,7 +38,7 @@ export function useDocumentDetail(docId: string | null | undefined) {
     pollTimer.value = window.setInterval(async () => {
       if (!docId) return
       try {
-        const resp = await client.getDocumentFile(docId)
+        const resp = await getDocumentFile(docId)
         detail.value = resp.data
         const hasActive = detail.value?.parses.some(
           (p) => p.status === 'pending' || p.status === 'parsing'
@@ -60,7 +61,7 @@ export function useDocumentDetail(docId: string | null | undefined) {
     if (!docId) return
     parsing.value = true
     try {
-      await client.parseDocumentFile(docId, modelVersion)
+      await parseDocumentFile(docId, modelVersion)
       await loadDetail()
       toastSuccess(`已触发 ${modelVersion === 'vlm' ? 'VLM' : 'Pipeline'} 解析`)
     } catch (e) {
@@ -82,7 +83,7 @@ export function useDocumentDetail(docId: string | null | undefined) {
       return
     }
     try {
-      await client.deleteDocumentFile(docId)
+      await deleteDocumentFile(docId)
       toastSuccess('删除成功')
       backToDocs?.()
     } catch (e) {
@@ -102,7 +103,7 @@ export function useDocumentDetail(docId: string | null | undefined) {
     }
     deleting.value = parseId
     try {
-      await client.deleteDocumentParse(parseId)
+      await deleteDocumentParse(parseId)
       await loadDetail()
       toastSuccess('删除成功')
     } catch (e) {

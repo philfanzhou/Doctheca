@@ -12,7 +12,7 @@
 
 #### Database initialization approach
 
-> Historical record: this section describes the retired raw-SQL initializer. Since 2026-09-30 the schema has been managed by the EF Core migration baseline (`20260930161548_InitialCreate`) with `DocthecaMigrationExecutor` takeover rules; see [Migration History](../../database/migrations.md).
+> Historical record: this section describes the retired raw-SQL initializer. Since 2026-09-30 the schema has been managed by the EF Core migration baseline (`20260930161548_InitialCreate`) with `MigrationExecutor` takeover rules; see [Migration History](../../database/migrations.md).
 
 This service **does not use EF Core Migration**. Database initialization is done by `DatabaseInitializer.cs` via raw SQL:
 

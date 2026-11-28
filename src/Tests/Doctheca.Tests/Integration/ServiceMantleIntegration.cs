@@ -24,7 +24,7 @@ namespace Doctheca.Tests.Integration;
 
 /// <summary>
 /// One shared PostgreSQL container for the ServiceMantle integration collection. The real host
-/// startup path runs <c>DocthecaMigrationExecutor</c> (EF migrations from the InitialCreate
+/// startup path runs <c>MigrationExecutor</c> (EF migrations from the InitialCreate
 /// baseline), so the tests exercise the actual EF/Npgsql stack instead of an in-memory fake.
 /// </summary>
 /// <remarks>
@@ -158,7 +158,7 @@ public abstract class ServiceMantleIntegrationTestBase
 
     /// <summary>
     /// Builds a factory around the real Program.cs entry point. Accessing <see cref="WebApplicationFactory{TEntryPoint}.Services"/>
-    /// or creating a client runs the full host startup, including <c>DocthecaMigrationExecutor</c>.
+    /// or creating a client runs the full host startup, including <c>MigrationExecutor</c>.
     /// All overrides go through <c>UseSetting</c>: with the minimal-hosting replay used by
     /// WebApplicationFactory, settings registered this way take precedence over the appsettings
     /// sources. External clients (OpenSearch, StructaDoc, OSS, Identity) are replaced by test

@@ -12,13 +12,7 @@ public interface IDocumentParseService
         Guid id,
         string status,
         string? errorMessage = null,
-        string? markdownContent = null,
         string? externalTaskId = null,
-        string? contentList = null,
-        string? contentListV2 = null,
-        string? modelJson = null,
-        string? layoutJson = null,
-        string? zipPath = null,
         Guid? structaDocParseRunId = null);
     Task<List<DocumentParse>> GetByStatusAsync(string status);
     Task<List<DocumentParse>> GetActiveJobsAsync();

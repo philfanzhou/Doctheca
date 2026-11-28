@@ -20,7 +20,7 @@ public sealed class RequiredPolicyRepositoryTests(PostgreSqlMigrationFixture fix
     public async Task ConcurrentReplacements_LockBeforeTrackedRead_AndLaterCompleteSaveWins()
     {
         using var setup = fixture.CreateContext(_database);
-        await new DocthecaMigrationExecutor(setup).ExecuteAsync();
+        await new MigrationExecutor(setup).ExecuteAsync();
         var initial = Definition();
         await new StructureDefinitionRepository(setup).AddAsync(initial);
         var firstBoundary = new ReadBoundary(pauseRead: true);
@@ -57,7 +57,7 @@ public sealed class RequiredPolicyRepositoryTests(PostgreSqlMigrationFixture fix
     public async Task FailureBeforeCommit_RollsBackNameParentsLevelsAndFlags_AndMissingDefinitionStaysFalse()
     {
         using var setup = fixture.CreateContext(_database);
-        await new DocthecaMigrationExecutor(setup).ExecuteAsync();
+        await new MigrationExecutor(setup).ExecuteAsync();
         var initial = Definition();
         await new StructureDefinitionRepository(setup).AddAsync(initial);
         using var attempt = new DocthecaDbContext(new DbContextOptionsBuilder<DocthecaDbContext>()

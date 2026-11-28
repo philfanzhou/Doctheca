@@ -34,7 +34,7 @@ public sealed class StructaDocAnnotationSyncTests(PostgreSqlMigrationFixture fix
     {
         _database = await fixture.CreateDatabaseAsync();
         using var context = fixture.CreateContext(_database);
-        await new DocthecaMigrationExecutor(context).ExecuteAsync();
+        await new MigrationExecutor(context).ExecuteAsync();
         await MigrationGoldenStates.SeedBusinessRowsAsync(context);
         await context.DocumentParses.ExecuteUpdateAsync(update => update
             .SetProperty(parse => parse.Status, DocumentParseStatus.Parsing)

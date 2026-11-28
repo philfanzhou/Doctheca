@@ -30,8 +30,8 @@ var builder = WebApplication.CreateBuilder(args);
 // ========== ServiceMantle (service identity, correlation id, base telemetry) ==========
 // The single foundation registration root; later ServiceMantle migration slices extend this
 // builder instead of regenerating the identity or registering a second root (see
-// DocthecaServiceMantleExtensions for the identity and no-exporter contract).
-var serviceMantle = builder.Services.AddDocthecaServiceMantleFoundation();
+// ServiceMantleExtensions for the identity and no-exporter contract).
+var serviceMantle = builder.Services.AddServiceMantleFoundation();
 
 // ========== ServiceMantle health probes (live + readiness, /health alias) ==========
 // Readiness is the shared startup receipt plus the scoped mapped-schema probe.
@@ -39,11 +39,11 @@ serviceMantle.AddServiceMantleHealthEndpoints(options =>
 {
     options.ProbeTimeout = TimeSpan.FromSeconds(3);
 });
-builder.Services.AddDocthecaStartupDatabase(serviceMantle);
+builder.Services.AddStartupDatabase(serviceMantle);
 // Preserve the executor's existing safe diagnostic logging.
 builder.Services.AddSingleton<ILogger>(
     serviceProvider => serviceProvider.GetRequiredService<ILoggerFactory>()
-        .CreateLogger(nameof(DocthecaMigrationExecutor)));
+        .CreateLogger(nameof(MigrationExecutor)));
 
 // ========== ServiceMantle security response headers (marked JSON endpoints) ==========
 // Immutable six-header baseline (Cache-Control/Pragma/X-Content-Type-Options/X-Frame-Options/
@@ -81,7 +81,7 @@ builder.Configuration.AddConsulConfiguration(builder.Configuration);
 
 // ========== ServiceMantle logging (Console + optional Grafana Loki) ==========
 // Registered after the Consul configuration source so Loki:Uri from Consul KV is visible.
-builder.AddDocthecaLogging();
+builder.AddLoggingPipeline();
 
 // Validate tunables once after Consul loading, before any initialization or listener.
 var documentAudioOptions = DocumentAudioOptions.Read(key => builder.Configuration[key]);
@@ -105,8 +105,8 @@ builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(optio
 
 // Missing trust never enables an alternative identity source. Full configurations retain
 // the common strict JWT validation; missing ones register a rejecting Bearer scheme.
-builder.Services.AddDocthecaAdminAuthentication(builder.Configuration, builder.Environment);
-builder.Services.AddDocthecaAdminOidc(builder.Configuration, builder.Environment);
+builder.Services.AddAdminAuthentication(builder.Configuration, builder.Environment);
+builder.Services.AddAdminOidc(builder.Configuration, builder.Environment);
 
 var fallbackConnectionString = builder.Configuration.GetConnectionString("Default");
 var connectionString = SharedPostgreSqlConnectionStringFactory.BuildOrFallback(builder.Configuration, fallbackConnectionString)
@@ -313,11 +313,11 @@ using (serviceLogContext.BeginScope(app.Logger))
     // Direct entry preserves the existing LLM -> database -> OpenSearch startup order.
     // No hosted gate is registered, so this is the sole production invocation.
     var applicationStopping = app.Lifetime.ApplicationStopping;
-    var gateOptions = DocthecaStartupDatabase.CreateOptions(builder.Configuration, connectionString);
+    var gateOptions = StartupDatabase.CreateOptions(builder.Configuration, connectionString);
     var gateResult = await app.Services.GetRequiredService<StartupDatabaseGate>().RunAsync(
         gateOptions,
         app.Services.GetRequiredService<StartupDatabaseReceipt>(),
-        ServiceId.Parse(DocthecaServiceMantleExtensions.ServiceIdValue),
+        ServiceId.Parse(ServiceMantleExtensions.ServiceIdValue),
         applicationStopping);
     if (!gateResult.Succeeded)
     {

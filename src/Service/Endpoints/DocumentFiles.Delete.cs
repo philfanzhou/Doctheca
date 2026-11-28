@@ -53,7 +53,8 @@ public static partial class DocumentFiles
             }
         }
 
-        // Include historical audio even when its origin parse has already been deleted.
+        // Step 2: Collect the keys of every audio object of the document, including historical
+        // audio whose origin parse has already been deleted.
         var audioKeys = await fileService.DeleteWithAudioAsync(id);
         if (audioKeys is not null) await audioService.DeleteUnreferencedObjectsAsync(audioKeys);
 

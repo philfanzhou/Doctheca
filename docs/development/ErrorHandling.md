@@ -116,8 +116,8 @@ Parameter validation should happen at the entry of HTTP endpoint methods, return
 ### ServiceMantle Logging Pipeline (Console + Loki)
 
 Doctheca logs through the `ServiceMantle.Logging` pipeline (Console sink + optional Grafana
-Loki remote sink), registered by `builder.AddDocthecaLogging()`
-(`src/Host/DocthecaLoggingExtensions.cs`) after the Consul configuration source is loaded.
+Loki remote sink), registered by `builder.AddLoggingPipeline()`
+(`src/Host/LoggingExtensions.cs`) after the Consul configuration source is loaded.
 Every event passes the library's mandatory structured sanitizer — denied field names
 (`password`, `token`, `apikey`, `authorization`, `cookie`, `connection string`, …) are
 redacted, and exception `Message`/stack/`Data` are not emitted by the pipeline at all. This

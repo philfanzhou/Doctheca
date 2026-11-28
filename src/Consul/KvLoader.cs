@@ -8,12 +8,10 @@ public sealed class KvLoader
 {
     private const string CommentPropertyName = "__comment";
     private readonly ConsulOptions _options;
-    private readonly HttpMessageHandler? _handler;
 
-    public KvLoader(ConsulOptions options, HttpMessageHandler? handler = null)
+    public KvLoader(ConsulOptions options)
     {
         _options = options;
-        _handler = handler;
     }
 
     public KvLoadResult Load()
@@ -159,9 +157,7 @@ public sealed class KvLoader
     private HttpClient CreateClient()
     {
         var baseUri = new UriBuilder("http", _options.Host, _options.Port).Uri;
-        return _handler == null
-            ? new HttpClient { BaseAddress = baseUri, Timeout = TimeSpan.FromMilliseconds(_options.TimeoutMs) }
-            : new HttpClient(_handler, disposeHandler: false) { BaseAddress = baseUri, Timeout = TimeSpan.FromMilliseconds(_options.TimeoutMs) };
+        return new HttpClient { BaseAddress = baseUri, Timeout = TimeSpan.FromMilliseconds(_options.TimeoutMs) };
     }
 
     private static void Merge(IDictionary<string, string?> target, IDictionary<string, string?> incoming)

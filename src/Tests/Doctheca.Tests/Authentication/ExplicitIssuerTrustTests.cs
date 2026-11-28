@@ -110,7 +110,7 @@ public sealed class ExplicitIssuerTrustTests
             ["IdentityService:Audience"] = Audience,
             ["IdentityService:ClockSkewSeconds"] = "0"
         });
-        builder.Services.AddIdentityJwtBearer(builder.Configuration, builder.Environment,
+        builder.Services.AddIdentityJwtBearer(builder.Configuration,
             consumer => { consumer.MapInboundClaims = false; consumer.NameClaimType = "sub"; consumer.RoleClaimType = "role"; });
         var wrappedManager = nonBaseManager ? new DiscoveryConfigurationManager(backchannel) : null;
         builder.Services.Configure<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme, options =>
