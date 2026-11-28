@@ -1,32 +1,20 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using System.Threading.Tasks;
 using Minio;
 using Minio.DataModel.Args;
 
 namespace Doctheca.Common.ObjectStorage;
 
-public enum Bucket
-{
-    Uploads,      // uploads/
-    Mistakes,     // mistakes/
-    Questions,    // questions/
-    Documents,    // documents/
-    Audio,        // audio/ (structure audio, issue #90)
-}
-
+/// <summary>
+/// Object storage operations Doctheca relies on. Every method addresses an object by its full key
+/// inside the configured bucket (or root directory).
+/// </summary>
 public interface IObjectStore
 {
-    Task<string> UploadAsync(Stream stream, string fileName, string contentType, Bucket bucket = Bucket.Uploads, string? folder = null);
-    /// <summary>Cancelable upload; existing providers retain their original upload implementation.</summary>
-    async Task<string> UploadAsync(Stream stream, string fileName, string contentType, Bucket bucket, string? folder,
-        CancellationToken cancellationToken)
-    {
-        cancellationToken.ThrowIfCancellationRequested();
-        return await UploadAsync(stream, fileName, contentType, bucket, folder);
-    }
+    /// <summary>Stores <paramref name="content"/> under the exact <paramref name="objectPath"/> and returns that key.</summary>
+    Task<string> UploadAsync(string objectPath, Stream content, string contentType, CancellationToken cancellationToken);
     Task<Stream> DownloadAsync(string objectPath);
     /// <summary>Cancellable byte transfer; unsupported providers must not fall back to legacy unbounded buffering.</summary>
     Task CopyToAsync(string objectPath, Stream destination, CancellationToken cancellationToken) =>
@@ -58,7 +46,6 @@ public class ObjectInfo
     public string ObjectPath { get; set; } = string.Empty;
     public long Size { get; set; }
     public DateTimeOffset? LastModified { get; set; }
-    public bool IsZombie { get; set; }
 }
 
 public class S3ObjectStore : IObjectStore
@@ -67,15 +54,13 @@ public class S3ObjectStore : IObjectStore
     private readonly Lazy<IMinioClient> _presignClient;
     private readonly Lazy<IMinioClient> _audioPresignClient;
     private readonly string _bucketName;
-    private readonly PathPrefixValidator? _prefixValidator;
     private readonly Lazy<Uri?> _publicBaseUri;
 
-    public S3ObjectStore(StoreOptions options, string[]? allowedPrefixes = null)
+    public S3ObjectStore(StoreOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);
 
         _bucketName = options.BucketName;
-        _prefixValidator = allowedPrefixes != null ? new PathPrefixValidator(allowedPrefixes) : null;
         _internalClient = BuildClient(
             options.InternalEndpoint,
             options.AccessKey,
@@ -113,23 +98,16 @@ public class S3ObjectStore : IObjectStore
         return client.Build();
     }
 
-    public Task<string> UploadAsync(Stream stream, string fileName, string contentType, Bucket bucket = Bucket.Uploads, string? folder = null) =>
-        UploadAsync(stream, fileName, contentType, bucket, folder, CancellationToken.None);
-
-    public async Task<string> UploadAsync(Stream stream, string fileName, string contentType, Bucket bucket, string? folder,
-        CancellationToken cancellationToken)
+    public async Task<string> UploadAsync(string objectPath, Stream content, string contentType, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var objectPath = GenerateObjectPath(fileName, bucket, folder);
-        _prefixValidator?.ValidateWritePath(objectPath);
-
         await EnsureBucketExistsAsync(cancellationToken);
 
         var putObjectArgs = new PutObjectArgs()
             .WithBucket(_bucketName)
             .WithObject(objectPath)
-            .WithStreamData(stream)
-            .WithObjectSize(stream.Length)
+            .WithStreamData(content)
+            .WithObjectSize(content.Length)
             .WithContentType(contentType);
 
         await _internalClient.PutObjectAsync(putObjectArgs, cancellationToken);
@@ -196,8 +174,6 @@ public class S3ObjectStore : IObjectStore
     {
         try
         {
-            _prefixValidator?.ValidateWritePath(objectPath);
-
             // If not a thumbnail path, delete the associated thumbnails first
             if (!ThumbnailHelper.IsThumbnailPath(objectPath))
             {
@@ -273,8 +249,7 @@ public class S3ObjectStore : IObjectStore
             {
                 ObjectPath = item.Key,
                 Size = (long)item.Size,
-                LastModified = string.IsNullOrEmpty(item.LastModified) ? null : DateTimeOffset.TryParse(item.LastModified, out var dt) ? (DateTimeOffset?)dt : null,
-                IsZombie = false
+                LastModified = string.IsNullOrEmpty(item.LastModified) ? null : DateTimeOffset.TryParse(item.LastModified, out var dt) ? (DateTimeOffset?)dt : null
             });
         }
         return objects;
@@ -315,27 +290,6 @@ public class S3ObjectStore : IObjectStore
         }
 
         return publicBaseUri;
-    }
-
-    private static string GenerateObjectPath(string fileName, Bucket bucket, string? folder = null)
-    {
-        var prefix = bucket switch
-        {
-            Bucket.Uploads => "uploads",
-            Bucket.Mistakes => "mistakes",
-            Bucket.Questions => "questions",
-            Bucket.Documents => "documents",
-            Bucket.Audio => "audio",
-            _ => "others"
-        };
-
-        if (!string.IsNullOrWhiteSpace(folder))
-        {
-            return $"{prefix}/{folder}/{fileName}";
-        }
-
-        var now = DateTime.UtcNow;
-        return $"{prefix}/{now.Year}/{now.Month:D2}/{now.Day:D2}/{Guid.NewGuid():N}/{fileName}";
     }
 }
 

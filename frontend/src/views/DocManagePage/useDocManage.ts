@@ -1,9 +1,9 @@
 import { ref, computed, onMounted, onUnmounted, inject } from 'vue'
 import { ElMessageBox } from 'element-plus'
-import { createDocApiClient, type DocumentFile } from '../../services/docApi'
+import { deleteDocumentFile, listDocumentFiles, parseDocumentFile, uploadDocumentFile } from '../../services/documentApi'
+import type { DocumentFile } from '../../services/types'
 import { useToast } from '../../composables/useToast'
 
-const client = createDocApiClient()
 
 export function useDocManage() {
   const { success: toastSuccess, error: toastError } = useToast()
@@ -25,7 +25,7 @@ export function useDocManage() {
   async function loadFileList() {
     listLoading.value = true
     try {
-      const response = await client.listDocumentFiles(
+      const response = await listDocumentFiles(
         filePage.value,
         filePageSize.value,
         filterStatus.value === 'all' ? undefined : filterStatus.value,
@@ -61,7 +61,7 @@ export function useDocManage() {
     fileUploadProgress.value = 0
 
     try {
-      await client.uploadDocumentFile(file, (progressEvent) => {
+      await uploadDocumentFile(file, (progressEvent) => {
         if (progressEvent.total) {
           fileUploadProgress.value = Math.round((progressEvent.loaded / progressEvent.total) * 100)
         }
@@ -83,7 +83,7 @@ export function useDocManage() {
   async function handleParseFile(id: string, modelVersion: string) {
     parseFileParsing.value = true
     try {
-      await client.parseDocumentFile(id, modelVersion)
+      await parseDocumentFile(id, modelVersion)
       await loadFileList()
       startPolling()
       toastSuccess(`已触发 ${modelVersion === 'vlm' ? 'VLM' : 'Pipeline'} 解析`)
@@ -106,7 +106,7 @@ export function useDocManage() {
       return
     }
     try {
-      await client.deleteDocumentFile(id)
+      await deleteDocumentFile(id)
       if (fileList.value.length <= 1 && filePage.value > 1) {
         filePage.value--
       }

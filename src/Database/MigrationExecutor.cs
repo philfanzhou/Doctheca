@@ -60,7 +60,7 @@ namespace Doctheca.Database;
 /// logs never contain SQL statement text or connection values.
 /// </para>
 /// </remarks>
-public sealed class DocthecaMigrationExecutor : IDatabaseMigrationExecutor
+public sealed class MigrationExecutor : IDatabaseMigrationExecutor
 {
     internal const string InitialCreateMigrationId = "20260930161548_InitialCreate";
     internal const string AddDocumentStructureMigrationId = "20261021094612_AddDocumentStructure";
@@ -119,7 +119,7 @@ public sealed class DocthecaMigrationExecutor : IDatabaseMigrationExecutor
     private readonly DocthecaDbContext _context;
     private readonly ILogger? _logger;
 
-    public DocthecaMigrationExecutor(DocthecaDbContext context, ILogger? logger = null)
+    public MigrationExecutor(DocthecaDbContext context, ILogger? logger = null)
     {
         ArgumentNullException.ThrowIfNull(context);
         _context = context;

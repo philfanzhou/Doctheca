@@ -1,8 +1,8 @@
 namespace Doctheca.Common.Authentication;
 
 /// <summary>
-/// Defines the identity trust contract shared by every Ruoyu JWT consumer.
-/// Application credentials intentionally remain in each portal's own options.
+/// Defines the issuer trust contract for the host's JWT Bearer scheme.
+/// Application credentials are intentionally not part of this contract.
 /// </summary>
 public sealed class IdentityOptions
 {

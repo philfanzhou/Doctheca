@@ -91,7 +91,7 @@ public sealed class ServiceMantleLoggingTests : ServiceMantleIntegrationTestBase
                         // The fixed query contract: {service="Doctheca"} plus the sink-owned
                         // level label; nothing else is promoted to a stream label.
                         Assert.Equal(
-                            DocthecaLoggingExtensions.LokiServiceLabelValue,
+                            LoggingExtensions.LokiServiceLabelValue,
                             stream.GetProperty("stream").GetProperty("service").GetString());
                         Assert.True(stream.GetProperty("stream").TryGetProperty("level", out _));
                         return stream.GetProperty("values").EnumerateArray()
@@ -181,7 +181,7 @@ public sealed class ServiceMantleLoggingTests : ServiceMantleIntegrationTestBase
     {
         var builder = Microsoft.Extensions.Hosting.Host.CreateApplicationBuilder();
         builder.Configuration["Loki:Uri"] = uri;
-        builder.AddDocthecaLogging();
+        builder.AddLoggingPipeline();
         using var host = builder.Build();
 
         var failure = await Assert.ThrowsAsync<SerilogConfigurationException>(

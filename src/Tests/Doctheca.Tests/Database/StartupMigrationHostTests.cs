@@ -75,8 +75,8 @@ public sealed class StartupMigrationHostTests
 
             (await DatabaseExistsAsync(missing)).Should().BeTrue();
             (await ReadHistoryAsync(missing)).Should().Equal(
-                Doctheca.Database.DocthecaMigrationExecutor.KnownMigrationIds);
-            foreach (var table in Doctheca.Database.DocthecaMigrationExecutor.KnownTableNames)
+                Doctheca.Database.MigrationExecutor.KnownMigrationIds);
+            foreach (var table in Doctheca.Database.MigrationExecutor.KnownTableNames)
             {
                 (await CountRowsAsync(missing, table)).Should().Be(0,
                     $"table '{table}' must exist after startup");
@@ -104,7 +104,7 @@ public sealed class StartupMigrationHostTests
             (await ready.Content.ReadAsStringAsync()).Should().Be(ReadyBody);
 
             (await ReadHistoryAsync(database)).Should().Equal(
-                Doctheca.Database.DocthecaMigrationExecutor.KnownMigrationIds);
+                Doctheca.Database.MigrationExecutor.KnownMigrationIds);
         }
         finally
         {

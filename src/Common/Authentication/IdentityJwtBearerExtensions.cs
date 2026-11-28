@@ -17,19 +17,14 @@ public static class IdentityJwtBearerExtensions
     /// IdentityService configuration keys (IdentityService:Authority, etc.).
     /// The signing key is resolved automatically via OIDC discovery (JWKS).
     /// </summary>
-    /// <param name="services">The service collection.</param>
-    /// <param name="configuration">Application configuration containing the IdentityService section.</param>
-    /// <param name="configureAuthorization">Optional callback to add authorization policies.</param>
+    /// <param name="configureConsumer">Optional callback for claim-type settings.</param>
     public static IServiceCollection AddIdentityJwtBearer(
         this IServiceCollection services,
         IConfiguration configuration,
-        IHostEnvironment environment,
-        Action<JwtBearerConsumerOptions>? configureConsumer = null,
-        Action<AuthorizationOptions>? configureAuthorization = null)
+        Action<JwtBearerConsumerOptions>? configureConsumer = null)
     {
         if (services is null) throw new ArgumentNullException(nameof(services));
         if (configuration is null) throw new ArgumentNullException(nameof(configuration));
-        if (environment is null) throw new ArgumentNullException(nameof(environment));
 
         var identityOptions = configuration
             .GetSection(IdentityOptions.SectionName)
@@ -64,8 +59,6 @@ public static class IdentityJwtBearerExtensions
                     identityOptions,
                     nameClaimType: consumerOptions.NameClaimType,
                     roleClaimType: consumerOptions.RoleClaimType);
-
-
             });
 
         services.AddAuthorization(options =>
@@ -74,8 +67,6 @@ public static class IdentityJwtBearerExtensions
             options.FallbackPolicy = new AuthorizationPolicyBuilder()
                 .RequireAuthenticatedUser()
                 .Build();
-
-            configureAuthorization?.Invoke(options);
         });
 
         return services;

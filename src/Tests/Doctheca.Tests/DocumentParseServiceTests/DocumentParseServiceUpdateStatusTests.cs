@@ -55,11 +55,10 @@ public class DocumentParseServiceUpdateStatusTests
         _parseRepoMock.Setup(r => r.UpdateAsync(It.IsAny<DocumentParse>())).ReturnsAsync(model);
 
         // Act
-        var result = await _service.UpdateStatusAsync(id, DocumentParseStatus.Parsed, markdownContent: "# Hello");
+        var result = await _service.UpdateStatusAsync(id, DocumentParseStatus.Parsed);
 
         // Assert
         result.ParsedAt.Should().BeCloseTo(DateTimeOffset.UtcNow, TimeSpan.FromSeconds(5));
-        result.MarkdownContent.Should().Be("# Hello");
     }
 
     [Fact]
@@ -90,46 +89,6 @@ public class DocumentParseServiceUpdateStatusTests
 
         // Assert
         result.ErrorMessage.Should().Be("Parse error");
-    }
-
-    [Fact]
-    public async Task UpdateStatusAsync_SetsLayoutJson_WhenProvided()
-    {
-        // Arrange
-        var id = Guid.NewGuid();
-        var model = new DocumentParse { Id = id, Status = DocumentParseStatus.Parsing };
-        _parseRepoMock.Setup(r => r.GetByIdAsync(id)).ReturnsAsync(model);
-        _parseRepoMock.Setup(r => r.UpdateAsync(It.IsAny<DocumentParse>())).ReturnsAsync(model);
-
-        // Act
-        var result = await _service.UpdateStatusAsync(
-            id, DocumentParseStatus.Parsed,
-            markdownContent: "# Hello",
-            layoutJson: "{\"pages\":[]}");
-
-        // Assert
-        result.LayoutJson.Should().Be("{\"pages\":[]}");
-    }
-
-    [Fact]
-    public async Task UpdateStatusAsync_DoesNotOverwriteLayoutJson_WhenNull()
-    {
-        // Arrange
-        var id = Guid.NewGuid();
-        var model = new DocumentParse
-        {
-            Id = id,
-            Status = DocumentParseStatus.Parsing,
-            LayoutJson = "{\"pages\":[1]}"
-        };
-        _parseRepoMock.Setup(r => r.GetByIdAsync(id)).ReturnsAsync(model);
-        _parseRepoMock.Setup(r => r.UpdateAsync(It.IsAny<DocumentParse>())).ReturnsAsync(model);
-
-        // Act
-        var result = await _service.UpdateStatusAsync(id, DocumentParseStatus.Parsed, markdownContent: "# Hello");
-
-        // Assert
-        result.LayoutJson.Should().Be("{\"pages\":[1]}");
     }
 
     [Fact]

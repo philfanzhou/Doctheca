@@ -1,8 +1,8 @@
 import { ref, computed } from 'vue'
-import { createDocApiClient, type SearchResult } from '../../services/docApi'
+import { searchTest } from '../../services/searchApi'
+import type { SearchResult } from '../../services/types'
 import { useToast } from '../../composables/useToast'
 
-const client = createDocApiClient()
 
 export interface SearchFilters {
   blockType: string
@@ -58,7 +58,7 @@ export function useSearch() {
     if (!searchQuery.value.trim()) return
     searchLoading.value = true
     try {
-      const response = await client.searchTest(
+      const response = await searchTest(
         searchQuery.value.trim(),
         searchPhrase.value,
         20,

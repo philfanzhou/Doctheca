@@ -21,7 +21,7 @@ public sealed partial class StructureAudioStore
             stream = scratch.Open();
             if (!stream.CanRead || !stream.CanWrite || !stream.CanSeek || stream.Length != 0) throw new AudioStorageException();
             using var bounded = new BoundedAudioDestination(stream, audio.SizeBytes);
-            await _ossService.Value.CopyToAsync(audio.ObjectKey, bounded, deadline.Token);
+            await _objectStore.Value.CopyToAsync(audio.ObjectKey, bounded, deadline.Token);
             deadline.Token.ThrowIfCancellationRequested();
             if (bounded.Exceeded || bounded.Written != audio.SizeBytes || stream.Length != audio.SizeBytes) throw new AudioStorageException();
             stream.Position = 0;

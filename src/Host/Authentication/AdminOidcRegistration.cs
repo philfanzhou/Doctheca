@@ -21,7 +21,7 @@ namespace Doctheca.Host.Authentication;
 /// </summary>
 public static class AdminOidcRegistration
 {
-    public static IServiceCollection AddDocthecaAdminOidc(
+    public static IServiceCollection AddAdminOidc(
         this IServiceCollection services,
         IConfiguration configuration,
         IHostEnvironment environment)

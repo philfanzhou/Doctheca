@@ -2,7 +2,7 @@
 import { ref, computed } from 'vue'
 import { formatDate } from '../../utils/format'
 import { iconHtml } from '../../utils/icons'
-import type { SearchResult } from '../../services/docApi'
+import type { SearchResult } from '../../services/types'
 import {
   extractBlockType,
   formatBbox,

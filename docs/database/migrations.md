@@ -18,7 +18,7 @@ business tables — `document_files`, `document_parses`, `document_parse_images`
 `set_document_files_updated_at` trigger, all matching the production structure the previous raw-SQL
 initializer produced.
 
-At startup `DocthecaMigrationExecutor` ([source](../../src/Database/DocthecaMigrationExecutor.cs))
+At startup `MigrationExecutor` ([source](../../src/Database/MigrationExecutor.cs))
 classifies the target database and executes. The executor implements ServiceMantle's
 `IDatabaseMigrationExecutor`: its internal states map onto the shared observation states
 (`LegacyTakeoverRequired` → `PendingMigration`, the rest one-to-one), and the shared
@@ -190,7 +190,7 @@ remain in temporary mode-0600 environment files and are checked for disclosure w
 | `20261022194526_ClassifyLevelLessTitles` | Data-only title classification correction (#106); identical schema including pages/footnotes/audio |
 | `20261024021500_AddRequiredStructureLevels` | Adds non-null default-false required-level policy (#129); prior data/links retained |
 
-Adding or changing migrations requires extending `DocthecaMigrationExecutor.KnownMigrationIds`
+Adding or changing migrations requires extending `MigrationExecutor.KnownMigrationIds`
 (the known-version contract) and `TablesAfterMigration` together with the executor's takeover
 rules. An earlier version is verified against that migration's own target model (its Designer
 snapshot), never against the current model, so every known version stays upgradeable in place.

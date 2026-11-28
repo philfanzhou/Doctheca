@@ -20,7 +20,7 @@ The mockup contains two sets of interfaces, Identity (identity center) and Docth
 | `--primary-hover` | `#4338CA` | Primary hover |
 | `--primary-soft` | `#EEF2FF` | Primary soft background |
 | `--primary-line` | `#C7D2FE` | Primary border |
-| `--ink-0/1/2` | `#0D0F1E / #141731 / #1D2142` | Sidebar dark background, three tiers |
+| `--ink-0/1` | `#0D0F1E / #141731` | Sidebar dark background, two tiers |
 | `--ink-text/2/3` | `#E7E9F5 / #9BA1C4 / #5D6388` | Sidebar text, three tiers |
 | `--bg` | `#F5F6F8` | Page background |
 | `--surface` | `#FFFFFF` | Card background |

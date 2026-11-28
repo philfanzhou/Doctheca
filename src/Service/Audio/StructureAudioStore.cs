@@ -15,7 +15,7 @@ public sealed class AudioStorageException() : Exception("Audio storage is unavai
 /// </summary>
 public sealed partial class StructureAudioStore
 {
-    private readonly Lazy<IObjectStore> _ossService;
+    private readonly Lazy<IObjectStore> _objectStore;
     private readonly ILogger<StructureAudioStore> _logger;
 
     public StructureAudioStore(
@@ -24,7 +24,7 @@ public sealed partial class StructureAudioStore
         ILogger<StructureAudioStore> logger,
         DocumentAudioPlaybackSettings? playback = null)
     {
-        _ossService = new Lazy<IObjectStore>(objectStore);
+        _objectStore = new Lazy<IObjectStore>(objectStore);
         Status = status;
         _logger = logger;
         Playback = playback ?? new(false, 300);
@@ -44,10 +44,10 @@ public sealed partial class StructureAudioStore
         try
         {
             EnsureAudioKey(key);
-            if (!await _ossService.Value.ObjectExistsAsync(key, timeout.Token)) throw new AudioStorageException();
+            if (!await _objectStore.Value.ObjectExistsAsync(key, timeout.Token)) throw new AudioStorageException();
             timeout.Token.ThrowIfCancellationRequested();
             var issuedAt = DateTimeOffset.FromUnixTimeSeconds(timeProvider.GetUtcNow().ToUnixTimeSeconds());
-            var url = await _ossService.Value.GetPresignedUrlAsync(key, Playback.LinkSeconds, issuedAt, timeout.Token);
+            var url = await _objectStore.Value.GetPresignedUrlAsync(key, Playback.LinkSeconds, issuedAt, timeout.Token);
             timeout.Token.ThrowIfCancellationRequested();
             return new(url, issuedAt.AddSeconds(Playback.LinkSeconds), Playback.LinkSeconds);
         }
@@ -82,20 +82,20 @@ public sealed partial class StructureAudioStore
     }
 
     public Task<string> PutDocumentAsync(Guid documentId, Guid audioId, string extension, Stream content, string contentType, CancellationToken ct = default) =>
-        PutCoreAsync($"documents/{documentId:N}", DocumentPrefix(documentId), audioId, extension, content, contentType, ct);
+        PutCoreAsync(DocumentPrefix(documentId), audioId, extension, content, contentType, ct);
 
     /// <summary>Stores one file and returns its object key.</summary>
-    public async Task<string> PutAsync(Guid parseId, Guid audioId, string extension, Stream content, string contentType, CancellationToken cancellationToken = default)
-        => await PutCoreAsync($"{parseId:N}", ParsePrefix(parseId), audioId, extension, content, contentType, cancellationToken);
+    public Task<string> PutAsync(Guid parseId, Guid audioId, string extension, Stream content, string contentType, CancellationToken cancellationToken = default) =>
+        PutCoreAsync(ParsePrefix(parseId), audioId, extension, content, contentType, cancellationToken);
 
-    private async Task<string> PutCoreAsync(string folder, string prefix, Guid audioId, string extension, Stream content, string contentType, CancellationToken cancellationToken)
+    private async Task<string> PutCoreAsync(string prefix, Guid audioId, string extension, Stream content, string contentType, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
         if (!Status.Available) throw new AudioStorageException();
-        string key;
+        var key = $"{prefix}{audioId:N}{extension}";
         try
         {
-            key = await _ossService.Value.UploadAsync(content, $"{audioId:N}{extension}", contentType, Bucket.Audio, folder, cancellationToken);
+            await _objectStore.Value.UploadAsync(key, content, contentType, cancellationToken);
         }
         catch (OperationCanceledException) { throw; }
         catch (Exception ex)
@@ -103,12 +103,6 @@ public sealed partial class StructureAudioStore
             // SDK exceptions can carry endpoints, keys or signed URLs; only the type is logged.
             _logger.LogWarning("Audio object upload failed for audio {AudioId}: {ExceptionType}", audioId, ex.GetType().Name);
             throw new AudioStorageException();
-        }
-
-        if (key != $"{prefix}{audioId:N}{extension}")
-        {
-            // An unexpected key may belong to another row. Only the service can confirm references.
-            throw new InvalidOperationException("The storage returned an object key outside the audio prefix.");
         }
         return key;
     }
@@ -129,7 +123,7 @@ public sealed partial class StructureAudioStore
     {
         try
         {
-            return (await _ossService.Value.ListObjectsOrThrowAsync(DocumentAudioOptions.ObjectPrefix))
+            return (await _objectStore.Value.ListObjectsOrThrowAsync(DocumentAudioOptions.ObjectPrefix))
                 .Where(item => item.ObjectPath.StartsWith(DocumentAudioOptions.ObjectPrefix, StringComparison.Ordinal))
                 .ToList();
         }
@@ -145,7 +139,7 @@ public sealed partial class StructureAudioStore
         EnsureAudioKey(key);
         try
         {
-            return await _ossService.Value.DeleteAsync(key);
+            return await _objectStore.Value.DeleteAsync(key);
         }
         catch (Exception ex)
         {

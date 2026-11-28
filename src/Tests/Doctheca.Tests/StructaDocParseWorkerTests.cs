@@ -23,7 +23,7 @@ public class StructaDocParseWorkerTests
     private readonly Mock<IStructaDocClient> _client = new();
     private readonly Mock<IStructaDocParseResultSync> _sync = new();
     private readonly Mock<ISearchIndexService> _searchIndex = new();
-    private readonly Mock<IObjectStore> _ossService = new();
+    private readonly Mock<IObjectStore> _objectStore = new();
     private readonly StructaDocOptions _options = new()
     {
         BaseUrl = "http://structadoc.test",
@@ -47,9 +47,8 @@ public class StructaDocParseWorkerTests
         _parseService.Verify(x => x.UpdateStatusAsync(
             job.Id,
             DocumentParseStatus.Parsing,
-            null, null,
+            null,
             runId.ToString("D"),
-            null, null, null, null, null,
             runId), Times.Once);
     }
 
@@ -81,7 +80,7 @@ public class StructaDocParseWorkerTests
         _fileService.Setup(x => x.GetByIdAsync(job.DocumentFileId)).ReturnsAsync(file);
         _fileService.Setup(x => x.AttachStructaDocDocumentAsync(job.DocumentFileId, documentId))
             .ReturnsAsync(file);
-        _ossService.Setup(x => x.DownloadAsync("documents/legacy/paper.pdf"))
+        _objectStore.Setup(x => x.DownloadAsync("documents/legacy/paper.pdf"))
             .ReturnsAsync(new MemoryStream([1, 2]));
         _client.Setup(x => x.UploadDocumentAsync(
                 file.FileName, file.ContentType, It.IsAny<Stream>(), It.IsAny<CancellationToken>()))
@@ -95,8 +94,7 @@ public class StructaDocParseWorkerTests
         _fileService.Verify(x => x.AttachStructaDocDocumentAsync(job.DocumentFileId, documentId), Times.Once);
         _parseService.Verify(x => x.UpdateStatusAsync(
             job.Id, DocumentParseStatus.Parsing,
-            It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>(),
-            It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>(),
+            It.IsAny<string?>(), It.IsAny<string?>(),
             It.IsAny<Guid?>()), Times.Once);
     }
 
@@ -115,8 +113,7 @@ public class StructaDocParseWorkerTests
         await act.Should().ThrowAsync<StructaDocException>();
         _parseService.Verify(x => x.UpdateStatusAsync(
             job.Id, DocumentParseStatus.Failed, It.IsAny<string?>(),
-            It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>(),
-            It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<Guid?>()), Times.Never);
+            It.IsAny<string?>(), It.IsAny<Guid?>()), Times.Never);
     }
 
     [Fact]
@@ -158,8 +155,7 @@ public class StructaDocParseWorkerTests
             job.Id,
             DocumentParseStatus.Failed,
             "StructaDoc parse run failed (provider-task-failed: MinerU rejected the file)",
-            It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>(),
-            It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<Guid?>()), Times.Once);
+            It.IsAny<string?>(), It.IsAny<Guid?>()), Times.Once);
     }
 
     [Fact]
@@ -173,8 +169,7 @@ public class StructaDocParseWorkerTests
         await Run((worker, provider) => worker.PollAsync(job, provider, CancellationToken.None));
 
         _parseService.Verify(x => x.UpdateStatusAsync(
-            It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>(),
-            It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>(),
+            It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<string?>(),
             It.IsAny<Guid?>()), Times.Never);
         _sync.Verify(x => x.SyncAsync(
             It.IsAny<DocumentParse>(), It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never);
@@ -191,8 +186,7 @@ public class StructaDocParseWorkerTests
             job.Id,
             DocumentParseStatus.Failed,
             It.Is<string>(m => m.Contains("StructaDoc pipeline migration")),
-            It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>(),
-            It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<Guid?>()), Times.Once);
+            It.IsAny<string?>(), It.IsAny<Guid?>()), Times.Once);
         _client.Verify(x => x.GetParseRunAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
@@ -209,8 +203,7 @@ public class StructaDocParseWorkerTests
         _parseService.Verify(x => x.UpdateStatusAsync(
             job.Id, DocumentParseStatus.Failed,
             It.Is<string>(m => m.Contains("no longer exists")),
-            It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>(),
-            It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<Guid?>()), Times.Once);
+            It.IsAny<string?>(), It.IsAny<Guid?>()), Times.Once);
     }
 
     // ── helpers ──
@@ -247,7 +240,7 @@ public class StructaDocParseWorkerTests
         services.AddSingleton(_client.Object);
         services.AddSingleton(_sync.Object);
         services.AddSingleton(_searchIndex.Object);
-        services.AddSingleton(_ossService.Object);
+        services.AddSingleton(_objectStore.Object);
         services.AddSingleton(Options.Create(_options));
         var provider = services.BuildServiceProvider();
 

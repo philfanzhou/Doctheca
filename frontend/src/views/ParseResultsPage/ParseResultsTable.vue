@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { formatTime, getFileStatusLabel } from '../../utils/format'
 import { iconHtml } from '../../utils/icons'
-import { createDocApiClient } from '../../services/docApi'
+import { getDocumentFile } from '../../services/documentApi'
+import { exportParseHtml, exportParseMarkdown } from '../../services/exportApi'
 import { useToast } from '../../composables/useToast'
-import type { DocumentParse } from '../../services/docApi'
+import type { DocumentParse } from '../../services/types'
 import {
   openMarkdown,
   openHtmlPreview,
@@ -22,7 +23,6 @@ const emit = defineEmits<{
   (e: 'delete', parseId: string): void
 }>()
 
-const client = createDocApiClient()
 const { success: toastSuccess, error: toastError } = useToast()
 
 function statusBadgeHtml(status: string): string {
@@ -39,7 +39,7 @@ function modelBadgeHtml(modelVersion: string): string {
 
 async function openMarkdownForRow(row: DocumentParse) {
   try {
-    const response = await client.getDocumentFile(row.fileId)
+    const response = await getDocumentFile(row.fileId)
     const detail = response.data
     const parse = detail.parses?.find((p) => p.id === row.id)
     if (!parse?.markdownContent) {
@@ -54,7 +54,7 @@ async function openMarkdownForRow(row: DocumentParse) {
 
 async function openHtmlPreviewForRow(parseId: string) {
   try {
-    await openHtmlPreview(client.exportParseHtml(parseId).then((r) => r.blob))
+    await openHtmlPreview(exportParseHtml(parseId).then((r) => r.blob))
   } catch (e) {
     toastError(e instanceof Error ? e.message : '生成 HTML 失败')
   }
@@ -62,7 +62,7 @@ async function openHtmlPreviewForRow(parseId: string) {
 
 async function openJsonForRow(row: DocumentParse, field: 'contentList' | 'contentListV2' | 'modelJson' | 'layoutJson', label: string) {
   try {
-    const response = await client.getDocumentFile(row.fileId)
+    const response = await getDocumentFile(row.fileId)
     const detail = response.data
     const parse = detail.parses?.find((p) => p.id === row.id)
     const rawContent = parse?.[field]
@@ -78,7 +78,7 @@ async function openJsonForRow(row: DocumentParse, field: 'contentList' | 'conten
 
 async function openImagesForRow(row: DocumentParse) {
   try {
-    const response = await client.getDocumentFile(row.fileId)
+    const response = await getDocumentFile(row.fileId)
     const detail = response.data
     const parse = detail.parses?.find((p) => p.id === row.id)
     if (!parse?.images?.length) {
@@ -93,7 +93,7 @@ async function openImagesForRow(row: DocumentParse) {
 
 async function exportMarkdown(parseId: string) {
   try {
-    const { blob, fileName } = await client.exportParseMarkdown(parseId)
+    const { blob, fileName } = await exportParseMarkdown(parseId)
     downloadBlob(blob, fileName)
     toastSuccess('导出成功')
   } catch (e) {
@@ -103,7 +103,7 @@ async function exportMarkdown(parseId: string) {
 
 async function exportHtml(parseId: string) {
   try {
-    const { blob, fileName } = await client.exportParseHtml(parseId)
+    const { blob, fileName } = await exportParseHtml(parseId)
     downloadBlob(blob, fileName)
     toastSuccess('导出成功')
   } catch (e) {

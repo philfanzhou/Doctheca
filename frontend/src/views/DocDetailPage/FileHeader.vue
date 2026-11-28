@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { formatTime } from '../../utils/format'
 import { iconHtml } from '../../utils/icons'
-import type { DocumentFileDetail } from '../../services/docApi'
+import type { DocumentFileDetail } from '../../services/types'
 import { fileIconCls, fileExtLabel } from '../../utils/file'
 
 const props = defineProps<{

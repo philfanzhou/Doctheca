@@ -226,7 +226,7 @@ registrations/configuration before rolling back and sign in again. No SQL/data r
 
 ## Logging Configuration
 
-Doctheca logs through the `ServiceMantle.Logging` pipeline (Console sink + optional Grafana Loki remote sink). The wiring lives in `src/Host/DocthecaLoggingExtensions.cs` and is registered in `Program.cs` via `builder.AddDocthecaLogging()` after the Consul configuration source. All direct ServiceMantle packages (`ServiceMantle`, `.Web`, `.Diagnostics`, `.Logging`, `.Database.PostgreSql`, and `.Persistence.Relational`) are pinned to the same official **0.3.3** release. Do not float these versions.
+Doctheca logs through the `ServiceMantle.Logging` pipeline (Console sink + optional Grafana Loki remote sink). The wiring lives in `src/Host/LoggingExtensions.cs` and is registered in `Program.cs` via `builder.AddLoggingPipeline()` after the Consul configuration source. All direct ServiceMantle packages (`ServiceMantle`, `.Web`, `.Diagnostics`, `.Logging`, `.Database.PostgreSql`, and `.Persistence.Relational`) are pinned to the same official **0.3.3** release. Do not float these versions.
 
 ### Log Levels
 
@@ -417,7 +417,7 @@ The post-deployment smoke check should hit `http://127.0.0.1:5012/health/live` f
 
 The service automatically performs the following at startup:
 1. `IDocumentAnalysisService.InitializeAsync` — LLM initialization (if an ApiKey is configured)
-2. Shared `StartupDatabaseGate` — deployment validation, explicit target preparation, and `DocthecaMigrationExecutor` under the PostgreSQL session advisory lock; the gate publishes success only after the held-lock final inspection passes (see [Migrations](../database/migrations.md))
+2. Shared `StartupDatabaseGate` — deployment validation, explicit target preparation, and `MigrationExecutor` under the PostgreSQL session advisory lock; the gate publishes success only after the held-lock final inspection passes (see [Migrations](../database/migrations.md))
 3. `IndexService.EnsureIndexAsync` — create the search index (best-effort)
 
 ## Prebuilt Images & Version Releases

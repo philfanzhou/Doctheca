@@ -26,7 +26,7 @@ Use the issue and pull request templates. Issue titles and bodies are written in
 
 ## Database changes
 
-The PostgreSQL schema is managed with EF Core migrations. The baseline migration `20260930161548_InitialCreate` in `src/Database/Migrations` creates the four business tables, and at startup `DocthecaMigrationExecutor` classifies the target database: an empty database gets the baseline applied, a legacy database that verifies against the baseline is taken over with safe backfills and stamped, and an unknown or conflicting structure is refused with `DOCTHECA_DB_SCHEMA_INCOMPATIBLE`. Schema changes must add a migration and extend `DocthecaMigrationExecutor.KnownMigrationIds` with matching takeover rules, keeping existing databases upgradeable in place. See [docs/database/migrations.md](docs/database/migrations.md) for details.
+The PostgreSQL schema is managed with EF Core migrations. The baseline migration `20260930161548_InitialCreate` in `src/Database/Migrations` creates the four business tables, and at startup `MigrationExecutor` classifies the target database: an empty database gets the baseline applied, a legacy database that verifies against the baseline is taken over with safe backfills and stamped, and an unknown or conflicting structure is refused with `DOCTHECA_DB_SCHEMA_INCOMPATIBLE`. Schema changes must add a migration and extend `MigrationExecutor.KnownMigrationIds` with matching takeover rules, keeping existing databases upgradeable in place. See [docs/database/migrations.md](docs/database/migrations.md) for details.
 
 ## Security
 

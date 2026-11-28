@@ -8,11 +8,7 @@ namespace Doctheca.Database.Repositories;
 
 public sealed class InternalCatalogRepository(DbContextOptions<DocthecaDbContext> options) : IInternalCatalogRepository
 {
-    // EF query/command errors can contain raw provider details before the HTTP boundary sees
-    // them. Isolate anonymous reads from that logging; the marked endpoint's safe exception
-    // handler owns diagnostics. Existing administrative contexts retain their logging.
-    private DocthecaDbContext CreateContext() => new(new DbContextOptionsBuilder<DocthecaDbContext>(options)
-        .UseLoggerFactory(NullLoggerFactory.Instance).EnableSensitiveDataLogging(false).EnableDetailedErrors(false).Options);
+    private DocthecaDbContext CreateContext() => DocthecaDbContext.CreateUnlogged(options);
 
     public async Task<IReadOnlyList<InternalDefinition>> ReadDefinitionsAsync(
         InternalCatalogQuery query, CancellationToken cancellationToken)

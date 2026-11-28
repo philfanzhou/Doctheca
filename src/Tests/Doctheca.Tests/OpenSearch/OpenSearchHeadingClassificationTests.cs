@@ -32,7 +32,7 @@ public sealed class OpenSearchHeadingClassificationTests(OpenSearchFixture fixtu
         try
         {
             using var context = postgres.CreateContext(database);
-            await context.GetService<IMigrator>().MigrateAsync(DocthecaMigrationExecutor.AddBlockFootnotesMigrationId);
+            await context.GetService<IMigrator>().MigrateAsync(MigrationExecutor.AddBlockFootnotesMigrationId);
             await PageMigrationTests.SeedAllEarlierTablesAsync(context);
             var rows = new[]
             {
@@ -59,7 +59,7 @@ public sealed class OpenSearchHeadingClassificationTests(OpenSearchFixture fixtu
             await index.EnsureIndexAsync();
             await ReindexAsync();
             (await HitsAsync(-1, "beacon delta", true)).Should().Contain(rows[0].Id);
-            await new DocthecaMigrationExecutor(context).ExecuteAsync();
+            await new MigrationExecutor(context).ExecuteAsync();
             // The existing index is deliberately stale until the documented explicit reindex.
             (await HitsAsync(-1, "beacon delta", true)).Should().Contain(rows[0].Id);
             await index.EnsureIndexAsync(); // mapping4 stays intact; classification alone cannot recreate it.

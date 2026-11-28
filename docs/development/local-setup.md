@@ -37,7 +37,7 @@ startup create a verifiably missing target itself, set `Database:AllowCreate=tru
 form `Database__AllowCreate=true`; the value must be exactly `true` or `false`).
 
 Once the database exists, startup orchestrates the EF Core migrations for you:
-`DocthecaMigrationExecutor` runs under the ServiceMantle `DatabaseMigrationOrchestrator`
+`MigrationExecutor` runs under the ServiceMantle `DatabaseMigrationOrchestrator`
 (PostgreSQL advisory lock), applies the EF Core baseline migration `20260930161548_InitialCreate`
 to an empty database, and takes over a legacy database after verifying its structure; an unknown
 structure is refused with `DOCTHECA_DB_SCHEMA_INCOMPATIBLE` (see

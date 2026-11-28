@@ -108,11 +108,11 @@ public sealed class MigrationIntegrationCollection : ICollectionFixture<PostgreS
 /// </summary>
 internal static class MigrationGoldenStates
 {
-    internal const string InitialId = DocthecaMigrationExecutor.InitialCreateMigrationId;
+    internal const string InitialId = MigrationExecutor.InitialCreateMigrationId;
 
     /// <summary>The complete known history a current database carries.</summary>
-    internal static readonly string[] AllIds = [.. DocthecaMigrationExecutor.KnownMigrationIds];
-    internal const string HistoryTable = DocthecaMigrationExecutor.HistoryTableName;
+    internal static readonly string[] AllIds = [.. MigrationExecutor.KnownMigrationIds];
+    internal const string HistoryTable = MigrationExecutor.HistoryTableName;
 
     internal static readonly Guid FileId = Guid.Parse("a1111111-1111-4111-8111-111111111111");
     internal static readonly Guid ParseId = Guid.Parse("b2222222-2222-4222-8222-222222222222");
@@ -154,7 +154,7 @@ internal static class MigrationGoldenStates
     }
 
     /// <summary>
-    /// The column and constraint entries <see cref="DocthecaMigrationExecutor.AddDocumentStructureMigrationId"/>
+    /// The column and constraint entries <see cref="MigrationExecutor.AddDocumentStructureMigrationId"/>
     /// adds to the four baseline tables; filtering them out compares a migrated database with its
     /// pre-migration baseline shape.
     /// </summary>
@@ -271,7 +271,7 @@ internal static class MigrationGoldenStates
                 """;
             var parameter = command.CreateParameter();
             parameter.ParameterName = "@tables";
-            parameter.Value = (tables ?? DocthecaMigrationExecutor.KnownTableNames).ToArray();
+            parameter.Value = (tables ?? MigrationExecutor.KnownTableNames).ToArray();
             command.Parameters.Add(parameter);
             await using var reader = await command.ExecuteReaderAsync();
             while (await reader.ReadAsync())
@@ -316,7 +316,7 @@ internal static class MigrationGoldenStates
                     """;
                 var parameter = constraints.CreateParameter();
                 parameter.ParameterName = "@tables";
-                parameter.Value = (tables ?? DocthecaMigrationExecutor.KnownTableNames).ToArray();
+                parameter.Value = (tables ?? MigrationExecutor.KnownTableNames).ToArray();
                 constraints.Parameters.Add(parameter);
                 await using var reader = await constraints.ExecuteReaderAsync();
                 while (await reader.ReadAsync())
@@ -345,7 +345,7 @@ internal static class MigrationGoldenStates
                     """;
                 var parameter = indexes.CreateParameter();
                 parameter.ParameterName = "@tables";
-                parameter.Value = (tables ?? DocthecaMigrationExecutor.KnownTableNames).ToArray();
+                parameter.Value = (tables ?? MigrationExecutor.KnownTableNames).ToArray();
                 indexes.Parameters.Add(parameter);
                 await using var reader = await indexes.ExecuteReaderAsync();
                 while (await reader.ReadAsync())

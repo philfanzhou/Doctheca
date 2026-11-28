@@ -18,12 +18,12 @@ namespace Doctheca.Tests.Database;
 /// result column by column; and secret canaries never enter the error surfaces.
 /// </summary>
 [Collection(MigrationIntegrationCollection.Name)]
-public sealed class DocthecaMigrationExecutorTests : IAsyncLifetime
+public sealed class MigrationExecutorTests : IAsyncLifetime
 {
     private readonly PostgreSqlMigrationFixture _fixture;
     private string _database = null!;
 
-    public DocthecaMigrationExecutorTests(PostgreSqlMigrationFixture fixture)
+    public MigrationExecutorTests(PostgreSqlMigrationFixture fixture)
     {
         _fixture = fixture;
     }
@@ -32,7 +32,7 @@ public sealed class DocthecaMigrationExecutorTests : IAsyncLifetime
 
     public async Task DisposeAsync() => await _fixture.DropDatabaseAsync(_database);
 
-    private DocthecaMigrationExecutor Executor(DocthecaDbContext context, ILogger? logger = null) =>
+    private MigrationExecutor Executor(DocthecaDbContext context, ILogger? logger = null) =>
         new(context, logger ?? NullLogger.Instance);
 
     [Fact]
@@ -40,12 +40,12 @@ public sealed class DocthecaMigrationExecutorTests : IAsyncLifetime
     {
         using var context = _fixture.CreateContext(_database);
 
-        (await Executor(context).InspectAsync()).Should().Be(DocthecaMigrationExecutor.DatabaseState.Empty);
+        (await Executor(context).InspectAsync()).Should().Be(MigrationExecutor.DatabaseState.Empty);
         await Executor(context).ExecuteAsync();
 
         (await MigrationGoldenStates.ReadAppliedHistoryAsync(context)).Should()
             .Equal(MigrationGoldenStates.AllIds);
-        foreach (var table in DocthecaMigrationExecutor.KnownTableNames)
+        foreach (var table in MigrationExecutor.KnownTableNames)
         {
             (await MigrationGoldenStates.CountRowsAsync(context, table)).Should().Be(0);
         }
@@ -62,7 +62,7 @@ public sealed class DocthecaMigrationExecutorTests : IAsyncLifetime
 
         // The second execution over the current database does nothing and stays compatible.
         (await Executor(context).InspectAsync()).Should()
-            .Be(DocthecaMigrationExecutor.DatabaseState.CurrentVersionCompatible);
+            .Be(MigrationExecutor.DatabaseState.CurrentVersionCompatible);
         await Executor(context).ExecuteAsync();
         (await MigrationGoldenStates.ReadAppliedHistoryAsync(context)).Should()
             .Equal(MigrationGoldenStates.AllIds);
@@ -76,7 +76,7 @@ public sealed class DocthecaMigrationExecutorTests : IAsyncLifetime
         {
             using var context = _fixture.CreateContext(database);
             (await Executor(context).InspectAsync()).Should()
-                .Be(DocthecaMigrationExecutor.DatabaseState.Empty);
+                .Be(MigrationExecutor.DatabaseState.Empty);
             await Executor(context).ExecuteAsync();
             (await MigrationGoldenStates.ReadAppliedHistoryAsync(context)).Should()
                 .Equal(MigrationGoldenStates.AllIds);
@@ -98,7 +98,7 @@ public sealed class DocthecaMigrationExecutorTests : IAsyncLifetime
         var constraintsBefore = await MigrationGoldenStates.ReadConstraintShapeAsync(context);
 
         (await Executor(context).InspectAsync()).Should()
-            .Be(DocthecaMigrationExecutor.DatabaseState.LegacyTakeoverRequired);
+            .Be(MigrationExecutor.DatabaseState.LegacyTakeoverRequired);
         await Executor(context).ExecuteAsync();
 
         (await MigrationGoldenStates.ReadAppliedHistoryAsync(context)).Should()
@@ -155,7 +155,7 @@ public sealed class DocthecaMigrationExecutorTests : IAsyncLifetime
             "ALTER TABLE document_parses DROP COLUMN model_version");
 
         var inspection = await Executor(context).InspectDetailedAsync(default);
-        inspection.State.Should().Be(DocthecaMigrationExecutor.DatabaseState.InspectionFailed);
+        inspection.State.Should().Be(MigrationExecutor.DatabaseState.InspectionFailed);
         inspection.Reason.Should().Contain("model_version");
 
         var failure = await Assert.ThrowsAsync<InvalidOperationException>(
@@ -200,12 +200,12 @@ public sealed class DocthecaMigrationExecutorTests : IAsyncLifetime
             """);
 
         (await Executor(context).InspectAsync()).Should()
-            .Be(DocthecaMigrationExecutor.DatabaseState.VersionTooNew);
+            .Be(MigrationExecutor.DatabaseState.VersionTooNew);
         var failure = await Assert.ThrowsAsync<InvalidOperationException>(
             () => Executor(context).ExecuteAsync());
-        failure.Message.Should().Contain(DocthecaMigrationExecutor.IncompatibleErrorCode);
+        failure.Message.Should().Contain(MigrationExecutor.IncompatibleErrorCode);
         (await MigrationGoldenStates.ReadAppliedHistoryAsync(context)).Should()
-            .HaveCount(DocthecaMigrationExecutor.KnownMigrationIds.Count + 1);
+            .HaveCount(MigrationExecutor.KnownMigrationIds.Count + 1);
     }
 
     [Fact]
@@ -223,7 +223,7 @@ public sealed class DocthecaMigrationExecutorTests : IAsyncLifetime
             using var migratedContext = _fixture.CreateContext(migrated);
             await Executor(migratedContext).ExecuteAsync();
 
-            var tables = DocthecaMigrationExecutor.AllTableNames;
+            var tables = MigrationExecutor.AllTableNames;
             (await MigrationGoldenStates.ReadColumnShapeAsync(legacyContext, tables)).Order().Should()
                 .Equal((await MigrationGoldenStates.ReadColumnShapeAsync(migratedContext, tables)).Order());
             (await MigrationGoldenStates.ReadConstraintShapeAsync(legacyContext, tables)).Should()
@@ -246,10 +246,10 @@ public sealed class DocthecaMigrationExecutorTests : IAsyncLifetime
         using var executorContext = context;
 
         (await Executor(executorContext, loggerFactory.CreateLogger("test")).InspectAsync()).Should()
-            .Be(DocthecaMigrationExecutor.DatabaseState.InspectionFailed);
+            .Be(MigrationExecutor.DatabaseState.InspectionFailed);
         var failure = await Assert.ThrowsAsync<InvalidOperationException>(
             () => Executor(executorContext, loggerFactory.CreateLogger("test")).ExecuteAsync());
-        failure.Message.Should().Contain(DocthecaMigrationExecutor.IncompatibleErrorCode);
+        failure.Message.Should().Contain(MigrationExecutor.IncompatibleErrorCode);
 
         var surfaces = failure.Message + Environment.NewLine + string.Join(Environment.NewLine, logs.Messages);
         surfaces.Should().NotContain(_fixture.PasswordCanary);
@@ -272,7 +272,7 @@ public sealed class DocthecaMigrationExecutorTests : IAsyncLifetime
 
     private static async Task AssertRefusedAsync(DocthecaDbContext context, InvalidOperationException failure)
     {
-        failure.Message.Should().Contain(DocthecaMigrationExecutor.IncompatibleErrorCode);
+        failure.Message.Should().Contain(MigrationExecutor.IncompatibleErrorCode);
         failure.Message.Should().NotContain("Host=");
         failure.Message.Should().NotContain("SELECT");
         // Refused states perform zero writes: no history table was created or stamped.

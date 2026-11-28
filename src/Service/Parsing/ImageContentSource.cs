@@ -12,7 +12,7 @@ namespace Doctheca.Service.Parsing;
 public sealed class ImageContentSource
 {
     private readonly IStructaDocClient _structaDocClient;
-    private readonly IObjectStore _ossService;
+    private readonly IObjectStore _objectStore;
     private readonly ILogger<ImageContentSource> _logger;
 
     public ImageContentSource(
@@ -21,7 +21,7 @@ public sealed class ImageContentSource
         ILogger<ImageContentSource> logger)
     {
         _structaDocClient = structaDocClient;
-        _ossService = objectStore;
+        _objectStore = objectStore;
         _logger = logger;
     }
 
@@ -46,7 +46,7 @@ public sealed class ImageContentSource
         }
 
         if (string.IsNullOrWhiteSpace(image.ImagePath)) return null;
-        var stream = await _ossService.DownloadAsync(image.ImagePath);
+        var stream = await _objectStore.DownloadAsync(image.ImagePath);
         if (ct.IsCancellationRequested)
         {
             if (stream is not null) await stream.DisposeAsync();

@@ -356,10 +356,10 @@ public sealed class StructureAudioLifecycleTests(PostgreSqlFixture database, Min
         var uploaded = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var resume = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var proxy = new Mock<IObjectStore>(MockBehavior.Strict);
-        proxy.Setup(storage => storage.UploadAsync(It.IsAny<Stream>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<Bucket>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
-            .Returns(async (Stream source, string name, string type, Bucket bucket, string? folder, CancellationToken ct) =>
+        proxy.Setup(storage => storage.UploadAsync(It.IsAny<string>(), It.IsAny<Stream>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .Returns(async (string key, Stream source, string type, CancellationToken ct) =>
             {
-                var key = await real.UploadAsync(source, name, type, bucket, folder, ct);
+                await real.UploadAsync(key, source, type, ct);
                 uploaded.TrySetResult(); await resume.Task.WaitAsync(ct); return key;
             });
         proxy.Setup(storage => storage.DeleteAsync(It.IsAny<string>())).Returns((string key) => real.DeleteAsync(key));

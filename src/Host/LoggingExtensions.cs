@@ -30,7 +30,7 @@ namespace Doctheca.Host;
 /// An invalid or credential-bearing <c>Loki:Uri</c> fails the host start with a safe library
 /// error code (<c>loki.invalid_endpoint</c>) without echoing the configured value.
 /// </remarks>
-public static class DocthecaLoggingExtensions
+public static class LoggingExtensions
 {
     /// <summary>
     /// The fixed Loki stream label value. Deliberately distinct from the lowercase
@@ -46,7 +46,7 @@ public static class DocthecaLoggingExtensions
     /// </summary>
     /// <param name="builder">The host application builder.</param>
     /// <returns>The same builder.</returns>
-    public static IHostApplicationBuilder AddDocthecaLogging(
+    public static IHostApplicationBuilder AddLoggingPipeline(
         this IHostApplicationBuilder builder)
     {
         ArgumentNullException.ThrowIfNull(builder);

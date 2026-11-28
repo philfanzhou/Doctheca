@@ -29,7 +29,7 @@ Migration mandate: ADR-001 + Redesign-2026-07-Admin-Console.md (`docs/overview/`
 - Other UI libraries (Naive / Arco / Ant Design Vue / Vuetify)
 - Chart libraries (SVG line/donut charts are drawn natively by `ChartLine.vue` / `ChartDonut.vue`)
 - `marked` (parse-result Markdown is shown verbatim in a `<pre>`)
-- `@element-plus/icons-vue` (replaced by the self-maintained `utils/icons.ts`, 27 linear SVG icons)
+- `@element-plus/icons-vue` (replaced by the self-maintained `utils/icons.ts`, 22 linear SVG icons)
 
 ## 3. Access Control
 
@@ -197,7 +197,7 @@ Import order in `main.ts` (later imports override earlier ones):
 | Drawer (`AppDrawer.vue` + `.drawer` + `.overlay`) | Teleport + hand-written SCSS, spring entrance 0.3s |
 | Toast (`AppToast.vue` + `.toast` + `useToast`) | Teleport + global singleton, success/error states, spring entrance 0.3s |
 | Charts (`ChartLine.vue` / `ChartDonut.vue`) | Native SVG, stroke-dashoffset/dasharray drawing animation; `ChartLine`'s `labels` are HTML/SVG-escaped before being spliced into the SVG |
-| Icons (`Icon` / `iconHtml(name)`) | `utils/icons.ts`, 27 linear SVGs, stroke 1.6 round |
+| Icons (`Icon` / `iconHtml(name)`) | `utils/icons.ts`, 22 linear SVGs, stroke 1.6 round |
 | Input / Select / number input / Switch / Checkbox | EP components (`el-input` / `el-select` / `el-input-number` / `el-switch` / `el-checkbox`) |
 | Pagination | EP `el-pagination` (layout="sizes, prev, pager, next, jumper") |
 | Confirm dialog | EP `ElMessageBox.confirm` (kept, equivalent to window.confirm) |
@@ -218,7 +218,7 @@ The following CSS classes have been removed from style.css (the corresponding fe
 
 Admin business endpoints and parameters stay unchanged; all modules reuse the shared Axios client with cookie session and 401/403 handling.
 
-The client is split into multiple modules by domain; `services/docApi.ts` continues to act as a compatibility facade exporting `createDocApiClient` and all types:
+The client is split into multiple modules by domain; views import the functions they use from the module that owns them:
 
 | File | Responsibility |
 |------|------|
@@ -230,7 +230,6 @@ The client is split into multiple modules by domain; `services/docApi.ts` contin
 | `services/searchApi.ts` | Search test: searchTest |
 | `services/exportApi.ts` | Export downloads: Markdown / HTML blob download helpers |
 | `services/error.ts` | `getDocErrorMessage` |
-| `services/docApi.ts` | Compatibility facade: delegates internally to the modules, keeping the original export signatures |
 
 | Method | Endpoint | Description |
 |------|------|------|

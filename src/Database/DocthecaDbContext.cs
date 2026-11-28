@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
 using Doctheca.Database.Entities;
 
 namespace Doctheca.Database;
@@ -8,6 +9,15 @@ public class DocthecaDbContext : DbContext
     public DocthecaDbContext(DbContextOptions<DocthecaDbContext> options) : base(options)
     {
     }
+
+    /// <summary>
+    /// Creates a context for anonymous read paths. EF query and command errors can carry raw
+    /// provider details; this keeps them out of EF diagnostics — the marked endpoint's safe
+    /// exception handler owns diagnostics — without changing how administrative contexts log.
+    /// </summary>
+    public static DocthecaDbContext CreateUnlogged(DbContextOptions<DocthecaDbContext> options) =>
+        new(new DbContextOptionsBuilder<DocthecaDbContext>(options)
+            .UseLoggerFactory(NullLoggerFactory.Instance).EnableSensitiveDataLogging(false).EnableDetailedErrors(false).Options);
 
     public DbSet<DocumentFileEntity> DocumentFiles { get; set; } = null!;
     public DbSet<DocumentParseEntity> DocumentParses { get; set; } = null!;

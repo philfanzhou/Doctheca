@@ -2,7 +2,7 @@
 import { inject } from 'vue'
 import { formatTime, getFileStatusLabel } from '../../utils/format'
 import { iconHtml } from '../../utils/icons'
-import { createDocApiClient } from '../../services/docApi'
+import { exportParseHtml, exportParseMarkdown } from '../../services/exportApi'
 import { useToast } from '../../composables/useToast'
 import {
   openMarkdown,
@@ -11,7 +11,7 @@ import {
   openImages,
   downloadBlob,
 } from '../../utils/preview'
-import type { DocumentFileDetail } from '../../services/docApi'
+import type { DocumentFileDetail } from '../../services/types'
 
 const props = defineProps<{
   detail: DocumentFileDetail
@@ -23,7 +23,6 @@ const emit = defineEmits<{
   (e: 'delete', parseId: string): void
 }>()
 
-const client = createDocApiClient()
 const navigate = inject<(page: string, id?: string | null) => void>('navigate')
 const { success: toastSuccess, error: toastError } = useToast()
 
@@ -44,7 +43,7 @@ function handleOpenMarkdown() {
 
 async function handleOpenHtmlPreview() {
   try {
-    await openHtmlPreview(client.exportParseHtml(props.parse.id).then((r) => r.blob))
+    await openHtmlPreview(exportParseHtml(props.parse.id).then((r) => r.blob))
   } catch (e) {
     toastError(e instanceof Error ? e.message : '生成 HTML 失败')
   }
@@ -69,7 +68,7 @@ function handleOpenImages() {
 
 async function handleExportMarkdown() {
   try {
-    const { blob, fileName } = await client.exportParseMarkdown(props.parse.id)
+    const { blob, fileName } = await exportParseMarkdown(props.parse.id)
     downloadBlob(blob, fileName)
     toastSuccess('导出成功')
   } catch (e) {
@@ -79,7 +78,7 @@ async function handleExportMarkdown() {
 
 async function handleExportHtml() {
   try {
-    const { blob, fileName } = await client.exportParseHtml(props.parse.id)
+    const { blob, fileName } = await exportParseHtml(props.parse.id)
     downloadBlob(blob, fileName)
     toastSuccess('导出成功')
   } catch (e) {

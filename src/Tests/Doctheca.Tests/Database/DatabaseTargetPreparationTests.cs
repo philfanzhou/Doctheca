@@ -31,7 +31,7 @@ public sealed class DatabaseTargetPreparationTests(PostgreSqlMigrationFixture fi
     {
         var services = new ServiceCollection();
         services.AddLogging();
-        services.AddDocthecaStartupDatabase(services.AddDocthecaServiceMantleFoundation());
+        services.AddStartupDatabase(services.AddServiceMantleFoundation());
         services.AddDbContext<DocthecaDbContext>(o => o.UseNpgsql(connectionString));
         if (executor is not null)
         {
@@ -46,7 +46,7 @@ public sealed class DatabaseTargetPreparationTests(PostgreSqlMigrationFixture fi
         CancellationToken token = default)
     {
         using var services = BuildServices(target, executor);
-        var options = DocthecaStartupDatabase.CreateOptions(Config(allowCreate), target);
+        var options = StartupDatabase.CreateOptions(Config(allowCreate), target);
         var receipt = services.GetRequiredService<StartupDatabaseReceipt>();
         var result = await services.GetRequiredService<StartupDatabaseGate>().RunAsync(
             options, receipt, MigrationOrchestration.ServiceId, token);
@@ -66,7 +66,7 @@ public sealed class DatabaseTargetPreparationTests(PostgreSqlMigrationFixture fi
             .Should().BeOfType<ServiceMantle.Database.PostgreSql.PostgreSqlDatabaseDeploymentCapabilityProvider>();
         services.GetServices<Microsoft.Extensions.Hosting.IHostedService>()
             .Should().NotContain(service => service.GetType().Name == "StartupDatabaseGateHostedService");
-        var options = DocthecaStartupDatabase.CreateOptions(Config(null), target);
+        var options = StartupDatabase.CreateOptions(Config(null), target);
         options.DeploymentMode.Should().Be(DatabaseDeploymentMode.MultiInstance);
         options.LockWaitBudget.Should().Be(TimeSpan.FromSeconds(30));
         options.PreparationTimeout.Should().Be(TimeSpan.FromSeconds(30));
@@ -147,7 +147,7 @@ public sealed class DatabaseTargetPreparationTests(PostgreSqlMigrationFixture fi
     public void InvalidAllowCreate_RejectsBeforeEvenParsingConnection_DoesNotEchoValue()
     {
         var canary = $"invalid-{Guid.NewGuid():N}";
-        var exception = Record.Exception(() => DocthecaStartupDatabase.CreateOptions(Config(canary), "invalid connection"));
+        var exception = Record.Exception(() => StartupDatabase.CreateOptions(Config(canary), "invalid connection"));
         exception.Should().BeOfType<InvalidOperationException>();
         exception!.Message.Should().Contain("Database:AllowCreate").And.Contain("database_target_preparation.invalid_target");
         exception.ToString().Should().NotContain(canary).And.NotContain("invalid connection");
@@ -210,7 +210,7 @@ public sealed class DatabaseTargetPreparationTests(PostgreSqlMigrationFixture fi
         cancelled.Cancel();
         var receipt = services.GetRequiredService<StartupDatabaseReceipt>();
         var gate = services.GetRequiredService<StartupDatabaseGate>();
-        var options = DocthecaStartupDatabase.CreateOptions(Config(null), connection);
+        var options = StartupDatabase.CreateOptions(Config(null), connection);
         var exception = await Assert.ThrowsAsync<OperationCanceledException>(() =>
             gate.RunAsync(options, receipt, MigrationOrchestration.ServiceId, cancelled.Token).AsTask());
         exception.CancellationToken.Should().Be(cancelled.Token);

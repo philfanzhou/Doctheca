@@ -21,14 +21,14 @@ public sealed class SchemaEvidenceBoundaryTests(PostgreSqlMigrationFixture fixtu
     public async Task SharedExtendedEvidenceEliminatesLocalColumnFallback()
     {
         using var context = fixture.CreateContext(_database);
-        var executor = new DocthecaMigrationExecutor(context, NullLogger.Instance);
+        var executor = new MigrationExecutor(context, NullLogger.Instance);
         await executor.ExecuteAsync();
         await MigrationGoldenStates.ExecuteRawAsync(context, "CREATE EXTENSION pg_stat_statements");
         foreach (var fallback in new[] { false, true })
         {
             if (fallback) await MigrationGoldenStates.ExecuteRawAsync(context, "CREATE INDEX extra_same_shape ON document_files(file_name)");
             await MigrationGoldenStates.ScalarAsync<object>(context, "SELECT pg_stat_statements_reset()");
-            Assert.Equal(DocthecaMigrationExecutor.DatabaseState.CurrentVersionCompatible, await executor.InspectAsync());
+            Assert.Equal(MigrationExecutor.DatabaseState.CurrentVersionCompatible, await executor.InspectAsync());
             // PostgreSQL observes the actual SQL execution, rather than a product test flag.
             var sharedCount = await MigrationGoldenStates.ScalarAsync<long>(context,
                 "SELECT COALESCE(sum(calls), 0)::bigint FROM pg_stat_statements WHERE query LIKE 'SELECT n.nspname AS schema_name, tbl.relname AS table_name, a.attname AS column_name,%'");
@@ -44,8 +44,8 @@ public sealed class SchemaEvidenceBoundaryTests(PostgreSqlMigrationFixture fixtu
     {
         using var context = fixture.CreateContext(_database);
         await MigrationGoldenStates.EnsureCreatedLegacyAsync(context);
-        var executor = new DocthecaMigrationExecutor(context, NullLogger.Instance);
-        Assert.Equal(DocthecaMigrationExecutor.DatabaseState.LegacyTakeoverRequired, await executor.InspectAsync());
+        var executor = new MigrationExecutor(context, NullLogger.Instance);
+        Assert.Equal(MigrationExecutor.DatabaseState.LegacyTakeoverRequired, await executor.InspectAsync());
         await MigrationGoldenStates.ExecuteRawAsync(context, "ALTER TABLE document_files ALTER COLUMN file_name TYPE text");
         var shape = await MigrationGoldenStates.ReadColumnShapeAsync(context);
         await Assert.ThrowsAsync<InvalidOperationException>(() => executor.ExecuteAsync());
@@ -60,7 +60,7 @@ public sealed class SchemaEvidenceBoundaryTests(PostgreSqlMigrationFixture fixtu
         await MigrationGoldenStates.EnsureCreatedLegacyAsync(context);
         var shape = await MigrationGoldenStates.ReadColumnShapeAsync(context);
         using var cancellation = new CancellationTokenSource(); cancellation.Cancel();
-        var executor = new DocthecaMigrationExecutor(context, NullLogger.Instance);
+        var executor = new MigrationExecutor(context, NullLogger.Instance);
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => executor.InspectAsync(cancellation.Token));
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => executor.ExecuteAsync(cancellation.Token));
         Assert.False(await HistoryExists(context));
@@ -76,11 +76,11 @@ public sealed class SchemaEvidenceBoundaryTests(PostgreSqlMigrationFixture fixtu
         using var cancellation = new CancellationTokenSource();
         using var context = new DocthecaDbContext(new DbContextOptionsBuilder<DocthecaDbContext>()
             .UseNpgsql(fixture.GetConnectionString(_database)).AddInterceptors(new CancelBackfill(cancellation)).Options);
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => new DocthecaMigrationExecutor(context, NullLogger.Instance).ExecuteAsync(cancellation.Token));
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => new MigrationExecutor(context, NullLogger.Instance).ExecuteAsync(cancellation.Token));
         Assert.False(await HistoryExists(seed));
         // The completed DDL is truthful pending state, not rolled back or reported stamped.
         Assert.Contains("document_files.subject:character varying(50):null", await MigrationGoldenStates.ReadColumnShapeAsync(seed));
-        await new DocthecaMigrationExecutor(seed, NullLogger.Instance).ExecuteAsync();
+        await new MigrationExecutor(seed, NullLogger.Instance).ExecuteAsync();
         Assert.Equal(MigrationGoldenStates.AllIds, await MigrationGoldenStates.ReadAppliedHistoryAsync(seed));
     }
 
@@ -96,7 +96,7 @@ public sealed class SchemaEvidenceBoundaryTests(PostgreSqlMigrationFixture fixtu
             """);
         using var context = fixture.CreateContext(_database);
         using var cancellation = new CancellationTokenSource();
-        var pending = new DocthecaMigrationExecutor(context, NullLogger.Instance).ExecuteAsync(cancellation.Token);
+        var pending = new MigrationExecutor(context, NullLogger.Instance).ExecuteAsync(cancellation.Token);
         var stopwatch = Stopwatch.StartNew();
         var entered = false;
         while (stopwatch.Elapsed < TimeSpan.FromSeconds(5))
@@ -117,7 +117,7 @@ public sealed class SchemaEvidenceBoundaryTests(PostgreSqlMigrationFixture fixtu
     {
         using var context = fixture.CreateContext(_database);
         await MigrationGoldenStates.EnsureCreatedLegacyAsync(context);
-        var executor = new DocthecaMigrationExecutor(context, NullLogger.Instance);
+        var executor = new MigrationExecutor(context, NullLogger.Instance);
         await executor.ExecuteAsync(); await executor.ExecuteAsync();
         Assert.Equal(MigrationGoldenStates.AllIds, await MigrationGoldenStates.ReadAppliedHistoryAsync(context));
         Assert.Equal("MigrationId:character varying(150):true,ProductVersion:character varying(32):true",
@@ -140,7 +140,7 @@ public sealed class SchemaEvidenceBoundaryTests(PostgreSqlMigrationFixture fixtu
             """);
         var logs = new CapturingLoggerProvider();
         using var logger = LoggerFactory.Create(builder => builder.AddProvider(logs));
-        var failure = await Assert.ThrowsAsync<PostgresException>(() => new DocthecaMigrationExecutor(context, logger.CreateLogger("probe")).ExecuteAsync());
+        var failure = await Assert.ThrowsAsync<PostgresException>(() => new MigrationExecutor(context, logger.CreateLogger("probe")).ExecuteAsync());
         Assert.Equal("23514", failure.SqlState);
         Assert.Empty(await MigrationGoldenStates.ReadAppliedHistoryAsync(context));
         var surfaces = failure.Message + string.Join('\n', logs.Messages);
@@ -153,7 +153,7 @@ public sealed class SchemaEvidenceBoundaryTests(PostgreSqlMigrationFixture fixtu
     public async Task CatalogPermissionFailureWithDuplicateShapeIsStillRefused()
     {
         using var seed = fixture.CreateContext(_database);
-        await new DocthecaMigrationExecutor(seed, NullLogger.Instance).ExecuteAsync();
+        await new MigrationExecutor(seed, NullLogger.Instance).ExecuteAsync();
         var role = "reader_" + Guid.NewGuid().ToString("N");
         var password = Guid.NewGuid().ToString("N");
         try
@@ -164,8 +164,8 @@ public sealed class SchemaEvidenceBoundaryTests(PostgreSqlMigrationFixture fixtu
             using var context = fixture.CreateContextWithConnectionString(connection.ConnectionString);
             var logs = new CapturingLoggerProvider();
             using var logger = LoggerFactory.Create(builder => builder.AddProvider(logs));
-            var executor = new DocthecaMigrationExecutor(context, logger.CreateLogger("probe"));
-            Assert.Equal(DocthecaMigrationExecutor.DatabaseState.InspectionFailed, await executor.InspectAsync());
+            var executor = new MigrationExecutor(context, logger.CreateLogger("probe"));
+            Assert.Equal(MigrationExecutor.DatabaseState.InspectionFailed, await executor.InspectAsync());
             var failure = await Assert.ThrowsAsync<InvalidOperationException>(() => executor.ExecuteAsync());
             var surfaces = failure.Message + string.Join('\n', logs.Messages);
             Assert.DoesNotContain(password, surfaces); Assert.DoesNotContain(fixture.PasswordCanary, surfaces); Assert.DoesNotContain("Host=", surfaces);
@@ -189,8 +189,8 @@ public sealed class SchemaEvidenceBoundaryTests(PostgreSqlMigrationFixture fixtu
         using var context = new DocthecaDbContext(new DbContextOptionsBuilder<DocthecaDbContext>().UseNpgsql(source).Options);
         var logs = new CapturingLoggerProvider();
         using var logger = LoggerFactory.Create(logging => logging.AddProvider(logs));
-        var executor = new DocthecaMigrationExecutor(context, logger.CreateLogger("probe"));
-        Assert.Equal(DocthecaMigrationExecutor.DatabaseState.InspectionFailed, await executor.InspectAsync());
+        var executor = new MigrationExecutor(context, logger.CreateLogger("probe"));
+        Assert.Equal(MigrationExecutor.DatabaseState.InspectionFailed, await executor.InspectAsync());
         var failure = await Assert.ThrowsAsync<InvalidOperationException>(() => executor.ExecuteAsync());
         var surfaces = failure.Message + string.Join('\n', logs.Messages);
         Assert.DoesNotContain(canary, surfaces); Assert.DoesNotContain("Host=", surfaces);

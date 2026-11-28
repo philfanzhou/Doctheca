@@ -28,7 +28,7 @@ namespace Doctheca.Host;
 /// Only lazy foundation services are registered; Bootstrap is never read or written here, and
 /// management, setup, discovery registration, and startup-phase gating stay disabled.
 /// </remarks>
-public static class DocthecaServiceMantleExtensions
+public static class ServiceMantleExtensions
 {
     /// <summary>
     /// The stable ServiceMantle service identity of this deployment.
@@ -41,7 +41,7 @@ public static class DocthecaServiceMantleExtensions
     /// </summary>
     /// <param name="services">The host service collection.</param>
     /// <returns>The builder later ServiceMantle slices extend with optional capabilities.</returns>
-    public static ServiceMantleBuilder AddDocthecaServiceMantleFoundation(
+    public static ServiceMantleBuilder AddServiceMantleFoundation(
         this IServiceCollection services)
     {
         ArgumentNullException.ThrowIfNull(services);

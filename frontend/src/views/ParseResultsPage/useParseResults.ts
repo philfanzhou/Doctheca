@@ -1,9 +1,9 @@
 import { ref, computed, onMounted } from 'vue'
 import { ElMessageBox } from 'element-plus'
-import { createDocApiClient, type DocumentParse } from '../../services/docApi'
+import { deleteDocumentParse, listDocumentParses } from '../../services/parseApi'
+import type { DocumentParse } from '../../services/types'
 import { useToast } from '../../composables/useToast'
 
-const client = createDocApiClient()
 
 export function useParseResults() {
   const { success: toastSuccess, error: toastError } = useToast()
@@ -20,7 +20,7 @@ export function useParseResults() {
   async function loadParseList() {
     listLoading.value = true
     try {
-      const response = await client.listDocumentParses(
+      const response = await listDocumentParses(
         parsePage.value,
         parsePageSize.value,
         parseSearch.value || undefined,
@@ -58,7 +58,7 @@ export function useParseResults() {
     }
     parseDeleting.value = parseId
     try {
-      await client.deleteDocumentParse(parseId)
+      await deleteDocumentParse(parseId)
       if (parseList.value.length <= 1 && parsePage.value > 1) {
         parsePage.value--
       }

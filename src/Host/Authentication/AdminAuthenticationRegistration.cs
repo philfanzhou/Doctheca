@@ -12,7 +12,7 @@ namespace Doctheca.Host.Authentication;
 
 internal static class AdminAuthenticationRegistration
 {
-    internal static IServiceCollection AddDocthecaAdminAuthentication(this IServiceCollection services,
+    internal static IServiceCollection AddAdminAuthentication(this IServiceCollection services,
         IConfiguration configuration, IHostEnvironment environment)
     {
         var required = new[] { "IdentityService:Authority", "IdentityService:Issuer", "IdentityService:Audience" };
@@ -25,7 +25,7 @@ internal static class AdminAuthenticationRegistration
         {
             if (configuration["IdentityService:ClockSkewSeconds"] is { } skew && !int.TryParse(skew, out _))
                 throw new InvalidOperationException("IdentityService:ClockSkewSeconds");
-            services.AddIdentityJwtBearer(configuration, environment, consumer =>
+            services.AddIdentityJwtBearer(configuration, consumer =>
             {
                 consumer.MapInboundClaims = false;
                 consumer.NameClaimType = "unique_name";

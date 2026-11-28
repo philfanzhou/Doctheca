@@ -16,7 +16,7 @@ internal static class MigrationOrchestration
 {
     /// <summary>The same service id the host's Program.cs uses for orchestration.</summary>
     internal static readonly ServiceId ServiceId =
-        ServiceMantle.ServiceId.Parse(DocthecaServiceMantleExtensions.ServiceIdValue);
+        ServiceMantle.ServiceId.Parse(ServiceMantleExtensions.ServiceIdValue);
 
     /// <summary>The production lock acquire budget.</summary>
     internal static readonly TimeSpan DefaultAcquireTimeout = TimeSpan.FromSeconds(30);
@@ -42,7 +42,7 @@ internal static class MigrationOrchestration
         string connectionString,
         TimeSpan? acquireTimeout = null,
         CancellationToken cancellationToken = default) =>
-        CreateOrchestrator(new Doctheca.Database.DocthecaMigrationExecutor(context))
+        CreateOrchestrator(new Doctheca.Database.MigrationExecutor(context))
             .OrchestrateMigrationAsync(
                 ServiceId,
                 Target(connectionString),

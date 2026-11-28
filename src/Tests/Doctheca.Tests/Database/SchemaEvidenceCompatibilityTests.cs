@@ -55,29 +55,29 @@ public sealed class SchemaEvidenceCompatibilityTests(PostgreSqlMigrationFixture 
     public async Task OriginalDecisionsRemainExact(string scenario, string sql, bool current, bool reject, bool backfill)
     {
         using var context = fixture.CreateContext(_database);
-        var executor = new DocthecaMigrationExecutor(context, NullLogger.Instance);
+        var executor = new MigrationExecutor(context, NullLogger.Instance);
         if (current) await executor.ExecuteAsync();
         else await MigrationGoldenStates.EnsureCreatedLegacyAsync(context);
         await MigrationGoldenStates.ExecuteRawAsync(context, sql);
         var beforeColumns = await MigrationGoldenStates.ReadColumnShapeAsync(context);
         var beforeConstraints = await MigrationGoldenStates.ReadConstraintShapeAsync(context);
         var inspection = await executor.InspectDetailedAsync(default);
-        var expected = reject ? DocthecaMigrationExecutor.DatabaseState.InspectionFailed : current
-            ? DocthecaMigrationExecutor.DatabaseState.CurrentVersionCompatible : DocthecaMigrationExecutor.DatabaseState.LegacyTakeoverRequired;
+        var expected = reject ? MigrationExecutor.DatabaseState.InspectionFailed : current
+            ? MigrationExecutor.DatabaseState.CurrentVersionCompatible : MigrationExecutor.DatabaseState.LegacyTakeoverRequired;
         Assert.True(inspection.State == expected, "Unexpected classification in shape " + scenario);
         Assert.Equal(beforeColumns, await MigrationGoldenStates.ReadColumnShapeAsync(context));
         Assert.Equal(beforeConstraints, await MigrationGoldenStates.ReadConstraintShapeAsync(context));
         if (reject)
         {
             var failure = await Assert.ThrowsAsync<InvalidOperationException>(() => executor.ExecuteAsync());
-            Assert.Contains(DocthecaMigrationExecutor.IncompatibleErrorCode, failure.Message);
+            Assert.Contains(MigrationExecutor.IncompatibleErrorCode, failure.Message);
             Assert.Equal(beforeColumns, await MigrationGoldenStates.ReadColumnShapeAsync(context));
             Assert.Equal(beforeConstraints, await MigrationGoldenStates.ReadConstraintShapeAsync(context));
         }
         else
         {
             await executor.ExecuteAsync();
-            Assert.Equal(DocthecaMigrationExecutor.DatabaseState.CurrentVersionCompatible, await executor.InspectAsync());
+            Assert.Equal(MigrationExecutor.DatabaseState.CurrentVersionCompatible, await executor.InspectAsync());
             Assert.Equal(MigrationGoldenStates.AllIds, await MigrationGoldenStates.ReadAppliedHistoryAsync(context));
             if (!backfill) Assert.Equal(beforeColumns, current
                 ? await MigrationGoldenStates.ReadColumnShapeAsync(context)
@@ -91,26 +91,26 @@ public sealed class SchemaEvidenceCompatibilityTests(PostgreSqlMigrationFixture 
     public async Task UnknownHistoryPrecedesUnrepresentableUnrelatedShapes()
     {
         using var context = fixture.CreateContext(_database);
-        var executor = new DocthecaMigrationExecutor(context, NullLogger.Instance);
+        var executor = new MigrationExecutor(context, NullLogger.Instance);
         await executor.ExecuteAsync();
         await MigrationGoldenStates.ExecuteRawAsync(context, "INSERT INTO \"__EFMigrationsHistory\" VALUES ('future-version', '1'); CREATE TABLE unrelated(value text); CREATE INDEX a ON unrelated(value); CREATE INDEX b ON unrelated(value)");
-        Assert.Equal(DocthecaMigrationExecutor.DatabaseState.VersionTooNew, await executor.InspectAsync());
+        Assert.Equal(MigrationExecutor.DatabaseState.VersionTooNew, await executor.InspectAsync());
         await Assert.ThrowsAsync<InvalidOperationException>(() => executor.ExecuteAsync());
-        Assert.Equal(DocthecaMigrationExecutor.KnownMigrationIds.Count + 1, (await MigrationGoldenStates.ReadAppliedHistoryAsync(context)).Count);
+        Assert.Equal(MigrationExecutor.KnownMigrationIds.Count + 1, (await MigrationGoldenStates.ReadAppliedHistoryAsync(context)).Count);
     }
 
     [Fact]
     public async Task UnknownPublicHistoryPrecedesUnrepresentableMappedTable()
     {
         using var context = fixture.CreateContext(_database);
-        var executor = new DocthecaMigrationExecutor(context, NullLogger.Instance);
+        var executor = new MigrationExecutor(context, NullLogger.Instance);
         await executor.ExecuteAsync();
         await MigrationGoldenStates.ExecuteRawAsync(context,
             "INSERT INTO \"__EFMigrationsHistory\" VALUES ('future-version', '1'); " +
             "DROP TABLE document_parse_blocks; CREATE TABLE document_parse_blocks()");
-        Assert.Equal(DocthecaMigrationExecutor.DatabaseState.VersionTooNew, await executor.InspectAsync());
+        Assert.Equal(MigrationExecutor.DatabaseState.VersionTooNew, await executor.InspectAsync());
         await Assert.ThrowsAsync<InvalidOperationException>(() => executor.ExecuteAsync());
-        Assert.Equal(DocthecaMigrationExecutor.KnownMigrationIds.Count + 1, (await MigrationGoldenStates.ReadAppliedHistoryAsync(context)).Count);
+        Assert.Equal(MigrationExecutor.KnownMigrationIds.Count + 1, (await MigrationGoldenStates.ReadAppliedHistoryAsync(context)).Count);
     }
 
     [Fact]
@@ -123,6 +123,6 @@ public sealed class SchemaEvidenceCompatibilityTests(PostgreSqlMigrationFixture 
         }
         var connection = new NpgsqlConnectionStringBuilder(fixture.GetConnectionString(_database)) { SearchPath = "alternate,public" };
         using var context = fixture.CreateContextWithConnectionString(connection.ConnectionString);
-        Assert.Equal(DocthecaMigrationExecutor.DatabaseState.LegacyTakeoverRequired, await new DocthecaMigrationExecutor(context).InspectAsync());
+        Assert.Equal(MigrationExecutor.DatabaseState.LegacyTakeoverRequired, await new MigrationExecutor(context).InspectAsync());
     }
 }

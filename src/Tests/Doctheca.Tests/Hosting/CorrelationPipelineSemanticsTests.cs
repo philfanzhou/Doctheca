@@ -17,7 +17,7 @@ namespace Doctheca.Tests.Hosting;
 /// <summary>
 /// Per-request correlation semantics of the Doctheca ServiceMantle wiring, exercised on an
 /// isolated TestServer host built through the same foundation extension
-/// (<c>AddDocthecaServiceMantleFoundation</c>) and the same pipeline entry
+/// (<c>AddServiceMantleFoundation</c>) and the same pipeline entry
 /// (<c>UseServiceMantleCorrelationId</c>) as the real Program.cs, with test-only endpoints for
 /// the paths production cannot trigger on demand: a downstream response-header overwrite
 /// converges to the resolved single value; exceptions and cancellation propagate untouched with
@@ -47,7 +47,7 @@ public sealed partial class CorrelationPipelineSemanticsTests : IAsyncLifetime
         builder.Logging.ClearProviders().AddProvider(_capture);
 
         // The exact foundation entry point the real Program.cs uses.
-        builder.Services.AddDocthecaServiceMantleFoundation();
+        builder.Services.AddServiceMantleFoundation();
         builder.Services.AddSingleton(new HttpClient(_outbound, disposeHandler: false));
 
         _app = builder.Build();

@@ -2,7 +2,7 @@
 import { formatTime, getFileStatusLabel } from '../../utils/format'
 import { iconHtml } from '../../utils/icons'
 import { fileIconCls, fileExtLabel } from '../../utils/file'
-import type { DocumentFile } from '../../services/docApi'
+import type { DocumentFile } from '../../services/types'
 
 const props = defineProps<{
   files: DocumentFile[]

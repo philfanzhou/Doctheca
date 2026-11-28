@@ -13,27 +13,27 @@ using ServiceMantle.Persistence.Relational;
 namespace Doctheca.Host;
 
 /// <summary>Consumer configuration and registration for the shared startup gate.</summary>
-public static class DocthecaStartupDatabase
+public static class StartupDatabase
 {
     internal const string AllowCreateConfigurationKey = "Database:AllowCreate";
 
     /// <summary>Registers the direct gate and the scoped health source, without a hosted run.</summary>
-    public static IServiceCollection AddDocthecaStartupDatabase(
+    public static IServiceCollection AddStartupDatabase(
         this IServiceCollection services, ServiceMantleBuilder foundation)
     {
         foundation
             .AddBootstrapDatabaseProvider<PostgreSqlBootstrapDatabaseProvider>()
             .AddDatabaseTargetPreparationProvider<PostgreSqlDatabaseTargetPreparationProvider>()
             .AddMigrationLockProvider<PostgreSqlMigrationLockProvider>()
-            .AddDatabaseMigration<DocthecaMigrationExecutor>();
+            .AddDatabaseMigration<MigrationExecutor>();
         services.AddServiceMantlePostgreSqlDeploymentCapability();
         services.AddServiceMantleStartupDatabaseGateServices();
-        services.AddScoped<IServiceDatabaseProbeFailureClassifier, DocthecaPostgreSqlProbeFailureClassifier>();
+        services.AddScoped<IServiceDatabaseProbeFailureClassifier, PostgreSqlProbeFailureClassifier>();
         services.AddScoped<IServiceHealthSnapshotSource>(sp => new EfCoreHealthSnapshotSource<DocthecaDbContext>(
             sp.GetRequiredService<StartupDatabaseReceipt>(),
             sp.GetRequiredService<DocthecaDbContext>(),
             sp.GetRequiredService<IServiceDatabaseProbeFailureClassifier>(),
-            DocthecaServiceMantleExtensions.ServiceIdValue,
+            ServiceMantleExtensions.ServiceIdValue,
             EfCoreHealthSnapshotProbeMode.MappedSchema));
         return services;
     }
@@ -55,7 +55,7 @@ public static class DocthecaStartupDatabase
 }
 
 /// <summary>Preserves the existing classification of all connection-opening failures.</summary>
-internal sealed class DocthecaPostgreSqlProbeFailureClassifier(DocthecaDbContext context)
+internal sealed class PostgreSqlProbeFailureClassifier(DocthecaDbContext context)
     : IServiceDatabaseProbeFailureClassifier
 {
     private readonly PostgreSqlDatabaseProbeFailureClassifier provider = new();

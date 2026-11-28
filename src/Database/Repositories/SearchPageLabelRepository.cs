@@ -17,8 +17,7 @@ public sealed class SearchPageLabelRepository(DbContextOptions<DocthecaDbContext
         var blockIds = requested.Select(key => key.BlockId).Distinct().ToArray();
 
         // Optional enrichment must not leak provider exceptions through EF diagnostics.
-        await using var context = new DocthecaDbContext(new DbContextOptionsBuilder<DocthecaDbContext>(options)
-            .UseLoggerFactory(NullLoggerFactory.Instance).EnableSensitiveDataLogging(false).EnableDetailedErrors(false).Options);
+        await using var context = DocthecaDbContext.CreateUnlogged(options);
         await using var transaction = await context.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead, cancellationToken);
         await context.Database.ExecuteSqlRawAsync("SET TRANSACTION READ ONLY", cancellationToken);
         var rows = await (from block in context.DocumentParseBlocks.AsNoTracking()

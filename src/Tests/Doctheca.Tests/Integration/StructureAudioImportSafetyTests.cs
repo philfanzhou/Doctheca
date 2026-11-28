@@ -223,11 +223,10 @@ public sealed partial class StructureAudioEndpointTests
             var realOss = scope.ServiceProvider.GetRequiredService<IObjectStore>();
             var oss = new Mock<IObjectStore>();
             var uploads = 0;
-            oss.Setup(o => o.UploadAsync(It.IsAny<Stream>(), It.IsAny<string>(), It.IsAny<string>(), Bucket.Audio,
-                    It.IsAny<string>(), It.IsAny<CancellationToken>()))
-                .Returns(async (Stream content, string name, string type, Bucket bucket, string? folder, CancellationToken token) =>
+            oss.Setup(o => o.UploadAsync(It.IsAny<string>(), It.IsAny<Stream>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+                .Returns(async (string key, Stream content, string type, CancellationToken token) =>
                 {
-                    var key = await realOss.UploadAsync(content, name, type, bucket, folder, token);
+                    await realOss.UploadAsync(key, content, type, token);
                     if (failure == "cancel-upload") { cancellation.Cancel(); token.ThrowIfCancellationRequested(); }
                     if (++uploads == 2) throw new IOException("synthetic lost upload acknowledgement");
                     return key;
