@@ -6,8 +6,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Markdig" Version="1.4.1" />
-    <PackageReference Include="OpenSearch.Net" Version="2.2.0" />
+    <PackageReference Include="Markdig" Version="1.6.0" />
+    <PackageReference Include="OpenSearch.Net" Version="2.3.0" />
     <!-- ServiceMantle.Web types used directly by the Service layer: ServiceLogContext for the
          background worker's own identity scope (the singleton instance is owned and registered
          by the Host's ServiceMantle foundation) and the
